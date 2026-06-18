@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\RaisinDocs\RaisinDocs.csproj" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(UseProjectReferences)' != 'false'">
+    <ProjectReference Include="..\..\LibrariesExternal\AvalonDock\source\Components\AvalonDock\AvalonDock.csproj" />
+    <ProjectReference Include="..\..\LibrariesExternal\AvalonDock\source\Components\AvalonDock.Themes.VS2013\AvalonDock.Themes.VS2013.csproj" />
+    <ProjectReference Include="..\..\RaisinLibraries\Raisin.WPF.Base\Raisin.WPF.Base.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(UseProjectReferences)' == 'false'">
+    <PackageReference Include="Raisin.AvalonDock" Version="4.72.6" />
+    <PackageReference Include="Raisin.AvalonDock.Themes.VS2013" Version="4.72.6" />
+    <PackageReference Include="Raisin.WPF.Base" Version="2.0.0" />
+  </ItemGroup>
+
+</Project>

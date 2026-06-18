@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="RaisinDocs/RaisinDocs.csproj" />
+  <Project Path="RaisinDocs.TestApp/RaisinDocs.TestApp.csproj" />
+</Solution>

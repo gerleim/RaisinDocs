@@ -1,0 +1,25 @@
+<Window x:Class="RaisinDocs.TestApp.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:avalonDock="https://github.com/Dirkster99/AvalonDock"
+        xmlns:docs="clr-namespace:RaisinDocs;assembly=RaisinDocs"
+        Title="RaisinDocs TestApp"
+        Width="1024" Height="768"
+        Background="#1E1E1E"
+        Foreground="#D4D4D4">
+    <Grid>
+        <avalonDock:DockingManager x:Name="DockingManager"
+                                   AllowMixedOrientation="True"
+                                   Background="#212121">
+            <avalonDock:LayoutRoot>
+                <avalonDock:LayoutPanel Orientation="Horizontal">
+                    <avalonDock:LayoutDocumentPane>
+                        <avalonDock:LayoutDocument Title="Document 1" CanClose="False">
+                            <docs:DocsCanvas />
+                        </avalonDock:LayoutDocument>
+                    </avalonDock:LayoutDocumentPane>
+                </avalonDock:LayoutPanel>
+            </avalonDock:LayoutRoot>
+        </avalonDock:DockingManager>
+    </Grid>
+</Window>
