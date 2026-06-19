@@ -80,11 +80,20 @@ The document model must distinguish these from iteration 2 onward. A naive "one 
 - Typing at styled boundaries inserts/removes syntax appropriately
 - Toggle between raw and WYSIWYG views
 
+### 4b — Undo/redo ✅
+- Snapshot-based undo (memento pattern): captures full document state (`string[]` blocks + cursor/anchor) at each undo boundary
+- VS Code-style grouping with 600ms timer: continuous typing groups into one undo unit
+- Group broken by: pause >600ms, cursor movement (arrow/mouse/Home/End), Enter, or switching action type (typing ↔ deleting)
+- Enter, Cut, Paste each sealed as their own undo unit
+- Two-stack model (`_undoStack` + `_redoStack`), new mutations clear redo
+- 200-entry max undo depth
+- Ctrl+Z / Ctrl+Y keyboard shortcuts
+- 18 tests covering round-trip, cursor restoration, group management, redo invalidation, stack depth, compound operations
+
 ### Future
 - Motion blur during smooth scroll (ghost copies offset in scroll direction, like RaisinTerminal2)
 - Images (inline and reference)
 - Tables
 - Links (clickable in view mode, editable syntax in edit mode)
-- Undo/redo
 - Syntax highlighting in code blocks
 - Drag-and-drop
