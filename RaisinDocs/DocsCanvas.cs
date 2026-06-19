@@ -896,11 +896,11 @@ public class DocsCanvas : FrameworkElement
                 ft.SetForegroundBrush(_syntaxBrush, localStart, localEnd - localStart);
         }
 
-        if (parsed.Kind == BlockKind.UnorderedListItem)
+        if (parsed.Kind == BlockKind.UnorderedListItem && vl.Length >= 2)
         {
-            int localEnd = Math.Min(vl.Length, 2 - vl.StartOffset);
-            if (localEnd > 0 && vl.StartOffset == 0)
-                ft.SetForegroundBrush(_syntaxBrush, 0, localEnd);
+            string vlText = blockText.Substring(vl.StartOffset, Math.Min(vl.Length, 2));
+            if (vlText is "- " or "* ")
+                ft.SetForegroundBrush(_syntaxBrush, 0, 2);
         }
 
         foreach (var run in parsed.Runs)
