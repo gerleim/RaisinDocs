@@ -14,6 +14,91 @@ public class Document
     public bool HasSelection => CursorBlock != AnchorBlock || CursorOffset != AnchorOffset;
     public int BlockCount => _blocks.Count;
 
+    // --- Undo/Redo ---
+
+    private const int MaxUndoDepth = 200;
+
+    private record DocumentSnapshot(string[] Blocks, int CursorBlock, int CursorOffset, int AnchorBlock, int AnchorOffset);
+
+    private readonly Stack<DocumentSnapshot> _undoStack = new();
+    private readonly Stack<DocumentSnapshot> _redoStack = new();
+    private DocumentSnapshot? _currentGroupStart;
+
+    public bool CanUndo => _currentGroupStart != null || _undoStack.Count > 0;
+    public bool CanRedo => _redoStack.Count > 0;
+
+    private DocumentSnapshot CaptureSnapshot()
+    {
+        var blocks = new string[_blocks.Count];
+        for (int i = 0; i < _blocks.Count; i++)
+            blocks[i] = _blocks[i].ToString();
+        return new DocumentSnapshot(blocks, CursorBlock, CursorOffset, AnchorBlock, AnchorOffset);
+    }
+
+    private void RestoreSnapshot(DocumentSnapshot snapshot)
+    {
+        _blocks.Clear();
+        foreach (var block in snapshot.Blocks)
+            _blocks.Add(new StringBuilder(block));
+        CursorBlock = snapshot.CursorBlock;
+        CursorOffset = snapshot.CursorOffset;
+        AnchorBlock = snapshot.AnchorBlock;
+        AnchorOffset = snapshot.AnchorOffset;
+    }
+
+    private bool HasContentChanged(DocumentSnapshot snapshot)
+    {
+        if (_blocks.Count != snapshot.Blocks.Length) return true;
+        for (int i = 0; i < _blocks.Count; i++)
+        {
+            if (_blocks[i].Length != snapshot.Blocks[i].Length) return true;
+            if (!_blocks[i].ToString().Equals(snapshot.Blocks[i], StringComparison.Ordinal)) return true;
+        }
+        return false;
+    }
+
+    public void BeginUndoGroup()
+    {
+        if (_currentGroupStart != null) return;
+        _currentGroupStart = CaptureSnapshot();
+        _redoStack.Clear();
+    }
+
+    public void SealUndoGroup()
+    {
+        if (_currentGroupStart == null) return;
+        if (HasContentChanged(_currentGroupStart))
+        {
+            _undoStack.Push(_currentGroupStart);
+            if (_undoStack.Count > MaxUndoDepth)
+            {
+                var keep = _undoStack.ToArray();
+                _undoStack.Clear();
+                for (int i = MaxUndoDepth - 1; i >= 0; i--)
+                    _undoStack.Push(keep[i]);
+            }
+        }
+        _currentGroupStart = null;
+    }
+
+    public bool Undo()
+    {
+        SealUndoGroup();
+        if (_undoStack.Count == 0) return false;
+        _redoStack.Push(CaptureSnapshot());
+        RestoreSnapshot(_undoStack.Pop());
+        return true;
+    }
+
+    public bool Redo()
+    {
+        SealUndoGroup();
+        if (_redoStack.Count == 0) return false;
+        _undoStack.Push(CaptureSnapshot());
+        RestoreSnapshot(_redoStack.Pop());
+        return true;
+    }
+
     public string GetBlockText(int index) => _blocks[index].ToString();
     public int GetBlockLength(int index) => _blocks[index].Length;
 

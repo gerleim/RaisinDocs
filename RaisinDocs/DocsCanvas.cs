@@ -82,6 +82,10 @@ public class DocsCanvas : FrameworkElement
 
     private List<ParsedBlock>? _parsedBlocks;
 
+    private readonly DispatcherTimer _undoSealTimer;
+    private enum LastActionKind { None, Typing, Deleting }
+    private LastActionKind _lastAction;
+
     public DocsCanvas()
     {
         _smoother = new SmoothScroller(InvalidateVisual);
@@ -99,12 +103,33 @@ public class DocsCanvas : FrameworkElement
             InvalidateVisual();
         };
 
+        _undoSealTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(600) };
+        _undoSealTimer.Tick += (_, _) =>
+        {
+            _undoSealTimer.Stop();
+            _doc.SealUndoGroup();
+            _lastAction = LastActionKind.None;
+        };
+
         Loaded += (_, _) => { EnsureMeasured(); Focus(); };
         IsVisibleChanged += (_, e) =>
         {
             if ((bool)e.NewValue) _blinkTimer.Start();
             else _blinkTimer.Stop();
         };
+    }
+
+    private void ResetUndoSealTimer()
+    {
+        _undoSealTimer.Stop();
+        _undoSealTimer.Start();
+    }
+
+    private void SealAndStopTimer()
+    {
+        _undoSealTimer.Stop();
+        _doc.SealUndoGroup();
+        _lastAction = LastActionKind.None;
     }
 
     private void EnsureMeasured()
@@ -503,6 +528,8 @@ public class DocsCanvas : FrameworkElement
             return;
         }
 
+        SealAndStopTimer();
+
         HitTestToPosition(pos, out int block, out int offset);
         _doc.CursorBlock = block;
         _doc.CursorOffset = offset;
@@ -565,6 +592,13 @@ public class DocsCanvas : FrameworkElement
         base.OnTextInput(e);
         if (string.IsNullOrEmpty(e.Text)) return;
 
+        if (_lastAction != LastActionKind.Typing)
+        {
+            _doc.SealUndoGroup();
+            _lastAction = LastActionKind.Typing;
+        }
+        _doc.BeginUndoGroup();
+
         if (_doc.HasSelection) _doc.DeleteSelection();
 
         foreach (char c in e.Text)
@@ -574,6 +608,7 @@ public class DocsCanvas : FrameworkElement
         }
         _doc.CollapseSelection();
 
+        ResetUndoSealTimer();
         ResetBlink();
         InvalidateLayout();
         EnsureCursorVisible();
@@ -595,16 +630,25 @@ public class DocsCanvas : FrameworkElement
         switch (e.Key)
         {
             case Key.Return:
+                SealAndStopTimer();
+                _doc.BeginUndoGroup();
                 if (_doc.HasSelection) _doc.DeleteSelection();
                 if (shift)
                     _doc.InsertHardBreak();
                 else
                     _doc.InsertParagraphBreak();
                 _doc.CollapseSelection();
+                _doc.SealUndoGroup();
                 textChanged = true;
                 break;
 
             case Key.Back:
+                if (_lastAction != LastActionKind.Deleting)
+                {
+                    _doc.SealUndoGroup();
+                    _lastAction = LastActionKind.Deleting;
+                }
+                _doc.BeginUndoGroup();
                 if (_doc.HasSelection)
                 {
                     _doc.DeleteSelection();
@@ -618,9 +662,16 @@ public class DocsCanvas : FrameworkElement
                     textChanged = _doc.CursorBlock != prevBlock || _doc.CursorOffset != prevOffset;
                     if (textChanged) _doc.CollapseSelection();
                 }
+                ResetUndoSealTimer();
                 break;
 
             case Key.Delete:
+                if (_lastAction != LastActionKind.Deleting)
+                {
+                    _doc.SealUndoGroup();
+                    _lastAction = LastActionKind.Deleting;
+                }
+                _doc.BeginUndoGroup();
                 if (_doc.HasSelection)
                 {
                     _doc.DeleteSelection();
@@ -634,9 +685,11 @@ public class DocsCanvas : FrameworkElement
                     textChanged = _doc.BlockCount != prevBlocks ||
                                   _doc.GetBlockLength(_doc.CursorBlock) != prevLen;
                 }
+                ResetUndoSealTimer();
                 break;
 
             case Key.Left:
+                SealAndStopTimer();
                 if (!shift && _doc.HasSelection)
                 {
                     var (sb, so, _, _) = _doc.GetOrderedSelection();
@@ -652,6 +705,7 @@ public class DocsCanvas : FrameworkElement
                 break;
 
             case Key.Right:
+                SealAndStopTimer();
                 if (!shift && _doc.HasSelection)
                 {
                     var (_, _, eb, eo) = _doc.GetOrderedSelection();
@@ -668,6 +722,7 @@ public class DocsCanvas : FrameworkElement
 
             case Key.Up:
             {
+                SealAndStopTimer();
                 int vli = CursorToVisualLineIndex();
                 if (vli > 0)
                 {
@@ -682,6 +737,7 @@ public class DocsCanvas : FrameworkElement
 
             case Key.Down:
             {
+                SealAndStopTimer();
                 int vli = CursorToVisualLineIndex();
                 if (vli < _visualLines.Count - 1)
                 {
@@ -696,6 +752,7 @@ public class DocsCanvas : FrameworkElement
 
             case Key.Home:
             {
+                SealAndStopTimer();
                 if (ctrl)
                 {
                     _doc.CursorBlock = 0;
@@ -712,6 +769,7 @@ public class DocsCanvas : FrameworkElement
 
             case Key.End:
             {
+                SealAndStopTimer();
                 if (ctrl)
                 {
                     _doc.CursorBlock = _doc.BlockCount - 1;
@@ -729,7 +787,10 @@ public class DocsCanvas : FrameworkElement
 
             case Key.A:
                 if (ctrl)
+                {
+                    SealAndStopTimer();
                     _doc.SelectAll();
+                }
                 else handled = false;
                 break;
 
@@ -745,9 +806,12 @@ public class DocsCanvas : FrameworkElement
             case Key.X:
                 if (ctrl && _doc.HasSelection)
                 {
+                    SealAndStopTimer();
                     try { Clipboard.SetText(_doc.GetSelectedText()); }
                     catch { }
+                    _doc.BeginUndoGroup();
                     _doc.DeleteSelection();
+                    _doc.SealUndoGroup();
                     textChanged = true;
                 }
                 else handled = false;
@@ -756,17 +820,42 @@ public class DocsCanvas : FrameworkElement
             case Key.V:
                 if (ctrl)
                 {
+                    SealAndStopTimer();
                     try
                     {
                         string text = Clipboard.GetText();
                         if (!string.IsNullOrEmpty(text))
                         {
+                            _doc.BeginUndoGroup();
                             if (_doc.HasSelection) _doc.DeleteSelection();
                             _doc.Paste(text);
+                            _doc.SealUndoGroup();
                             textChanged = true;
                         }
                     }
                     catch { }
+                }
+                else handled = false;
+                break;
+
+            case Key.Z:
+                if (ctrl)
+                {
+                    _undoSealTimer.Stop();
+                    _doc.Undo();
+                    _lastAction = LastActionKind.None;
+                    textChanged = true;
+                }
+                else handled = false;
+                break;
+
+            case Key.Y:
+                if (ctrl)
+                {
+                    _undoSealTimer.Stop();
+                    _doc.Redo();
+                    _lastAction = LastActionKind.None;
+                    textChanged = true;
                 }
                 else handled = false;
                 break;

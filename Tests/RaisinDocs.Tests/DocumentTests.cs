@@ -434,4 +434,271 @@ public class DocumentTests
         Document.ComparePositions(0, 10, 1, 0).Should().BeNegative();
         Document.ComparePositions(2, 0, 1, 100).Should().BePositive();
     }
+
+    // --- Undo/Redo helpers ---
+
+    private static void TypeAndSeal(Document doc, string text)
+    {
+        doc.BeginUndoGroup();
+        foreach (char c in text) doc.Insert(c);
+        doc.CollapseSelection();
+        doc.SealUndoGroup();
+    }
+
+    // --- Undo: basic round-trip ---
+
+    [Fact]
+    public void Undo_RevertsInsert()
+    {
+        var doc = new Document();
+        TypeAndSeal(doc, "abc");
+
+        doc.Undo().Should().BeTrue();
+        doc.GetBlockText(0).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Redo_ReappliesInsert()
+    {
+        var doc = new Document();
+        TypeAndSeal(doc, "abc");
+        doc.Undo();
+
+        doc.Redo().Should().BeTrue();
+        doc.GetBlockText(0).Should().Be("abc");
+    }
+
+    [Fact]
+    public void Undo_RevertsParagraphBreak()
+    {
+        var doc = new Document();
+        TypeAndSeal(doc, "hello");
+
+        doc.BeginUndoGroup();
+        doc.InsertParagraphBreak();
+        doc.CollapseSelection();
+        doc.SealUndoGroup();
+
+        doc.BlockCount.Should().Be(2);
+        doc.Undo().Should().BeTrue();
+        doc.BlockCount.Should().Be(1);
+        doc.GetBlockText(0).Should().Be("hello");
+    }
+
+    [Fact]
+    public void Undo_RevertsBackspace()
+    {
+        var doc = new Document();
+        TypeAndSeal(doc, "abc");
+
+        doc.BeginUndoGroup();
+        doc.Backspace();
+        doc.SealUndoGroup();
+
+        doc.GetBlockText(0).Should().Be("ab");
+        doc.Undo().Should().BeTrue();
+        doc.GetBlockText(0).Should().Be("abc");
+    }
+
+    [Fact]
+    public void Undo_RevertsDelete()
+    {
+        var doc = new Document();
+        TypeAndSeal(doc, "abc");
+
+        doc.CursorOffset = 1;
+        doc.CollapseSelection();
+        doc.BeginUndoGroup();
+        doc.Delete();
+        doc.SealUndoGroup();
+
+        doc.GetBlockText(0).Should().Be("ac");
+        doc.Undo().Should().BeTrue();
+        doc.GetBlockText(0).Should().Be("abc");
+    }
+
+    [Fact]
+    public void Undo_RevertsPaste()
+    {
+        var doc = new Document();
+        doc.BeginUndoGroup();
+        doc.Paste("hello\r\nworld");
+        doc.SealUndoGroup();
+
+        doc.BlockCount.Should().Be(2);
+        doc.Undo().Should().BeTrue();
+        doc.BlockCount.Should().Be(1);
+        doc.GetBlockText(0).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Undo_RevertsDeleteSelection()
+    {
+        var doc = new Document();
+        TypeAndSeal(doc, "hello world");
+
+        doc.AnchorBlock = 0;
+        doc.AnchorOffset = 5;
+        doc.CursorBlock = 0;
+        doc.CursorOffset = 11;
+
+        doc.BeginUndoGroup();
+        doc.DeleteSelection();
+        doc.SealUndoGroup();
+
+        doc.GetBlockText(0).Should().Be("hello");
+        doc.Undo().Should().BeTrue();
+        doc.GetBlockText(0).Should().Be("hello world");
+    }
+
+    // --- Cursor restoration ---
+
+    [Fact]
+    public void Undo_RestoresCursorPosition()
+    {
+        var doc = new Document();
+        TypeAndSeal(doc, "abc");
+        doc.CursorOffset.Should().Be(3);
+
+        TypeAndSeal(doc, "def");
+        doc.CursorOffset.Should().Be(6);
+
+        doc.Undo();
+        doc.CursorOffset.Should().Be(3);
+    }
+
+    [Fact]
+    public void Redo_RestoresCursorPosition()
+    {
+        var doc = new Document();
+        TypeAndSeal(doc, "abc");
+        TypeAndSeal(doc, "def");
+
+        doc.Undo();
+        doc.CursorOffset.Should().Be(3);
+
+        doc.Redo();
+        doc.CursorOffset.Should().Be(6);
+    }
+
+    // --- Group management ---
+
+    [Fact]
+    public void BeginUndoGroup_IsIdempotent()
+    {
+        var doc = new Document();
+        doc.BeginUndoGroup();
+        doc.Insert('a');
+        doc.BeginUndoGroup();
+        doc.Insert('b');
+        doc.BeginUndoGroup();
+        doc.Insert('c');
+        doc.CollapseSelection();
+        doc.SealUndoGroup();
+
+        doc.Undo().Should().BeTrue();
+        doc.GetBlockText(0).Should().BeEmpty();
+        doc.Undo().Should().BeFalse();
+    }
+
+    [Fact]
+    public void SealUndoGroup_WhenNoGroupOpen_IsNoOp()
+    {
+        var doc = new Document();
+        doc.SealUndoGroup();
+        doc.Undo().Should().BeFalse();
+    }
+
+    [Fact]
+    public void SealUndoGroup_SkipsNoOpGroup()
+    {
+        var doc = new Document();
+        doc.BeginUndoGroup();
+        doc.SealUndoGroup();
+        doc.Undo().Should().BeFalse();
+    }
+
+    [Fact]
+    public void MultipleGroupsUndoInOrder()
+    {
+        var doc = new Document();
+        TypeAndSeal(doc, "a");
+        TypeAndSeal(doc, "b");
+        TypeAndSeal(doc, "c");
+
+        doc.GetBlockText(0).Should().Be("abc");
+        doc.Undo();
+        doc.GetBlockText(0).Should().Be("ab");
+        doc.Undo();
+        doc.GetBlockText(0).Should().Be("a");
+        doc.Undo();
+        doc.GetBlockText(0).Should().BeEmpty();
+    }
+
+    // --- Redo invalidation ---
+
+    [Fact]
+    public void NewMutation_ClearsRedoStack()
+    {
+        var doc = new Document();
+        TypeAndSeal(doc, "abc");
+        doc.Undo();
+        doc.CanRedo.Should().BeTrue();
+
+        TypeAndSeal(doc, "xyz");
+        doc.CanRedo.Should().BeFalse();
+        doc.Redo().Should().BeFalse();
+    }
+
+    [Fact]
+    public void Redo_WhenEmpty_ReturnsFalse()
+    {
+        var doc = new Document();
+        doc.Redo().Should().BeFalse();
+    }
+
+    [Fact]
+    public void Undo_WhenEmpty_ReturnsFalse()
+    {
+        var doc = new Document();
+        doc.Undo().Should().BeFalse();
+    }
+
+    // --- Stack depth limit ---
+
+    [Fact]
+    public void UndoStack_CappedAtMaxDepth()
+    {
+        var doc = new Document();
+        for (int i = 0; i < 250; i++)
+            TypeAndSeal(doc, "x");
+
+        int undoCount = 0;
+        while (doc.Undo()) undoCount++;
+        undoCount.Should().Be(200);
+    }
+
+    // --- Compound operation ---
+
+    [Fact]
+    public void Undo_CompoundDeleteSelectionAndType()
+    {
+        var doc = new Document();
+        TypeAndSeal(doc, "hello world");
+
+        doc.AnchorBlock = 0;
+        doc.AnchorOffset = 5;
+        doc.CursorBlock = 0;
+        doc.CursorOffset = 11;
+
+        doc.BeginUndoGroup();
+        doc.DeleteSelection();
+        foreach (char c in " earth") doc.Insert(c);
+        doc.CollapseSelection();
+        doc.SealUndoGroup();
+
+        doc.GetBlockText(0).Should().Be("hello earth");
+        doc.Undo();
+        doc.GetBlockText(0).Should().Be("hello world");
+    }
 }
