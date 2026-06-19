@@ -2,6 +2,8 @@
 
 WPF markdown editor control built on a bare `FrameworkElement` with `OnRender`/`DrawingContext`, same approach as `TerminalCanvas`. No RichTextBox, no FlowDocument, no WebView2.
 
+**Markdown specification:** [CommonMark 0.31.2](https://spec.commonmark.org/0.31.2/)
+
 ## Document model
 
 The internal model is a list of **blocks**, each containing **runs** (spans of styled text). The model stores raw text — markdown syntax characters are part of the content and drive styling decisions at render time.
@@ -50,6 +52,16 @@ The document model must distinguish these from iteration 2 onward. A naive "one 
 - Frozen brushes and cached pen for rendering resources
 - Mouse wheel scrolling with auto-scroll to keep cursor visible
 - Viewport culling: only draw and hit-test visual lines within the visible region
+
+### 3c — Scrollbar and smooth scrolling
+- Smooth scrolling with exponential decay (adapted from TerminalCanvas SmoothScroll pattern)
+  - CompositionTarget.Rendering drives animation frames, unhooks when idle
+  - Scroll position jumps immediately; visual offset decays back to 0
+  - Decay: `offset *= Math.Exp(-frameInterval * 30.0)`, stops at < 0.5px
+- Custom scrollbar drawn in OnRender on right edge
+  - Proportionally-sized thumb, only visible when content exceeds viewport
+  - Click track to page up/down, drag thumb for direct scroll (no smooth animation)
+  - Content area width reduced by scrollbar width when visible
 
 ### 4 — Markdown styling (visible syntax)
 - Parse inline syntax: `**bold**`, `*italic*`, `` `code` ``

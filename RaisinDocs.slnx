@@ -1,4 +1,7 @@
 <Solution>
   <Project Path="RaisinDocs/RaisinDocs.csproj" />
   <Project Path="RaisinDocs.TestApp/RaisinDocs.TestApp.csproj" />
+  <Folder Name="/Tests/">
+    <Project Path="Tests/RaisinDocs.Tests/RaisinDocs.Tests.csproj" />
+  </Folder>
 </Solution>
