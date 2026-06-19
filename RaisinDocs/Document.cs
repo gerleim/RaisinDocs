@@ -170,6 +170,16 @@ public class Document
         CursorOffset++;
     }
 
+    public void InsertTextAt(int block, int offset, string text)
+    {
+        _blocks[block].Insert(offset, text);
+    }
+
+    public void RemoveTextAt(int block, int offset, int length)
+    {
+        _blocks[block].Remove(offset, length);
+    }
+
     public void InsertHardBreak()
     {
         _blocks[CursorBlock].Insert(CursorOffset, '\n');

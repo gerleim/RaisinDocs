@@ -28,6 +28,7 @@ public class ParsedBlock
 {
     public required BlockKind Kind { get; init; }
     public required IReadOnlyList<StyledRun> Runs { get; init; }
+    public bool IsFenceDelimiter { get; init; }
 }
 
 public static class MarkdownParser
@@ -48,6 +49,7 @@ public static class MarkdownParser
                 {
                     Kind = BlockKind.FencedCodeLine,
                     Runs = [new StyledRun(0, text.Length, InlineStyle.Normal)],
+                    IsFenceDelimiter = true,
                 });
                 continue;
             }

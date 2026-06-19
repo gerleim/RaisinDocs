@@ -15,7 +15,7 @@
                 <avalonDock:LayoutPanel Orientation="Horizontal">
                     <avalonDock:LayoutDocumentPane>
                         <avalonDock:LayoutDocument Title="Document 1" CanClose="False">
-                            <docs:DocsCanvas />
+                            <docs:DocsCanvas x:Name="Canvas" />
                         </avalonDock:LayoutDocument>
                     </avalonDock:LayoutDocumentPane>
                 </avalonDock:LayoutPanel>

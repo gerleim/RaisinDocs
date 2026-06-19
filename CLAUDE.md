@@ -42,10 +42,15 @@ dotnet build RaisinDocs.slnx -p:UseProjectReferences=false
 
 ### Key classes
 
-- **DocsCanvas** — Custom `FrameworkElement` handling rendering, input, scrolling, selection, and layout. Renders text via `FormattedText`/`GlyphTypeface` with viewport culling and smooth scrolling.
-- **Document** — Testable document model: `List<StringBuilder>` blocks, cursor/anchor positions, text mutations (insert, delete, paste), selection, and navigation. No UI dependencies.
+- **DocsCanvas** — Custom `FrameworkElement` handling rendering, input, scrolling, selection, and layout. Renders text via `FormattedText`/`GlyphTypeface` with viewport culling and smooth scrolling. Owns the `Document` instance and delegates all text mutations to it.
+- **Document** — Testable document model: `List<StringBuilder>` blocks, cursor/anchor positions, text mutations (insert, delete, paste), selection, undo/redo, and navigation. No UI dependencies — all tests target this class.
+- **MarkdownParser** — Static class that classifies blocks (`BlockKind`: paragraph, H1–H6, list item, fenced code) and parses inline styles (`StyledRun`: bold, italic, bold-italic, code). DocsCanvas calls this to drive styled rendering; Document knows nothing about markdown.
 
 ### Key dependencies
 
 - **Raisin.WPF.Base** — shared base library via project reference (SmoothScroller, layout helpers)
 - **AvalonDock** — docking framework with VS2013 dark theme (test app only)
+
+### Design document
+
+`design/RaisinDocs design v01.md` — iteration plan with completed/future milestones. Update status markers when completing iterations.
