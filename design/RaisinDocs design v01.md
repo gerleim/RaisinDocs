@@ -75,6 +75,7 @@ The document model must distinguish these from iteration 2 onward. A naive "one 
 - Toggle between raw and WYSIWYG views
 
 ### Future
+- Motion blur during smooth scroll (ghost copies offset in scroll direction, like RaisinTerminal2)
 - Images (inline and reference)
 - Tables
 - Links (clickable in view mode, editable syntax in edit mode)
