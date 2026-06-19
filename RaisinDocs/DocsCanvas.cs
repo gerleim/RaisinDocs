@@ -9,16 +9,26 @@ namespace RaisinDocs;
 
 public class DocsCanvas : FrameworkElement
 {
-    private static readonly Typeface _typeface = new("Segoe UI");
-    private const double _fontSize = 16;
+    private static readonly Typeface _normalTypeface = new("Segoe UI");
+    private static readonly Typeface _boldTypeface = new(new FontFamily("Segoe UI"), FontStyles.Normal, FontWeights.Bold, FontStretches.Normal);
+    private static readonly Typeface _italicTypeface = new(new FontFamily("Segoe UI"), FontStyles.Italic, FontWeights.Normal, FontStretches.Normal);
+    private static readonly Typeface _boldItalicTypeface = new(new FontFamily("Segoe UI"), FontStyles.Italic, FontWeights.Bold, FontStretches.Normal);
+    private static readonly Typeface _monoTypeface = new("Cascadia Mono");
+    private const double _baseFontSize = 16;
+    private const double _codeFontSize = 14;
     private const double _padding = 10;
     private const double _paragraphGap = 8;
+    private const double _listIndent = 20;
     private static readonly Brush _selectionBrush;
     private static readonly Pen _cursorPen;
     private const double ScrollBarWidth = 14;
     private const double ScrollBarMinThumb = 20;
     private static readonly Brush _scrollTrackBrush;
     private static readonly Brush _scrollThumbBrush;
+    private static readonly Brush _syntaxBrush;
+    private static readonly Brush _codeBackgroundBrush;
+
+    private static readonly double[] _headingFontSizes = [32, 26, 22, 18, 16, 14];
 
     static DocsCanvas()
     {
@@ -34,20 +44,31 @@ public class DocsCanvas : FrameworkElement
         var thumb = new SolidColorBrush(Color.FromArgb(120, 128, 128, 128));
         thumb.Freeze();
         _scrollThumbBrush = thumb;
+        var syntax = new SolidColorBrush(Color.FromArgb(180, 140, 140, 140));
+        syntax.Freeze();
+        _syntaxBrush = syntax;
+        var codeBg = new SolidColorBrush(Color.FromArgb(25, 0, 0, 0));
+        codeBg.Freeze();
+        _codeBackgroundBrush = codeBg;
     }
 
     private readonly Document _doc = new();
 
     private bool _cursorVisible = true;
     private double _dpiScale = 1.0;
-    private double _lineHeight;
     private bool _measured;
     private readonly DispatcherTimer _blinkTimer;
 
-    private GlyphTypeface? _glyphTypeface;
-    private readonly Dictionary<char, double> _charWidthCache = new();
+    private GlyphTypeface? _normalGlyph;
+    private GlyphTypeface? _boldGlyph;
+    private GlyphTypeface? _italicGlyph;
+    private GlyphTypeface? _boldItalicGlyph;
+    private GlyphTypeface? _monoGlyph;
+    private readonly Dictionary<(char, int), double> _charWidthCache = new();
 
-    private record struct VisualLine(int BlockIndex, int StartOffset, int Length);
+    private readonly Dictionary<BlockKind, double> _lineHeights = new();
+
+    private record struct VisualLine(int BlockIndex, int StartOffset, int Length, BlockKind BlockKind);
     private readonly List<VisualLine> _visualLines = [];
     private readonly List<double> _lineYPositions = [];
     private bool _layoutDirty = true;
@@ -58,6 +79,8 @@ public class DocsCanvas : FrameworkElement
     private bool _isDraggingThumb;
     private double _dragStartY;
     private double _dragStartScroll;
+
+    private List<ParsedBlock>? _parsedBlocks;
 
     public DocsCanvas()
     {
@@ -89,12 +112,83 @@ public class DocsCanvas : FrameworkElement
         if (_measured) return;
         try { _dpiScale = VisualTreeHelper.GetDpi(this).PixelsPerDip; }
         catch { }
-        var ft = new FormattedText("M", CultureInfo.InvariantCulture,
-            FlowDirection.LeftToRight, _typeface, _fontSize,
-            Brushes.Black, _dpiScale);
-        _lineHeight = ft.Height;
-        _typeface.TryGetGlyphTypeface(out _glyphTypeface);
+
+        _normalTypeface.TryGetGlyphTypeface(out _normalGlyph);
+        _boldTypeface.TryGetGlyphTypeface(out _boldGlyph);
+        _italicTypeface.TryGetGlyphTypeface(out _italicGlyph);
+        _boldItalicTypeface.TryGetGlyphTypeface(out _boldItalicGlyph);
+        _monoTypeface.TryGetGlyphTypeface(out _monoGlyph);
+
+        foreach (BlockKind kind in Enum.GetValues<BlockKind>())
+        {
+            double fontSize = GetBlockFontSize(kind);
+            var ft = new FormattedText("M", CultureInfo.InvariantCulture,
+                FlowDirection.LeftToRight, GetBlockBaseTypeface(kind), fontSize,
+                Brushes.Black, _dpiScale);
+            _lineHeights[kind] = ft.Height;
+        }
+
         _measured = true;
+    }
+
+    private static double GetBlockFontSize(BlockKind kind) => kind switch
+    {
+        BlockKind.Heading1 => _headingFontSizes[0],
+        BlockKind.Heading2 => _headingFontSizes[1],
+        BlockKind.Heading3 => _headingFontSizes[2],
+        BlockKind.Heading4 => _headingFontSizes[3],
+        BlockKind.Heading5 => _headingFontSizes[4],
+        BlockKind.Heading6 => _headingFontSizes[5],
+        BlockKind.FencedCodeLine => _codeFontSize,
+        _ => _baseFontSize,
+    };
+
+    private static Typeface GetBlockBaseTypeface(BlockKind kind) => kind switch
+    {
+        BlockKind.FencedCodeLine => _monoTypeface,
+        _ => _normalTypeface,
+    };
+
+    private static Typeface GetInlineTypeface(BlockKind blockKind, InlineStyle style) => blockKind switch
+    {
+        BlockKind.FencedCodeLine => _monoTypeface,
+        _ => style switch
+        {
+            InlineStyle.Bold => _boldTypeface,
+            InlineStyle.Italic => _italicTypeface,
+            InlineStyle.BoldItalic => _boldItalicTypeface,
+            InlineStyle.Code => _monoTypeface,
+            _ => _normalTypeface,
+        },
+    };
+
+    private GlyphTypeface? GetInlineGlyph(BlockKind blockKind, InlineStyle style) => blockKind switch
+    {
+        BlockKind.FencedCodeLine => _monoGlyph,
+        _ => style switch
+        {
+            InlineStyle.Bold => _boldGlyph,
+            InlineStyle.Italic => _italicGlyph,
+            InlineStyle.BoldItalic => _boldItalicGlyph,
+            InlineStyle.Code => _monoGlyph,
+            _ => _normalGlyph,
+        },
+    };
+
+    private static int GetStyleKey(BlockKind blockKind, InlineStyle style)
+    {
+        int fontId = blockKind == BlockKind.FencedCodeLine || style == InlineStyle.Code ? 1 : 0;
+        if (style == InlineStyle.Bold) fontId = 2;
+        else if (style == InlineStyle.Italic) fontId = 3;
+        else if (style == InlineStyle.BoldItalic) fontId = 4;
+        if (blockKind == BlockKind.FencedCodeLine) fontId = 1;
+        int sizeKey = (int)GetBlockFontSize(blockKind);
+        return fontId * 100 + sizeKey;
+    }
+
+    private double GetLineHeight(BlockKind kind)
+    {
+        return _lineHeights.TryGetValue(kind, out double h) ? h : _lineHeights[BlockKind.Paragraph];
     }
 
     private void ResetBlink()
@@ -107,6 +201,7 @@ public class DocsCanvas : FrameworkElement
     private void InvalidateLayout()
     {
         _layoutDirty = true;
+        _parsedBlocks = null;
         InvalidateVisual();
     }
 
@@ -128,32 +223,47 @@ public class DocsCanvas : FrameworkElement
 
     // --- Text measurement ---
 
-    private double MeasureCharWidth(char ch)
+    private double MeasureCharWidth(char ch, BlockKind blockKind, InlineStyle style)
     {
-        if (!_charWidthCache.TryGetValue(ch, out double w))
+        int key = GetStyleKey(blockKind, style);
+        if (!_charWidthCache.TryGetValue((ch, key), out double w))
         {
-            if (_glyphTypeface != null &&
-                _glyphTypeface.CharacterToGlyphMap.TryGetValue(ch, out ushort glyphIndex))
+            double fontSize = GetBlockFontSize(blockKind);
+            var glyph = GetInlineGlyph(blockKind, style);
+            if (glyph != null && glyph.CharacterToGlyphMap.TryGetValue(ch, out ushort glyphIndex))
             {
-                w = _glyphTypeface.AdvanceWidths[glyphIndex] * _fontSize;
+                w = glyph.AdvanceWidths[glyphIndex] * fontSize;
             }
             else
             {
+                var typeface = GetInlineTypeface(blockKind, style);
                 var ft = new FormattedText(ch.ToString(), CultureInfo.InvariantCulture,
-                    FlowDirection.LeftToRight, _typeface, _fontSize,
+                    FlowDirection.LeftToRight, typeface, fontSize,
                     Brushes.Black, _dpiScale);
                 w = ft.WidthIncludingTrailingWhitespace;
             }
-            _charWidthCache[ch] = w;
+            _charWidthCache[(ch, key)] = w;
         }
         return w;
     }
 
-    private double MeasureStringWidth(string text, int start, int length)
+    private InlineStyle GetStyleAtOffset(IReadOnlyList<StyledRun> runs, int offset, ref int runHint)
+    {
+        while (runHint < runs.Count - 1 && offset >= runs[runHint].Start + runs[runHint].Length)
+            runHint++;
+        return runs[runHint].Style;
+    }
+
+    private double MeasureStringWidth(string text, int start, int length,
+        IReadOnlyList<StyledRun> runs, BlockKind blockKind)
     {
         double total = 0;
+        int runIdx = 0;
         for (int i = start; i < start + length; i++)
-            total += MeasureCharWidth(text[i]);
+        {
+            var style = GetStyleAtOffset(runs, i, ref runIdx);
+            total += MeasureCharWidth(text[i], blockKind, style);
+        }
         return total;
     }
 
@@ -163,6 +273,8 @@ public class DocsCanvas : FrameworkElement
     {
         if (!_layoutDirty) return;
         _layoutDirty = false;
+
+        _parsedBlocks ??= MarkdownParser.Parse(i => _doc.GetBlockText(i), _doc.BlockCount);
 
         _scrollbarVisible = false;
         ComputeLayoutCore(ActualWidth - _padding * 2);
@@ -182,11 +294,12 @@ public class DocsCanvas : FrameworkElement
         for (int bi = 0; bi < _doc.BlockCount; bi++)
         {
             string text = _doc.GetBlockText(bi);
+            var parsed = _parsedBlocks![bi];
             var segments = text.Split('\n');
             int offset = 0;
             for (int s = 0; s < segments.Length; s++)
             {
-                WrapSegment(bi, offset, segments[s], maxWidth);
+                WrapSegment(bi, offset, segments[s], maxWidth, parsed);
                 offset += segments[s].Length + 1;
             }
         }
@@ -197,36 +310,39 @@ public class DocsCanvas : FrameworkElement
             if (i > 0 && _visualLines[i].BlockIndex != _visualLines[i - 1].BlockIndex)
                 y += _paragraphGap;
             _lineYPositions.Add(y);
-            y += _lineHeight;
+            y += GetLineHeight(_visualLines[i].BlockKind);
         }
         _totalContentHeight = y + _padding;
     }
 
-    private void WrapSegment(int blockIndex, int startOffset, string segment, double maxWidth)
+    private void WrapSegment(int blockIndex, int startOffset, string segment, double maxWidth,
+        ParsedBlock parsed)
     {
         if (segment.Length == 0)
         {
-            _visualLines.Add(new VisualLine(blockIndex, startOffset, 0));
+            _visualLines.Add(new VisualLine(blockIndex, startOffset, 0, parsed.Kind));
             return;
         }
 
         int pos = 0;
         while (pos < segment.Length)
         {
-            int lineLen = FitLine(segment, pos, maxWidth);
-            _visualLines.Add(new VisualLine(blockIndex, startOffset + pos, lineLen));
+            int lineLen = FitLine(segment, pos, maxWidth, parsed);
+            _visualLines.Add(new VisualLine(blockIndex, startOffset + pos, lineLen, parsed.Kind));
             pos += lineLen;
         }
     }
 
-    private int FitLine(string text, int start, double maxWidth)
+    private int FitLine(string text, int start, double maxWidth, ParsedBlock parsed)
     {
         int lastSpace = -1;
         double width = 0;
+        int runIdx = 0;
         for (int i = start; i < text.Length; i++)
         {
             if (text[i] == ' ') lastSpace = i;
-            width += MeasureCharWidth(text[i]);
+            var style = GetStyleAtOffset(parsed.Runs, i, ref runIdx);
+            width += MeasureCharWidth(text[i], parsed.Kind, style);
             if (width > maxWidth && i > start)
             {
                 if (lastSpace >= start)
@@ -256,7 +372,8 @@ public class DocsCanvas : FrameworkElement
         int localOffset = Math.Clamp(_doc.CursorOffset - vl.StartOffset, 0, vl.Length);
         if (localOffset == 0) return 0;
         string blockText = _doc.GetBlockText(vl.BlockIndex);
-        return MeasureStringWidth(blockText, vl.StartOffset, localOffset);
+        var parsed = _parsedBlocks![vl.BlockIndex];
+        return MeasureStringWidth(blockText, vl.StartOffset, localOffset, parsed.Runs, parsed.Kind);
     }
 
     private int HitTestInVisualLine(int vlIndex, double x)
@@ -265,12 +382,16 @@ public class DocsCanvas : FrameworkElement
         if (vl.Length == 0) return vl.StartOffset;
 
         string blockText = _doc.GetBlockText(vl.BlockIndex);
+        var parsed = _parsedBlocks![vl.BlockIndex];
         double accum = 0;
+        int runIdx = 0;
         for (int i = 0; i < vl.Length; i++)
         {
-            double charW = MeasureCharWidth(blockText[vl.StartOffset + i]);
+            int offset = vl.StartOffset + i;
+            var style = GetStyleAtOffset(parsed.Runs, offset, ref runIdx);
+            double charW = MeasureCharWidth(blockText[offset], parsed.Kind, style);
             if (x < accum + charW / 2)
-                return vl.StartOffset + i;
+                return offset;
             accum += charW;
         }
         return vl.StartOffset + vl.Length;
@@ -280,7 +401,8 @@ public class DocsCanvas : FrameworkElement
     {
         for (int i = 0; i < _visualLines.Count; i++)
         {
-            if (y < _lineYPositions[i] + _lineHeight)
+            double lineH = GetLineHeight(_visualLines[i].BlockKind);
+            if (y < _lineYPositions[i] + lineH)
                 return i;
         }
         return _visualLines.Count - 1;
@@ -308,7 +430,8 @@ public class DocsCanvas : FrameworkElement
         ComputeLayout();
         int vli = CursorToVisualLineIndex();
         double cursorY = _lineYPositions[vli];
-        double cursorBottom = cursorY + _lineHeight;
+        double lineH = GetLineHeight(_visualLines[vli].BlockKind);
+        double cursorBottom = cursorY + lineH;
         if (cursorY < _scrollOffset + _padding)
             _scrollOffset = cursorY - _padding;
         else if (cursorBottom > _scrollOffset + ActualHeight - _padding)
@@ -678,22 +801,33 @@ public class DocsCanvas : FrameworkElement
         double viewTop = effectiveScroll;
         double viewBottom = effectiveScroll + ActualHeight;
 
+        DrawCodeBlockBackgrounds(dc, effectiveScroll, viewTop, viewBottom);
+
         if (_doc.HasSelection)
             DrawSelection(dc, effectiveScroll);
 
         for (int i = 0; i < _visualLines.Count; i++)
         {
+            var vl = _visualLines[i];
+            double lineH = GetLineHeight(vl.BlockKind);
             double lineY = _lineYPositions[i];
-            if (lineY + _lineHeight < viewTop) continue;
+            if (lineY + lineH < viewTop) continue;
             if (lineY > viewBottom) break;
 
-            var vl = _visualLines[i];
             if (vl.Length > 0)
             {
-                string text = _doc.GetBlockText(vl.BlockIndex).Substring(vl.StartOffset, vl.Length);
+                string blockText = _doc.GetBlockText(vl.BlockIndex);
+                string text = blockText.Substring(vl.StartOffset, vl.Length);
+                var parsed = _parsedBlocks![vl.BlockIndex];
+                double fontSize = GetBlockFontSize(parsed.Kind);
+                var baseTypeface = GetBlockBaseTypeface(parsed.Kind);
+
                 var ft = new FormattedText(text, CultureInfo.InvariantCulture,
-                    FlowDirection.LeftToRight, _typeface, _fontSize,
+                    FlowDirection.LeftToRight, baseTypeface, fontSize,
                     Brushes.Black, _dpiScale);
+
+                ApplyInlineStyles(ft, vl, parsed);
+
                 dc.DrawText(ft, new Point(_padding, lineY - effectiveScroll));
             }
         }
@@ -703,11 +837,127 @@ public class DocsCanvas : FrameworkElement
             int vli = CursorToVisualLineIndex();
             double cx = _padding + CursorXInVisualLine(vli);
             double cy = _lineYPositions[vli] - effectiveScroll;
-            dc.DrawLine(_cursorPen, new Point(cx, cy), new Point(cx, cy + _lineHeight));
+            double lineH = GetLineHeight(_visualLines[vli].BlockKind);
+            dc.DrawLine(_cursorPen, new Point(cx, cy), new Point(cx, cy + lineH));
         }
 
         if (_scrollbarVisible)
             DrawScrollbar(dc);
+    }
+
+    private void ApplyInlineStyles(FormattedText ft, VisualLine vl, ParsedBlock parsed)
+    {
+        foreach (var run in parsed.Runs)
+        {
+            int runEnd = run.Start + run.Length;
+            int vlEnd = vl.StartOffset + vl.Length;
+            if (runEnd <= vl.StartOffset || run.Start >= vlEnd) continue;
+
+            int localStart = Math.Max(0, run.Start - vl.StartOffset);
+            int localEnd = Math.Min(vl.Length, runEnd - vl.StartOffset);
+            int count = localEnd - localStart;
+            if (count <= 0) continue;
+
+            if (parsed.Kind == BlockKind.FencedCodeLine) continue;
+
+            switch (run.Style)
+            {
+                case InlineStyle.Bold:
+                    ft.SetFontWeight(FontWeights.Bold, localStart, count);
+                    break;
+                case InlineStyle.Italic:
+                    ft.SetFontStyle(FontStyles.Italic, localStart, count);
+                    break;
+                case InlineStyle.BoldItalic:
+                    ft.SetFontWeight(FontWeights.Bold, localStart, count);
+                    ft.SetFontStyle(FontStyles.Italic, localStart, count);
+                    break;
+                case InlineStyle.Code:
+                    ft.SetFontFamily(_monoTypeface.FontFamily, localStart, count);
+                    break;
+            }
+        }
+
+        ApplySyntaxDimming(ft, vl, parsed);
+    }
+
+    private void ApplySyntaxDimming(FormattedText ft, VisualLine vl, ParsedBlock parsed)
+    {
+        string blockText = _doc.GetBlockText(vl.BlockIndex);
+        int vlEnd = vl.StartOffset + vl.Length;
+
+        if (parsed.Kind >= BlockKind.Heading1 && parsed.Kind <= BlockKind.Heading6)
+        {
+            int hashCount = parsed.Kind - BlockKind.Heading1 + 1;
+            int prefixLen = hashCount + 1;
+            int localStart = Math.Max(0, 0 - vl.StartOffset);
+            int localEnd = Math.Min(vl.Length, prefixLen - vl.StartOffset);
+            if (localEnd > localStart)
+                ft.SetForegroundBrush(_syntaxBrush, localStart, localEnd - localStart);
+        }
+
+        if (parsed.Kind == BlockKind.UnorderedListItem)
+        {
+            int localEnd = Math.Min(vl.Length, 2 - vl.StartOffset);
+            if (localEnd > 0 && vl.StartOffset == 0)
+                ft.SetForegroundBrush(_syntaxBrush, 0, localEnd);
+        }
+
+        foreach (var run in parsed.Runs)
+        {
+            if (run.Style == InlineStyle.Normal) continue;
+            int runEnd = run.Start + run.Length;
+            if (runEnd <= vl.StartOffset || run.Start >= vlEnd) continue;
+
+            int markerLen = run.Style switch
+            {
+                InlineStyle.BoldItalic => 3,
+                InlineStyle.Bold => 2,
+                InlineStyle.Italic => 1,
+                InlineStyle.Code => CountBackticks(blockText, run.Start),
+                _ => 0,
+            };
+            if (markerLen == 0) continue;
+
+            DimRange(ft, vl, run.Start, markerLen);
+            DimRange(ft, vl, runEnd - markerLen, markerLen);
+        }
+    }
+
+    private static int CountBackticks(string text, int start)
+    {
+        int count = 0;
+        while (start + count < text.Length && text[start + count] == '`') count++;
+        return count;
+    }
+
+    private static void DimRange(FormattedText ft, VisualLine vl, int docStart, int length)
+    {
+        int vlEnd = vl.StartOffset + vl.Length;
+        int localStart = Math.Max(0, docStart - vl.StartOffset);
+        int localEnd = Math.Min(vl.Length, docStart + length - vl.StartOffset);
+        if (localEnd > localStart)
+            ft.SetForegroundBrush(_syntaxBrush, localStart, localEnd - localStart);
+    }
+
+    private void DrawCodeBlockBackgrounds(DrawingContext dc, double effectiveScroll,
+        double viewTop, double viewBottom)
+    {
+        double contentWidth = _scrollbarVisible ? ActualWidth - ScrollBarWidth : ActualWidth;
+
+        for (int i = 0; i < _visualLines.Count; i++)
+        {
+            var vl = _visualLines[i];
+            if (vl.BlockKind != BlockKind.FencedCodeLine) continue;
+
+            double lineH = GetLineHeight(vl.BlockKind);
+            double lineY = _lineYPositions[i];
+            if (lineY + lineH < viewTop) continue;
+            if (lineY > viewBottom) break;
+
+            dc.DrawRectangle(_codeBackgroundBrush, null,
+                new Rect(0, lineY - effectiveScroll, contentWidth, lineH));
+        }
     }
 
     private void DrawSelection(DrawingContext dc, double effectiveScroll)
@@ -718,11 +968,12 @@ public class DocsCanvas : FrameworkElement
 
         for (int i = 0; i < _visualLines.Count; i++)
         {
+            var vl = _visualLines[i];
+            double lineH = GetLineHeight(vl.BlockKind);
             double lineY = _lineYPositions[i];
-            if (lineY + _lineHeight < viewTop) continue;
+            if (lineY + lineH < viewTop) continue;
             if (lineY > viewBottom) break;
 
-            var vl = _visualLines[i];
             int vlEnd = vl.StartOffset + vl.Length;
 
             bool startsBeforeSelEnd = Document.ComparePositions(vl.BlockIndex, vl.StartOffset, eb, eo) < 0;
@@ -735,11 +986,12 @@ public class DocsCanvas : FrameworkElement
                 ? vlEnd : eo;
 
             string blockText = _doc.GetBlockText(vl.BlockIndex);
+            var parsed = _parsedBlocks![vl.BlockIndex];
             double x1 = hlStart > vl.StartOffset
-                ? MeasureStringWidth(blockText, vl.StartOffset, hlStart - vl.StartOffset)
+                ? MeasureStringWidth(blockText, vl.StartOffset, hlStart - vl.StartOffset, parsed.Runs, parsed.Kind)
                 : 0;
             double x2 = hlEnd > vl.StartOffset
-                ? MeasureStringWidth(blockText, vl.StartOffset, hlEnd - vl.StartOffset)
+                ? MeasureStringWidth(blockText, vl.StartOffset, hlEnd - vl.StartOffset, parsed.Runs, parsed.Kind)
                 : 0;
 
             bool selectionContinues = Document.ComparePositions(vl.BlockIndex, vlEnd, eb, eo) < 0;
@@ -749,7 +1001,7 @@ public class DocsCanvas : FrameworkElement
                 x2 += 4;
 
             dc.DrawRectangle(_selectionBrush, null,
-                new Rect(_padding + x1, lineY - effectiveScroll, x2 - x1, _lineHeight));
+                new Rect(_padding + x1, lineY - effectiveScroll, x2 - x1, lineH));
         }
     }
 
