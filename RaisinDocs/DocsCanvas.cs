@@ -15,7 +15,7 @@ public class DocsCanvas : FrameworkElement
     private const double _paragraphGap = 8;
     private static readonly Brush _selectionBrush;
     private static readonly Pen _cursorPen;
-    private const double ScrollBarWidth = 10;
+    private const double ScrollBarWidth = 14;
     private const double ScrollBarMinThumb = 20;
     private static readonly Brush _scrollTrackBrush;
     private static readonly Brush _scrollThumbBrush;
@@ -63,6 +63,7 @@ public class DocsCanvas : FrameworkElement
     {
         _smoother = new SmoothScroller(InvalidateVisual);
         Focusable = true;
+        FocusVisualStyle = null;
         SnapsToDevicePixels = true;
         UseLayoutRounding = true;
         ClipToBounds = true;
@@ -394,9 +395,14 @@ public class DocsCanvas : FrameworkElement
     protected override void OnMouseMove(MouseEventArgs e)
     {
         base.OnMouseMove(e);
-        if (!IsMouseCaptured) return;
 
         var pos = e.GetPosition(this);
+        if (!IsMouseCaptured)
+        {
+            Cursor = IsInScrollbarArea(pos) ? Cursors.Arrow : Cursors.IBeam;
+            return;
+        }
+
         if (_isDraggingThumb)
         {
             double maxScroll = Math.Max(1, _totalContentHeight - ActualHeight);
