@@ -63,10 +63,16 @@ The document model must distinguish these from iteration 2 onward. A naive "one 
   - Click track to page up/down, drag thumb for direct scroll (no smooth animation)
   - Content area width reduced by scrollbar width when visible
 
-### 4 — Markdown styling (visible syntax)
-- Parse inline syntax: `**bold**`, `*italic*`, `` `code` ``
-- Parse block syntax: `# heading`, `- list`, ``` ``` code block ```
-- Render with appropriate fonts/sizes — syntax characters still visible
+### 4 — Markdown styling (visible syntax) ✅
+- `MarkdownParser` static class: block classification (`# heading` → H1–H6, `- list`, fenced code) and inline parsing (`**bold**`, `*italic*`, `` `code` ``, `***bold italic***`)
+- Cross-block fenced code detection (``` ``` ``` toggles fence state)
+- Style-aware rendering via `FormattedText` range styling (SetFontWeight/SetFontStyle/SetFontFamily)
+- Heading font sizes: H1=32, H2=26, H3=22, H4=18, H5=16, H6=14; code=14pt Cascadia Mono
+- Variable line heights per block kind, with style-aware character measurement and word wrapping
+- Syntax marker dimming (`#`, `- `, `**`, `*`, `` ` ``) in gray
+- Subtle gray background behind fenced code blocks
+- Hit testing, cursor positioning, and selection updated for mixed styles
+- 34 parser tests (block classification, inline parsing, fenced code, edge cases)
 
 ### 5 — WYSIWYG mode
 - Hide markdown syntax, show styled result
