@@ -44,6 +44,13 @@ The document model must distinguish these from iteration 2 onward. A naive "one 
 - Hit testing: screen coordinates to document position
 - Copy/paste (paste as plain text initially)
 
+### 3b — Performance and scrolling
+- Layout dirty flag: skip recomputation on cursor blink, only recompute on text/size changes
+- GlyphTypeface measurement cache: per-character advance width lookup instead of FormattedText allocation
+- Frozen brushes and cached pen for rendering resources
+- Mouse wheel scrolling with auto-scroll to keep cursor visible
+- Viewport culling: only draw and hit-test visual lines within the visible region
+
 ### 4 — Markdown styling (visible syntax)
 - Parse inline syntax: `**bold**`, `*italic*`, `` `code` ``
 - Parse block syntax: `# heading`, `- list`, ``` ``` code block ```

@@ -13,7 +13,18 @@ public class DocsCanvas : FrameworkElement
     private const double _fontSize = 16;
     private const double _padding = 10;
     private const double _paragraphGap = 8;
-    private static readonly Brush _selectionBrush = new SolidColorBrush(Color.FromArgb(100, 0, 120, 215));
+    private static readonly Brush _selectionBrush;
+    private static readonly Pen _cursorPen;
+
+    static DocsCanvas()
+    {
+        var brush = new SolidColorBrush(Color.FromArgb(100, 0, 120, 215));
+        brush.Freeze();
+        _selectionBrush = brush;
+        var pen = new Pen(Brushes.Black, 1.5);
+        pen.Freeze();
+        _cursorPen = pen;
+    }
 
     private readonly List<StringBuilder> _blocks = [new()];
     private int _blockIndex;
@@ -27,9 +38,15 @@ public class DocsCanvas : FrameworkElement
     private bool _measured;
     private readonly DispatcherTimer _blinkTimer;
 
+    private GlyphTypeface? _glyphTypeface;
+    private readonly Dictionary<char, double> _charWidthCache = new();
+
     private record struct VisualLine(int BlockIndex, int StartOffset, int Length);
     private readonly List<VisualLine> _visualLines = [];
     private readonly List<double> _lineYPositions = [];
+    private bool _layoutDirty = true;
+    private double _totalContentHeight;
+    private double _scrollOffset;
 
     private bool HasSelection => _anchorBlockIndex != _blockIndex || _anchorCharOffset != _charOffset;
 
@@ -65,6 +82,7 @@ public class DocsCanvas : FrameworkElement
             FlowDirection.LeftToRight, _typeface, _fontSize,
             Brushes.Black, _dpiScale);
         _lineHeight = ft.Height;
+        _typeface.TryGetGlyphTypeface(out _glyphTypeface);
         _measured = true;
     }
 
@@ -73,6 +91,12 @@ public class DocsCanvas : FrameworkElement
         _cursorVisible = true;
         _blinkTimer.Stop();
         _blinkTimer.Start();
+    }
+
+    private void InvalidateLayout()
+    {
+        _layoutDirty = true;
+        InvalidateVisual();
     }
 
     protected override void OnGotFocus(RoutedEventArgs e)
@@ -93,19 +117,42 @@ public class DocsCanvas : FrameworkElement
 
     // --- Text measurement ---
 
-    private double MeasureTextWidth(string text)
+    private double MeasureCharWidth(char ch)
     {
-        if (text.Length == 0) return 0;
-        var ft = new FormattedText(text, CultureInfo.InvariantCulture,
-            FlowDirection.LeftToRight, _typeface, _fontSize,
-            Brushes.Black, _dpiScale);
-        return ft.WidthIncludingTrailingWhitespace;
+        if (!_charWidthCache.TryGetValue(ch, out double w))
+        {
+            if (_glyphTypeface != null &&
+                _glyphTypeface.CharacterToGlyphMap.TryGetValue(ch, out ushort glyphIndex))
+            {
+                w = _glyphTypeface.AdvanceWidths[glyphIndex] * _fontSize;
+            }
+            else
+            {
+                var ft = new FormattedText(ch.ToString(), CultureInfo.InvariantCulture,
+                    FlowDirection.LeftToRight, _typeface, _fontSize,
+                    Brushes.Black, _dpiScale);
+                w = ft.WidthIncludingTrailingWhitespace;
+            }
+            _charWidthCache[ch] = w;
+        }
+        return w;
+    }
+
+    private double MeasureStringWidth(string text, int start, int length)
+    {
+        double total = 0;
+        for (int i = start; i < start + length; i++)
+            total += MeasureCharWidth(text[i]);
+        return total;
     }
 
     // --- Layout ---
 
     private void ComputeLayout()
     {
+        if (!_layoutDirty) return;
+        _layoutDirty = false;
+
         _visualLines.Clear();
         _lineYPositions.Clear();
         double maxWidth = Math.Max(0, ActualWidth - _padding * 2);
@@ -130,6 +177,7 @@ public class DocsCanvas : FrameworkElement
             _lineYPositions.Add(y);
             y += _lineHeight;
         }
+        _totalContentHeight = y + _padding;
     }
 
     private void WrapSegment(int blockIndex, int startOffset, string segment, double maxWidth)
@@ -152,11 +200,12 @@ public class DocsCanvas : FrameworkElement
     private int FitLine(string text, int start, double maxWidth)
     {
         int lastSpace = -1;
+        double width = 0;
         for (int i = start; i < text.Length; i++)
         {
             if (text[i] == ' ') lastSpace = i;
-            double w = MeasureTextWidth(text[start..(i + 1)]);
-            if (w > maxWidth && i > start)
+            width += MeasureCharWidth(text[i]);
+            if (width > maxWidth && i > start)
             {
                 if (lastSpace >= start)
                     return lastSpace - start + 1;
@@ -185,7 +234,7 @@ public class DocsCanvas : FrameworkElement
         int localOffset = Math.Clamp(_charOffset - vl.StartOffset, 0, vl.Length);
         if (localOffset == 0) return 0;
         string blockText = _blocks[vl.BlockIndex].ToString();
-        return MeasureTextWidth(blockText.Substring(vl.StartOffset, localOffset));
+        return MeasureStringWidth(blockText, vl.StartOffset, localOffset);
     }
 
     private int HitTestInVisualLine(int vlIndex, double x)
@@ -194,13 +243,13 @@ public class DocsCanvas : FrameworkElement
         if (vl.Length == 0) return vl.StartOffset;
 
         string blockText = _blocks[vl.BlockIndex].ToString();
-        string lineText = blockText.Substring(vl.StartOffset, vl.Length);
-
-        for (int i = 0; i < lineText.Length; i++)
+        double accum = 0;
+        for (int i = 0; i < vl.Length; i++)
         {
-            double left = i > 0 ? MeasureTextWidth(lineText[..i]) : 0;
-            double right = MeasureTextWidth(lineText[..(i + 1)]);
-            if (x < (left + right) / 2) return vl.StartOffset + i;
+            double charW = MeasureCharWidth(blockText[vl.StartOffset + i]);
+            if (x < accum + charW / 2)
+                return vl.StartOffset + i;
+            accum += charW;
         }
         return vl.StartOffset + vl.Length;
     }
@@ -217,9 +266,40 @@ public class DocsCanvas : FrameworkElement
 
     private void HitTestToPosition(Point pos, out int blockIndex, out int charOffset)
     {
-        int vli = HitTestVisualLine(pos.Y);
+        int vli = HitTestVisualLine(pos.Y + _scrollOffset);
         blockIndex = _visualLines[vli].BlockIndex;
         charOffset = HitTestInVisualLine(vli, pos.X - _padding);
+    }
+
+    // --- Scroll ---
+
+    private void ClampScroll()
+    {
+        double maxScroll = Math.Max(0, _totalContentHeight - ActualHeight);
+        _scrollOffset = Math.Clamp(_scrollOffset, 0, maxScroll);
+    }
+
+    private void EnsureCursorVisible()
+    {
+        ComputeLayout();
+        int vli = CursorToVisualLineIndex();
+        double cursorY = _lineYPositions[vli];
+        double cursorBottom = cursorY + _lineHeight;
+        if (cursorY < _scrollOffset + _padding)
+            _scrollOffset = cursorY - _padding;
+        else if (cursorBottom > _scrollOffset + ActualHeight - _padding)
+            _scrollOffset = cursorBottom - ActualHeight + _padding;
+        ClampScroll();
+    }
+
+    protected override void OnMouseWheel(MouseWheelEventArgs e)
+    {
+        base.OnMouseWheel(e);
+        ComputeLayout();
+        _scrollOffset -= e.Delta;
+        ClampScroll();
+        InvalidateVisual();
+        e.Handled = true;
     }
 
     // --- Selection helpers ---
@@ -356,7 +436,8 @@ public class DocsCanvas : FrameworkElement
         CollapseSelection();
 
         ResetBlink();
-        InvalidateVisual();
+        InvalidateLayout();
+        EnsureCursorVisible();
         e.Handled = true;
     }
 
@@ -368,6 +449,7 @@ public class DocsCanvas : FrameworkElement
         bool handled = true;
         bool shift = Keyboard.Modifiers.HasFlag(ModifierKeys.Shift);
         bool ctrl = Keyboard.Modifiers.HasFlag(ModifierKeys.Control);
+        bool textChanged = false;
 
         ComputeLayout();
 
@@ -390,18 +472,21 @@ public class DocsCanvas : FrameworkElement
                     _charOffset = 0;
                 }
                 CollapseSelection();
+                textChanged = true;
                 break;
 
             case Key.Back:
                 if (HasSelection)
                 {
                     DeleteSelection();
+                    textChanged = true;
                 }
                 else if (_charOffset > 0)
                 {
                     _blocks[_blockIndex].Remove(_charOffset - 1, 1);
                     _charOffset--;
                     CollapseSelection();
+                    textChanged = true;
                 }
                 else if (_blockIndex > 0)
                 {
@@ -412,6 +497,7 @@ public class DocsCanvas : FrameworkElement
                     _blockIndex--;
                     _charOffset = newOffset;
                     CollapseSelection();
+                    textChanged = true;
                 }
                 break;
 
@@ -419,15 +505,18 @@ public class DocsCanvas : FrameworkElement
                 if (HasSelection)
                 {
                     DeleteSelection();
+                    textChanged = true;
                 }
                 else if (_charOffset < _blocks[_blockIndex].Length)
                 {
                     _blocks[_blockIndex].Remove(_charOffset, 1);
+                    textChanged = true;
                 }
                 else if (_blockIndex < _blocks.Count - 1)
                 {
                     _blocks[_blockIndex].Append(_blocks[_blockIndex + 1]);
                     _blocks.RemoveAt(_blockIndex + 1);
+                    textChanged = true;
                 }
                 break;
 
@@ -560,6 +649,7 @@ public class DocsCanvas : FrameworkElement
                     try { Clipboard.SetText(GetSelectedText()); }
                     catch { }
                     DeleteSelection();
+                    textChanged = true;
                 }
                 else handled = false;
                 break;
@@ -574,6 +664,7 @@ public class DocsCanvas : FrameworkElement
                         {
                             if (HasSelection) DeleteSelection();
                             PasteText(text);
+                            textChanged = true;
                         }
                     }
                     catch { }
@@ -589,7 +680,11 @@ public class DocsCanvas : FrameworkElement
         if (handled)
         {
             ResetBlink();
-            InvalidateVisual();
+            if (textChanged)
+                InvalidateLayout();
+            else
+                InvalidateVisual();
+            EnsureCursorVisible();
             e.Handled = true;
         }
     }
@@ -603,11 +698,18 @@ public class DocsCanvas : FrameworkElement
 
         ComputeLayout();
 
+        double viewTop = _scrollOffset;
+        double viewBottom = _scrollOffset + ActualHeight;
+
         if (HasSelection)
-            DrawSelection(dc);
+            DrawSelection(dc, viewTop, viewBottom);
 
         for (int i = 0; i < _visualLines.Count; i++)
         {
+            double lineY = _lineYPositions[i];
+            if (lineY + _lineHeight < viewTop) continue;
+            if (lineY > viewBottom) break;
+
             var vl = _visualLines[i];
             if (vl.Length > 0)
             {
@@ -615,7 +717,7 @@ public class DocsCanvas : FrameworkElement
                 var ft = new FormattedText(text, CultureInfo.InvariantCulture,
                     FlowDirection.LeftToRight, _typeface, _fontSize,
                     Brushes.Black, _dpiScale);
-                dc.DrawText(ft, new Point(_padding, _lineYPositions[i]));
+                dc.DrawText(ft, new Point(_padding, lineY - _scrollOffset));
             }
         }
 
@@ -623,18 +725,21 @@ public class DocsCanvas : FrameworkElement
         {
             int vli = CursorToVisualLineIndex();
             double cx = _padding + CursorXInVisualLine(vli);
-            double cy = _lineYPositions[vli];
-            var pen = new Pen(Brushes.Black, 1.5);
-            dc.DrawLine(pen, new Point(cx, cy), new Point(cx, cy + _lineHeight));
+            double cy = _lineYPositions[vli] - _scrollOffset;
+            dc.DrawLine(_cursorPen, new Point(cx, cy), new Point(cx, cy + _lineHeight));
         }
     }
 
-    private void DrawSelection(DrawingContext dc)
+    private void DrawSelection(DrawingContext dc, double viewTop, double viewBottom)
     {
         var (sb, so, eb, eo) = GetOrderedSelection();
 
         for (int i = 0; i < _visualLines.Count; i++)
         {
+            double lineY = _lineYPositions[i];
+            if (lineY + _lineHeight < viewTop) continue;
+            if (lineY > viewBottom) break;
+
             var vl = _visualLines[i];
             int vlEnd = vl.StartOffset + vl.Length;
 
@@ -649,10 +754,10 @@ public class DocsCanvas : FrameworkElement
 
             string blockText = _blocks[vl.BlockIndex].ToString();
             double x1 = hlStart > vl.StartOffset
-                ? MeasureTextWidth(blockText.Substring(vl.StartOffset, hlStart - vl.StartOffset))
+                ? MeasureStringWidth(blockText, vl.StartOffset, hlStart - vl.StartOffset)
                 : 0;
             double x2 = hlEnd > vl.StartOffset
-                ? MeasureTextWidth(blockText.Substring(vl.StartOffset, hlEnd - vl.StartOffset))
+                ? MeasureStringWidth(blockText, vl.StartOffset, hlEnd - vl.StartOffset)
                 : 0;
 
             bool selectionContinues = ComparePositions(vl.BlockIndex, vlEnd, eb, eo) < 0;
@@ -662,13 +767,13 @@ public class DocsCanvas : FrameworkElement
                 x2 += 4;
 
             dc.DrawRectangle(_selectionBrush, null,
-                new Rect(_padding + x1, _lineYPositions[i], x2 - x1, _lineHeight));
+                new Rect(_padding + x1, lineY - _scrollOffset, x2 - x1, _lineHeight));
         }
     }
 
     protected override void OnRenderSizeChanged(SizeChangedInfo sizeInfo)
     {
         base.OnRenderSizeChanged(sizeInfo);
-        InvalidateVisual();
+        InvalidateLayout();
     }
 }
