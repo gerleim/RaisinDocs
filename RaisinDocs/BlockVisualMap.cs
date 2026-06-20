@@ -79,13 +79,6 @@ public class BlockVisualMap
         return rawOffset;
     }
 
-    public bool HasListPrefixAt(int offset, string blockText)
-    {
-        if (ReplacementPrefix == null) return false;
-        if (offset + 1 >= blockText.Length) return false;
-        return (blockText[offset] == '-' || blockText[offset] == '*') && blockText[offset + 1] == ' ';
-    }
-
     public static BlockVisualMap Compute(ParsedBlock parsed, string blockText)
     {
         var ranges = new List<HiddenRange>();
@@ -104,16 +97,6 @@ public class BlockVisualMap
             {
                 ranges.Add(new HiddenRange(0, 2));
                 replacementPrefix = "  • ";
-            }
-
-            for (int i = 0; i < blockText.Length - 2; i++)
-            {
-                if (blockText[i] == '\n' &&
-                    (blockText[i + 1] == '-' || blockText[i + 1] == '*') &&
-                    blockText[i + 2] == ' ')
-                {
-                    ranges.Add(new HiddenRange(i + 1, 2));
-                }
             }
         }
 

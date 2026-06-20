@@ -97,3 +97,4 @@ The document model must distinguish these from iteration 2 onward. A naive "one 
 - Links (clickable in view mode, editable syntax in edit mode)
 - Syntax highlighting in code blocks
 - Drag-and-drop
+- Toggle to show/hide hard break indicators (trailing spaces at end of lines that produce a `<br>` per CommonMark spec)

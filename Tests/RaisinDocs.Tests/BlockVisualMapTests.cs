@@ -305,55 +305,6 @@ public class BlockVisualMapTests
         map.BuildDisplayString("# **bold**", 0, 10).Should().Be("bold");
     }
 
-    // --- Multi-segment list items (hard breaks) ---
-
-    [Fact]
-    public void ListItem_HardBreak_AllPrefixesHidden()
-    {
-        var map = ComputeMap("- alpha\n- beta\n- gamma");
-        // First prefix
-        map.IsHidden(0).Should().BeTrue();
-        map.IsHidden(1).Should().BeTrue();
-        map.IsHidden(2).Should().BeFalse();
-        // Second prefix (after \n at position 7)
-        map.IsHidden(8).Should().BeTrue();
-        map.IsHidden(9).Should().BeTrue();
-        map.IsHidden(10).Should().BeFalse();
-        // Third prefix (after \n at position 14)
-        map.IsHidden(15).Should().BeTrue();
-        map.IsHidden(16).Should().BeTrue();
-        map.IsHidden(17).Should().BeFalse();
-    }
-
-    [Fact]
-    public void ListItem_HardBreak_BuildDisplayString_PerSegment()
-    {
-        var map = ComputeMap("- alpha\n- beta\n- gamma");
-        map.BuildDisplayString("- alpha\n- beta\n- gamma", 0, 7).Should().Be("alpha");
-        map.BuildDisplayString("- alpha\n- beta\n- gamma", 8, 6).Should().Be("beta");
-        map.BuildDisplayString("- alpha\n- beta\n- gamma", 15, 7).Should().Be("gamma");
-    }
-
-    [Fact]
-    public void ListItem_HasListPrefixAt()
-    {
-        var text = "- alpha\n- beta\n- gamma";
-        var map = ComputeMap(text);
-        map.HasListPrefixAt(0, text).Should().BeTrue();
-        map.HasListPrefixAt(8, text).Should().BeTrue();
-        map.HasListPrefixAt(15, text).Should().BeTrue();
-        map.HasListPrefixAt(2, text).Should().BeFalse();
-    }
-
-    [Fact]
-    public void ListItem_ContinuationLine_NoPrefix()
-    {
-        var text = "- item\ncontinuation";
-        var map = ComputeMap(text);
-        map.HasListPrefixAt(0, text).Should().BeTrue();
-        map.HasListPrefixAt(7, text).Should().BeFalse();
-    }
-
     // --- IsFenceDelimiter ---
 
     [Fact]
@@ -371,5 +322,34 @@ public class BlockVisualMapTests
         var blocks = MarkdownParser.Parse(i => new[] { "hello", "**bold**" }[i], 2);
         blocks[0].IsFenceDelimiter.Should().BeFalse();
         blocks[1].IsFenceDelimiter.Should().BeFalse();
+    }
+
+    [Fact]
+    public void CodeBlock_WithTrailingSpaces_ContentNotMarkedAsDelimiter()
+    {
+        // Simulates loading a file where code lines have trailing spaces
+        var doc = new Document();
+        doc.SetText("```python  \ndef greet(name):  \n    print(f\"Hello\")\n\nasdasd\n```\n# Heading");
+
+        doc.BlockCount.Should().Be(7);
+        doc.GetBlockText(0).Should().Be("```python  ");
+        doc.GetBlockText(1).Should().Be("def greet(name):  ");
+        doc.GetBlockText(2).Should().Be("    print(f\"Hello\")");
+        doc.GetBlockText(3).Should().Be("");
+        doc.GetBlockText(4).Should().Be("asdasd");
+        doc.GetBlockText(5).Should().Be("```");
+        doc.GetBlockText(6).Should().Be("# Heading");
+
+        var parsed = MarkdownParser.Parse(i => doc.GetBlockText(i), doc.BlockCount);
+        parsed[0].IsFenceDelimiter.Should().BeTrue();
+        parsed[1].IsFenceDelimiter.Should().BeFalse();
+        parsed[1].Kind.Should().Be(BlockKind.FencedCodeLine);
+        parsed[2].IsFenceDelimiter.Should().BeFalse();
+        parsed[2].Kind.Should().Be(BlockKind.FencedCodeLine);
+        parsed[3].IsFenceDelimiter.Should().BeFalse();
+        parsed[4].IsFenceDelimiter.Should().BeFalse();
+        parsed[4].Kind.Should().Be(BlockKind.FencedCodeLine);
+        parsed[5].IsFenceDelimiter.Should().BeTrue();
+        parsed[6].Kind.Should().Be(BlockKind.Heading1);
     }
 }

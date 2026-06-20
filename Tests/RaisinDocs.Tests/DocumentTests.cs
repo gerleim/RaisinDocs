@@ -103,18 +103,6 @@ public class DocumentTests
 
     // --- Hard break (Shift+Enter) ---
 
-    [Fact]
-    public void InsertHardBreak_InsertsNewlineWithinBlock()
-    {
-        var doc = CreateDoc("helloworld");
-        doc.CursorOffset = 5;
-        doc.InsertHardBreak();
-
-        doc.BlockCount.Should().Be(1);
-        doc.GetBlockText(0).Should().Be("hello\nworld");
-        doc.CursorOffset.Should().Be(6);
-    }
-
     // --- Backspace ---
 
     [Fact]
@@ -304,22 +292,6 @@ public class DocumentTests
         doc.CursorOffset = 2;
 
         doc.GetSelectedText().Should().Be("lo\r\nwo");
-    }
-
-    [Fact]
-    public void GetSelectedText_WithHardBreak()
-    {
-        var doc = CreateDoc("ab");
-        doc.CursorOffset = 1;
-        doc.InsertHardBreak();
-        doc.Insert('c');
-        // Block 0 is now "a\ncb"
-        doc.AnchorBlock = 0;
-        doc.AnchorOffset = 0;
-        doc.CursorBlock = 0;
-        doc.CursorOffset = 4;
-
-        doc.GetSelectedText().Should().Be("a\r\ncb");
     }
 
     [Fact]

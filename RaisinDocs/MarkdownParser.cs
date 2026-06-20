@@ -75,7 +75,7 @@ public static class MarkdownParser
         return result;
     }
 
-    internal static bool IsFenceLine(string text)
+    public static bool IsFenceLine(string text)
     {
         var trimmed = text.TrimStart();
         return trimmed.StartsWith("```");

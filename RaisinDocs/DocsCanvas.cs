@@ -87,24 +87,11 @@ public class DocsCanvas : FrameworkElement
     private EditMode _editMode = EditMode.Raw;
     public EditMode CurrentEditMode => _editMode;
 
-    public string GetText()
-    {
-        _doc.SelectAll();
-        string text = _doc.GetSelectedText();
-        _doc.CollapseSelection();
-        return text;
-    }
+    public string GetText() => _doc.GetText();
 
     public void SetText(string text)
     {
-        _doc.SelectAll();
-        _doc.DeleteSelection();
-        _doc.Paste(text.Replace("\r\n", "\n").Replace("\r", "\n"));
-        _doc.CollapseSelection();
-        _doc.CursorBlock = 0;
-        _doc.CursorOffset = 0;
-        _doc.AnchorBlock = 0;
-        _doc.AnchorOffset = 0;
+        _doc.SetText(text);
         InvalidateLayout();
     }
 
@@ -381,8 +368,20 @@ public class DocsCanvas : FrameworkElement
         double y = _padding;
         for (int i = 0; i < _visualLines.Count; i++)
         {
-            if (i > 0 && _visualLines[i].BlockIndex != _visualLines[i - 1].BlockIndex)
-                y += _paragraphGap;
+            int bi = _visualLines[i].BlockIndex;
+            if (i > 0 && bi != _visualLines[i - 1].BlockIndex)
+            {
+                bool paragraphBreak = false;
+                for (int prev = _visualLines[i - 1].BlockIndex; prev < bi && !paragraphBreak; prev++)
+                {
+                    if (_doc.GetBlockLength(prev) == 0)
+                        paragraphBreak = true;
+                    else if (_doc.GetBlockText(prev).EndsWith("  "))
+                        paragraphBreak = true;
+                }
+                if (paragraphBreak)
+                    y += _paragraphGap;
+            }
             _lineYPositions.Add(y);
             y += GetLineHeight(_visualLines[i].BlockKind);
         }
@@ -399,8 +398,7 @@ public class DocsCanvas : FrameworkElement
         }
 
         double prefixWidth = 0;
-        if (map?.ReplacementPrefix != null && segment.Length >= 2 &&
-            (segment[0] == '-' || segment[0] == '*') && segment[1] == ' ')
+        if (map?.ReplacementPrefix != null)
             prefixWidth = MeasureReplacementPrefix(map.ReplacementPrefix, parsed.Kind);
 
         int pos = 0;
@@ -458,7 +456,7 @@ public class DocsCanvas : FrameworkElement
 
         string blockText = _doc.GetBlockText(vl.BlockIndex);
         double x = 0;
-        if (map != null && map.HasListPrefixAt(vl.StartOffset, blockText))
+        if (map != null && map.ReplacementPrefix != null && vl.StartOffset == 0)
             x += MeasureReplacementPrefix(map.ReplacementPrefix!, vl.BlockKind);
 
         if (localOffset == 0) return x;
@@ -484,7 +482,7 @@ public class DocsCanvas : FrameworkElement
         var parsed = _parsedBlocks![vl.BlockIndex];
         double accum = 0;
 
-        if (map != null && map.HasListPrefixAt(vl.StartOffset, blockText))
+        if (map != null && map.ReplacementPrefix != null && vl.StartOffset == 0)
         {
             double prefixW = MeasureReplacementPrefix(map.ReplacementPrefix!, vl.BlockKind);
             if (x < prefixW) return vl.StartOffset;
@@ -556,19 +554,25 @@ public class DocsCanvas : FrameworkElement
     private void EnsureCursorOnVisibleBlock()
     {
         if (!IsWysiwyg || _parsedBlocks == null) return;
-        while (_doc.CursorBlock < _parsedBlocks.Count && _parsedBlocks[_doc.CursorBlock].IsFenceDelimiter)
+        if (!_parsedBlocks[_doc.CursorBlock].IsFenceDelimiter) return;
+
+        for (int i = _doc.CursorBlock + 1; i < _doc.BlockCount; i++)
         {
-            if (_doc.CursorBlock < _doc.BlockCount - 1)
+            if (!_parsedBlocks[i].IsFenceDelimiter)
             {
-                _doc.CursorBlock++;
+                _doc.CursorBlock = i;
                 _doc.CursorOffset = 0;
+                return;
             }
-            else if (_doc.CursorBlock > 0)
+        }
+        for (int i = _doc.CursorBlock - 1; i >= 0; i--)
+        {
+            if (!_parsedBlocks[i].IsFenceDelimiter)
             {
-                _doc.CursorBlock--;
-                _doc.CursorOffset = _doc.GetBlockLength(_doc.CursorBlock);
+                _doc.CursorBlock = i;
+                _doc.CursorOffset = _doc.GetBlockLength(i);
+                return;
             }
-            else break;
         }
     }
 
@@ -855,10 +859,7 @@ public class DocsCanvas : FrameworkElement
                 SealAndStopTimer();
                 _doc.BeginUndoGroup();
                 if (_doc.HasSelection) _doc.DeleteSelection();
-                if (shift)
-                    _doc.InsertHardBreak();
-                else
-                    _doc.InsertParagraphBreak();
+                _doc.InsertParagraphBreak();
                 _doc.CollapseSelection();
                 _doc.SealUndoGroup();
                 textChanged = true;
@@ -1196,7 +1197,7 @@ public class DocsCanvas : FrameworkElement
 
                 if (map != null)
                 {
-                    if (map.HasListPrefixAt(vl.StartOffset, blockText))
+                    if (map.ReplacementPrefix != null && vl.StartOffset == 0)
                     {
                         var prefixFt = new FormattedText(map.ReplacementPrefix!,
                             CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
@@ -1426,7 +1427,7 @@ public class DocsCanvas : FrameworkElement
             double x2 = MeasureRangeWidth(blockText, vl.StartOffset, hlEnd - vl.StartOffset,
                 parsed.Runs, parsed.Kind, map);
 
-            if (map != null && map.HasListPrefixAt(vl.StartOffset, blockText))
+            if (map != null && map.ReplacementPrefix != null && vl.StartOffset == 0)
             {
                 double prefixW = MeasureReplacementPrefix(map.ReplacementPrefix!, parsed.Kind);
                 x1 += prefixW;

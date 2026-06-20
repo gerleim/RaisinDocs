@@ -102,6 +102,33 @@ public class Document
     public string GetBlockText(int index) => _blocks[index].ToString();
     public int GetBlockLength(int index) => _blocks[index].Length;
 
+    public string GetText()
+    {
+        var sb = new StringBuilder();
+        for (int i = 0; i < _blocks.Count; i++)
+        {
+            if (i > 0) sb.Append("\r\n");
+            sb.Append(_blocks[i]);
+        }
+        return sb.ToString();
+    }
+
+    public void SetText(string text)
+    {
+        _blocks.Clear();
+        _blocks.Add(new StringBuilder());
+        CursorBlock = 0;
+        CursorOffset = 0;
+        CollapseSelection();
+        _undoStack.Clear();
+        _redoStack.Clear();
+        _currentGroupStart = null;
+        Paste(text);
+        CursorBlock = 0;
+        CursorOffset = 0;
+        CollapseSelection();
+    }
+
     public void CollapseSelection()
     {
         AnchorBlock = CursorBlock;
@@ -178,12 +205,6 @@ public class Document
     public void RemoveTextAt(int block, int offset, int length)
     {
         _blocks[block].Remove(offset, length);
-    }
-
-    public void InsertHardBreak()
-    {
-        _blocks[CursorBlock].Insert(CursorOffset, '\n');
-        CursorOffset++;
     }
 
     public void InsertParagraphBreak()
