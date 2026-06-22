@@ -12,7 +12,19 @@ public partial class DocsCanvas
         if (_visualMaps == null) return;
         if (_doc.CursorBlock >= _visualMaps.Count) return;
         var map = _visualMaps[_doc.CursorBlock];
-        _doc.CursorOffset = map.SkipHidden(_doc.CursorOffset, forward);
+        int offset = map.SkipHidden(_doc.CursorOffset, forward);
+        if (forward)
+        {
+            int blockLen = _doc.GetBlockLength(_doc.CursorBlock);
+            while (offset < blockLen && map.IsHidden(offset))
+                offset++;
+        }
+        else
+        {
+            while (offset > 0 && map.IsHidden(offset))
+                offset--;
+        }
+        _doc.CursorOffset = offset;
     }
 
     private void SkipCursorToVisible(bool forward)
@@ -182,6 +194,7 @@ public partial class DocsCanvas
                 _doc.CursorOffset = origOffset;
             }
             SkipCursorOverHiddenRanges(forward: false);
+            CrossToPreviousBlockIfHiddenStart();
         }
     }
 
@@ -209,13 +222,58 @@ public partial class DocsCanvas
                 _doc.CursorOffset = origOffset;
             }
             SkipCursorOverHiddenRanges(forward: true);
+            CrossToNextBlockIfHiddenEnd();
         }
+    }
+
+    private void CrossToPreviousBlockIfHiddenStart()
+    {
+        if (_doc.CursorOffset != 0 || _doc.CursorBlock == 0) return;
+        if (_visualMaps == null || _doc.CursorBlock >= _visualMaps.Count) return;
+        if (!_visualMaps[_doc.CursorBlock].IsHidden(0)) return;
+
+        _doc.CursorBlock--;
+        _doc.CursorOffset = _doc.GetBlockLength(_doc.CursorBlock);
+        EnsureCursorOnVisibleBlock(preferForward: false);
+        SkipCursorOverHiddenRanges(forward: false);
+    }
+
+    private void CrossToNextBlockIfHiddenEnd()
+    {
+        int blockLen = _doc.GetBlockLength(_doc.CursorBlock);
+        if (_doc.CursorOffset != blockLen || blockLen == 0) return;
+        if (_doc.CursorBlock >= _doc.BlockCount - 1) return;
+        if (_visualMaps == null || _doc.CursorBlock >= _visualMaps.Count) return;
+        if (!_visualMaps[_doc.CursorBlock].IsHidden(blockLen - 1)) return;
+
+        _doc.CursorBlock++;
+        _doc.CursorOffset = 0;
+        EnsureCursorOnVisibleBlock(preferForward: true);
+        SkipCursorOverHiddenRanges(forward: true);
     }
 
     private void HandleHomeVisual()
     {
         EnsureCursorOnVisibleBlock();
         SkipCursorToVisible(forward: true);
+    }
+
+    private void HandleEndVisual()
+    {
+        EnsureCursorOnVisibleBlock();
+        SkipCursorOverHiddenRanges(forward: false);
+    }
+
+    private void HandleUpVisual()
+    {
+        EnsureCursorOnVisibleBlock(preferForward: false);
+        SkipCursorOverHiddenRanges(forward: false);
+    }
+
+    private void HandleDownVisual()
+    {
+        EnsureCursorOnVisibleBlock(preferForward: true);
+        SkipCursorOverHiddenRanges(forward: true);
     }
 
     // --- Visual mode: rendering ---

@@ -1120,6 +1120,54 @@ public partial class DocsCanvas : FrameworkElement
         if (!shift) _doc.CollapseSelection();
     }
 
+    private void HandleEnd(bool shift, bool ctrl)
+    {
+        SealAndStopTimer();
+        if (ctrl)
+        {
+            _doc.CursorBlock = _doc.BlockCount - 1;
+            _doc.CursorOffset = _doc.GetBlockLength(_doc.CursorBlock);
+        }
+        else
+        {
+            int vli = CursorToVisualLineIndex();
+            var vl = _visualLines[vli];
+            _doc.CursorOffset = vl.StartOffset + vl.Length;
+        }
+        if (IsVisual) HandleEndVisual();
+        if (!shift) _doc.CollapseSelection();
+    }
+
+    private void HandleUp(bool shift)
+    {
+        SealAndStopTimer();
+        int vli = CursorToVisualLineIndex();
+        if (vli > 0)
+        {
+            double x = CursorXInVisualLine(vli);
+            vli--;
+            _doc.CursorBlock = _visualLines[vli].BlockIndex;
+            _doc.CursorOffset = HitTestInVisualLine(vli, x);
+        }
+        if (IsVisual) HandleUpVisual();
+        if (!shift) _doc.CollapseSelection();
+    }
+
+    private void HandleDown(bool shift)
+    {
+        SealAndStopTimer();
+        int vli = CursorToVisualLineIndex();
+        if (vli < _visualLines.Count - 1)
+        {
+            double x = CursorXInVisualLine(vli);
+            vli++;
+            _doc.CursorBlock = _visualLines[vli].BlockIndex;
+            _doc.CursorOffset = HitTestInVisualLine(vli, x);
+        }
+        if (IsVisual) HandleDownVisual();
+        if (!shift) _doc.CollapseSelection();
+    }
+
     // --- Keyboard ---
 
     protected override void OnKeyDown(KeyEventArgs e)
@@ -1161,56 +1209,20 @@ public partial class DocsCanvas : FrameworkElement
                 break;
 
             case Key.Up:
-            {
-                SealAndStopTimer();
-                int vli = CursorToVisualLineIndex();
-                if (vli > 0)
-                {
-                    double x = CursorXInVisualLine(vli);
-                    vli--;
-                    _doc.CursorBlock = _visualLines[vli].BlockIndex;
-                    _doc.CursorOffset = HitTestInVisualLine(vli, x);
-                }
-                if (!shift) _doc.CollapseSelection();
+                HandleUp(shift);
                 break;
-            }
 
             case Key.Down:
-            {
-                SealAndStopTimer();
-                int vli = CursorToVisualLineIndex();
-                if (vli < _visualLines.Count - 1)
-                {
-                    double x = CursorXInVisualLine(vli);
-                    vli++;
-                    _doc.CursorBlock = _visualLines[vli].BlockIndex;
-                    _doc.CursorOffset = HitTestInVisualLine(vli, x);
-                }
-                if (!shift) _doc.CollapseSelection();
+                HandleDown(shift);
                 break;
-            }
 
             case Key.Home:
                 HandleHome(shift, ctrl);
                 break;
 
             case Key.End:
-            {
-                SealAndStopTimer();
-                if (ctrl)
-                {
-                    _doc.CursorBlock = _doc.BlockCount - 1;
-                    _doc.CursorOffset = _doc.GetBlockLength(_doc.CursorBlock);
-                }
-                else
-                {
-                    int vli = CursorToVisualLineIndex();
-                    var vl = _visualLines[vli];
-                    _doc.CursorOffset = vl.StartOffset + vl.Length;
-                }
-                if (!shift) _doc.CollapseSelection();
+                HandleEnd(shift, ctrl);
                 break;
-            }
 
             case Key.A:
                 if (ctrl)
