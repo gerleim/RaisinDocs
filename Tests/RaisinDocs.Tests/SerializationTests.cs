@@ -112,10 +112,10 @@ public class SerializationTests
         parsed[3].IsFenceDelimiter.Should().BeFalse();
     }
 
-    // --- WYSIWYG visibility ---
+    // --- Visual mode visibility ---
 
     [Fact]
-    public void Wysiwyg_FenceDelimitersHidden_ContentVisible()
+    public void Visual_FenceDelimitersHidden_ContentVisible()
     {
         var doc = LoadMarkdown("```python\ndef greet():\n    pass\n```");
         var parsed = ParseDoc(doc);
@@ -133,7 +133,7 @@ public class SerializationTests
     }
 
     [Fact]
-    public void Wysiwyg_HeadingPrefix_Hidden()
+    public void Visual_HeadingPrefix_Hidden()
     {
         var doc = LoadMarkdown("# My Heading");
         var parsed = ParseDoc(doc);
@@ -147,7 +147,7 @@ public class SerializationTests
     }
 
     [Fact]
-    public void Wysiwyg_ListBullet_ReplacementPrefix()
+    public void Visual_ListBullet_ReplacementPrefix()
     {
         var doc = LoadMarkdown("- Item one\n- Item two");
         var parsed = ParseDoc(doc);
@@ -162,7 +162,7 @@ public class SerializationTests
     }
 
     [Fact]
-    public void Wysiwyg_BoldMarkers_Hidden()
+    public void Visual_BoldMarkers_Hidden()
     {
         var doc = LoadMarkdown("some **bold** text");
         var parsed = ParseDoc(doc);

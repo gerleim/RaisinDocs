@@ -102,6 +102,13 @@
                                           ToolTip="Blockquote">
                                 <TextBlock Text="&#x201C;" FontSize="18" FontWeight="Bold" Margin="0,-4,0,0" />
                             </ToggleButton>
+
+                            <Border Style="{StaticResource SeparatorLine}" />
+
+                            <ToggleButton x:Name="PART_Theme" Style="{StaticResource FormattingToggle}"
+                                          ToolTip="Switch to dark theme">
+                                <TextBlock Text="&#x2600;" FontSize="14" />
+                            </ToggleButton>
                         </StackPanel>
                     </Border>
                 </ControlTemplate>

@@ -19,38 +19,81 @@ public class DocsCanvas : FrameworkElement
     private const double _padding = 10;
     private const double _paragraphGap = 8;
     private const double _listIndent = 20;
-    private static readonly Brush _selectionBrush;
-    private static readonly Pen _cursorPen;
     private const double ScrollBarWidth = 14;
     private const double ScrollBarMinThumb = 20;
-    private static readonly Brush _scrollTrackBrush;
-    private static readonly Brush _scrollThumbBrush;
-    private static readonly Brush _syntaxBrush;
-    private static readonly Brush _codeBackgroundBrush;
+
+    public enum EditorTheme { Light, Dark }
+
+    private sealed record ThemePalette(
+        Brush Background, Brush Foreground, Pen CursorPen,
+        Brush Selection, Brush ScrollTrack, Brush ScrollThumb,
+        Brush Syntax, Brush CodeBackground);
+
+    private static readonly ThemePalette _lightPalette;
+    private static readonly ThemePalette _darkPalette;
+    private ThemePalette _palette = _lightPalette!;
 
     private static readonly double[] _headingFontSizes = [32, 26, 22, 18, 16, 14];
 
     static DocsCanvas()
     {
-        var brush = new SolidColorBrush(Color.FromArgb(100, 0, 120, 215));
-        brush.Freeze();
-        _selectionBrush = brush;
-        var pen = new Pen(Brushes.Black, 1.5);
-        pen.Freeze();
-        _cursorPen = pen;
-        var track = new SolidColorBrush(Color.FromArgb(30, 0, 0, 0));
-        track.Freeze();
-        _scrollTrackBrush = track;
-        var thumb = new SolidColorBrush(Color.FromArgb(120, 128, 128, 128));
-        thumb.Freeze();
-        _scrollThumbBrush = thumb;
-        var syntax = new SolidColorBrush(Color.FromArgb(180, 140, 140, 140));
-        syntax.Freeze();
-        _syntaxBrush = syntax;
-        var codeBg = new SolidColorBrush(Color.FromArgb(25, 0, 0, 0));
-        codeBg.Freeze();
-        _codeBackgroundBrush = codeBg;
+        _lightPalette = BuildPalette(
+            background: Colors.White,
+            foreground: Colors.Black,
+            cursor: Colors.Black,
+            selection: Color.FromArgb(100, 0, 120, 215),
+            scrollTrack: Color.FromArgb(30, 0, 0, 0),
+            scrollThumb: Color.FromArgb(120, 128, 128, 128),
+            syntax: Color.FromArgb(180, 140, 140, 140),
+            codeBackground: Color.FromArgb(25, 0, 0, 0));
+
+        _darkPalette = BuildPalette(
+            background: Color.FromRgb(30, 30, 30),
+            foreground: Color.FromRgb(212, 212, 212),
+            cursor: Colors.White,
+            selection: Color.FromArgb(100, 38, 79, 120),
+            scrollTrack: Color.FromArgb(30, 255, 255, 255),
+            scrollThumb: Color.FromArgb(120, 128, 128, 128),
+            syntax: Color.FromArgb(180, 110, 110, 110),
+            codeBackground: Color.FromArgb(25, 255, 255, 255));
     }
+
+    private static ThemePalette BuildPalette(
+        Color background, Color foreground, Color cursor,
+        Color selection, Color scrollTrack, Color scrollThumb,
+        Color syntax, Color codeBackground)
+    {
+        var cursorBrush = new SolidColorBrush(cursor);
+        cursorBrush.Freeze();
+        var cursorPen = new Pen(cursorBrush, 1.5);
+        cursorPen.Freeze();
+
+        return new ThemePalette(
+            Frozen(background), Frozen(foreground), cursorPen,
+            Frozen(selection), Frozen(scrollTrack), Frozen(scrollThumb),
+            Frozen(syntax), Frozen(codeBackground));
+
+        static Brush Frozen(Color c) { var b = new SolidColorBrush(c); b.Freeze(); return b; }
+    }
+
+    public static readonly DependencyProperty ThemeProperty =
+        DependencyProperty.Register(nameof(Theme), typeof(EditorTheme), typeof(DocsCanvas),
+            new FrameworkPropertyMetadata(EditorTheme.Light, FrameworkPropertyMetadataOptions.AffectsRender, OnThemePropertyChanged));
+
+    public EditorTheme Theme
+    {
+        get => (EditorTheme)GetValue(ThemeProperty);
+        set => SetValue(ThemeProperty, value);
+    }
+
+    private static void OnThemePropertyChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        var canvas = (DocsCanvas)d;
+        canvas._palette = canvas.Theme == EditorTheme.Dark ? _darkPalette : _lightPalette;
+        canvas.ThemeChanged?.Invoke(canvas, EventArgs.Empty);
+    }
+
+    public event EventHandler? ThemeChanged;
 
     private readonly Document _doc = new();
 
@@ -83,8 +126,8 @@ public class DocsCanvas : FrameworkElement
     private List<ParsedBlock>? _parsedBlocks;
     private List<BlockVisualMap>? _visualMaps;
 
-    public enum EditMode { Raw, Wysiwyg }
-    private EditMode _editMode = EditMode.Raw;
+    public enum EditMode { Source, Visual }
+    private EditMode _editMode = EditMode.Source;
     public EditMode CurrentEditMode => _editMode;
 
     public event EventHandler? FormattingChanged;
@@ -96,6 +139,8 @@ public class DocsCanvas : FrameworkElement
         _doc.SetText(text);
         InvalidateLayout();
     }
+
+    public void ToggleTheme() => Theme = Theme == EditorTheme.Light ? EditorTheme.Dark : EditorTheme.Light;
 
     // --- Public formatting API ---
 
@@ -294,7 +339,7 @@ public class DocsCanvas : FrameworkElement
         FormattingChanged?.Invoke(this, EventArgs.Empty);
     }
 
-    private bool IsWysiwyg => _editMode == EditMode.Wysiwyg;
+    private bool IsVisual => _editMode == EditMode.Visual;
 
     private readonly DispatcherTimer _undoSealTimer;
     private enum LastActionKind { None, Typing, Deleting }
@@ -363,7 +408,7 @@ public class DocsCanvas : FrameworkElement
             double fontSize = GetBlockFontSize(kind);
             var ft = new FormattedText("M", CultureInfo.InvariantCulture,
                 FlowDirection.LeftToRight, GetBlockBaseTypeface(kind), fontSize,
-                Brushes.Black, _dpiScale);
+                _palette.Foreground, _dpiScale);
             _lineHeights[kind] = ft.Height;
         }
 
@@ -479,7 +524,7 @@ public class DocsCanvas : FrameworkElement
                 var typeface = GetInlineTypeface(blockKind, style);
                 var ft = new FormattedText(ch.ToString(), CultureInfo.InvariantCulture,
                     FlowDirection.LeftToRight, typeface, fontSize,
-                    Brushes.Black, _dpiScale);
+                    _palette.Foreground, _dpiScale);
                 w = ft.WidthIncludingTrailingWhitespace;
             }
             _charWidthCache[(ch, key)] = w;
@@ -524,7 +569,7 @@ public class DocsCanvas : FrameworkElement
 
         _parsedBlocks ??= MarkdownParser.Parse(i => _doc.GetBlockText(i), _doc.BlockCount);
 
-        if (IsWysiwyg && _visualMaps == null)
+        if (IsVisual && _visualMaps == null)
         {
             _visualMaps = new List<BlockVisualMap>(_doc.BlockCount);
             for (int i = 0; i < _doc.BlockCount; i++)
@@ -550,11 +595,11 @@ public class DocsCanvas : FrameworkElement
         {
             var parsed = _parsedBlocks![bi];
 
-            if (IsWysiwyg && parsed.IsFenceDelimiter)
+            if (IsVisual && parsed.IsFenceDelimiter)
                 continue;
 
             string text = _doc.GetBlockText(bi);
-            var map = IsWysiwyg ? _visualMaps?[bi] : null;
+            var map = IsVisual ? _visualMaps?[bi] : null;
             var segments = text.Split('\n');
             int offset = 0;
             for (int s = 0; s < segments.Length; s++)
@@ -651,7 +696,7 @@ public class DocsCanvas : FrameworkElement
     {
         var vl = _visualLines[vlIndex];
         int localOffset = Math.Clamp(_doc.CursorOffset - vl.StartOffset, 0, vl.Length);
-        var map = IsWysiwyg ? _visualMaps?[vl.BlockIndex] : null;
+        var map = IsVisual ? _visualMaps?[vl.BlockIndex] : null;
 
         string blockText = _doc.GetBlockText(vl.BlockIndex);
         double x = 0;
@@ -676,7 +721,7 @@ public class DocsCanvas : FrameworkElement
         var vl = _visualLines[vlIndex];
         if (vl.Length == 0) return vl.StartOffset;
 
-        var map = IsWysiwyg ? _visualMaps?[vl.BlockIndex] : null;
+        var map = IsVisual ? _visualMaps?[vl.BlockIndex] : null;
         string blockText = _doc.GetBlockText(vl.BlockIndex);
         var parsed = _parsedBlocks![vl.BlockIndex];
         double accum = 0;
@@ -704,7 +749,7 @@ public class DocsCanvas : FrameworkElement
 
     private void SkipCursorOverHiddenRanges(bool forward)
     {
-        if (!IsWysiwyg || _visualMaps == null) return;
+        if (!IsVisual || _visualMaps == null) return;
         if (_doc.CursorBlock >= _visualMaps.Count) return;
         var map = _visualMaps[_doc.CursorBlock];
         _doc.CursorOffset = map.SkipHidden(_doc.CursorOffset, forward);
@@ -712,7 +757,7 @@ public class DocsCanvas : FrameworkElement
 
     private void SkipCursorToVisible(bool forward)
     {
-        if (!IsWysiwyg || _visualMaps == null) return;
+        if (!IsVisual || _visualMaps == null) return;
         if (_doc.CursorBlock >= _visualMaps.Count) return;
         var map = _visualMaps[_doc.CursorBlock];
         int offset = _doc.CursorOffset;
@@ -728,9 +773,9 @@ public class DocsCanvas : FrameworkElement
         _doc.CursorOffset = offset;
     }
 
-    private void WysiwygSkipBackspace()
+    private void VisualSkipBackspace()
     {
-        if (!IsWysiwyg || _visualMaps == null) return;
+        if (!IsVisual || _visualMaps == null) return;
         if (_doc.CursorBlock >= _visualMaps.Count) return;
         var map = _visualMaps[_doc.CursorBlock];
         int pos = _doc.CursorOffset - 1;
@@ -739,9 +784,9 @@ public class DocsCanvas : FrameworkElement
             _doc.CursorOffset = pos + 1;
     }
 
-    private void WysiwygSkipDelete()
+    private void VisualSkipDelete()
     {
-        if (!IsWysiwyg || _visualMaps == null) return;
+        if (!IsVisual || _visualMaps == null) return;
         if (_doc.CursorBlock >= _visualMaps.Count) return;
         var map = _visualMaps[_doc.CursorBlock];
         int blockLen = _doc.GetBlockLength(_doc.CursorBlock);
@@ -750,27 +795,62 @@ public class DocsCanvas : FrameworkElement
         _doc.CursorOffset = pos;
     }
 
-    private void EnsureCursorOnVisibleBlock()
+    private void EnsureCursorOnVisibleBlock(bool? preferForward = null)
     {
-        if (!IsWysiwyg || _parsedBlocks == null) return;
+        if (!IsVisual || _parsedBlocks == null) return;
         if (!_parsedBlocks[_doc.CursorBlock].IsFenceDelimiter) return;
 
-        for (int i = _doc.CursorBlock + 1; i < _doc.BlockCount; i++)
+        bool forward = preferForward ?? true;
+
+        if (forward)
         {
-            if (!_parsedBlocks[i].IsFenceDelimiter)
+            for (int i = _doc.CursorBlock + 1; i < _doc.BlockCount; i++)
             {
-                _doc.CursorBlock = i;
-                _doc.CursorOffset = 0;
-                return;
+                if (!_parsedBlocks[i].IsFenceDelimiter)
+                {
+                    _doc.CursorBlock = i;
+                    _doc.CursorOffset = 0;
+                    return;
+                }
             }
         }
-        for (int i = _doc.CursorBlock - 1; i >= 0; i--)
+        else
         {
-            if (!_parsedBlocks[i].IsFenceDelimiter)
+            for (int i = _doc.CursorBlock - 1; i >= 0; i--)
             {
-                _doc.CursorBlock = i;
-                _doc.CursorOffset = _doc.GetBlockLength(i);
-                return;
+                if (!_parsedBlocks[i].IsFenceDelimiter)
+                {
+                    _doc.CursorBlock = i;
+                    _doc.CursorOffset = _doc.GetBlockLength(i);
+                    return;
+                }
+            }
+        }
+
+        if (preferForward != null) return;
+
+        if (forward)
+        {
+            for (int i = _doc.CursorBlock - 1; i >= 0; i--)
+            {
+                if (!_parsedBlocks[i].IsFenceDelimiter)
+                {
+                    _doc.CursorBlock = i;
+                    _doc.CursorOffset = _doc.GetBlockLength(i);
+                    return;
+                }
+            }
+        }
+        else
+        {
+            for (int i = _doc.CursorBlock + 1; i < _doc.BlockCount; i++)
+            {
+                if (!_parsedBlocks[i].IsFenceDelimiter)
+                {
+                    _doc.CursorBlock = i;
+                    _doc.CursorOffset = 0;
+                    return;
+                }
             }
         }
     }
@@ -1075,6 +1155,192 @@ public class DocsCanvas : FrameworkElement
         e.Handled = true;
     }
 
+    // --- Key handlers (Source / Visual split) ---
+
+    private void HandleBack(bool shift, out bool textChanged)
+    {
+        textChanged = false;
+        if (_lastAction != LastActionKind.Deleting)
+        {
+            _doc.SealUndoGroup();
+            _lastAction = LastActionKind.Deleting;
+        }
+        _doc.BeginUndoGroup();
+        if (_doc.HasSelection)
+        {
+            _doc.DeleteSelection();
+            textChanged = true;
+        }
+        else if (IsVisual)
+        {
+            VisualSkipBackspace();
+            if (_doc.CursorOffset == 0 && _doc.CursorBlock > 0 &&
+                _parsedBlocks != null && _parsedBlocks[_doc.CursorBlock - 1].IsFenceDelimiter)
+            {
+                // Don't merge into a fence delimiter block
+            }
+            else
+            {
+                int prevBlock = _doc.CursorBlock;
+                int prevOffset = _doc.CursorOffset;
+                _doc.Backspace();
+                textChanged = _doc.CursorBlock != prevBlock || _doc.CursorOffset != prevOffset;
+                if (textChanged) _doc.CollapseSelection();
+            }
+            EnsureCursorOnVisibleBlock();
+            SkipCursorOverHiddenRanges(forward: false);
+        }
+        else
+        {
+            int prevBlock = _doc.CursorBlock;
+            int prevOffset = _doc.CursorOffset;
+            _doc.Backspace();
+            textChanged = _doc.CursorBlock != prevBlock || _doc.CursorOffset != prevOffset;
+            if (textChanged) _doc.CollapseSelection();
+        }
+        ResetUndoSealTimer();
+    }
+
+    private void HandleDelete(bool shift, out bool textChanged)
+    {
+        textChanged = false;
+        if (_lastAction != LastActionKind.Deleting)
+        {
+            _doc.SealUndoGroup();
+            _lastAction = LastActionKind.Deleting;
+        }
+        _doc.BeginUndoGroup();
+        if (_doc.HasSelection)
+        {
+            _doc.DeleteSelection();
+            textChanged = true;
+        }
+        else if (IsVisual)
+        {
+            VisualSkipDelete();
+            if (_doc.CursorOffset >= _doc.GetBlockLength(_doc.CursorBlock) &&
+                _doc.CursorBlock < _doc.BlockCount - 1 &&
+                _parsedBlocks != null && _parsedBlocks[_doc.CursorBlock + 1].IsFenceDelimiter)
+            {
+                // Don't merge with a fence delimiter block
+            }
+            else
+            {
+                int prevBlocks = _doc.BlockCount;
+                int prevLen = _doc.GetBlockLength(_doc.CursorBlock);
+                _doc.Delete();
+                textChanged = _doc.BlockCount != prevBlocks ||
+                              _doc.GetBlockLength(_doc.CursorBlock) != prevLen;
+            }
+            EnsureCursorOnVisibleBlock();
+            SkipCursorOverHiddenRanges(forward: true);
+        }
+        else
+        {
+            int prevBlocks = _doc.BlockCount;
+            int prevLen = _doc.GetBlockLength(_doc.CursorBlock);
+            _doc.Delete();
+            textChanged = _doc.BlockCount != prevBlocks ||
+                          _doc.GetBlockLength(_doc.CursorBlock) != prevLen;
+        }
+        ResetUndoSealTimer();
+    }
+
+    private void HandleLeft(bool shift)
+    {
+        SealAndStopTimer();
+        if (!shift && _doc.HasSelection)
+        {
+            var (sb, so, _, _) = _doc.GetOrderedSelection();
+            _doc.CursorBlock = sb;
+            _doc.CursorOffset = so;
+            _doc.CollapseSelection();
+            if (IsVisual)
+            {
+                EnsureCursorOnVisibleBlock(preferForward: false);
+                SkipCursorOverHiddenRanges(forward: false);
+            }
+        }
+        else if (IsVisual)
+        {
+            int origBlock = _doc.CursorBlock;
+            int origOffset = _doc.CursorOffset;
+            _doc.MoveLeft();
+            if (!shift) _doc.CollapseSelection();
+            EnsureCursorOnVisibleBlock(preferForward: false);
+            if (_parsedBlocks != null && _parsedBlocks[_doc.CursorBlock].IsFenceDelimiter)
+            {
+                _doc.CursorBlock = origBlock;
+                _doc.CursorOffset = origOffset;
+            }
+            SkipCursorOverHiddenRanges(forward: false);
+        }
+        else
+        {
+            _doc.MoveLeft();
+            if (!shift) _doc.CollapseSelection();
+        }
+        if (!shift) _doc.CollapseSelection();
+    }
+
+    private void HandleRight(bool shift)
+    {
+        SealAndStopTimer();
+        if (!shift && _doc.HasSelection)
+        {
+            var (_, _, eb, eo) = _doc.GetOrderedSelection();
+            _doc.CursorBlock = eb;
+            _doc.CursorOffset = eo;
+            _doc.CollapseSelection();
+            if (IsVisual)
+            {
+                EnsureCursorOnVisibleBlock(preferForward: true);
+                SkipCursorOverHiddenRanges(forward: true);
+            }
+        }
+        else if (IsVisual)
+        {
+            int origBlock = _doc.CursorBlock;
+            int origOffset = _doc.CursorOffset;
+            _doc.MoveRight();
+            if (!shift) _doc.CollapseSelection();
+            EnsureCursorOnVisibleBlock(preferForward: true);
+            if (_parsedBlocks != null && _parsedBlocks[_doc.CursorBlock].IsFenceDelimiter)
+            {
+                _doc.CursorBlock = origBlock;
+                _doc.CursorOffset = origOffset;
+            }
+            SkipCursorOverHiddenRanges(forward: true);
+        }
+        else
+        {
+            _doc.MoveRight();
+            if (!shift) _doc.CollapseSelection();
+        }
+        if (!shift) _doc.CollapseSelection();
+    }
+
+    private void HandleHome(bool shift, bool ctrl)
+    {
+        SealAndStopTimer();
+        if (ctrl)
+        {
+            _doc.CursorBlock = 0;
+            _doc.CursorOffset = 0;
+        }
+        else
+        {
+            int vli = CursorToVisualLineIndex();
+            _doc.CursorOffset = _visualLines[vli].StartOffset;
+        }
+        if (IsVisual)
+        {
+            EnsureCursorOnVisibleBlock();
+            SkipCursorToVisible(forward: true);
+        }
+        if (!shift) _doc.CollapseSelection();
+    }
+
     // --- Keyboard ---
 
     protected override void OnKeyDown(KeyEventArgs e)
@@ -1100,93 +1366,19 @@ public class DocsCanvas : FrameworkElement
                 break;
 
             case Key.Back:
-                if (_lastAction != LastActionKind.Deleting)
-                {
-                    _doc.SealUndoGroup();
-                    _lastAction = LastActionKind.Deleting;
-                }
-                _doc.BeginUndoGroup();
-                if (_doc.HasSelection)
-                {
-                    _doc.DeleteSelection();
-                    textChanged = true;
-                }
-                else
-                {
-                    WysiwygSkipBackspace();
-                    int prevBlock = _doc.CursorBlock;
-                    int prevOffset = _doc.CursorOffset;
-                    _doc.Backspace();
-                    textChanged = _doc.CursorBlock != prevBlock || _doc.CursorOffset != prevOffset;
-                    if (textChanged) _doc.CollapseSelection();
-                }
-                EnsureCursorOnVisibleBlock();
-                SkipCursorOverHiddenRanges(forward: false);
-                ResetUndoSealTimer();
+                HandleBack(shift, out textChanged);
                 break;
 
             case Key.Delete:
-                if (_lastAction != LastActionKind.Deleting)
-                {
-                    _doc.SealUndoGroup();
-                    _lastAction = LastActionKind.Deleting;
-                }
-                _doc.BeginUndoGroup();
-                if (_doc.HasSelection)
-                {
-                    _doc.DeleteSelection();
-                    textChanged = true;
-                }
-                else
-                {
-                    WysiwygSkipDelete();
-                    int prevBlocks = _doc.BlockCount;
-                    int prevLen = _doc.GetBlockLength(_doc.CursorBlock);
-                    _doc.Delete();
-                    textChanged = _doc.BlockCount != prevBlocks ||
-                                  _doc.GetBlockLength(_doc.CursorBlock) != prevLen;
-                }
-                EnsureCursorOnVisibleBlock();
-                SkipCursorOverHiddenRanges(forward: true);
-                ResetUndoSealTimer();
+                HandleDelete(shift, out textChanged);
                 break;
 
             case Key.Left:
-                SealAndStopTimer();
-                if (!shift && _doc.HasSelection)
-                {
-                    var (sb, so, _, _) = _doc.GetOrderedSelection();
-                    _doc.CursorBlock = sb;
-                    _doc.CursorOffset = so;
-                    _doc.CollapseSelection();
-                }
-                else
-                {
-                    _doc.MoveLeft();
-                    if (!shift) _doc.CollapseSelection();
-                }
-                EnsureCursorOnVisibleBlock();
-                SkipCursorOverHiddenRanges(forward: false);
-                if (!shift) _doc.CollapseSelection();
+                HandleLeft(shift);
                 break;
 
             case Key.Right:
-                SealAndStopTimer();
-                if (!shift && _doc.HasSelection)
-                {
-                    var (_, _, eb, eo) = _doc.GetOrderedSelection();
-                    _doc.CursorBlock = eb;
-                    _doc.CursorOffset = eo;
-                    _doc.CollapseSelection();
-                }
-                else
-                {
-                    _doc.MoveRight();
-                    if (!shift) _doc.CollapseSelection();
-                }
-                EnsureCursorOnVisibleBlock();
-                SkipCursorOverHiddenRanges(forward: true);
-                if (!shift) _doc.CollapseSelection();
+                HandleRight(shift);
                 break;
 
             case Key.Up:
@@ -1220,23 +1412,8 @@ public class DocsCanvas : FrameworkElement
             }
 
             case Key.Home:
-            {
-                SealAndStopTimer();
-                if (ctrl)
-                {
-                    _doc.CursorBlock = 0;
-                    _doc.CursorOffset = 0;
-                }
-                else
-                {
-                    int vli = CursorToVisualLineIndex();
-                    _doc.CursorOffset = _visualLines[vli].StartOffset;
-                }
-                EnsureCursorOnVisibleBlock();
-                SkipCursorToVisible(forward: true);
-                if (!shift) _doc.CollapseSelection();
+                HandleHome(shift, ctrl);
                 break;
-            }
 
             case Key.End:
             {
@@ -1346,9 +1523,9 @@ public class DocsCanvas : FrameworkElement
                 if (ctrl)
                 {
                     SealAndStopTimer();
-                    _editMode = _editMode == EditMode.Raw ? EditMode.Wysiwyg : EditMode.Raw;
+                    _editMode = _editMode == EditMode.Source ? EditMode.Visual : EditMode.Source;
                     InvalidateLayout();
-                    if (IsWysiwyg)
+                    if (IsVisual)
                     {
                         ComputeLayout();
                         EnsureCursorOnVisibleBlock();
@@ -1369,7 +1546,7 @@ public class DocsCanvas : FrameworkElement
             if (textChanged)
             {
                 InvalidateLayout();
-                if (IsWysiwyg)
+                if (IsVisual)
                 {
                     ComputeLayout();
                     EnsureCursorOnVisibleBlock();
@@ -1389,7 +1566,7 @@ public class DocsCanvas : FrameworkElement
     protected override void OnRender(DrawingContext dc)
     {
         EnsureMeasured();
-        dc.DrawRectangle(Brushes.White, null, new Rect(0, 0, ActualWidth, ActualHeight));
+        dc.DrawRectangle(_palette.Background, null, new Rect(0, 0, ActualWidth, ActualHeight));
 
         ComputeLayout();
 
@@ -1416,7 +1593,7 @@ public class DocsCanvas : FrameworkElement
                 var parsed = _parsedBlocks![vl.BlockIndex];
                 double fontSize = GetBlockFontSize(parsed.Kind);
                 var baseTypeface = GetBlockBaseTypeface(parsed.Kind);
-                var map = IsWysiwyg ? _visualMaps?[vl.BlockIndex] : null;
+                var map = IsVisual ? _visualMaps?[vl.BlockIndex] : null;
 
                 double textX = _padding;
 
@@ -1426,7 +1603,7 @@ public class DocsCanvas : FrameworkElement
                     {
                         var prefixFt = new FormattedText(map.ReplacementPrefix!,
                             CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
-                            _normalTypeface, fontSize, _syntaxBrush, _dpiScale);
+                            _normalTypeface, fontSize, _palette.Syntax, _dpiScale);
                         dc.DrawText(prefixFt, new Point(_padding, lineY - effectiveScroll));
                         textX += MeasureReplacementPrefix(map.ReplacementPrefix!, parsed.Kind);
                     }
@@ -1436,8 +1613,8 @@ public class DocsCanvas : FrameworkElement
                     {
                         var ft = new FormattedText(displayText, CultureInfo.InvariantCulture,
                             FlowDirection.LeftToRight, baseTypeface, fontSize,
-                            Brushes.Black, _dpiScale);
-                        ApplyInlineStylesWysiwyg(ft, vl, parsed, map);
+                            _palette.Foreground, _dpiScale);
+                        ApplyInlineStylesVisual(ft, vl, parsed, map);
                         dc.DrawText(ft, new Point(textX, lineY - effectiveScroll));
                     }
                 }
@@ -1446,7 +1623,7 @@ public class DocsCanvas : FrameworkElement
                     string text = blockText.Substring(vl.StartOffset, vl.Length);
                     var ft = new FormattedText(text, CultureInfo.InvariantCulture,
                         FlowDirection.LeftToRight, baseTypeface, fontSize,
-                        Brushes.Black, _dpiScale);
+                        _palette.Foreground, _dpiScale);
                     ApplyInlineStyles(ft, vl, parsed);
                     dc.DrawText(ft, new Point(textX, lineY - effectiveScroll));
                 }
@@ -1459,7 +1636,7 @@ public class DocsCanvas : FrameworkElement
             double cx = _padding + CursorXInVisualLine(vli);
             double cy = _lineYPositions[vli] - effectiveScroll;
             double lineH = GetLineHeight(_visualLines[vli].BlockKind);
-            dc.DrawLine(_cursorPen, new Point(cx, cy), new Point(cx, cy + lineH));
+            dc.DrawLine(_palette.CursorPen, new Point(cx, cy), new Point(cx, cy + lineH));
         }
 
         if (_scrollbarVisible)
@@ -1505,7 +1682,7 @@ public class DocsCanvas : FrameworkElement
         ApplySyntaxDimming(ft, vl, parsed);
     }
 
-    private void ApplyInlineStylesWysiwyg(FormattedText ft, VisualLine vl,
+    private void ApplyInlineStylesVisual(FormattedText ft, VisualLine vl,
         ParsedBlock parsed, BlockVisualMap map)
     {
         int vlEnd = vl.StartOffset + vl.Length;
@@ -1557,18 +1734,18 @@ public class DocsCanvas : FrameworkElement
             int localStart = Math.Max(0, 0 - vl.StartOffset);
             int localEnd = Math.Min(vl.Length, prefixLen - vl.StartOffset);
             if (localEnd > localStart)
-                ft.SetForegroundBrush(_syntaxBrush, localStart, localEnd - localStart);
+                ft.SetForegroundBrush(_palette.Syntax, localStart, localEnd - localStart);
         }
 
         if (parsed.Kind == BlockKind.UnorderedListItem && vl.Length >= 2)
         {
             string vlText = blockText.Substring(vl.StartOffset, Math.Min(vl.Length, 2));
             if (vlText is "- " or "* ")
-                ft.SetForegroundBrush(_syntaxBrush, 0, 2);
+                ft.SetForegroundBrush(_palette.Syntax, 0, 2);
         }
 
         if (parsed.Kind == BlockKind.Blockquote && vl.StartOffset == 0 && vl.Length >= 2)
-            ft.SetForegroundBrush(_syntaxBrush, 0, 2);
+            ft.SetForegroundBrush(_palette.Syntax, 0, 2);
 
         foreach (var run in parsed.Runs)
         {
@@ -1599,13 +1776,13 @@ public class DocsCanvas : FrameworkElement
         return count;
     }
 
-    private static void DimRange(FormattedText ft, VisualLine vl, int docStart, int length)
+    private void DimRange(FormattedText ft, VisualLine vl, int docStart, int length)
     {
         int vlEnd = vl.StartOffset + vl.Length;
         int localStart = Math.Max(0, docStart - vl.StartOffset);
         int localEnd = Math.Min(vl.Length, docStart + length - vl.StartOffset);
         if (localEnd > localStart)
-            ft.SetForegroundBrush(_syntaxBrush, localStart, localEnd - localStart);
+            ft.SetForegroundBrush(_palette.Syntax, localStart, localEnd - localStart);
     }
 
     private void DrawCodeBlockBackgrounds(DrawingContext dc, double effectiveScroll,
@@ -1623,7 +1800,7 @@ public class DocsCanvas : FrameworkElement
             if (lineY + lineH < viewTop) continue;
             if (lineY > viewBottom) break;
 
-            dc.DrawRectangle(_codeBackgroundBrush, null,
+            dc.DrawRectangle(_palette.CodeBackground, null,
                 new Rect(0, lineY - effectiveScroll, contentWidth, lineH));
         }
     }
@@ -1655,7 +1832,7 @@ public class DocsCanvas : FrameworkElement
 
             string blockText = _doc.GetBlockText(vl.BlockIndex);
             var parsed = _parsedBlocks![vl.BlockIndex];
-            var map = IsWysiwyg ? _visualMaps?[vl.BlockIndex] : null;
+            var map = IsVisual ? _visualMaps?[vl.BlockIndex] : null;
 
             double x1 = MeasureRangeWidth(blockText, vl.StartOffset, hlStart - vl.StartOffset,
                 parsed.Runs, parsed.Kind, map);
@@ -1675,7 +1852,7 @@ public class DocsCanvas : FrameworkElement
             else if (selectionContinues)
                 x2 += 4;
 
-            dc.DrawRectangle(_selectionBrush, null,
+            dc.DrawRectangle(_palette.Selection, null,
                 new Rect(_padding + x1, lineY - effectiveScroll, x2 - x1, lineH));
         }
     }
@@ -1698,11 +1875,11 @@ public class DocsCanvas : FrameworkElement
     private void DrawScrollbar(DrawingContext dc)
     {
         double trackX = ActualWidth - ScrollBarWidth;
-        dc.DrawRectangle(_scrollTrackBrush, null,
+        dc.DrawRectangle(_palette.ScrollTrack, null,
             new Rect(trackX, 0, ScrollBarWidth, ActualHeight));
 
         var (thumbY, thumbH) = GetScrollbarThumbRect();
-        dc.DrawRectangle(_scrollThumbBrush, null,
+        dc.DrawRectangle(_palette.ScrollThumb, null,
             new Rect(trackX + 1, thumbY, ScrollBarWidth - 2, thumbH));
     }
 
