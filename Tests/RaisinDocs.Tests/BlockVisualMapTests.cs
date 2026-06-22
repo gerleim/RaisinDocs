@@ -279,12 +279,25 @@ public class BlockVisualMapTests
     }
 
     [Fact]
-    public void SkipHidden_AtBoundary_NoChange()
+    public void SkipHidden_ForwardAtRangeStart_Skips()
     {
         var map = ComputeMap("**bold**");
-        map.SkipHidden(0, true).Should().Be(0);
-        map.SkipHidden(2, true).Should().Be(2);
+        map.SkipHidden(0, true).Should().Be(2);
+        map.SkipHidden(6, true).Should().Be(8);
+    }
+
+    [Fact]
+    public void SkipHidden_BackwardAtRangeStart_NoChange()
+    {
+        var map = ComputeMap("**bold**");
         map.SkipHidden(6, false).Should().Be(6);
+    }
+
+    [Fact]
+    public void SkipHidden_AtRangeEnd_NoChange()
+    {
+        var map = ComputeMap("**bold**");
+        map.SkipHidden(2, true).Should().Be(2);
         map.SkipHidden(8, false).Should().Be(8);
     }
 

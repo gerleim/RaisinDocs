@@ -73,8 +73,11 @@ public class BlockVisualMap
     {
         foreach (var hr in HiddenRanges)
         {
-            if (rawOffset > hr.Start && rawOffset < hr.Start + hr.Length)
-                return forward ? hr.Start + hr.Length : hr.Start;
+            int end = hr.Start + hr.Length;
+            if (forward && rawOffset >= hr.Start && rawOffset < end)
+                return end;
+            if (!forward && rawOffset > hr.Start && rawOffset < end)
+                return hr.Start;
         }
         return rawOffset;
     }

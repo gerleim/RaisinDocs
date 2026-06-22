@@ -7,7 +7,7 @@ using Raisin.WPF.Base;
 
 namespace RaisinDocs;
 
-public class DocsCanvas : FrameworkElement
+public partial class DocsCanvas : FrameworkElement
 {
     private static readonly Typeface _normalTypeface = new("Segoe UI");
     private static readonly Typeface _boldTypeface = new(new FontFamily("Segoe UI"), FontStyles.Normal, FontWeights.Bold, FontStretches.Normal);
@@ -747,114 +747,6 @@ public class DocsCanvas : FrameworkElement
         return vl.StartOffset + vl.Length;
     }
 
-    private void SkipCursorOverHiddenRanges(bool forward)
-    {
-        if (!IsVisual || _visualMaps == null) return;
-        if (_doc.CursorBlock >= _visualMaps.Count) return;
-        var map = _visualMaps[_doc.CursorBlock];
-        _doc.CursorOffset = map.SkipHidden(_doc.CursorOffset, forward);
-    }
-
-    private void SkipCursorToVisible(bool forward)
-    {
-        if (!IsVisual || _visualMaps == null) return;
-        if (_doc.CursorBlock >= _visualMaps.Count) return;
-        var map = _visualMaps[_doc.CursorBlock];
-        int offset = _doc.CursorOffset;
-        if (forward)
-        {
-            int blockLen = _doc.GetBlockLength(_doc.CursorBlock);
-            while (offset < blockLen && map.IsHidden(offset)) offset++;
-        }
-        else
-        {
-            while (offset > 0 && map.IsHidden(offset - 1)) offset--;
-        }
-        _doc.CursorOffset = offset;
-    }
-
-    private void VisualSkipBackspace()
-    {
-        if (!IsVisual || _visualMaps == null) return;
-        if (_doc.CursorBlock >= _visualMaps.Count) return;
-        var map = _visualMaps[_doc.CursorBlock];
-        int pos = _doc.CursorOffset - 1;
-        while (pos >= 0 && map.IsHidden(pos)) pos--;
-        if (pos >= 0)
-            _doc.CursorOffset = pos + 1;
-    }
-
-    private void VisualSkipDelete()
-    {
-        if (!IsVisual || _visualMaps == null) return;
-        if (_doc.CursorBlock >= _visualMaps.Count) return;
-        var map = _visualMaps[_doc.CursorBlock];
-        int blockLen = _doc.GetBlockLength(_doc.CursorBlock);
-        int pos = _doc.CursorOffset;
-        while (pos < blockLen && map.IsHidden(pos)) pos++;
-        _doc.CursorOffset = pos;
-    }
-
-    private void EnsureCursorOnVisibleBlock(bool? preferForward = null)
-    {
-        if (!IsVisual || _parsedBlocks == null) return;
-        if (!_parsedBlocks[_doc.CursorBlock].IsFenceDelimiter) return;
-
-        bool forward = preferForward ?? true;
-
-        if (forward)
-        {
-            for (int i = _doc.CursorBlock + 1; i < _doc.BlockCount; i++)
-            {
-                if (!_parsedBlocks[i].IsFenceDelimiter)
-                {
-                    _doc.CursorBlock = i;
-                    _doc.CursorOffset = 0;
-                    return;
-                }
-            }
-        }
-        else
-        {
-            for (int i = _doc.CursorBlock - 1; i >= 0; i--)
-            {
-                if (!_parsedBlocks[i].IsFenceDelimiter)
-                {
-                    _doc.CursorBlock = i;
-                    _doc.CursorOffset = _doc.GetBlockLength(i);
-                    return;
-                }
-            }
-        }
-
-        if (preferForward != null) return;
-
-        if (forward)
-        {
-            for (int i = _doc.CursorBlock - 1; i >= 0; i--)
-            {
-                if (!_parsedBlocks[i].IsFenceDelimiter)
-                {
-                    _doc.CursorBlock = i;
-                    _doc.CursorOffset = _doc.GetBlockLength(i);
-                    return;
-                }
-            }
-        }
-        else
-        {
-            for (int i = _doc.CursorBlock + 1; i < _doc.BlockCount; i++)
-            {
-                if (!_parsedBlocks[i].IsFenceDelimiter)
-                {
-                    _doc.CursorBlock = i;
-                    _doc.CursorOffset = 0;
-                    return;
-                }
-            }
-        }
-    }
-
     private void ToggleInlineStyle(string marker, InlineStyle targetStyle)
     {
         if (!_doc.HasSelection) return;
@@ -1155,7 +1047,7 @@ public class DocsCanvas : FrameworkElement
         e.Handled = true;
     }
 
-    // --- Key handlers (Source / Visual split) ---
+    // --- Key handlers (Source / Visual dispatch) ---
 
     private void HandleBack(bool shift, out bool textChanged)
     {
@@ -1171,33 +1063,8 @@ public class DocsCanvas : FrameworkElement
             _doc.DeleteSelection();
             textChanged = true;
         }
-        else if (IsVisual)
-        {
-            VisualSkipBackspace();
-            if (_doc.CursorOffset == 0 && _doc.CursorBlock > 0 &&
-                _parsedBlocks != null && _parsedBlocks[_doc.CursorBlock - 1].IsFenceDelimiter)
-            {
-                // Don't merge into a fence delimiter block
-            }
-            else
-            {
-                int prevBlock = _doc.CursorBlock;
-                int prevOffset = _doc.CursorOffset;
-                _doc.Backspace();
-                textChanged = _doc.CursorBlock != prevBlock || _doc.CursorOffset != prevOffset;
-                if (textChanged) _doc.CollapseSelection();
-            }
-            EnsureCursorOnVisibleBlock();
-            SkipCursorOverHiddenRanges(forward: false);
-        }
-        else
-        {
-            int prevBlock = _doc.CursorBlock;
-            int prevOffset = _doc.CursorOffset;
-            _doc.Backspace();
-            textChanged = _doc.CursorBlock != prevBlock || _doc.CursorOffset != prevOffset;
-            if (textChanged) _doc.CollapseSelection();
-        }
+        else if (IsVisual) textChanged = HandleBackVisual();
+        else textChanged = HandleBackSource();
         ResetUndoSealTimer();
     }
 
@@ -1215,108 +1082,24 @@ public class DocsCanvas : FrameworkElement
             _doc.DeleteSelection();
             textChanged = true;
         }
-        else if (IsVisual)
-        {
-            VisualSkipDelete();
-            if (_doc.CursorOffset >= _doc.GetBlockLength(_doc.CursorBlock) &&
-                _doc.CursorBlock < _doc.BlockCount - 1 &&
-                _parsedBlocks != null && _parsedBlocks[_doc.CursorBlock + 1].IsFenceDelimiter)
-            {
-                // Don't merge with a fence delimiter block
-            }
-            else
-            {
-                int prevBlocks = _doc.BlockCount;
-                int prevLen = _doc.GetBlockLength(_doc.CursorBlock);
-                _doc.Delete();
-                textChanged = _doc.BlockCount != prevBlocks ||
-                              _doc.GetBlockLength(_doc.CursorBlock) != prevLen;
-            }
-            EnsureCursorOnVisibleBlock();
-            SkipCursorOverHiddenRanges(forward: true);
-        }
-        else
-        {
-            int prevBlocks = _doc.BlockCount;
-            int prevLen = _doc.GetBlockLength(_doc.CursorBlock);
-            _doc.Delete();
-            textChanged = _doc.BlockCount != prevBlocks ||
-                          _doc.GetBlockLength(_doc.CursorBlock) != prevLen;
-        }
+        else if (IsVisual) textChanged = HandleDeleteVisual();
+        else textChanged = HandleDeleteSource();
         ResetUndoSealTimer();
     }
 
     private void HandleLeft(bool shift)
     {
         SealAndStopTimer();
-        if (!shift && _doc.HasSelection)
-        {
-            var (sb, so, _, _) = _doc.GetOrderedSelection();
-            _doc.CursorBlock = sb;
-            _doc.CursorOffset = so;
-            _doc.CollapseSelection();
-            if (IsVisual)
-            {
-                EnsureCursorOnVisibleBlock(preferForward: false);
-                SkipCursorOverHiddenRanges(forward: false);
-            }
-        }
-        else if (IsVisual)
-        {
-            int origBlock = _doc.CursorBlock;
-            int origOffset = _doc.CursorOffset;
-            _doc.MoveLeft();
-            if (!shift) _doc.CollapseSelection();
-            EnsureCursorOnVisibleBlock(preferForward: false);
-            if (_parsedBlocks != null && _parsedBlocks[_doc.CursorBlock].IsFenceDelimiter)
-            {
-                _doc.CursorBlock = origBlock;
-                _doc.CursorOffset = origOffset;
-            }
-            SkipCursorOverHiddenRanges(forward: false);
-        }
-        else
-        {
-            _doc.MoveLeft();
-            if (!shift) _doc.CollapseSelection();
-        }
+        if (IsVisual) HandleLeftVisual(shift);
+        else HandleLeftSource(shift);
         if (!shift) _doc.CollapseSelection();
     }
 
     private void HandleRight(bool shift)
     {
         SealAndStopTimer();
-        if (!shift && _doc.HasSelection)
-        {
-            var (_, _, eb, eo) = _doc.GetOrderedSelection();
-            _doc.CursorBlock = eb;
-            _doc.CursorOffset = eo;
-            _doc.CollapseSelection();
-            if (IsVisual)
-            {
-                EnsureCursorOnVisibleBlock(preferForward: true);
-                SkipCursorOverHiddenRanges(forward: true);
-            }
-        }
-        else if (IsVisual)
-        {
-            int origBlock = _doc.CursorBlock;
-            int origOffset = _doc.CursorOffset;
-            _doc.MoveRight();
-            if (!shift) _doc.CollapseSelection();
-            EnsureCursorOnVisibleBlock(preferForward: true);
-            if (_parsedBlocks != null && _parsedBlocks[_doc.CursorBlock].IsFenceDelimiter)
-            {
-                _doc.CursorBlock = origBlock;
-                _doc.CursorOffset = origOffset;
-            }
-            SkipCursorOverHiddenRanges(forward: true);
-        }
-        else
-        {
-            _doc.MoveRight();
-            if (!shift) _doc.CollapseSelection();
-        }
+        if (IsVisual) HandleRightVisual(shift);
+        else HandleRightSource(shift);
         if (!shift) _doc.CollapseSelection();
     }
 
@@ -1333,11 +1116,7 @@ public class DocsCanvas : FrameworkElement
             int vli = CursorToVisualLineIndex();
             _doc.CursorOffset = _visualLines[vli].StartOffset;
         }
-        if (IsVisual)
-        {
-            EnsureCursorOnVisibleBlock();
-            SkipCursorToVisible(forward: true);
-        }
+        if (IsVisual) HandleHomeVisual();
         if (!shift) _doc.CollapseSelection();
     }
 
@@ -1680,46 +1459,6 @@ public class DocsCanvas : FrameworkElement
         }
 
         ApplySyntaxDimming(ft, vl, parsed);
-    }
-
-    private void ApplyInlineStylesVisual(FormattedText ft, VisualLine vl,
-        ParsedBlock parsed, BlockVisualMap map)
-    {
-        int vlEnd = vl.StartOffset + vl.Length;
-        foreach (var run in parsed.Runs)
-        {
-            if (run.Style == InlineStyle.Normal) continue;
-            int runEnd = run.Start + run.Length;
-            if (runEnd <= vl.StartOffset || run.Start >= vlEnd) continue;
-            if (parsed.Kind == BlockKind.FencedCodeLine) continue;
-
-            int rawStart = Math.Max(run.Start, vl.StartOffset);
-            int rawEnd = Math.Min(runEnd, vlEnd);
-            int visStart = map.RawToVisual(rawStart) - map.RawToVisual(vl.StartOffset);
-            int visEnd = map.RawToVisual(rawEnd) - map.RawToVisual(vl.StartOffset);
-            int count = visEnd - visStart;
-            if (count <= 0) continue;
-
-            switch (run.Style)
-            {
-                case InlineStyle.Bold:
-                    ft.SetFontWeight(FontWeights.Bold, visStart, count);
-                    break;
-                case InlineStyle.Italic:
-                    ft.SetFontStyle(FontStyles.Italic, visStart, count);
-                    break;
-                case InlineStyle.BoldItalic:
-                    ft.SetFontWeight(FontWeights.Bold, visStart, count);
-                    ft.SetFontStyle(FontStyles.Italic, visStart, count);
-                    break;
-                case InlineStyle.Code:
-                    ft.SetFontFamily(_monoTypeface.FontFamily, visStart, count);
-                    break;
-                case InlineStyle.Strikethrough:
-                    ft.SetTextDecorations(TextDecorations.Strikethrough, visStart, count);
-                    break;
-            }
-        }
     }
 
     private void ApplySyntaxDimming(FormattedText ft, VisualLine vl, ParsedBlock parsed)
