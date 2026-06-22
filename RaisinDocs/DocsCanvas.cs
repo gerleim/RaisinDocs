@@ -341,6 +341,34 @@ public partial class DocsCanvas : FrameworkElement
 
     private bool IsVisual => _editMode == EditMode.Visual;
 
+    internal int TestCursorBlock => _doc.CursorBlock;
+    internal int TestCursorOffset => _doc.CursorOffset;
+    internal void TestSetCursor(int block, int offset)
+    {
+        _doc.CursorBlock = block;
+        _doc.CursorOffset = offset;
+        _doc.CollapseSelection();
+    }
+    internal void TestSetEditMode(EditMode mode)
+    {
+        _editMode = mode;
+        InvalidateLayout();
+    }
+    internal void TestComputeLayout() => ComputeLayout();
+    internal void TestNavigate(Key key, bool shift = false, bool ctrl = false)
+    {
+        ComputeLayout();
+        switch (key)
+        {
+            case Key.Left: HandleLeft(shift); break;
+            case Key.Right: HandleRight(shift); break;
+            case Key.Up: HandleUp(shift); break;
+            case Key.Down: HandleDown(shift); break;
+            case Key.Home: HandleHome(shift, ctrl); break;
+            case Key.End: HandleEnd(shift, ctrl); break;
+        }
+    }
+
     private readonly DispatcherTimer _undoSealTimer;
     private enum LastActionKind { None, Typing, Deleting }
     private LastActionKind _lastAction;

@@ -3,5 +3,6 @@
   <Project Path="RaisinDocs.TestApp/RaisinDocs.TestApp.csproj" />
   <Folder Name="/Tests/">
     <Project Path="Tests/RaisinDocs.Tests/RaisinDocs.Tests.csproj" />
+    <Project Path="Tests/RaisinDocs.Tests.UI/RaisinDocs.Tests.UI.csproj" />
   </Folder>
 </Solution>

@@ -7,6 +7,10 @@
     <UseWPF>true</UseWPF>
   </PropertyGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="RaisinDocs.Tests.UI" />
+  </ItemGroup>
+
   <ItemGroup Condition="'$(UseProjectReferences)' != 'false'">
     <ProjectReference Include="..\..\RaisinLibraries\Raisin.WPF.Base\Raisin.WPF.Base.csproj" />
   </ItemGroup>

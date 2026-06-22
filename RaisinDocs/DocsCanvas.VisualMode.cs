@@ -261,7 +261,12 @@ public partial class DocsCanvas
     private void HandleEndVisual()
     {
         EnsureCursorOnVisibleBlock();
-        SkipCursorOverHiddenRanges(forward: false);
+        if (_visualMaps == null || _doc.CursorBlock >= _visualMaps.Count) return;
+        var map = _visualMaps[_doc.CursorBlock];
+        int offset = _doc.CursorOffset;
+        while (offset > 0 && (map.IsHidden(offset) || map.IsHidden(offset - 1)))
+            offset--;
+        _doc.CursorOffset = offset;
     }
 
     private void HandleUpVisual()
