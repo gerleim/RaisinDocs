@@ -98,3 +98,7 @@ The document model must distinguish these from iteration 2 onward. A naive "one 
 - Syntax highlighting in code blocks
 - Drag-and-drop
 - Toggle to show/hide hard break indicators (trailing spaces at end of lines that produce a `<br>` per CommonMark spec)
+- Text expansion / autocomplete: user-defined shorthand dictionary (e.g. `t`→"the", `des`→"design") with inline ghost text shown dimmed after the cursor. Tab to accept, any other key to dismiss. Could also offer frequency-based English word completions as you type.
+- C# solution symbol harvesting: scan the loaded solution for meaningful names (class names, method names, properties, enums, namespaces) and feed them into the autocomplete dictionary so documentation can reference code identifiers accurately without manual typing.
+- Autocorrect: static replacement table (`Dictionary<string, string>`) of common typos (e.g. `"teh"→"the"`, `"sould"→"should"`) applied on word boundary, plus auto-correct from `ISpellChecker` top suggestion when edit distance is 1–2. Ship ~200 built-in entries, let users add their own.
+- Spell checking via Windows `ISpellChecker` COM API — no bundled dictionaries, uses the OS language packs. Declare COM interfaces (`ISpellCheckerFactory`, `ISpellChecker`, `IEnumSpellingError`, `ISpellingError`) in a small interop class and check words per block, skipping markdown syntax and code spans/blocks. Render red squiggly underlines under misspelled words in `OnRender` and offer suggestions via right-click context menu.
