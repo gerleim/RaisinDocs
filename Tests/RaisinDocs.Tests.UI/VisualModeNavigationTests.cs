@@ -94,12 +94,12 @@ public class VisualModeNavigationTests
     // --- End key lands on visible position ---
 
     [StaFact]
-    public void End_SkipsTrailingHiddenMarker()
+    public void End_LandsInsideClosingMarker()
     {
         var canvas = CreateCanvas("text **bold**");
         canvas.TestSetCursor(0, 0);
         canvas.TestNavigate(Key.End);
-        canvas.TestCursorOffset.Should().Be(10); // after 'd', not at 13
+        canvas.TestCursorOffset.Should().Be(11); // after 'd', before closing **
     }
 
     // --- Home key lands on visible position ---
@@ -140,6 +140,48 @@ public class VisualModeNavigationTests
         canvas.TestSetCursor(0, 8); // 'o' of bold
         canvas.TestNavigate(Key.Right);
         canvas.TestCursorOffset.Should().Be(9); // 'l' of bold
+    }
+
+    // --- Typing at styled boundaries ---
+
+    [StaFact]
+    public void Type_AfterEndKey_ContinuesBold()
+    {
+        var canvas = CreateCanvas("text **bold**");
+        canvas.TestSetCursor(0, 0);
+        canvas.TestNavigate(Key.End);
+        canvas.TestInsert("X");
+        canvas.GetText().Should().Be("text **boldX**");
+    }
+
+    [StaFact]
+    public void Type_AfterRightPastBold_ExitsBold()
+    {
+        var canvas = CreateCanvas("text **bold** end");
+        canvas.TestSetCursor(0, 10); // after 'd'
+        canvas.TestNavigate(Key.Right); // skip closing ** → offset 13
+        canvas.TestInsert("X");
+        canvas.GetText().Should().Be("text **bold**X end");
+    }
+
+    [StaFact]
+    public void Type_AfterHomeOnBold_InsideStyle()
+    {
+        var canvas = CreateCanvas("**bold** end");
+        canvas.TestSetCursor(0, 6);
+        canvas.TestNavigate(Key.Home); // skip opening ** → offset 2
+        canvas.TestInsert("X");
+        canvas.GetText().Should().Be("**Xbold** end");
+    }
+
+    [StaFact]
+    public void Type_AfterLeftPastBold_ExitsStyle()
+    {
+        var canvas = CreateCanvas("text **bold** end");
+        canvas.TestSetCursor(0, 7); // 'b' of bold
+        canvas.TestNavigate(Key.Left); // skip opening ** → offset 4
+        canvas.TestInsert("X");
+        canvas.GetText().Should().Be("textX **bold** end");
     }
 
     // --- Italic and code markers ---

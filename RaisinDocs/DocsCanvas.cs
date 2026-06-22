@@ -355,6 +355,14 @@ public partial class DocsCanvas : FrameworkElement
         InvalidateLayout();
     }
     internal void TestComputeLayout() => ComputeLayout();
+    internal void TestInsert(string text)
+    {
+        ComputeLayout();
+        foreach (char c in text)
+            _doc.Insert(c);
+        _doc.CollapseSelection();
+        InvalidateLayout();
+    }
     internal void TestNavigate(Key key, bool shift = false, bool ctrl = false)
     {
         ComputeLayout();
