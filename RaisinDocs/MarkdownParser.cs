@@ -7,6 +7,7 @@ public enum InlineStyle
     Italic,
     BoldItalic,
     Code,
+    Strikethrough,
 }
 
 public readonly record struct StyledRun(int Start, int Length, InlineStyle Style);
@@ -22,6 +23,7 @@ public enum BlockKind
     Heading6,
     UnorderedListItem,
     FencedCodeLine,
+    Blockquote,
 }
 
 public class ParsedBlock
@@ -99,6 +101,9 @@ public static class MarkdownParser
         if (text.StartsWith("- ") || text.StartsWith("* "))
             return BlockKind.UnorderedListItem;
 
+        if (text.StartsWith("> ") || text == ">")
+            return BlockKind.Blockquote;
+
         return BlockKind.Paragraph;
     }
 
@@ -110,6 +115,7 @@ public static class MarkdownParser
         var styles = new InlineStyle[text.Length];
 
         MarkCodeSpans(text, styles);
+        MarkStrikethrough(text, styles);
         MarkEmphasis(text, styles);
 
         return BuildRuns(styles);
@@ -154,6 +160,34 @@ public static class MarkdownParser
             }
         }
         return -1;
+    }
+
+    private static void MarkStrikethrough(string text, InlineStyle[] styles)
+    {
+        int i = 0;
+        while (i <= text.Length - 4)
+        {
+            if (styles[i] != InlineStyle.Normal || text[i] != '~' || text[i + 1] != '~')
+            {
+                i++;
+                continue;
+            }
+
+            int openStart = i;
+            i += 2;
+
+            for (int j = i; j <= text.Length - 2; j++)
+            {
+                if (styles[j] == InlineStyle.Normal && text[j] == '~' && text[j + 1] == '~')
+                {
+                    for (int k = openStart; k < j + 2; k++)
+                        styles[k] = InlineStyle.Strikethrough;
+                    i = j + 2;
+                    goto next;
+                }
+            }
+            next:;
+        }
     }
 
     private static void MarkEmphasis(string text, InlineStyle[] styles)

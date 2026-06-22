@@ -143,6 +143,37 @@ public class Document
         CursorOffset = _blocks[CursorBlock].Length;
     }
 
+    public void SelectWord(int block, int offset)
+    {
+        string text = _blocks[block].ToString();
+        if (text.Length == 0) return;
+
+        offset = Math.Min(offset, text.Length - 1);
+        if (offset < 0) return;
+
+        bool IsWord(char c) => char.IsLetterOrDigit(c) || c == '_';
+        bool wordChar = IsWord(text[offset]);
+
+        int start = offset;
+        int end = offset;
+
+        if (wordChar)
+        {
+            while (start > 0 && IsWord(text[start - 1])) start--;
+            while (end < text.Length - 1 && IsWord(text[end + 1])) end++;
+        }
+        else
+        {
+            while (start > 0 && !IsWord(text[start - 1]) && !char.IsWhiteSpace(text[start - 1])) start--;
+            while (end < text.Length - 1 && !IsWord(text[end + 1]) && !char.IsWhiteSpace(text[end + 1])) end++;
+        }
+
+        AnchorBlock = block;
+        AnchorOffset = start;
+        CursorBlock = block;
+        CursorOffset = end + 1;
+    }
+
     public static int ComparePositions(int block1, int offset1, int block2, int offset2)
     {
         if (block1 != block2) return block1.CompareTo(block2);
@@ -207,6 +238,22 @@ public class Document
         _blocks[block].Remove(offset, length);
     }
 
+    public void InsertBlockAt(int index, string text)
+    {
+        _blocks.Insert(index, new StringBuilder(text));
+        if (CursorBlock >= index) CursorBlock++;
+        if (AnchorBlock >= index) AnchorBlock++;
+    }
+
+    public void RemoveBlockAt(int index)
+    {
+        _blocks.RemoveAt(index);
+        if (CursorBlock > index) CursorBlock--;
+        else if (CursorBlock == index) { CursorBlock = Math.Max(0, index - 1); CursorOffset = _blocks[CursorBlock].Length; }
+        if (AnchorBlock > index) AnchorBlock--;
+        else if (AnchorBlock == index) { AnchorBlock = Math.Max(0, index - 1); AnchorOffset = _blocks[AnchorBlock].Length; }
+    }
+
     public void InsertParagraphBreak()
     {
         var block = _blocks[CursorBlock];
@@ -246,6 +293,48 @@ public class Document
             _blocks[CursorBlock].Append(_blocks[CursorBlock + 1]);
             _blocks.RemoveAt(CursorBlock + 1);
         }
+    }
+
+    public void ToggleBlockPrefix(int blockIndex, string prefix)
+    {
+        var text = _blocks[blockIndex].ToString();
+        if (text.StartsWith(prefix))
+        {
+            _blocks[blockIndex].Remove(0, prefix.Length);
+            AdjustPositionsAfterPrefixChange(blockIndex, -prefix.Length);
+        }
+        else
+        {
+            var existingPrefix = GetBlockPrefix(text);
+            if (existingPrefix != null)
+            {
+                _blocks[blockIndex].Remove(0, existingPrefix.Length);
+                AdjustPositionsAfterPrefixChange(blockIndex, -existingPrefix.Length);
+            }
+            _blocks[blockIndex].Insert(0, prefix);
+            AdjustPositionsAfterPrefixChange(blockIndex, prefix.Length);
+        }
+    }
+
+    private static string? GetBlockPrefix(string text)
+    {
+        for (int h = 6; h >= 1; h--)
+        {
+            var hp = new string('#', h) + " ";
+            if (text.StartsWith(hp)) return hp;
+        }
+        if (text.StartsWith("- ")) return "- ";
+        if (text.StartsWith("* ")) return "* ";
+        if (text.StartsWith("> ")) return "> ";
+        return null;
+    }
+
+    private void AdjustPositionsAfterPrefixChange(int blockIndex, int delta)
+    {
+        if (CursorBlock == blockIndex)
+            CursorOffset = Math.Max(0, CursorOffset + delta);
+        if (AnchorBlock == blockIndex)
+            AnchorOffset = Math.Max(0, AnchorOffset + delta);
     }
 
     public void MoveLeft()

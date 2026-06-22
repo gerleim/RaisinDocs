@@ -87,12 +87,211 @@ public class DocsCanvas : FrameworkElement
     private EditMode _editMode = EditMode.Raw;
     public EditMode CurrentEditMode => _editMode;
 
+    public event EventHandler? FormattingChanged;
+
     public string GetText() => _doc.GetText();
 
     public void SetText(string text)
     {
         _doc.SetText(text);
         InvalidateLayout();
+    }
+
+    // --- Public formatting API ---
+
+    public void ToggleBold()
+    {
+        SealAndStopTimer();
+        ToggleInlineStyle("**", InlineStyle.Bold);
+        InvalidateLayout();
+        EnsureCursorVisible();
+        RaiseFormattingChanged();
+    }
+
+    public void ToggleItalic()
+    {
+        SealAndStopTimer();
+        ToggleInlineStyle("*", InlineStyle.Italic);
+        InvalidateLayout();
+        EnsureCursorVisible();
+        RaiseFormattingChanged();
+    }
+
+    public void ToggleCodeSpan()
+    {
+        SealAndStopTimer();
+        ToggleInlineStyle("`", InlineStyle.Code);
+        InvalidateLayout();
+        EnsureCursorVisible();
+        RaiseFormattingChanged();
+    }
+
+    public void ToggleStrikethrough()
+    {
+        SealAndStopTimer();
+        ToggleInlineStyle("~~", InlineStyle.Strikethrough);
+        InvalidateLayout();
+        EnsureCursorVisible();
+        RaiseFormattingChanged();
+    }
+
+    public void ToggleHeading(int level)
+    {
+        if (level < 1 || level > 6) return;
+        ToggleBlockPrefixForSelection(new string('#', level) + " ");
+    }
+
+    public void ToggleBulletList()
+    {
+        ToggleBlockPrefixForSelection("- ");
+    }
+
+    public void ToggleBlockquote()
+    {
+        ToggleBlockPrefixForSelection("> ");
+    }
+
+    public void ToggleFencedCode()
+    {
+        SealAndStopTimer();
+        var (sb, _, eb, _) = _doc.HasSelection
+            ? _doc.GetOrderedSelection()
+            : (_doc.CursorBlock, 0, _doc.CursorBlock, 0);
+
+        ComputeLayout();
+
+        bool allFenced = true;
+        for (int b = sb; b <= eb; b++)
+        {
+            if (_parsedBlocks![b].Kind != BlockKind.FencedCodeLine)
+            {
+                allFenced = false;
+                break;
+            }
+        }
+
+        _doc.BeginUndoGroup();
+
+        if (allFenced)
+        {
+            int openDelim = -1;
+            for (int b = sb; b >= 0; b--)
+            {
+                if (_parsedBlocks![b].IsFenceDelimiter) { openDelim = b; break; }
+            }
+            int closeDelim = -1;
+            for (int b = eb; b < _doc.BlockCount; b++)
+            {
+                if (_parsedBlocks![b].IsFenceDelimiter) { closeDelim = b; break; }
+            }
+
+            if (openDelim >= 0 && closeDelim >= 0)
+            {
+                _doc.RemoveBlockAt(closeDelim);
+                _doc.RemoveBlockAt(openDelim);
+            }
+        }
+        else
+        {
+            _doc.InsertBlockAt(eb + 1, "```");
+            _doc.InsertBlockAt(sb, "```");
+        }
+
+        _doc.SealUndoGroup();
+        InvalidateLayout();
+        EnsureCursorVisible();
+        RaiseFormattingChanged();
+    }
+
+    private void ToggleBlockPrefixForSelection(string prefix)
+    {
+        SealAndStopTimer();
+        var (sb, _, eb, _) = _doc.HasSelection
+            ? _doc.GetOrderedSelection()
+            : (_doc.CursorBlock, 0, _doc.CursorBlock, 0);
+
+        bool allHavePrefix = true;
+        for (int b = sb; b <= eb; b++)
+        {
+            if (!_doc.GetBlockText(b).StartsWith(prefix))
+            {
+                allHavePrefix = false;
+                break;
+            }
+        }
+
+        _doc.BeginUndoGroup();
+
+        if (allHavePrefix)
+        {
+            for (int b = sb; b <= eb; b++)
+                _doc.ToggleBlockPrefix(b, prefix);
+        }
+        else
+        {
+            for (int b = sb; b <= eb; b++)
+            {
+                if (!_doc.GetBlockText(b).StartsWith(prefix))
+                    _doc.ToggleBlockPrefix(b, prefix);
+            }
+        }
+
+        _doc.SealUndoGroup();
+        InvalidateLayout();
+        EnsureCursorVisible();
+        RaiseFormattingChanged();
+    }
+
+    // --- Formatting query properties ---
+
+    public BlockKind CurrentBlockKind
+    {
+        get
+        {
+            if (!_measured) return BlockKind.Paragraph;
+            ComputeLayout();
+            return _parsedBlocks![_doc.CursorBlock].Kind;
+        }
+    }
+
+    public bool SelectionIsBold => SelectionHasStyle(InlineStyle.Bold);
+    public bool SelectionIsItalic => SelectionHasStyle(InlineStyle.Italic);
+    public bool SelectionIsCode => SelectionHasStyle(InlineStyle.Code);
+    public bool SelectionIsStrikethrough => SelectionHasStyle(InlineStyle.Strikethrough);
+
+    private bool SelectionHasStyle(InlineStyle targetStyle)
+    {
+        if (!_measured || !_doc.HasSelection) return false;
+        var (sb, so, eb, eo) = _doc.GetOrderedSelection();
+        so = Math.Min(so, _doc.GetBlockLength(sb));
+        eo = Math.Min(eo, _doc.GetBlockLength(eb));
+
+        ComputeLayout();
+
+        for (int b = sb; b <= eb; b++)
+        {
+            int blockSelStart = (b == sb) ? so : 0;
+            int blockSelEnd = (b == eb) ? eo : _doc.GetBlockLength(b);
+            if (blockSelStart >= blockSelEnd) continue;
+
+            var parsed = _parsedBlocks![b];
+            foreach (var run in parsed.Runs)
+            {
+                int runEnd = run.Start + run.Length;
+                if (runEnd <= blockSelStart || run.Start >= blockSelEnd) continue;
+                if (run.Style != targetStyle && run.Style != InlineStyle.BoldItalic)
+                    return false;
+                if (run.Style == InlineStyle.BoldItalic &&
+                    targetStyle != InlineStyle.Bold && targetStyle != InlineStyle.Italic)
+                    return false;
+            }
+        }
+        return true;
+    }
+
+    private void RaiseFormattingChanged()
+    {
+        FormattingChanged?.Invoke(this, EventArgs.Empty);
     }
 
     private bool IsWysiwyg => _editMode == EditMode.Wysiwyg;
@@ -581,68 +780,92 @@ public class DocsCanvas : FrameworkElement
         if (!_doc.HasSelection) return;
 
         var (sb, so, eb, eo) = _doc.GetOrderedSelection();
-        if (sb != eb) return;
+        so = Math.Min(so, _doc.GetBlockLength(sb));
+        eo = Math.Min(eo, _doc.GetBlockLength(eb));
 
         ComputeLayout();
-        var parsed = _parsedBlocks![sb];
+
+        int markerLen = marker.Length;
+        int styleMarkerLen = targetStyle switch
+        {
+            InlineStyle.Bold => 2,
+            InlineStyle.Italic => 1,
+            InlineStyle.BoldItalic => 3,
+            InlineStyle.Code => 1,
+            InlineStyle.Strikethrough => 2,
+            _ => 0,
+        };
 
         bool allStyled = true;
-        foreach (var run in parsed.Runs)
+        for (int b = sb; b <= eb; b++)
         {
-            int runEnd = run.Start + run.Length;
-            if (runEnd <= so || run.Start >= eo) continue;
+            int bStart = (b == sb) ? so : 0;
+            int bEnd = (b == eb) ? eo : _doc.GetBlockLength(b);
+            if (bStart >= bEnd) continue;
 
-            int markerLen = targetStyle switch
+            var parsed = _parsedBlocks![b];
+            foreach (var run in parsed.Runs)
             {
-                InlineStyle.Bold => 2,
-                InlineStyle.Italic => 1,
-                InlineStyle.BoldItalic => 3,
-                _ => 0,
-            };
+                int runEnd = run.Start + run.Length;
+                if (runEnd <= bStart || run.Start >= bEnd) continue;
 
-            int contentStart = run.Start + markerLen;
-            int contentEnd = runEnd - markerLen;
-            int overlapStart = Math.Max(so, contentStart);
-            int overlapEnd = Math.Min(eo, contentEnd);
-            if (overlapStart < overlapEnd && run.Style == targetStyle) continue;
+                int contentStart = run.Start + styleMarkerLen;
+                int contentEnd = runEnd - styleMarkerLen;
+                int overlapStart = Math.Max(bStart, contentStart);
+                int overlapEnd = Math.Min(bEnd, contentEnd);
+                if (overlapStart < overlapEnd && run.Style == targetStyle) continue;
 
-            allStyled = false;
-            break;
+                allStyled = false;
+                break;
+            }
+            if (!allStyled) break;
         }
 
         _doc.BeginUndoGroup();
 
-        if (allStyled)
+        int newSo = so, newEo = eo;
+
+        for (int b = eb; b >= sb; b--)
         {
-            foreach (var run in parsed.Runs)
+            int bStart = (b == sb) ? so : 0;
+            int bEnd = (b == eb) ? eo : _doc.GetBlockLength(b);
+            if (bStart >= bEnd) continue;
+
+            if (allStyled)
             {
-                int runEnd = run.Start + run.Length;
-                if (runEnd <= so || run.Start >= eo) continue;
-                if (run.Style != targetStyle) continue;
+                var parsed = _parsedBlocks![b];
+                foreach (var run in parsed.Runs)
+                {
+                    int runEnd = run.Start + run.Length;
+                    if (runEnd <= bStart || run.Start >= bEnd) continue;
+                    if (run.Style != targetStyle) continue;
 
-                int markerLen = marker.Length;
-                _doc.RemoveTextAt(sb, runEnd - markerLen, markerLen);
-                _doc.RemoveTextAt(sb, run.Start, markerLen);
+                    _doc.RemoveTextAt(b, runEnd - markerLen, markerLen);
+                    _doc.RemoveTextAt(b, run.Start, markerLen);
 
-                int shift = markerLen;
-                if (eo > runEnd - markerLen) eo -= markerLen;
-                so -= shift;
-                eo -= shift;
-                break;
+                    if (b == eb)
+                    {
+                        newEo = eo - markerLen;
+                        if (eo > runEnd - markerLen) newEo -= markerLen;
+                    }
+                    if (b == sb)
+                        newSo = so - markerLen;
+                    break;
+                }
             }
-        }
-        else
-        {
-            _doc.InsertTextAt(sb, eo, marker);
-            _doc.InsertTextAt(sb, so, marker);
-            so += marker.Length;
-            eo += marker.Length;
+            else
+            {
+                _doc.InsertTextAt(b, bEnd, marker);
+                _doc.InsertTextAt(b, bStart, marker);
+                if (b == sb) newSo = so + markerLen;
+                if (b == eb) newEo = eo + markerLen;
+            }
         }
 
         _doc.AnchorBlock = sb;
-        _doc.AnchorOffset = so;
-        _doc.CursorBlock = sb;
-        _doc.CursorOffset = eo;
+        _doc.AnchorOffset = newSo;
+        _doc.CursorBlock = eb;
+        _doc.CursorOffset = newEo;
         _doc.SealUndoGroup();
     }
 
@@ -755,6 +978,16 @@ public class DocsCanvas : FrameworkElement
         SealAndStopTimer();
 
         HitTestToPosition(pos, out int block, out int offset);
+
+        if (e.ClickCount == 2)
+        {
+            _doc.SelectWord(block, offset);
+            CaptureMouse();
+            ResetBlink();
+            InvalidateVisual();
+            return;
+        }
+
         _doc.CursorBlock = block;
         _doc.CursorOffset = offset;
         SkipCursorOverHiddenRanges(forward: true);
@@ -765,6 +998,7 @@ public class DocsCanvas : FrameworkElement
         CaptureMouse();
         ResetBlink();
         InvalidateVisual();
+        RaiseFormattingChanged();
     }
 
     protected override void OnMouseMove(MouseEventArgs e)
@@ -1099,22 +1333,12 @@ public class DocsCanvas : FrameworkElement
                 break;
 
             case Key.B:
-                if (ctrl)
-                {
-                    SealAndStopTimer();
-                    ToggleInlineStyle("**", InlineStyle.Bold);
-                    textChanged = true;
-                }
+                if (ctrl) ToggleBold();
                 else handled = false;
                 break;
 
             case Key.I:
-                if (ctrl)
-                {
-                    SealAndStopTimer();
-                    ToggleInlineStyle("*", InlineStyle.Italic);
-                    textChanged = true;
-                }
+                if (ctrl) ToggleItalic();
                 else handled = false;
                 break;
 
@@ -1156,6 +1380,7 @@ public class DocsCanvas : FrameworkElement
                 InvalidateVisual();
             EnsureCursorVisible();
             e.Handled = true;
+            RaiseFormattingChanged();
         }
     }
 
@@ -1271,6 +1496,9 @@ public class DocsCanvas : FrameworkElement
                 case InlineStyle.Code:
                     ft.SetFontFamily(_monoTypeface.FontFamily, localStart, count);
                     break;
+                case InlineStyle.Strikethrough:
+                    ft.SetTextDecorations(TextDecorations.Strikethrough, localStart, count);
+                    break;
             }
         }
 
@@ -1310,6 +1538,9 @@ public class DocsCanvas : FrameworkElement
                 case InlineStyle.Code:
                     ft.SetFontFamily(_monoTypeface.FontFamily, visStart, count);
                     break;
+                case InlineStyle.Strikethrough:
+                    ft.SetTextDecorations(TextDecorations.Strikethrough, visStart, count);
+                    break;
             }
         }
     }
@@ -1336,6 +1567,9 @@ public class DocsCanvas : FrameworkElement
                 ft.SetForegroundBrush(_syntaxBrush, 0, 2);
         }
 
+        if (parsed.Kind == BlockKind.Blockquote && vl.StartOffset == 0 && vl.Length >= 2)
+            ft.SetForegroundBrush(_syntaxBrush, 0, 2);
+
         foreach (var run in parsed.Runs)
         {
             if (run.Style == InlineStyle.Normal) continue;
@@ -1348,6 +1582,7 @@ public class DocsCanvas : FrameworkElement
                 InlineStyle.Bold => 2,
                 InlineStyle.Italic => 1,
                 InlineStyle.Code => CountBackticks(blockText, run.Start),
+                InlineStyle.Strikethrough => 2,
                 _ => 0,
             };
             if (markerLen == 0) continue;

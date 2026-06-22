@@ -673,4 +673,268 @@ public class DocumentTests
         doc.Undo();
         doc.GetBlockText(0).Should().Be("hello world");
     }
+
+    // --- SelectWord ---
+
+    [Fact]
+    public void SelectWord_SelectsWordUnderCursor()
+    {
+        var doc = CreateDoc("hello world");
+        doc.SelectWord(0, 2);
+        doc.GetSelectedText().Should().Be("hello");
+        doc.AnchorOffset.Should().Be(0);
+        doc.CursorOffset.Should().Be(5);
+    }
+
+    [Fact]
+    public void SelectWord_SelectsSecondWord()
+    {
+        var doc = CreateDoc("hello world");
+        doc.SelectWord(0, 8);
+        doc.GetSelectedText().Should().Be("world");
+        doc.AnchorOffset.Should().Be(6);
+        doc.CursorOffset.Should().Be(11);
+    }
+
+    [Fact]
+    public void SelectWord_SelectsPunctuation()
+    {
+        var doc = CreateDoc("foo---bar");
+        doc.SelectWord(0, 4);
+        doc.GetSelectedText().Should().Be("---");
+        doc.AnchorOffset.Should().Be(3);
+        doc.CursorOffset.Should().Be(6);
+    }
+
+    [Fact]
+    public void SelectWord_IncludesUnderscores()
+    {
+        var doc = CreateDoc("my_var = 1");
+        doc.SelectWord(0, 1);
+        doc.GetSelectedText().Should().Be("my_var");
+        doc.AnchorOffset.Should().Be(0);
+        doc.CursorOffset.Should().Be(6);
+    }
+
+    [Fact]
+    public void SelectWord_EmptyBlockDoesNothing()
+    {
+        var doc = CreateDoc("");
+        doc.SelectWord(0, 0);
+        doc.HasSelection.Should().BeFalse();
+    }
+
+    // --- ToggleBlockPrefix ---
+
+    [Fact]
+    public void ToggleBlockPrefix_AddsHeadingPrefix()
+    {
+        var doc = CreateDoc("hello");
+        doc.CursorBlock = 0;
+        doc.CursorOffset = 3;
+        doc.CollapseSelection();
+
+        doc.ToggleBlockPrefix(0, "## ");
+
+        doc.GetBlockText(0).Should().Be("## hello");
+        doc.CursorOffset.Should().Be(6);
+    }
+
+    [Fact]
+    public void ToggleBlockPrefix_RemovesExistingPrefix()
+    {
+        var doc = CreateDoc("## hello");
+        doc.CursorBlock = 0;
+        doc.CursorOffset = 5;
+        doc.CollapseSelection();
+
+        doc.ToggleBlockPrefix(0, "## ");
+
+        doc.GetBlockText(0).Should().Be("hello");
+        doc.CursorOffset.Should().Be(2);
+    }
+
+    [Fact]
+    public void ToggleBlockPrefix_ReplacesPrefix()
+    {
+        var doc = CreateDoc("## hello");
+        doc.CursorBlock = 0;
+        doc.CursorOffset = 5;
+        doc.CollapseSelection();
+
+        doc.ToggleBlockPrefix(0, "### ");
+
+        doc.GetBlockText(0).Should().Be("### hello");
+        doc.CursorOffset.Should().Be(6);
+    }
+
+    [Fact]
+    public void ToggleBlockPrefix_AddsBulletPrefix()
+    {
+        var doc = CreateDoc("item");
+        doc.CursorBlock = 0;
+        doc.CursorOffset = 2;
+        doc.CollapseSelection();
+
+        doc.ToggleBlockPrefix(0, "- ");
+
+        doc.GetBlockText(0).Should().Be("- item");
+        doc.CursorOffset.Should().Be(4);
+    }
+
+    [Fact]
+    public void ToggleBlockPrefix_RemovesBulletPrefix()
+    {
+        var doc = CreateDoc("- item");
+        doc.CursorBlock = 0;
+        doc.CursorOffset = 4;
+        doc.CollapseSelection();
+
+        doc.ToggleBlockPrefix(0, "- ");
+
+        doc.GetBlockText(0).Should().Be("item");
+        doc.CursorOffset.Should().Be(2);
+    }
+
+    [Fact]
+    public void ToggleBlockPrefix_AddsBlockquote()
+    {
+        var doc = CreateDoc("quoted");
+        doc.CursorBlock = 0;
+        doc.CursorOffset = 3;
+        doc.CollapseSelection();
+
+        doc.ToggleBlockPrefix(0, "> ");
+
+        doc.GetBlockText(0).Should().Be("> quoted");
+        doc.CursorOffset.Should().Be(5);
+    }
+
+    [Fact]
+    public void ToggleBlockPrefix_ReplacesHeadingWithBullet()
+    {
+        var doc = CreateDoc("# heading");
+        doc.CursorBlock = 0;
+        doc.CursorOffset = 4;
+        doc.CollapseSelection();
+
+        doc.ToggleBlockPrefix(0, "- ");
+
+        doc.GetBlockText(0).Should().Be("- heading");
+        doc.CursorOffset.Should().Be(4);
+    }
+
+    [Fact]
+    public void ToggleBlockPrefix_CursorAtZero_DoesNotGoNegative()
+    {
+        var doc = CreateDoc("## hello");
+        doc.CursorBlock = 0;
+        doc.CursorOffset = 0;
+        doc.CollapseSelection();
+
+        doc.ToggleBlockPrefix(0, "## ");
+
+        doc.GetBlockText(0).Should().Be("hello");
+        doc.CursorOffset.Should().Be(0);
+    }
+
+    // --- InsertBlockAt ---
+
+    [Fact]
+    public void InsertBlockAt_Beginning_ShiftsCursorDown()
+    {
+        var doc = CreateDoc("first", "second");
+        doc.CursorBlock = 1;
+        doc.CursorOffset = 3;
+        doc.AnchorBlock = 1;
+        doc.AnchorOffset = 3;
+
+        doc.InsertBlockAt(0, "new");
+
+        doc.BlockCount.Should().Be(3);
+        doc.GetBlockText(0).Should().Be("new");
+        doc.GetBlockText(1).Should().Be("first");
+        doc.GetBlockText(2).Should().Be("second");
+        doc.CursorBlock.Should().Be(2);
+        doc.AnchorBlock.Should().Be(2);
+    }
+
+    [Fact]
+    public void InsertBlockAt_End_DoesNotShiftCursor()
+    {
+        var doc = CreateDoc("first", "second");
+        doc.CursorBlock = 0;
+        doc.CursorOffset = 2;
+        doc.CollapseSelection();
+
+        doc.InsertBlockAt(2, "new");
+
+        doc.BlockCount.Should().Be(3);
+        doc.GetBlockText(2).Should().Be("new");
+        doc.CursorBlock.Should().Be(0);
+    }
+
+    [Fact]
+    public void InsertBlockAt_AtCursor_ShiftsCursorDown()
+    {
+        var doc = CreateDoc("first", "second");
+        doc.CursorBlock = 1;
+        doc.CursorOffset = 0;
+        doc.CollapseSelection();
+
+        doc.InsertBlockAt(1, "inserted");
+
+        doc.BlockCount.Should().Be(3);
+        doc.GetBlockText(1).Should().Be("inserted");
+        doc.GetBlockText(2).Should().Be("second");
+        doc.CursorBlock.Should().Be(2);
+    }
+
+    // --- RemoveBlockAt ---
+
+    [Fact]
+    public void RemoveBlockAt_BeforeCursor_ShiftsCursorUp()
+    {
+        var doc = CreateDoc("first", "second", "third");
+        doc.CursorBlock = 2;
+        doc.CursorOffset = 1;
+        doc.CollapseSelection();
+
+        doc.RemoveBlockAt(0);
+
+        doc.BlockCount.Should().Be(2);
+        doc.GetBlockText(0).Should().Be("second");
+        doc.CursorBlock.Should().Be(1);
+        doc.CursorOffset.Should().Be(1);
+    }
+
+    [Fact]
+    public void RemoveBlockAt_AfterCursor_DoesNotShift()
+    {
+        var doc = CreateDoc("first", "second", "third");
+        doc.CursorBlock = 0;
+        doc.CursorOffset = 2;
+        doc.CollapseSelection();
+
+        doc.RemoveBlockAt(2);
+
+        doc.BlockCount.Should().Be(2);
+        doc.CursorBlock.Should().Be(0);
+        doc.CursorOffset.Should().Be(2);
+    }
+
+    [Fact]
+    public void RemoveBlockAt_AtCursor_MovesToPreviousBlockEnd()
+    {
+        var doc = CreateDoc("first", "second", "third");
+        doc.CursorBlock = 1;
+        doc.CursorOffset = 3;
+        doc.CollapseSelection();
+
+        doc.RemoveBlockAt(1);
+
+        doc.BlockCount.Should().Be(2);
+        doc.CursorBlock.Should().Be(0);
+        doc.CursorOffset.Should().Be(5);
+    }
 }

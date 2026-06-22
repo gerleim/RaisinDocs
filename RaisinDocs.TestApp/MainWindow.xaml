@@ -15,7 +15,15 @@
                 <avalonDock:LayoutPanel Orientation="Horizontal">
                     <avalonDock:LayoutDocumentPane>
                         <avalonDock:LayoutDocument Title="Document 1" CanClose="False">
-                            <docs:DocsCanvas x:Name="Canvas" />
+                            <DockPanel>
+                                <docs:DocsFormattingBar DockPanel.Dock="Top"
+                                                        Canvas="{Binding ElementName=Canvas}"
+                                                        Background="#2D2D2D"
+                                                        BorderBrush="#3F3F3F"
+                                                        BorderThickness="0,0,0,1"
+                                                        Foreground="#D4D4D4" />
+                                <docs:DocsCanvas x:Name="Canvas" />
+                            </DockPanel>
                         </avalonDock:LayoutDocument>
                     </avalonDock:LayoutDocumentPane>
                 </avalonDock:LayoutPanel>

@@ -307,6 +307,65 @@ public class MarkdownParserTests
             runs[i].Start.Should().Be(runs[i - 1].Start + runs[i - 1].Length);
     }
 
+    // --- Inline parsing: strikethrough ---
+
+    [Fact]
+    public void Strikethrough_ParsedCorrectly()
+    {
+        var result = ParseBlocks("~~struck~~");
+        result[0].Runs.Should().HaveCount(1);
+        result[0].Runs[0].Should().Be(new StyledRun(0, 10, InlineStyle.Strikethrough));
+    }
+
+    [Fact]
+    public void Strikethrough_WithSurroundingText()
+    {
+        var result = ParseBlocks("before ~~struck~~ after");
+        result[0].Runs.Should().HaveCount(3);
+        result[0].Runs[0].Should().Be(new StyledRun(0, 7, InlineStyle.Normal));
+        result[0].Runs[1].Should().Be(new StyledRun(7, 10, InlineStyle.Strikethrough));
+        result[0].Runs[2].Should().Be(new StyledRun(17, 6, InlineStyle.Normal));
+    }
+
+    [Fact]
+    public void Strikethrough_Unclosed_IsNormal()
+    {
+        var result = ParseBlocks("~~unclosed");
+        result[0].Runs.Should().HaveCount(1);
+        result[0].Runs[0].Style.Should().Be(InlineStyle.Normal);
+    }
+
+    [Fact]
+    public void Strikethrough_SingleTilde_IsNormal()
+    {
+        var result = ParseBlocks("~not struck~");
+        result[0].Runs.Should().HaveCount(1);
+        result[0].Runs[0].Style.Should().Be(InlineStyle.Normal);
+    }
+
+    // --- Block classification: blockquote ---
+
+    [Fact]
+    public void Blockquote_IsBlockquote()
+    {
+        var result = ParseBlocks("> quoted text");
+        result[0].Kind.Should().Be(BlockKind.Blockquote);
+    }
+
+    [Fact]
+    public void Blockquote_EmptyContent()
+    {
+        var result = ParseBlocks(">");
+        result[0].Kind.Should().Be(BlockKind.Blockquote);
+    }
+
+    [Fact]
+    public void GreaterThan_WithoutSpace_IsParagraph()
+    {
+        var result = ParseBlocks(">nospace");
+        result[0].Kind.Should().Be(BlockKind.Paragraph);
+    }
+
     // --- Multiple blocks ---
 
     [Fact]
