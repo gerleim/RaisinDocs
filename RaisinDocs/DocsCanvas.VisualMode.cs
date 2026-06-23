@@ -186,6 +186,10 @@ public partial class DocsCanvas
             EnsureCursorOnVisibleBlock(preferForward: false);
             SkipCursorOverHiddenRanges(forward: false);
         }
+        else if (_parsedBlocks != null && HandleTableArrow(_parsedBlocks[_doc.CursorBlock], forward: false))
+        {
+            if (!shift) _doc.CollapseSelection();
+        }
         else
         {
             int origBlock = _doc.CursorBlock;
@@ -214,6 +218,10 @@ public partial class DocsCanvas
             EnsureCursorOnVisibleBlock(preferForward: true);
             SkipCursorOverHiddenRanges(forward: true);
         }
+        else if (_parsedBlocks != null && HandleTableArrow(_parsedBlocks[_doc.CursorBlock], forward: true))
+        {
+            if (!shift) _doc.CollapseSelection();
+        }
         else
         {
             int origBlock = _doc.CursorBlock;
@@ -231,11 +239,132 @@ public partial class DocsCanvas
         }
     }
 
+    private bool HandleTableArrow(ParsedBlock parsed, bool forward)
+    {
+        if (parsed.TableRow == null) return false;
+        string blockText = _doc.GetBlockText(_doc.CursorBlock);
+        var cells = parsed.TableRow.Cells;
+
+        // find the trimmed content range for each cell
+        var cellRanges = new List<(int Start, int End)>();
+        foreach (var cell in cells)
+        {
+            int s = cell.Start, e = cell.Start + cell.Length;
+            while (s < e && blockText[s] == ' ') s++;
+            while (e > s && blockText[e - 1] == ' ') e--;
+            cellRanges.Add((s, e));
+        }
+
+        int offset = _doc.CursorOffset;
+
+        if (forward)
+        {
+            // find which cell the cursor is in or between
+            for (int c = 0; c < cellRanges.Count; c++)
+            {
+                var (cs, ce) = cellRanges[c];
+                if (offset < ce)
+                {
+                    // cursor is within this cell's content — move right by 1
+                    _doc.CursorOffset = offset + 1;
+                    return true;
+                }
+                if (offset == ce)
+                {
+                    // cursor is at end of this cell — jump to start of next cell
+                    if (c + 1 < cellRanges.Count)
+                    {
+                        _doc.CursorOffset = cellRanges[c + 1].Start;
+                        return true;
+                    }
+                    // at end of last cell — cross to next row
+                    if (MoveToAdjacentTableRow(parsed, forward: true))
+                        return true;
+                    return true;
+                }
+            }
+            return true;
+        }
+        else
+        {
+            for (int c = cellRanges.Count - 1; c >= 0; c--)
+            {
+                var (cs, ce) = cellRanges[c];
+                if (offset > cs)
+                {
+                    // cursor is within this cell's content — move left by 1
+                    _doc.CursorOffset = offset - 1;
+                    return true;
+                }
+                if (offset == cs)
+                {
+                    // cursor is at start of this cell — jump to end of previous cell
+                    if (c > 0)
+                    {
+                        _doc.CursorOffset = cellRanges[c - 1].End;
+                        return true;
+                    }
+                    // at start of first cell — cross to previous row
+                    if (MoveToAdjacentTableRow(parsed, forward: false))
+                        return true;
+                    return true;
+                }
+            }
+            return true;
+        }
+    }
+
+    private bool MoveToAdjacentTableRow(ParsedBlock parsed, bool forward)
+    {
+        if (_parsedBlocks == null || parsed.Table == null) return false;
+
+        if (forward)
+        {
+            for (int b = _doc.CursorBlock + 1; b < _doc.BlockCount; b++)
+            {
+                var p = _parsedBlocks[b];
+                if (p.Table != parsed.Table) break;
+                if (p.IsTableSeparator) continue;
+                if (p.TableRow != null)
+                {
+                    _doc.CursorBlock = b;
+                    string text = _doc.GetBlockText(b);
+                    var firstCell = p.TableRow.Cells[0];
+                    int s = firstCell.Start;
+                    while (s < firstCell.Start + firstCell.Length && text[s] == ' ') s++;
+                    _doc.CursorOffset = s;
+                    return true;
+                }
+            }
+        }
+        else
+        {
+            for (int b = _doc.CursorBlock - 1; b >= 0; b--)
+            {
+                var p = _parsedBlocks[b];
+                if (p.Table != parsed.Table) break;
+                if (p.IsTableSeparator) continue;
+                if (p.TableRow != null)
+                {
+                    _doc.CursorBlock = b;
+                    string text = _doc.GetBlockText(b);
+                    var lastCell = p.TableRow.Cells[^1];
+                    int e = lastCell.Start + lastCell.Length;
+                    while (e > lastCell.Start && text[e - 1] == ' ') e--;
+                    _doc.CursorOffset = e;
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
     private void CrossToPreviousBlockIfHiddenStart()
     {
         if (_doc.CursorOffset != 0 || _doc.CursorBlock == 0) return;
         if (_visualMaps == null || _doc.CursorBlock >= _visualMaps.Count) return;
         if (!_visualMaps[_doc.CursorBlock].IsHidden(0)) return;
+        if (_parsedBlocks != null && IsTableRow(_parsedBlocks[_doc.CursorBlock])) return;
 
         _doc.CursorBlock--;
         _doc.CursorOffset = _doc.GetBlockLength(_doc.CursorBlock);
@@ -250,6 +379,7 @@ public partial class DocsCanvas
         if (_doc.CursorBlock >= _doc.BlockCount - 1) return;
         if (_visualMaps == null || _doc.CursorBlock >= _visualMaps.Count) return;
         if (!_visualMaps[_doc.CursorBlock].IsHidden(blockLen - 1)) return;
+        if (_parsedBlocks != null && IsTableRow(_parsedBlocks[_doc.CursorBlock])) return;
 
         _doc.CursorBlock++;
         _doc.CursorOffset = 0;
@@ -272,13 +402,49 @@ public partial class DocsCanvas
     private void HandleUpVisual()
     {
         EnsureCursorOnVisibleBlock(preferForward: false);
-        SkipCursorOverHiddenRanges(forward: false);
+        if (_parsedBlocks != null && IsTableRow(_parsedBlocks[_doc.CursorBlock]))
+            ClampCursorToTableCell();
+        else
+            SkipCursorOverHiddenRanges(forward: false);
     }
 
     private void HandleDownVisual()
     {
         EnsureCursorOnVisibleBlock(preferForward: true);
-        SkipCursorOverHiddenRanges(forward: true);
+        if (_parsedBlocks != null && IsTableRow(_parsedBlocks[_doc.CursorBlock]))
+            ClampCursorToTableCell();
+        else
+            SkipCursorOverHiddenRanges(forward: true);
+    }
+
+    private void ClampCursorToTableCell()
+    {
+        if (_parsedBlocks == null) return;
+        var parsed = _parsedBlocks[_doc.CursorBlock];
+        if (parsed.TableRow == null) return;
+        string blockText = _doc.GetBlockText(_doc.CursorBlock);
+        int offset = _doc.CursorOffset;
+
+        foreach (var cell in parsed.TableRow.Cells)
+        {
+            int s = cell.Start, e = cell.Start + cell.Length;
+            while (s < e && blockText[s] == ' ') s++;
+            while (e > s && blockText[e - 1] == ' ') e--;
+            if (offset >= s && offset <= e) return;
+        }
+
+        // cursor is in a hidden region — find nearest cell boundary
+        int best = 0;
+        int bestDist = int.MaxValue;
+        foreach (var cell in parsed.TableRow.Cells)
+        {
+            int s = cell.Start, e = cell.Start + cell.Length;
+            while (s < e && blockText[s] == ' ') s++;
+            while (e > s && blockText[e - 1] == ' ') e--;
+            if (Math.Abs(offset - s) < bestDist) { best = s; bestDist = Math.Abs(offset - s); }
+            if (Math.Abs(offset - e) < bestDist) { best = e; bestDist = Math.Abs(offset - e); }
+        }
+        _doc.CursorOffset = best;
     }
 
     // --- Visual mode: rendering ---

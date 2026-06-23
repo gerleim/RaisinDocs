@@ -537,6 +537,12 @@ public partial class DocsCanvas : FrameworkElement
     private static Typeface GetInlineTypeface(BlockKind blockKind, InlineStyle style) => blockKind switch
     {
         BlockKind.FencedCodeLine => _monoTypeface,
+        BlockKind.TableHeaderRow => style switch
+        {
+            InlineStyle.Italic or InlineStyle.BoldItalic => _boldItalicTypeface,
+            InlineStyle.Code => _monoTypeface,
+            _ => _boldTypeface,
+        },
         _ => style switch
         {
             InlineStyle.Bold => _boldTypeface,
@@ -550,6 +556,12 @@ public partial class DocsCanvas : FrameworkElement
     private GlyphTypeface? GetInlineGlyph(BlockKind blockKind, InlineStyle style) => blockKind switch
     {
         BlockKind.FencedCodeLine => _monoGlyph,
+        BlockKind.TableHeaderRow => style switch
+        {
+            InlineStyle.Italic or InlineStyle.BoldItalic => _boldItalicGlyph,
+            InlineStyle.Code => _monoGlyph,
+            _ => _boldGlyph,
+        },
         _ => style switch
         {
             InlineStyle.Bold => _boldGlyph,
@@ -567,6 +579,8 @@ public partial class DocsCanvas : FrameworkElement
         else if (style == InlineStyle.Italic) fontId = 3;
         else if (style == InlineStyle.BoldItalic) fontId = 4;
         if (blockKind == BlockKind.FencedCodeLine) fontId = 1;
+        if (blockKind == BlockKind.TableHeaderRow && fontId == 0) fontId = 2;
+        else if (blockKind == BlockKind.TableHeaderRow && fontId == 3) fontId = 4;
         int sizeKey = (int)GetBlockFontSize(blockKind);
         return fontId * 100 + sizeKey;
     }

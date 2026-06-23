@@ -105,14 +105,22 @@ public class BlockVisualMap
             }
         }
 
-        if (parsed.Kind is BlockKind.TableHeaderRow or BlockKind.TableDataRow)
+        if (parsed.Kind is BlockKind.TableHeaderRow or BlockKind.TableDataRow && parsed.TableRow != null)
         {
-            for (int i = 0; i < blockText.Length; i++)
+            int prev = 0;
+            foreach (var cell in parsed.TableRow.Cells)
             {
-                if (i > 0 && blockText[i - 1] == '\\') continue;
-                if (blockText[i] == '|')
-                    ranges.Add(new HiddenRange(i, 1));
+                int contentStart = cell.Start;
+                int contentEnd = cell.Start + cell.Length;
+                while (contentStart < contentEnd && blockText[contentStart] == ' ') contentStart++;
+                while (contentEnd > contentStart && blockText[contentEnd - 1] == ' ') contentEnd--;
+
+                if (contentStart > prev)
+                    ranges.Add(new HiddenRange(prev, contentStart - prev));
+                prev = contentEnd;
             }
+            if (prev < blockText.Length)
+                ranges.Add(new HiddenRange(prev, blockText.Length - prev));
         }
 
         foreach (var run in parsed.Runs)

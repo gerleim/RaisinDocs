@@ -388,33 +388,41 @@ public class BlockVisualMapTests
     }
 
     [Fact]
-    public void Table_PipesHidden()
+    public void Table_PipesAndPaddingHidden()
     {
         var maps = ComputeTableMaps("| A | B |", "| --- | --- |", "| 1 | 2 |");
         var headerMap = maps[0];
-        // "| A | B |" — pipes at 0, 4, 8 are hidden
+        // "| A | B |" — pipes and padding spaces hidden, only cell content visible
         headerMap.IsHidden(0).Should().BeTrue();  // leading |
-        headerMap.IsHidden(4).Should().BeTrue();  // middle |
-        headerMap.IsHidden(8).Should().BeTrue();  // trailing |
+        headerMap.IsHidden(1).Should().BeTrue();  // padding space
         headerMap.IsHidden(2).Should().BeFalse(); // 'A'
+        headerMap.IsHidden(3).Should().BeTrue();  // padding space
+        headerMap.IsHidden(4).Should().BeTrue();  // middle |
+        headerMap.IsHidden(5).Should().BeTrue();  // padding space
         headerMap.IsHidden(6).Should().BeFalse(); // 'B'
+        headerMap.IsHidden(7).Should().BeTrue();  // padding space
+        headerMap.IsHidden(8).Should().BeTrue();  // trailing |
     }
 
     [Fact]
-    public void Table_DataRowPipesHidden()
+    public void Table_DataRowPaddingHidden()
     {
         var maps = ComputeTableMaps("| A |", "| --- |", "| hello |");
         var dataMap = maps[2];
-        // "| hello |" — pipes at 0 and 8
-        dataMap.IsHidden(0).Should().BeTrue();  // leading |
-        dataMap.IsHidden(8).Should().BeTrue();  // trailing |
+        // "| hello |" — pipes and padding hidden
+        dataMap.IsHidden(0).Should().BeTrue();   // leading |
+        dataMap.IsHidden(1).Should().BeTrue();   // padding space
+        dataMap.IsHidden(2).Should().BeFalse();  // 'h'
+        dataMap.IsHidden(6).Should().BeFalse();  // 'o'
+        dataMap.IsHidden(7).Should().BeTrue();   // padding space
+        dataMap.IsHidden(8).Should().BeTrue();   // trailing |
     }
 
     [Fact]
-    public void Table_BuildDisplayString_HidesPipes()
+    public void Table_BuildDisplayString_HidesPipesAndPadding()
     {
         var maps = ComputeTableMaps("| A | B |", "| --- | --- |", "| 1 | 2 |");
-        maps[0].BuildDisplayString("| A | B |", 0, 9).Should().Be(" A  B ");
+        maps[0].BuildDisplayString("| A | B |", 0, 9).Should().Be("AB");
     }
 
     [Fact]
@@ -422,9 +430,9 @@ public class BlockVisualMapTests
     {
         var maps = ComputeTableMaps("| A | B |", "| --- | --- |", "| 1 | 2 |");
         var m = maps[0];
-        // raw 0 = '|' (hidden), raw 1 = ' ', raw 2 = 'A', raw 3 = ' ', raw 4 = '|' (hidden)
-        m.RawToVisual(1).Should().Be(0);  // ' ' after hidden leading pipe
-        m.RawToVisual(5).Should().Be(3);  // ' ' after hidden middle pipe
+        // "| A | B |" — hidden: [0,2), [3,6), [7,9). Visible: 2='A', 6='B'
+        m.RawToVisual(2).Should().Be(0);  // 'A' is first visible char
+        m.RawToVisual(6).Should().Be(1);  // 'B' is second visible char
     }
 
     // --- IsFenceDelimiter ---
