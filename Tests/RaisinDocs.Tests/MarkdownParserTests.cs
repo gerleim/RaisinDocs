@@ -377,4 +377,153 @@ public class MarkdownParserTests
         result[1].Kind.Should().Be(BlockKind.Paragraph);
         result[2].Kind.Should().Be(BlockKind.UnorderedListItem);
     }
+
+    // --- Inline parsing: images ---
+
+    [Fact]
+    public void Image_BasicSyntax_ParsedCorrectly()
+    {
+        var result = ParseBlocks("![alt](image.png)");
+        result[0].Images.Should().HaveCount(1);
+        var img = result[0].Images![0];
+        img.Start.Should().Be(0);
+        img.Length.Should().Be(17);
+        img.AltText.Should().Be("alt");
+        img.Url.Should().Be("image.png");
+        img.Title.Should().BeNull();
+    }
+
+    [Fact]
+    public void Image_WithTitle()
+    {
+        var result = ParseBlocks("![photo](pic.jpg \"My photo\")");
+        result[0].Images.Should().HaveCount(1);
+        var img = result[0].Images![0];
+        img.Url.Should().Be("pic.jpg");
+        img.Title.Should().Be("My photo");
+    }
+
+    [Fact]
+    public void Image_WithSingleQuoteTitle()
+    {
+        var result = ParseBlocks("![a](b.png 'title')");
+        result[0].Images![0].Title.Should().Be("title");
+    }
+
+    [Fact]
+    public void Image_EmptyAlt()
+    {
+        var result = ParseBlocks("![](image.png)");
+        result[0].Images.Should().HaveCount(1);
+        var img = result[0].Images![0];
+        img.AltText.Should().BeEmpty();
+        img.Url.Should().Be("image.png");
+    }
+
+    [Fact]
+    public void Image_InCodeSpan_NotParsed()
+    {
+        var result = ParseBlocks("`![not](image)`");
+        result[0].Images.Should().BeNull();
+        result[0].Runs[0].Style.Should().Be(InlineStyle.Code);
+    }
+
+    [Fact]
+    public void Image_InFencedCode_NotParsed()
+    {
+        var result = ParseBlocks("```", "![not](image.png)", "```");
+        result[1].Images.Should().BeNull();
+    }
+
+    [Fact]
+    public void Image_WithSurroundingText()
+    {
+        var result = ParseBlocks("before ![img](x.png) after");
+        result[0].Images.Should().HaveCount(1);
+        result[0].Runs.Should().HaveCount(3);
+        result[0].Runs[0].Should().Be(new StyledRun(0, 7, InlineStyle.Normal));
+        result[0].Runs[1].Should().Be(new StyledRun(7, 13, InlineStyle.Image));
+        result[0].Runs[2].Should().Be(new StyledRun(20, 6, InlineStyle.Normal));
+    }
+
+    [Fact]
+    public void Image_MultiplePerBlock()
+    {
+        var result = ParseBlocks("![a](1.png) and ![b](2.png)");
+        result[0].Images.Should().HaveCount(2);
+        result[0].Images![0].Url.Should().Be("1.png");
+        result[0].Images![1].Url.Should().Be("2.png");
+    }
+
+    [Fact]
+    public void Image_UnclosedBracket_NotParsed()
+    {
+        var result = ParseBlocks("![alt text without closing");
+        result[0].Images.Should().BeNull();
+    }
+
+    [Fact]
+    public void Image_UnclosedParen_NotParsed()
+    {
+        var result = ParseBlocks("![alt](no-close-paren");
+        result[0].Images.Should().BeNull();
+    }
+
+    [Fact]
+    public void Image_NoParenAfterBracket_NotParsed()
+    {
+        var result = ParseBlocks("![alt] no paren");
+        result[0].Images.Should().BeNull();
+    }
+
+    [Fact]
+    public void Image_SuppressesEmphasis()
+    {
+        var result = ParseBlocks("![**not bold**](path.png)");
+        result[0].Images.Should().HaveCount(1);
+        result[0].Runs.Should().HaveCount(1);
+        result[0].Runs[0].Style.Should().Be(InlineStyle.Image);
+    }
+
+    [Fact]
+    public void Image_AngleBracketDestination()
+    {
+        var result = ParseBlocks("![alt](<path with spaces.png>)");
+        result[0].Images.Should().HaveCount(1);
+        result[0].Images![0].Url.Should().Be("path with spaces.png");
+    }
+
+    [Fact]
+    public void Image_BalancedParensInUrl()
+    {
+        var result = ParseBlocks("![alt](wiki/File_(1).png)");
+        result[0].Images.Should().HaveCount(1);
+        result[0].Images![0].Url.Should().Be("wiki/File_(1).png");
+    }
+
+    [Fact]
+    public void Image_NestedBracketsInAlt()
+    {
+        var result = ParseBlocks("![text [with] brackets](url.png)");
+        result[0].Images.Should().HaveCount(1);
+        result[0].Images![0].AltText.Should().Be("text [with] brackets");
+    }
+
+    [Fact]
+    public void Image_StyleArrayCoversEntireSpan()
+    {
+        var result = ParseBlocks("![alt](url.png)");
+        var runs = result[0].Runs;
+        runs.Should().HaveCount(1);
+        runs[0].Start.Should().Be(0);
+        runs[0].Length.Should().Be(15);
+        runs[0].Style.Should().Be(InlineStyle.Image);
+    }
+
+    [Fact]
+    public void Image_NoImages_PropertyIsNull()
+    {
+        var result = ParseBlocks("just plain text");
+        result[0].Images.Should().BeNull();
+    }
 }

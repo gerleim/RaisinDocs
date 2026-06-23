@@ -318,6 +318,67 @@ public class BlockVisualMapTests
         map.BuildDisplayString("# **bold**", 0, 10).Should().Be("bold");
     }
 
+    // --- Images ---
+
+    [Fact]
+    public void Image_EntireSyntaxHidden()
+    {
+        var map = ComputeMap("![alt](image.png)");
+        for (int i = 0; i < 17; i++)
+            map.IsHidden(i).Should().BeTrue($"offset {i} should be hidden");
+    }
+
+    [Fact]
+    public void Image_BuildDisplayString_ExcludesImageSyntax()
+    {
+        var map = ComputeMap("![alt](image.png)");
+        map.BuildDisplayString("![alt](image.png)", 0, 17).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Image_WithSurroundingText_OnlyImageHidden()
+    {
+        var map = ComputeMap("before ![img](x.png) after");
+        for (int i = 0; i < 7; i++)
+            map.IsHidden(i).Should().BeFalse($"offset {i} should be visible");
+        for (int i = 7; i < 20; i++)
+            map.IsHidden(i).Should().BeTrue($"offset {i} should be hidden");
+        for (int i = 20; i < 26; i++)
+            map.IsHidden(i).Should().BeFalse($"offset {i} should be visible");
+    }
+
+    [Fact]
+    public void Image_BuildDisplayString_SurroundingTextPreserved()
+    {
+        var map = ComputeMap("before ![img](x.png) after");
+        map.BuildDisplayString("before ![img](x.png) after", 0, 26).Should().Be("before  after");
+    }
+
+    [Fact]
+    public void Image_RawToVisual_SkipsImageLength()
+    {
+        var map = ComputeMap("before ![img](x.png) after");
+        map.RawToVisual(0).Should().Be(0);
+        map.RawToVisual(7).Should().Be(7);
+        map.RawToVisual(20).Should().Be(7);
+        map.RawToVisual(21).Should().Be(8);
+    }
+
+    [Fact]
+    public void Image_ImagesPropertyPassedThrough()
+    {
+        var map = ComputeMap("![alt](pic.png)");
+        map.Images.Should().HaveCount(1);
+        map.Images![0].Url.Should().Be("pic.png");
+    }
+
+    [Fact]
+    public void Image_NoImages_PropertyIsNull()
+    {
+        var map = ComputeMap("just text");
+        map.Images.Should().BeNull();
+    }
+
     // --- IsFenceDelimiter ---
 
     [Fact]

@@ -111,11 +111,15 @@ public partial class DocsCanvas : FrameworkElement
 
     private readonly Dictionary<BlockKind, double> _lineHeights = new();
 
-    private record struct VisualLine(int BlockIndex, int StartOffset, int Length, BlockKind BlockKind);
+    private record struct VisualLine(int BlockIndex, int StartOffset, int Length, BlockKind BlockKind)
+    {
+        public double OverrideHeight { get; init; }
+    }
     private readonly List<VisualLine> _visualLines = [];
     private readonly List<double> _lineYPositions = [];
     private bool _layoutDirty = true;
     private double _totalContentHeight;
+    private double _layoutMaxWidth;
     private double _scrollOffset;
     private bool _scrollbarVisible;
     private readonly SmoothScroller _smoother;
@@ -125,6 +129,9 @@ public partial class DocsCanvas : FrameworkElement
 
     private List<ParsedBlock>? _parsedBlocks;
     private List<BlockVisualMap>? _visualMaps;
+    private readonly ImageCache _imageCache = new();
+
+    public string? DocumentBasePath { get; set; }
 
     public enum EditMode { Source, Visual }
     private EditMode _editMode = EditMode.Source;
@@ -511,6 +518,12 @@ public partial class DocsCanvas : FrameworkElement
         return _lineHeights.TryGetValue(kind, out double h) ? h : _lineHeights[BlockKind.Paragraph];
     }
 
+    private double GetEffectiveLineHeight(VisualLine vl)
+    {
+        double h = GetLineHeight(vl.BlockKind);
+        return vl.OverrideHeight > h ? vl.OverrideHeight : h;
+    }
+
     private void ResetBlink()
     {
         _cursorVisible = true;
@@ -596,6 +609,42 @@ public partial class DocsCanvas : FrameworkElement
         return total;
     }
 
+    private (double Width, double Height) GetImageSize(InlineImage img, double maxWidth)
+    {
+        var cached = _imageCache.Get(img.Url, DocumentBasePath, maxWidth);
+        if (cached != null)
+            return (cached.Value.Width, cached.Value.Height);
+        _imageCache.RequestLoad(img.Url, DocumentBasePath, () => InvalidateVisual());
+        return (20, 20);
+    }
+
+    private static InlineImage? FindImageAtRawOffset(IReadOnlyList<InlineImage>? images, int rawOffset)
+    {
+        if (images == null) return null;
+        foreach (var img in images)
+        {
+            if (img.Start == rawOffset) return img;
+            if (img.Start > rawOffset) break;
+        }
+        return null;
+    }
+
+    private double GetImageMaxLineHeight(VisualLine vl, BlockVisualMap? map)
+    {
+        if (map?.Images == null) return 0;
+        double maxH = 0;
+        int vlEnd = vl.StartOffset + vl.Length;
+        foreach (var img in map.Images)
+        {
+            if (img.Start >= vl.StartOffset && img.Start < vlEnd)
+            {
+                var (_, h) = GetImageSize(img, _layoutMaxWidth);
+                if (h > maxH) maxH = h;
+            }
+        }
+        return maxH;
+    }
+
     // --- Layout ---
 
     private void ComputeLayout()
@@ -626,6 +675,7 @@ public partial class DocsCanvas : FrameworkElement
         _visualLines.Clear();
         _lineYPositions.Clear();
         maxWidth = Math.Max(0, maxWidth);
+        _layoutMaxWidth = maxWidth;
 
         for (int bi = 0; bi < _doc.BlockCount; bi++)
         {
@@ -663,7 +713,10 @@ public partial class DocsCanvas : FrameworkElement
                     y += _paragraphGap;
             }
             _lineYPositions.Add(y);
-            y += GetLineHeight(_visualLines[i].BlockKind);
+            var lineVl = _visualLines[i];
+            double lineH = GetLineHeight(lineVl.BlockKind);
+            if (lineVl.OverrideHeight > lineH) lineH = lineVl.OverrideHeight;
+            y += lineH;
         }
         _totalContentHeight = y + _padding;
     }
@@ -686,7 +739,13 @@ public partial class DocsCanvas : FrameworkElement
         {
             double lineMax = pos == 0 ? maxWidth - prefixWidth : maxWidth;
             int lineLen = FitLine(segment, pos, lineMax, parsed, map, startOffset);
-            _visualLines.Add(new VisualLine(blockIndex, startOffset + pos, lineLen, parsed.Kind));
+            var vl = new VisualLine(blockIndex, startOffset + pos, lineLen, parsed.Kind);
+            if (IsVisual && map?.Images != null)
+            {
+                double imgH = GetImageMaxLineHeight(vl, map);
+                if (imgH > 0) vl = vl with { OverrideHeight = imgH };
+            }
+            _visualLines.Add(vl);
             pos += lineLen;
         }
     }
@@ -700,9 +759,27 @@ public partial class DocsCanvas : FrameworkElement
         bool anyVisible = false;
         for (int i = start; i < text.Length; i++)
         {
-            if (map != null && map.IsHidden(blockOffset + i)) continue;
+            int rawOffset = blockOffset + i;
+            if (map != null && map.IsHidden(rawOffset))
+            {
+                var img = FindImageAtRawOffset(map.Images, rawOffset);
+                if (img != null)
+                {
+                    var (imgW, _) = GetImageSize(img.Value, _layoutMaxWidth);
+                    if (width + imgW > maxWidth && anyVisible && i > start)
+                    {
+                        if (lastSpace >= start)
+                            return lastSpace - start + 1;
+                        return i - start;
+                    }
+                    width += imgW;
+                    anyVisible = true;
+                    i += img.Value.Length - 1;
+                }
+                continue;
+            }
             if (text[i] == ' ') lastSpace = i;
-            var style = GetStyleAtOffset(parsed.Runs, blockOffset + i, ref runIdx);
+            var style = GetStyleAtOffset(parsed.Runs, rawOffset, ref runIdx);
             width += MeasureCharWidth(text[i], parsed.Kind, style);
             anyVisible = true;
             if (width > maxWidth && anyVisible && i > start)
@@ -745,7 +822,17 @@ public partial class DocsCanvas : FrameworkElement
         int runIdx = 0;
         for (int i = vl.StartOffset; i < vl.StartOffset + localOffset; i++)
         {
-            if (map != null && map.IsHidden(i)) continue;
+            if (map != null && map.IsHidden(i))
+            {
+                var img = FindImageAtRawOffset(map.Images, i);
+                if (img != null)
+                {
+                    var (imgW, _) = GetImageSize(img.Value, _layoutMaxWidth);
+                    x += imgW;
+                    i += img.Value.Length - 1;
+                }
+                continue;
+            }
             var style = GetStyleAtOffset(parsed.Runs, i, ref runIdx);
             x += MeasureCharWidth(blockText[i], parsed.Kind, style);
         }
@@ -773,7 +860,19 @@ public partial class DocsCanvas : FrameworkElement
         for (int i = 0; i < vl.Length; i++)
         {
             int offset = vl.StartOffset + i;
-            if (map != null && map.IsHidden(offset)) continue;
+            if (map != null && map.IsHidden(offset))
+            {
+                var img = FindImageAtRawOffset(map?.Images, offset);
+                if (img != null)
+                {
+                    var (imgW, _) = GetImageSize(img.Value, _layoutMaxWidth);
+                    if (x < accum + imgW / 2)
+                        return offset;
+                    accum += imgW;
+                    i += img.Value.Length - 1;
+                }
+                continue;
+            }
             var style = GetStyleAtOffset(parsed.Runs, offset, ref runIdx);
             double charW = MeasureCharWidth(blockText[offset], parsed.Kind, style);
             if (x < accum + charW / 2)
@@ -881,7 +980,7 @@ public partial class DocsCanvas : FrameworkElement
     {
         for (int i = 0; i < _visualLines.Count; i++)
         {
-            double lineH = GetLineHeight(_visualLines[i].BlockKind);
+            double lineH = GetEffectiveLineHeight(_visualLines[i]);
             if (y < _lineYPositions[i] + lineH)
                 return i;
         }
@@ -910,7 +1009,7 @@ public partial class DocsCanvas : FrameworkElement
         ComputeLayout();
         int vli = CursorToVisualLineIndex();
         double cursorY = _lineYPositions[vli];
-        double lineH = GetLineHeight(_visualLines[vli].BlockKind);
+        double lineH = GetEffectiveLineHeight(_visualLines[vli]);
         double cursorBottom = cursorY + lineH;
         if (cursorY < _scrollOffset + _padding)
             _scrollOffset = cursorY - _padding;
@@ -1409,7 +1508,7 @@ public partial class DocsCanvas : FrameworkElement
         for (int i = 0; i < _visualLines.Count; i++)
         {
             var vl = _visualLines[i];
-            double lineH = GetLineHeight(vl.BlockKind);
+            double lineH = GetEffectiveLineHeight(vl);
             double lineY = _lineYPositions[i];
             if (lineY + lineH < viewTop) continue;
             if (lineY > viewBottom) break;
@@ -1426,23 +1525,31 @@ public partial class DocsCanvas : FrameworkElement
 
                 if (map != null)
                 {
-                    if (map.ReplacementPrefix != null && vl.StartOffset == 0)
+                    if (HasImagesOnLine(vl, map))
                     {
-                        var prefixFt = new FormattedText(map.ReplacementPrefix!,
-                            CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
-                            _normalTypeface, fontSize, _palette.Syntax, _dpiScale);
-                        dc.DrawText(prefixFt, new Point(_padding, lineY - effectiveScroll));
-                        textX += MeasureReplacementPrefix(map.ReplacementPrefix!, parsed.Kind);
+                        DrawVisualLineWithImages(dc, vl, blockText, parsed, map,
+                            lineY, effectiveScroll, fontSize, baseTypeface);
                     }
-
-                    string displayText = map.BuildDisplayString(blockText, vl.StartOffset, vl.Length);
-                    if (displayText.Length > 0)
+                    else
                     {
-                        var ft = new FormattedText(displayText, CultureInfo.InvariantCulture,
-                            FlowDirection.LeftToRight, baseTypeface, fontSize,
-                            _palette.Foreground, _dpiScale);
-                        ApplyInlineStylesVisual(ft, vl, parsed, map);
-                        dc.DrawText(ft, new Point(textX, lineY - effectiveScroll));
+                        if (map.ReplacementPrefix != null && vl.StartOffset == 0)
+                        {
+                            var prefixFt = new FormattedText(map.ReplacementPrefix!,
+                                CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
+                                _normalTypeface, fontSize, _palette.Syntax, _dpiScale);
+                            dc.DrawText(prefixFt, new Point(_padding, lineY - effectiveScroll));
+                            textX += MeasureReplacementPrefix(map.ReplacementPrefix!, parsed.Kind);
+                        }
+
+                        string displayText = map.BuildDisplayString(blockText, vl.StartOffset, vl.Length);
+                        if (displayText.Length > 0)
+                        {
+                            var ft = new FormattedText(displayText, CultureInfo.InvariantCulture,
+                                FlowDirection.LeftToRight, baseTypeface, fontSize,
+                                _palette.Foreground, _dpiScale);
+                            ApplyInlineStylesVisual(ft, vl, parsed, map);
+                            dc.DrawText(ft, new Point(textX, lineY - effectiveScroll));
+                        }
                     }
                 }
                 else
@@ -1462,7 +1569,7 @@ public partial class DocsCanvas : FrameworkElement
             int vli = CursorToVisualLineIndex();
             double cx = _padding + CursorXInVisualLine(vli);
             double cy = _lineYPositions[vli] - effectiveScroll;
-            double lineH = GetLineHeight(_visualLines[vli].BlockKind);
+            double lineH = GetEffectiveLineHeight(_visualLines[vli]);
             dc.DrawLine(_palette.CursorPen, new Point(cx, cy), new Point(cx, cy + lineH));
         }
 
@@ -1534,9 +1641,22 @@ public partial class DocsCanvas : FrameworkElement
         if (parsed.Kind == BlockKind.Blockquote && vl.StartOffset == 0 && vl.Length >= 2)
             ft.SetForegroundBrush(_palette.Syntax, 0, 2);
 
+        if (parsed.Images != null)
+        {
+            foreach (var img in parsed.Images)
+            {
+                int imgEnd = img.Start + img.Length;
+                if (imgEnd <= vl.StartOffset || img.Start >= vlEnd) continue;
+
+                DimRange(ft, vl, img.Start, 2);
+                int closeBracket = img.Start + 2 + img.AltText.Length;
+                DimRange(ft, vl, closeBracket, imgEnd - closeBracket);
+            }
+        }
+
         foreach (var run in parsed.Runs)
         {
-            if (run.Style == InlineStyle.Normal) continue;
+            if (run.Style == InlineStyle.Normal || run.Style == InlineStyle.Image) continue;
             int runEnd = run.Start + run.Length;
             if (runEnd <= vl.StartOffset || run.Start >= vlEnd) continue;
 
@@ -1601,7 +1721,7 @@ public partial class DocsCanvas : FrameworkElement
         for (int i = 0; i < _visualLines.Count; i++)
         {
             var vl = _visualLines[i];
-            double lineH = GetLineHeight(vl.BlockKind);
+            double lineH = GetEffectiveLineHeight(vl);
             double lineY = _lineYPositions[i];
             if (lineY + lineH < viewTop) continue;
             if (lineY > viewBottom) break;
@@ -1652,7 +1772,17 @@ public partial class DocsCanvas : FrameworkElement
         int runIdx = 0;
         for (int i = start; i < start + length; i++)
         {
-            if (map != null && map.IsHidden(i)) continue;
+            if (map != null && map.IsHidden(i))
+            {
+                var img = FindImageAtRawOffset(map.Images, i);
+                if (img != null)
+                {
+                    var (imgW, _) = GetImageSize(img.Value, _layoutMaxWidth);
+                    total += imgW;
+                    i += img.Value.Length - 1;
+                }
+                continue;
+            }
             var style = GetStyleAtOffset(runs, i, ref runIdx);
             total += MeasureCharWidth(text[i], blockKind, style);
         }

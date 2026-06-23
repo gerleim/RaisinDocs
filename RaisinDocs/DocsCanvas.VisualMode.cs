@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Windows;
 using System.Windows.Media;
 
@@ -284,7 +285,7 @@ public partial class DocsCanvas
         int vlEnd = vl.StartOffset + vl.Length;
         foreach (var run in parsed.Runs)
         {
-            if (run.Style == InlineStyle.Normal) continue;
+            if (run.Style == InlineStyle.Normal || run.Style == InlineStyle.Image) continue;
             int runEnd = run.Start + run.Length;
             if (runEnd <= vl.StartOffset || run.Start >= vlEnd) continue;
             if (parsed.Kind == BlockKind.FencedCodeLine) continue;
@@ -316,5 +317,124 @@ public partial class DocsCanvas
                     break;
             }
         }
+    }
+
+    private bool HasImagesOnLine(VisualLine vl, BlockVisualMap map)
+    {
+        if (map.Images == null) return false;
+        int vlEnd = vl.StartOffset + vl.Length;
+        foreach (var img in map.Images)
+        {
+            if (img.Start >= vl.StartOffset && img.Start < vlEnd) return true;
+            if (img.Start >= vlEnd) break;
+        }
+        return false;
+    }
+
+    private void DrawVisualLineWithImages(DrawingContext dc, VisualLine vl,
+        string blockText, ParsedBlock parsed, BlockVisualMap map,
+        double lineY, double effectiveScroll, double fontSize, Typeface baseTypeface)
+    {
+        double x = _padding;
+        double screenY = lineY - effectiveScroll;
+        double textLineH = GetLineHeight(vl.BlockKind);
+        double totalLineH = vl.OverrideHeight > textLineH ? vl.OverrideHeight : textLineH;
+
+        if (map.ReplacementPrefix != null && vl.StartOffset == 0)
+        {
+            var prefixFt = new FormattedText(map.ReplacementPrefix,
+                CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
+                _normalTypeface, fontSize, _palette.Syntax, _dpiScale);
+            dc.DrawText(prefixFt, new Point(_padding, screenY));
+            x += MeasureReplacementPrefix(map.ReplacementPrefix, parsed.Kind);
+        }
+
+        int vlEnd = vl.StartOffset + vl.Length;
+        int segStart = vl.StartOffset;
+
+        foreach (var img in map.Images!)
+        {
+            if (img.Start >= vlEnd) break;
+            if (img.Start + img.Length <= vl.StartOffset) continue;
+
+            if (segStart < img.Start)
+                x = DrawTextSegment(dc, blockText, segStart, img.Start, map, parsed, fontSize, baseTypeface, x, screenY);
+
+            var (imgW, imgH) = GetImageSize(img, _layoutMaxWidth);
+            var cached = _imageCache.Get(img.Url, DocumentBasePath, _layoutMaxWidth);
+            double imgY = screenY + totalLineH - imgH;
+            if (cached != null)
+            {
+                dc.DrawImage(cached.Value.Image, new Rect(x, imgY, imgW, imgH));
+            }
+            else
+            {
+                var placeholderBrush = new SolidColorBrush(Color.FromArgb(40, 128, 128, 128));
+                placeholderBrush.Freeze();
+                dc.DrawRectangle(placeholderBrush, null, new Rect(x, imgY, imgW, imgH));
+
+                if (!string.IsNullOrEmpty(img.AltText))
+                {
+                    var altFt = new FormattedText(img.AltText,
+                        CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
+                        _normalTypeface, 11, _palette.Syntax, _dpiScale);
+                    altFt.MaxTextWidth = Math.Max(1, imgW);
+                    altFt.MaxTextHeight = Math.Max(1, imgH);
+                    dc.DrawText(altFt, new Point(x + 2, imgY + 2));
+                }
+            }
+            x += imgW;
+
+            segStart = img.Start + img.Length;
+        }
+
+        if (segStart < vlEnd)
+            DrawTextSegment(dc, blockText, segStart, vlEnd, map, parsed, fontSize, baseTypeface, x, screenY);
+    }
+
+    private double DrawTextSegment(DrawingContext dc, string blockText,
+        int rawStart, int rawEnd, BlockVisualMap map, ParsedBlock parsed,
+        double fontSize, Typeface baseTypeface, double x, double screenY)
+    {
+        string displayText = map.BuildDisplayString(blockText, rawStart, rawEnd - rawStart);
+        if (displayText.Length == 0) return x;
+
+        var ft = new FormattedText(displayText, CultureInfo.InvariantCulture,
+            FlowDirection.LeftToRight, baseTypeface, fontSize,
+            _palette.Foreground, _dpiScale);
+
+        int visBase = 0;
+        int runIdx = 0;
+        for (int r = rawStart; r < rawEnd; r++)
+        {
+            if (map.IsHidden(r)) continue;
+            var style = GetStyleAtOffset(parsed.Runs, r, ref runIdx);
+            if (style != InlineStyle.Normal && style != InlineStyle.Image && visBase < displayText.Length)
+            {
+                switch (style)
+                {
+                    case InlineStyle.Bold:
+                        ft.SetFontWeight(FontWeights.Bold, visBase, 1);
+                        break;
+                    case InlineStyle.Italic:
+                        ft.SetFontStyle(FontStyles.Italic, visBase, 1);
+                        break;
+                    case InlineStyle.BoldItalic:
+                        ft.SetFontWeight(FontWeights.Bold, visBase, 1);
+                        ft.SetFontStyle(FontStyles.Italic, visBase, 1);
+                        break;
+                    case InlineStyle.Code:
+                        ft.SetFontFamily(_monoTypeface.FontFamily, visBase, 1);
+                        break;
+                    case InlineStyle.Strikethrough:
+                        ft.SetTextDecorations(TextDecorations.Strikethrough, visBase, 1);
+                        break;
+                }
+            }
+            visBase++;
+        }
+
+        dc.DrawText(ft, new Point(x, screenY));
+        return x + ft.WidthIncludingTrailingWhitespace;
     }
 }

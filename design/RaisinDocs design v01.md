@@ -74,11 +74,13 @@ The document model must distinguish these from iteration 2 onward. A naive "one 
 - Hit testing, cursor positioning, and selection updated for mixed styles
 - 34 parser tests (block classification, inline parsing, fenced code, edge cases)
 
-### 5 — WYSIWYG mode
-- Hide markdown syntax, show styled result
-- Cursor navigation skips hidden syntax
-- Typing at styled boundaries inserts/removes syntax appropriately
-- Toggle between raw and WYSIWYG views
+### 5 — WYSIWYG mode ✅
+- Hide markdown syntax, show styled result (BlockVisualMap with HiddenRange)
+- Cursor navigation skips hidden syntax (SkipCursorOverHiddenRanges, CrossToPreviousBlock/CrossToNextBlock)
+- Typing at styled boundaries follows Word-like behavior: End key lands inside style, Right arrow exits
+- Toggle between raw (Source) and WYSIWYG (Visual) views
+- Partial class split: DocsCanvas.SourceMode.cs, DocsCanvas.VisualMode.cs
+- 18 UI tests (cursor skip bold/italic/code markers, cross-block boundaries, Home/End, typing at boundaries)
 
 ### 4b — Undo/redo ✅
 - Snapshot-based undo (memento pattern): captures full document state (`string[]` blocks + cursor/anchor) at each undo boundary
@@ -90,9 +92,21 @@ The document model must distinguish these from iteration 2 onward. A naive "one 
 - Ctrl+Z / Ctrl+Y keyboard shortcuts
 - 18 tests covering round-trip, cursor restoration, group management, redo invalidation, stack depth, compound operations
 
+### 6 — Inline images ✅
+- CommonMark `![alt](url "title")` syntax detection in MarkdownParser (InlineImage record, InlineStyle.Image lock marker)
+- Parser runs MarkImages after MarkCodeSpans but before emphasis — code spans suppress images, images suppress emphasis
+- Balanced bracket matching for alt text, balanced parens and angle-bracket destinations for URLs, optional quoted titles
+- BlockVisualMap hides entire image syntax as HiddenRange, passes Images through for renderer
+- ImageCache: async loading from local file paths and HTTP URLs, BitmapImage frozen for thread safety, scale-to-fit (native size, max content width, preserve aspect ratio), placeholder for missing/loading images
+- Layout: FitLine treats images as atomic inline elements (cannot break across lines), line height accounts for image height
+- Segmented rendering: DrawVisualLineWithImages splits text and images, draws each segment at correct X position
+- Cursor treats images as atomic elements via existing hidden range navigation
+- Hit testing and selection measurement account for image width
+- 17 parser tests, 7 BlockVisualMap tests, 4 UI navigation tests
+
 ### Future
 - Motion blur during smooth scroll (ghost copies offset in scroll direction, like RaisinTerminal2)
-- Images (inline and reference)
+- Reference-style images (`![alt][ref]` with `[ref]: url "title"` definitions)
 - Tables
 - Links (clickable in view mode, editable syntax in edit mode)
 - Syntax highlighting in code blocks

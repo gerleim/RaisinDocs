@@ -203,4 +203,44 @@ public class VisualModeNavigationTests
         canvas.TestNavigate(Key.Right);
         canvas.TestCursorOffset.Should().Be(6); // 'c' of code
     }
+
+    // --- Image navigation ---
+
+    [StaFact]
+    public void Right_SkipsImageSyntax()
+    {
+        // "before ![alt](img.png) after"
+        //  0123456                      7=!, 21=), 22=space
+        var canvas = CreateCanvas("before ![alt](img.png) after");
+        canvas.TestSetCursor(0, 6); // space before !
+        canvas.TestNavigate(Key.Right);
+        canvas.TestCursorOffset.Should().Be(22); // space after closing )
+    }
+
+    [StaFact]
+    public void Left_SkipsImageSyntax()
+    {
+        var canvas = CreateCanvas("before ![alt](img.png) after");
+        canvas.TestSetCursor(0, 22); // space after )
+        canvas.TestNavigate(Key.Left);
+        canvas.TestCursorOffset.Should().Be(6); // space before !
+    }
+
+    [StaFact]
+    public void Home_SkipsImageAtStart()
+    {
+        var canvas = CreateCanvas("![alt](img.png) text");
+        canvas.TestSetCursor(0, 18);
+        canvas.TestNavigate(Key.Home);
+        canvas.TestCursorOffset.Should().Be(15); // after image, first visible text position
+    }
+
+    [StaFact]
+    public void End_SkipsImageAtEnd()
+    {
+        var canvas = CreateCanvas("text ![alt](img.png)");
+        canvas.TestSetCursor(0, 0);
+        canvas.TestNavigate(Key.End);
+        canvas.TestCursorOffset.Should().Be(5); // space after "text", before hidden image
+    }
 }

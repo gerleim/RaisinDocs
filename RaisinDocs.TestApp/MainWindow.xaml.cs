@@ -27,6 +27,7 @@ public partial class MainWindow : Window
 
     private void LoadContent()
     {
+        Canvas.DocumentBasePath = Path.GetDirectoryName(SavePath)!;
         if (File.Exists(SavePath))
             Canvas.SetText(File.ReadAllText(SavePath));
     }
