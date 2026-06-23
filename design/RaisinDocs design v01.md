@@ -104,8 +104,18 @@ The document model must distinguish these from iteration 2 onward. A naive "one 
 - Hit testing and selection measurement account for image width
 - 17 parser tests, 7 BlockVisualMap tests, 4 UI navigation tests
 
+### 6b — Image Preview in Source mode ✅
+- Three-way `ImagePreviewMode` enum: Off, Inline, On Hover
+- **Off**: Source mode shows image syntax as dimmed text (existing behavior)
+- **Inline**: images render below their syntax line; layout adds image height to the visual line's OverrideHeight
+- **On Hover**: mouse hover over image syntax shows a bordered popup (max 300px wide) near the cursor, drawn as an overlay in OnRender; hit-testing detects image syntax ranges; OnMouseLeave clears the popup
+- Split button on the formatting bar: left side cycles modes, right ▾ arrow opens a dropdown menu with all three options (current one checked)
+- Three distinct vector icons drawn via WPF Path geometry: slashed frame (Off), mountain landscape (Inline), eye symbol (On Hover)
+- No existing markdown editors (Typora, Obsidian, VS Code, Mark Text) offer an embeddable native control — RaisinDocs is unique as a reusable WPF markdown editor component
+
 ### Future
 - Motion blur during smooth scroll (ghost copies offset in scroll direction, like RaisinTerminal2)
+- Image display sizing: CommonMark has no sizing syntax; options include inline HTML (`<img src="url" width="300">`), Obsidian-style pipe syntax (`![alt|300](url)`), or visual drag-resize that auto-generates markup. Typora's drag-to-resize UX is the gold standard. Could also auto-downscale pasted images to reduce file size.
 - Reference-style images (`![alt][ref]` with `[ref]: url "title"` definitions)
 - Tables
 - Links (clickable in view mode, editable syntax in edit mode)
