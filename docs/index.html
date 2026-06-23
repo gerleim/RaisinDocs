@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RaisinDocs — Native WPF Markdown Editor Control</title>
+    <meta name="description" content="An embeddable WPF markdown editor control with WYSIWYG and source modes. Built on FrameworkElement with OnRender — no RichTextBox, no FlowDocument, no WebView2.">
+    <style>
+        :root {
+            --bg: #0d1117;
+            --surface: #161b22;
+            --border: #30363d;
+            --text: #e6edf3;
+            --text-muted: #8b949e;
+            --accent: #4a9eff;
+            --accent-light: #79b8ff;
+            --code-bg: #1c2128;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+        }
+
+        a {
+            color: var(--accent-light);
+            text-decoration: none;
+        }
+
+        a:hover {
+            text-decoration: underline;
+        }
+
+        /* Nav */
+        nav {
+            position: fixed;
+            top: 0;
+            width: 100%;
+            background: rgba(13, 17, 23, 0.85);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--border);
+            z-index: 100;
+            padding: 0 2rem;
+        }
+
+        nav .nav-inner {
+            max-width: 1100px;
+            margin: 0 auto;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            height: 56px;
+        }
+
+        nav .logo {
+            font-weight: 700;
+            font-size: 1.1rem;
+            color: var(--text);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        nav .logo span {
+            color: var(--accent-light);
+        }
+
+        nav .nav-links {
+            display: flex;
+            gap: 1.5rem;
+            list-style: none;
+        }
+
+        nav .nav-links a {
+            color: var(--text-muted);
+            font-size: 0.9rem;
+            transition: color 0.2s;
+        }
+
+        nav .nav-links a:hover {
+            color: var(--text);
+            text-decoration: none;
+        }
+
+        /* Hero */
+        .hero {
+            padding: 8rem 2rem 4rem;
+            text-align: center;
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .hero h1 {
+            font-size: 3rem;
+            font-weight: 800;
+            letter-spacing: -0.02em;
+            margin-bottom: 1rem;
+        }
+
+        .hero h1 span {
+            color: var(--accent-light);
+        }
+
+        .hero p {
+            font-size: 1.25rem;
+            color: var(--text-muted);
+            max-width: 650px;
+            margin: 0 auto 1.5rem;
+        }
+
+        .hero .tagline {
+            font-size: 1rem;
+            color: var(--text-muted);
+            margin-bottom: 2rem;
+            font-style: italic;
+        }
+
+        .hero-buttons {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            transition: all 0.2s;
+            cursor: pointer;
+            border: none;
+        }
+
+        .btn-primary {
+            background: var(--accent);
+            color: #fff;
+        }
+
+        .btn-primary:hover {
+            background: var(--accent-light);
+            text-decoration: none;
+        }
+
+        .btn-secondary {
+            background: var(--surface);
+            color: var(--text);
+            border: 1px solid var(--border);
+        }
+
+        .btn-secondary:hover {
+            border-color: var(--text-muted);
+            text-decoration: none;
+        }
+
+        /* Screenshot */
+        .screenshot {
+            max-width: 1100px;
+            margin: 2rem auto 0;
+            padding: 0 2rem;
+        }
+
+        .screenshot img {
+            width: 100%;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            box-shadow: 0 16px 48px rgba(0, 0, 0, 0.4);
+        }
+
+        /* Problem / Why */
+        .problem {
+            max-width: 800px;
+            margin: 6rem auto;
+            padding: 0 2rem;
+        }
+
+        .problem h2 {
+            text-align: center;
+            font-size: 2rem;
+            font-weight: 700;
+            margin-bottom: 2rem;
+        }
+
+        .alternatives {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 1.5rem;
+            margin-bottom: 2.5rem;
+        }
+
+        .alt-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1.5rem;
+        }
+
+        .alt-card h3 {
+            font-size: 1rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            color: #f85149;
+        }
+
+        .alt-card p {
+            color: var(--text-muted);
+            font-size: 0.85rem;
+            line-height: 1.5;
+        }
+
+        .solution {
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 1.05rem;
+            line-height: 1.7;
+        }
+
+        .solution strong {
+            color: var(--accent-light);
+        }
+
+        /* Features */
+        .features {
+            max-width: 1100px;
+            margin: 6rem auto;
+            padding: 0 2rem;
+        }
+
+        .features h2 {
+            text-align: center;
+            font-size: 2rem;
+            font-weight: 700;
+            margin-bottom: 3rem;
+        }
+
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .feature-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1.5rem;
+            transition: border-color 0.2s;
+        }
+
+        .feature-card:hover {
+            border-color: var(--accent);
+        }
+
+        .feature-card .icon {
+            font-size: 1.5rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .feature-card h3 {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+
+        .feature-card p {
+            color: var(--text-muted);
+            font-size: 0.9rem;
+            line-height: 1.5;
+        }
+
+        /* Architecture */
+        .architecture {
+            max-width: 1100px;
+            margin: 6rem auto;
+            padding: 0 2rem;
+        }
+
+        .architecture h2 {
+            text-align: center;
+            font-size: 2rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+        }
+
+        .architecture .subtitle {
+            text-align: center;
+            color: var(--text-muted);
+            margin-bottom: 2.5rem;
+            font-size: 1.05rem;
+        }
+
+        .pipeline {
+            background: var(--code-bg);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 2rem;
+            font-family: "Cascadia Code", "Fira Code", "JetBrains Mono", monospace;
+            font-size: 0.9rem;
+            overflow-x: auto;
+            text-align: center;
+            line-height: 2;
+        }
+
+        .pipeline .stage {
+            display: inline;
+            color: var(--accent-light);
+        }
+
+        .pipeline .arrow {
+            color: var(--text-muted);
+        }
+
+        /* Usage */
+        .usage {
+            max-width: 800px;
+            margin: 6rem auto;
+            padding: 0 2rem;
+        }
+
+        .usage h2 {
+            text-align: center;
+            font-size: 2rem;
+            font-weight: 700;
+            margin-bottom: 2rem;
+        }
+
+        .code-block {
+            background: var(--code-bg);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .code-block .label {
+            color: var(--text-muted);
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 0.75rem;
+        }
+
+        .code-block pre {
+            font-family: "Cascadia Code", "Fira Code", "JetBrains Mono", monospace;
+            font-size: 0.85rem;
+            line-height: 1.6;
+            overflow-x: auto;
+            color: var(--text);
+        }
+
+        .code-block pre .kw { color: #ff7b72; }
+        .code-block pre .str { color: #a5d6ff; }
+        .code-block pre .type { color: #79c0ff; }
+        .code-block pre .attr { color: #d2a8ff; }
+        .code-block pre .cmt { color: #8b949e; }
+
+        /* Install */
+        .install {
+            max-width: 700px;
+            margin: 6rem auto;
+            padding: 0 2rem;
+        }
+
+        .install h2 {
+            text-align: center;
+            font-size: 2rem;
+            font-weight: 700;
+            margin-bottom: 2rem;
+        }
+
+        .install-steps {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 2rem;
+        }
+
+        .install-steps code {
+            display: block;
+            background: var(--code-bg);
+            padding: 1rem;
+            border-radius: 8px;
+            font-family: "Cascadia Code", "Fira Code", monospace;
+            font-size: 0.9rem;
+            margin: 0.75rem 0;
+            overflow-x: auto;
+        }
+
+        .install-steps p {
+            color: var(--text-muted);
+            font-size: 0.95rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .install-steps .req {
+            margin-top: 1.5rem;
+            padding-top: 1.5rem;
+            border-top: 1px solid var(--border);
+            font-size: 0.85rem;
+        }
+
+        /* Footer */
+        footer {
+            text-align: center;
+            padding: 3rem 2rem;
+            border-top: 1px solid var(--border);
+            color: var(--text-muted);
+            font-size: 0.85rem;
+        }
+
+        footer a {
+            color: var(--text-muted);
+        }
+
+        footer a:hover {
+            color: var(--text);
+        }
+
+        /* Responsive */
+        @media (max-width: 640px) {
+            .hero h1 {
+                font-size: 2rem;
+            }
+
+            .hero p {
+                font-size: 1.05rem;
+            }
+
+            .alternatives {
+                grid-template-columns: 1fr;
+            }
+
+            .features-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .pipeline {
+                font-size: 0.75rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <nav>
+        <div class="nav-inner">
+            <div class="logo">
+                <span>Raisin</span>Docs
+            </div>
+            <ul class="nav-links">
+                <li><a href="#why">Why</a></li>
+                <li><a href="#features">Features</a></li>
+                <li><a href="#architecture">Architecture</a></li>
+                <li><a href="#usage">Usage</a></li>
+                <li><a href="https://github.com/gerleim/RaisinDocs">GitHub</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <section class="hero">
+        <h1>A <span>markdown editor</span> you can embed</h1>
+        <p>Native WPF control for editing and rendering markdown. Drop it into your application &mdash; two lines of XAML, zero browser runtimes.</p>
+        <p class="tagline">No RichTextBox. No FlowDocument. No WebView2.</p>
+        <div class="hero-buttons">
+            <a href="https://github.com/gerleim/RaisinDocs" class="btn btn-primary">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0c4.42 0 8 3.58 8 8a8.013 8.013 0 0 1-5.45 7.59c-.4.08-.55-.17-.55-.38 0-.27.01-1.13.01-2.2 0-.75-.25-1.23-.54-1.48 1.78-.2 3.65-.88 3.65-3.95 0-.88-.31-1.59-.82-2.15.08-.2.36-1.02-.08-2.12 0 0-.67-.22-2.2.82-.64-.18-1.32-.27-2-.27-.68 0-1.36.09-2 .27-1.53-1.03-2.2-.82-2.2-.82-.44 1.1-.16 1.92-.08 2.12-.51.56-.82 1.28-.82 2.15 0 3.06 1.86 3.75 3.64 3.95-.23.2-.44.55-.51 1.07-.46.21-1.61.55-2.33-.66-.15-.24-.6-.83-1.23-.82-.67.01-.27.38.01.53.34.19.73.9.82 1.13.16.45.68 1.31 2.69.94 0 .67.01 1.3.01 1.49 0 .21-.15.45-.55.38A7.995 7.995 0 0 1 0 8c0-4.42 3.58-8 8-8Z"/></svg>
+                View on GitHub
+            </a>
+            <a href="#usage" class="btn btn-secondary">
+                Quick Start
+            </a>
+        </div>
+    </section>
+
+    <div class="screenshot">
+        <img src="screenshot.png" alt="RaisinDocs editor showing markdown with inline images and formatting toolbar">
+    </div>
+
+    <section class="problem" id="why">
+        <h2>The problem with markdown in WPF</h2>
+        <div class="alternatives">
+            <div class="alt-card">
+                <h3>WebView2 + JS editor</h3>
+                <p>Adds a full Chromium runtime. Cross-boundary marshalling, different threading model, 100+ MB dependency for a text box.</p>
+            </div>
+            <div class="alt-card">
+                <h3>RichTextBox</h3>
+                <p>Designed for rich text, not markdown. No block-level semantics, no syntax-aware wrapping. You fight the framework at every turn.</p>
+            </div>
+            <div class="alt-card">
+                <h3>TextBox + preview</h3>
+                <p>Edit in plain text, preview separately. No inline styling, no WYSIWYG. Two disconnected views of the same content.</p>
+            </div>
+        </div>
+        <p class="solution">
+            RaisinDocs renders directly with <strong>FormattedText</strong> and <strong>GlyphTypeface</strong>, measures and wraps text itself, and draws everything &mdash; text, images, cursor, selection, scrollbar &mdash; in a single <strong>OnRender</strong> pass. One control, no heavy dependencies.
+        </p>
+    </section>
+
+    <section class="features" id="features">
+        <h2>Features</h2>
+        <div class="features-grid">
+            <div class="feature-card">
+                <div class="icon">&#9998;</div>
+                <h3>Source &amp; Visual Modes</h3>
+                <p>Toggle between raw markdown syntax and a WYSIWYG view. Visual mode hides markers and shows styled text; cursor navigation skips hidden syntax automatically.</p>
+            </div>
+            <div class="feature-card">
+                <div class="icon">&#127912;</div>
+                <h3>Full Inline Styling</h3>
+                <p>Bold, italic, bold-italic, strikethrough, inline code, headings (H1&ndash;H6), fenced code blocks, bullet lists, blockquotes. CommonMark 0.31.2 compliant.</p>
+            </div>
+            <div class="feature-card">
+                <div class="icon">&#128444;</div>
+                <h3>Inline Images</h3>
+                <p>Local files and HTTP URLs. Async loading, scale-to-fit, placeholder for missing images. Source mode offers Off, Inline, and On Hover preview.</p>
+            </div>
+            <div class="feature-card">
+                <div class="icon">&#8617;</div>
+                <h3>Undo &amp; Redo</h3>
+                <p>VS Code&ndash;style grouping with 600ms timer. Typing groups into one unit; cursor movement, Enter, and action switches break the group.</p>
+            </div>
+            <div class="feature-card">
+                <div class="icon">&#127752;</div>
+                <h3>Themes</h3>
+                <p>Light and dark themes with a single property. Frozen brushes and cached pens keep rendering fast.</p>
+            </div>
+            <div class="feature-card">
+                <div class="icon">&#9881;</div>
+                <h3>Formatting Bar</h3>
+                <p>Optional toolbar control with toggle buttons for all styles. Bind it to your canvas &mdash; it picks up formatting state automatically.</p>
+            </div>
+        </div>
+    </section>
+
+    <section class="architecture" id="architecture">
+        <h2>Architecture</h2>
+        <p class="subtitle">Three classes, clean separation. No UI dependencies in the document model.</p>
+        <div class="pipeline">
+            <span class="stage">Keyboard / Mouse</span> <span class="arrow">&rarr;</span>
+            <span class="stage">DocsCanvas</span> <span class="arrow">&rarr;</span>
+            <span class="stage">Document</span>
+            <br>
+            <span class="stage">Document</span> <span class="arrow">&rarr;</span>
+            <span class="stage">MarkdownParser</span> <span class="arrow">&rarr;</span>
+            <span class="stage">BlockVisualMap</span> <span class="arrow">&rarr;</span>
+            <span class="stage">OnRender</span>
+        </div>
+    </section>
+
+    <section class="usage" id="usage">
+        <h2>Quick Start</h2>
+
+        <div class="code-block">
+            <div class="label">XAML</div>
+            <pre><span class="kw">&lt;Window</span> <span class="attr">xmlns:docs</span>=<span class="str">"clr-namespace:RaisinDocs;assembly=RaisinDocs"</span><span class="kw">&gt;</span>
+    <span class="kw">&lt;DockPanel&gt;</span>
+        <span class="kw">&lt;docs:DocsFormattingBar</span> <span class="attr">DockPanel.Dock</span>=<span class="str">"Top"</span>
+                                <span class="attr">Canvas</span>=<span class="str">"{Binding ElementName=Editor}"</span>
+                                <span class="attr">Background</span>=<span class="str">"#2D2D2D"</span>
+                                <span class="attr">Foreground</span>=<span class="str">"#D4D4D4"</span> <span class="kw">/&gt;</span>
+        <span class="kw">&lt;docs:DocsCanvas</span> <span class="attr">x:Name</span>=<span class="str">"Editor"</span> <span class="kw">/&gt;</span>
+    <span class="kw">&lt;/DockPanel&gt;</span>
+<span class="kw">&lt;/Window&gt;</span></pre>
+        </div>
+
+        <div class="code-block">
+            <div class="label">C#</div>
+            <pre><span class="cmt">// Load and save</span>
+Editor.DocumentBasePath = <span class="str">@"C:\MyProject\docs"</span>;
+Editor.SetText(File.ReadAllText(<span class="str">"document.md"</span>));
+File.WriteAllText(<span class="str">"document.md"</span>, Editor.GetText());
+
+<span class="cmt">// Theme</span>
+Editor.Theme = <span class="type">DocsCanvas</span>.EditorTheme.Dark;
+
+<span class="cmt">// Image preview in Source mode</span>
+Editor.SetImagePreview(<span class="type">DocsCanvas</span>.ImagePreviewMode.Inline);</pre>
+        </div>
+    </section>
+
+    <section class="install" id="install">
+        <h2>Build from Source</h2>
+        <div class="install-steps">
+            <p>Clone and build:</p>
+            <code>git clone https://github.com/gerleim/RaisinDocs.git
+cd RaisinDocs
+dotnet build RaisinDocs.slnx</code>
+
+            <p>Run the test app:</p>
+            <code>dotnet run --project RaisinDocs.TestApp/RaisinDocs.TestApp.csproj</code>
+
+            <p>Run tests:</p>
+            <code>dotnet test Tests/RaisinDocs.Tests/RaisinDocs.Tests.csproj</code>
+
+            <div class="req">
+                <p><strong>Requirements:</strong> Windows &middot; .NET 8+</p>
+            </div>
+        </div>
+    </section>
+
+    <footer>
+        <p>
+            RaisinDocs is open source under the <a href="https://github.com/gerleim/RaisinDocs/blob/main/LICENSE">MIT License</a>.
+            Part of the <a href="https://github.com/gerleim">Raisin</a> family.
+        </p>
+    </footer>
+</body>
+</html>
