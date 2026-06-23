@@ -2,7 +2,7 @@
 
 WPF markdown editor control built on a bare `FrameworkElement` with `OnRender`/`DrawingContext`, same approach as `TerminalCanvas`. No RichTextBox, no FlowDocument, no WebView2.
 
-**Markdown specification:** [CommonMark 0.31.2](https://spec.commonmark.org/0.31.2/)
+**Markdown specification:** [GitHub Flavored Markdown (GFM)](https://github.github.com/gfm/), which is built on [CommonMark 0.31.2](https://spec.commonmark.org/0.31.2/) plus extensions for tables, task lists, strikethrough, and extended autolinks.
 
 ## Document model
 
@@ -113,11 +113,26 @@ The document model must distinguish these from iteration 2 onward. A naive "one 
 - Three distinct vector icons drawn via WPF Path geometry: slashed frame (Off), mountain landscape (Inline), eye symbol (On Hover)
 - No existing markdown editors (Typora, Obsidian, VS Code, Mark Text) offer an embeddable native control — RaisinDocs is unique as a reusable WPF markdown editor component
 
+### 7 — Tables
+- See `design/GFM Table Support - Iteration 7.md` for detailed plan
+- GFM table syntax: header row, separator row (with column alignment), data rows
+- Parser detects table context across consecutive blocks (two-pass, like fenced code)
+- New BlockKind values: TableHeaderRow, TableSeparatorRow, TableDataRow
+- Source mode: dimmed pipe characters and separator row
+- Visual mode: grid rendering with borders, cell padding, header styling, column alignment
+- Tab/Shift+Tab cell navigation, Enter inserts new row
+- Toolbar button to insert table template
+
+### GFM extensions roadmap
+- ~~Strikethrough (`~~text~~`)~~ — ✅ implemented in iteration 4
+- Tables — iteration 7 (above)
+- Task list items (`- [ ]` unchecked, `- [x]` checked) — checkbox rendering in Visual mode, toggle on click
+- Extended autolinks — bare URLs auto-linked without `<>` syntax
+
 ### Future
 - Motion blur during smooth scroll (ghost copies offset in scroll direction, like RaisinTerminal2)
-- Image display sizing: CommonMark has no sizing syntax; options include inline HTML (`<img src="url" width="300">`), Obsidian-style pipe syntax (`![alt|300](url)`), or visual drag-resize that auto-generates markup. Typora's drag-to-resize UX is the gold standard. Could also auto-downscale pasted images to reduce file size.
+- Image display sizing: GFM has no sizing syntax; options include inline HTML (`<img src="url" width="300">`), Obsidian-style pipe syntax (`![alt|300](url)`), or visual drag-resize that auto-generates markup. Typora's drag-to-resize UX is the gold standard. Could also auto-downscale pasted images to reduce file size.
 - Reference-style images (`![alt][ref]` with `[ref]: url "title"` definitions)
-- Tables
 - Links (clickable in view mode, editable syntax in edit mode)
 - Syntax highlighting in code blocks
 - Drag-and-drop
