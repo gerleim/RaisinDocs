@@ -30,30 +30,30 @@ The document model must distinguish these from iteration 2 onward. A naive "one 
 
 ## Iterations
 
-### 1 — Editable plain text
+### 1 — Editable plain text ✅
 - Render unstyled text in FrameworkElement via OnRender
 - Blinking cursor, typing, backspace, delete
 - Single block, no wrapping yet
 
-### 2 — Multi-line with markdown newline rules
+### 2 — Multi-line with markdown newline rules ✅
 - Enter key: decide between hard break (shift+enter) and paragraph break (enter)
 - Store and render paragraph breaks vs line breaks correctly
 - Arrow keys, home/end navigation
 - Basic word wrapping
 
-### 3 — Selection and clipboard
+### 3 — Selection and clipboard ✅
 - Mouse drag and shift+arrow selection
 - Hit testing: screen coordinates to document position
 - Copy/paste (paste as plain text initially)
 
-### 3b — Performance and scrolling
+### 3b — Performance and scrolling ✅
 - Layout dirty flag: skip recomputation on cursor blink, only recompute on text/size changes
 - GlyphTypeface measurement cache: per-character advance width lookup instead of FormattedText allocation
 - Frozen brushes and cached pen for rendering resources
 - Mouse wheel scrolling with auto-scroll to keep cursor visible
 - Viewport culling: only draw and hit-test visual lines within the visible region
 
-### 3c — Scrollbar and smooth scrolling
+### 3c — Scrollbar and smooth scrolling ✅
 - Smooth scrolling with exponential decay (adapted from TerminalCanvas SmoothScroll pattern)
   - CompositionTarget.Rendering drives animation frames, unhooks when idle
   - Scroll position jumps immediately; visual offset decays back to 0
