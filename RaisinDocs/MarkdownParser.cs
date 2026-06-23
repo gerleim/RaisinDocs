@@ -27,6 +27,24 @@ public enum BlockKind
     UnorderedListItem,
     FencedCodeLine,
     Blockquote,
+    TableHeaderRow,
+    TableSeparatorRow,
+    TableDataRow,
+}
+
+public enum ColumnAlignment { Left, Center, Right }
+
+public readonly record struct TableCellInfo(int Start, int Length);
+
+public class TableRowInfo
+{
+    public required IReadOnlyList<TableCellInfo> Cells { get; init; }
+}
+
+public class TableInfo
+{
+    public required int ColumnCount { get; init; }
+    public required IReadOnlyList<ColumnAlignment> Alignments { get; init; }
 }
 
 public class ParsedBlock
@@ -34,7 +52,11 @@ public class ParsedBlock
     public required BlockKind Kind { get; init; }
     public required IReadOnlyList<StyledRun> Runs { get; init; }
     public bool IsFenceDelimiter { get; init; }
+    public bool IsTableSeparator { get; init; }
+    public bool IsSkippedInVisual => IsFenceDelimiter || IsTableSeparator;
     public IReadOnlyList<InlineImage>? Images { get; init; }
+    public TableRowInfo? TableRow { get; init; }
+    public TableInfo? Table { get; init; }
 }
 
 public static class MarkdownParser
@@ -79,7 +101,181 @@ public static class MarkdownParser
             result.Add(new ParsedBlock { Kind = kind, Runs = runs, Images = images });
         }
 
+        DetectTables(result, getBlockText);
+
         return result;
+    }
+
+    private static void DetectTables(List<ParsedBlock> blocks, Func<int, string> getBlockText)
+    {
+        int i = 0;
+        while (i < blocks.Count - 1)
+        {
+            if (blocks[i].Kind != BlockKind.Paragraph || !ContainsUnescapedPipe(getBlockText(i)))
+            {
+                i++;
+                continue;
+            }
+
+            string sepText = getBlockText(i + 1);
+            if (blocks[i + 1].Kind != BlockKind.Paragraph || !IsSeparatorRow(sepText, out var alignments))
+            {
+                i++;
+                continue;
+            }
+
+            var headerCells = ParseTableCells(getBlockText(i));
+            if (headerCells.Count != alignments.Count)
+            {
+                i++;
+                continue;
+            }
+
+            var tableInfo = new TableInfo { ColumnCount = alignments.Count, Alignments = alignments };
+            var headerRow = new TableRowInfo { Cells = headerCells };
+
+            blocks[i] = new ParsedBlock
+            {
+                Kind = BlockKind.TableHeaderRow,
+                Runs = blocks[i].Runs,
+                Images = blocks[i].Images,
+                TableRow = headerRow,
+                Table = tableInfo,
+            };
+
+            var sepCells = ParseTableCells(sepText);
+            blocks[i + 1] = new ParsedBlock
+            {
+                Kind = BlockKind.TableSeparatorRow,
+                Runs = blocks[i + 1].Runs,
+                IsTableSeparator = true,
+                TableRow = new TableRowInfo { Cells = sepCells },
+                Table = tableInfo,
+            };
+
+            int j = i + 2;
+            while (j < blocks.Count && blocks[j].Kind == BlockKind.Paragraph
+                   && ContainsUnescapedPipe(getBlockText(j)))
+            {
+                var dataCells = ParseTableCells(getBlockText(j));
+                blocks[j] = new ParsedBlock
+                {
+                    Kind = BlockKind.TableDataRow,
+                    Runs = blocks[j].Runs,
+                    Images = blocks[j].Images,
+                    TableRow = new TableRowInfo { Cells = dataCells },
+                    Table = tableInfo,
+                };
+                j++;
+            }
+
+            i = j;
+        }
+    }
+
+    private static bool ContainsUnescapedPipe(string text)
+    {
+        for (int i = 0; i < text.Length; i++)
+        {
+            if (text[i] == '\\') { i++; continue; }
+            if (text[i] == '|') return true;
+        }
+        return false;
+    }
+
+    internal static bool IsSeparatorRow(string text, out List<ColumnAlignment> alignments)
+    {
+        alignments = [];
+        var trimmed = text.Trim();
+        if (trimmed.Length == 0) return false;
+
+        int start = 0;
+        int end = trimmed.Length;
+        if (trimmed[0] == '|') start = 1;
+        if (end > start && trimmed[end - 1] == '|') end--;
+
+        if (start >= end) return false;
+
+        var inner = trimmed.Substring(start, end - start);
+        int cellStart = 0;
+        for (int ci = 0; ci <= inner.Length; ci++)
+        {
+            bool atPipe = ci < inner.Length && inner[ci] == '|';
+            if (ci < inner.Length && inner[ci] == '\\') { ci++; continue; }
+            if (!atPipe && ci < inner.Length) continue;
+
+            var cell = inner.Substring(cellStart, ci - cellStart).Trim();
+            if (cell.Length == 0) return false;
+
+            bool leftColon = cell[0] == ':';
+            bool rightColon = cell[cell.Length - 1] == ':';
+
+            int dashS = leftColon ? 1 : 0;
+            int dashE = rightColon ? cell.Length - 1 : cell.Length;
+            if (dashE <= dashS) return false;
+
+            for (int k = dashS; k < dashE; k++)
+            {
+                if (cell[k] != '-') return false;
+            }
+
+            if (leftColon && rightColon) alignments.Add(ColumnAlignment.Center);
+            else if (rightColon) alignments.Add(ColumnAlignment.Right);
+            else alignments.Add(ColumnAlignment.Left);
+
+            cellStart = ci + 1;
+        }
+
+        return alignments.Count > 0;
+    }
+
+    internal static List<TableCellInfo> ParseTableCells(string text)
+    {
+        var cells = new List<TableCellInfo>();
+        int pos = 0;
+
+        // skip leading pipe
+        if (pos < text.Length && text[pos] == '|') pos++;
+
+        while (pos < text.Length)
+        {
+            int cellStart = pos;
+            while (pos < text.Length)
+            {
+                if (text[pos] == '\\' && pos + 1 < text.Length) { pos += 2; continue; }
+                if (text[pos] == '|') break;
+                pos++;
+            }
+
+            // check if this is the trailing pipe (nothing after it or only whitespace)
+            if (pos < text.Length && text[pos] == '|')
+            {
+                bool isTrailing = true;
+                for (int k = pos + 1; k < text.Length; k++)
+                {
+                    if (text[k] != ' ' && text[k] != '\t') { isTrailing = false; break; }
+                }
+
+                if (isTrailing && cells.Count > 0)
+                {
+                    // include this last segment as a cell, then stop
+                    cells.Add(new TableCellInfo(cellStart, pos - cellStart));
+                    break;
+                }
+
+                cells.Add(new TableCellInfo(cellStart, pos - cellStart));
+                pos++; // skip pipe
+            }
+            else
+            {
+                // end of text without pipe
+                if (pos > cellStart || cells.Count > 0)
+                    cells.Add(new TableCellInfo(cellStart, pos - cellStart));
+                break;
+            }
+        }
+
+        return cells;
     }
 
     public static bool IsFenceLine(string text)

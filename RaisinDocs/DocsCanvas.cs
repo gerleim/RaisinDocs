@@ -27,7 +27,8 @@ public partial class DocsCanvas : FrameworkElement
     private sealed record ThemePalette(
         Brush Background, Brush Foreground, Pen CursorPen,
         Brush Selection, Brush ScrollTrack, Brush ScrollThumb,
-        Brush Syntax, Brush CodeBackground);
+        Brush Syntax, Brush CodeBackground,
+        Brush TableBackground, Brush TableHeaderBackground, Pen TableBorderPen);
 
     private static readonly ThemePalette _lightPalette;
     private static readonly ThemePalette _darkPalette;
@@ -45,7 +46,10 @@ public partial class DocsCanvas : FrameworkElement
             scrollTrack: Color.FromArgb(30, 0, 0, 0),
             scrollThumb: Color.FromArgb(120, 128, 128, 128),
             syntax: Color.FromArgb(180, 140, 140, 140),
-            codeBackground: Color.FromArgb(25, 0, 0, 0));
+            codeBackground: Color.FromArgb(25, 0, 0, 0),
+            tableBg: Color.FromArgb(15, 0, 0, 0),
+            tableHeaderBg: Color.FromArgb(30, 0, 0, 0),
+            tableBorder: Color.FromArgb(60, 0, 0, 0));
 
         _darkPalette = BuildPalette(
             background: Color.FromRgb(30, 30, 30),
@@ -55,23 +59,30 @@ public partial class DocsCanvas : FrameworkElement
             scrollTrack: Color.FromArgb(30, 255, 255, 255),
             scrollThumb: Color.FromArgb(120, 128, 128, 128),
             syntax: Color.FromArgb(180, 110, 110, 110),
-            codeBackground: Color.FromArgb(25, 255, 255, 255));
+            codeBackground: Color.FromArgb(25, 255, 255, 255),
+            tableBg: Color.FromArgb(15, 255, 255, 255),
+            tableHeaderBg: Color.FromArgb(30, 255, 255, 255),
+            tableBorder: Color.FromArgb(60, 255, 255, 255));
     }
 
     private static ThemePalette BuildPalette(
         Color background, Color foreground, Color cursor,
         Color selection, Color scrollTrack, Color scrollThumb,
-        Color syntax, Color codeBackground)
+        Color syntax, Color codeBackground,
+        Color tableBg, Color tableHeaderBg, Color tableBorder)
     {
         var cursorBrush = new SolidColorBrush(cursor);
         cursorBrush.Freeze();
         var cursorPen = new Pen(cursorBrush, 1.5);
         cursorPen.Freeze();
+        var tBorderPen = new Pen(Frozen(tableBorder), 1);
+        tBorderPen.Freeze();
 
         return new ThemePalette(
             Frozen(background), Frozen(foreground), cursorPen,
             Frozen(selection), Frozen(scrollTrack), Frozen(scrollThumb),
-            Frozen(syntax), Frozen(codeBackground));
+            Frozen(syntax), Frozen(codeBackground),
+            Frozen(tableBg), Frozen(tableHeaderBg), tBorderPen);
 
         static Brush Frozen(Color c) { var b = new SolidColorBrush(c); b.Freeze(); return b; }
     }
@@ -117,6 +128,7 @@ public partial class DocsCanvas : FrameworkElement
     }
     private readonly List<VisualLine> _visualLines = [];
     private readonly List<double> _lineYPositions = [];
+    private readonly Dictionary<TableInfo, double[]> _tableColumnWidths = new();
     private bool _layoutDirty = true;
     private double _totalContentHeight;
     private double _layoutMaxWidth;
@@ -735,18 +747,29 @@ public partial class DocsCanvas : FrameworkElement
     {
         _visualLines.Clear();
         _lineYPositions.Clear();
+        _tableColumnWidths.Clear();
         maxWidth = Math.Max(0, maxWidth);
         _layoutMaxWidth = maxWidth;
+
+        if (IsVisual)
+            ComputeAllTableColumnWidths(maxWidth);
 
         for (int bi = 0; bi < _doc.BlockCount; bi++)
         {
             var parsed = _parsedBlocks![bi];
 
-            if (IsVisual && parsed.IsFenceDelimiter)
+            if (IsVisual && parsed.IsSkippedInVisual)
                 continue;
 
             string text = _doc.GetBlockText(bi);
             var map = IsVisual ? _visualMaps?[bi] : null;
+
+            if (IsVisual && parsed.Table != null && parsed.Kind is BlockKind.TableHeaderRow or BlockKind.TableDataRow)
+            {
+                _visualLines.Add(new VisualLine(bi, 0, text.Length, parsed.Kind));
+                continue;
+            }
+
             var segments = text.Split('\n');
             int offset = 0;
             for (int s = 0; s < segments.Length; s++)
@@ -859,6 +882,55 @@ public partial class DocsCanvas : FrameworkElement
         return text.Length - start;
     }
 
+    private const double _tableCellPadding = 8;
+
+    private void ComputeAllTableColumnWidths(double maxWidth)
+    {
+        var seen = new HashSet<TableInfo>();
+        for (int bi = 0; bi < _doc.BlockCount; bi++)
+        {
+            var parsed = _parsedBlocks![bi];
+            if (parsed.Table == null || parsed.TableRow == null) continue;
+            if (!seen.Add(parsed.Table)) continue;
+
+            int colCount = parsed.Table.ColumnCount;
+            var widths = new double[colCount];
+
+            for (int bj = bi; bj < _doc.BlockCount; bj++)
+            {
+                var p = _parsedBlocks[bj];
+                if (p.Table != parsed.Table) break;
+                if (p.IsTableSeparator || p.TableRow == null) continue;
+
+                string text = _doc.GetBlockText(bj);
+                for (int c = 0; c < Math.Min(p.TableRow.Cells.Count, colCount); c++)
+                {
+                    var cell = p.TableRow.Cells[c];
+                    string cellText = text.Substring(cell.Start, cell.Length).Trim();
+                    double w = MeasureStringWidth(cellText, p.Kind, p.Runs, cell.Start);
+                    if (w > widths[c]) widths[c] = w;
+                }
+            }
+
+            for (int c = 0; c < colCount; c++)
+                widths[c] += _tableCellPadding * 2;
+
+            _tableColumnWidths[parsed.Table] = widths;
+        }
+    }
+
+    private double MeasureStringWidth(string text, BlockKind kind, IReadOnlyList<StyledRun> runs, int blockOffset)
+    {
+        double w = 0;
+        int runIdx = 0;
+        for (int i = 0; i < text.Length; i++)
+        {
+            var style = GetStyleAtOffset(runs, blockOffset + i, ref runIdx);
+            w += MeasureCharWidth(text[i], kind, style);
+        }
+        return w;
+    }
+
     // --- Cursor ↔ visual line mapping ---
 
     private int CursorToVisualLineIndex()
@@ -878,6 +950,13 @@ public partial class DocsCanvas : FrameworkElement
         int localOffset = Math.Clamp(_doc.CursorOffset - vl.StartOffset, 0, vl.Length);
         var map = IsVisual ? _visualMaps?[vl.BlockIndex] : null;
 
+        var parsed = _parsedBlocks![vl.BlockIndex];
+        if (IsVisual && parsed.Table != null && parsed.TableRow != null
+            && _tableColumnWidths.TryGetValue(parsed.Table, out var colWidths))
+        {
+            return CursorXInTableRow(parsed, colWidths, localOffset);
+        }
+
         string blockText = _doc.GetBlockText(vl.BlockIndex);
         double x = 0;
         if (map != null && map.ReplacementPrefix != null && vl.StartOffset == 0)
@@ -885,7 +964,6 @@ public partial class DocsCanvas : FrameworkElement
 
         if (localOffset == 0) return x;
 
-        var parsed = _parsedBlocks![vl.BlockIndex];
         int runIdx = 0;
         for (int i = vl.StartOffset; i < vl.StartOffset + localOffset; i++)
         {
@@ -906,14 +984,64 @@ public partial class DocsCanvas : FrameworkElement
         return x;
     }
 
+    private double CursorXInTableRow(ParsedBlock parsed, double[] colWidths, int cursorOffset)
+    {
+        var cells = parsed.TableRow!.Cells;
+        string blockText = _doc.GetBlockText(_doc.CursorBlock);
+
+        // find which cell the cursor is in
+        double x = 0;
+        for (int c = 0; c < cells.Count && c < colWidths.Length; c++)
+        {
+            var cell = cells[c];
+            int cellEnd = cell.Start + cell.Length;
+            if (cursorOffset >= cell.Start && cursorOffset <= cellEnd)
+            {
+                string cellContent = blockText.Substring(cell.Start, cell.Length).Trim();
+                int leadTrim = 0;
+                while (cell.Start + leadTrim < cellEnd && blockText[cell.Start + leadTrim] == ' ')
+                    leadTrim++;
+
+                int offsetInContent = Math.Clamp(cursorOffset - cell.Start - leadTrim, 0, cellContent.Length);
+                int runIdx = 0;
+                double textW = 0;
+                for (int i = 0; i < offsetInContent; i++)
+                {
+                    var style = GetStyleAtOffset(parsed.Runs, cell.Start + leadTrim + i, ref runIdx);
+                    textW += MeasureCharWidth(cellContent[i], parsed.Kind, style);
+                }
+
+                var align = parsed.Table!.Alignments[c];
+                double cellContentWidth = colWidths[c] - _tableCellPadding * 2;
+                double fullTextW = MeasureStringWidth(cellContent, parsed.Kind, parsed.Runs, cell.Start + leadTrim);
+                double alignOffset = align switch
+                {
+                    ColumnAlignment.Center => Math.Max(0, (cellContentWidth - fullTextW) / 2),
+                    ColumnAlignment.Right => Math.Max(0, cellContentWidth - fullTextW),
+                    _ => 0,
+                };
+                return x + _tableCellPadding + alignOffset + textW;
+            }
+            x += colWidths[c];
+        }
+        return x;
+    }
+
     private int HitTestInVisualLine(int vlIndex, double x)
     {
         var vl = _visualLines[vlIndex];
         if (vl.Length == 0) return vl.StartOffset;
 
+        var parsed = _parsedBlocks![vl.BlockIndex];
+        if (IsVisual && parsed.Table != null && parsed.TableRow != null
+            && _tableColumnWidths.TryGetValue(parsed.Table, out var colWidths))
+        {
+            return HitTestInTableRow(vl, parsed, colWidths, x);
+        }
+
         var map = IsVisual ? _visualMaps?[vl.BlockIndex] : null;
         string blockText = _doc.GetBlockText(vl.BlockIndex);
-        var parsed = _parsedBlocks![vl.BlockIndex];
+
         double accum = 0;
 
         if (map != null && map.ReplacementPrefix != null && vl.StartOffset == 0)
@@ -945,6 +1073,50 @@ public partial class DocsCanvas : FrameworkElement
             if (x < accum + charW / 2)
                 return offset;
             accum += charW;
+        }
+        return vl.StartOffset + vl.Length;
+    }
+
+    private int HitTestInTableRow(VisualLine vl, ParsedBlock parsed, double[] colWidths, double x)
+    {
+        var cells = parsed.TableRow!.Cells;
+        string blockText = _doc.GetBlockText(vl.BlockIndex);
+        double cx = 0;
+
+        for (int c = 0; c < cells.Count && c < colWidths.Length; c++)
+        {
+            if (x < cx + colWidths[c] || c == cells.Count - 1 || c == colWidths.Length - 1)
+            {
+                var cell = cells[c];
+                string cellContent = blockText.Substring(cell.Start, cell.Length).Trim();
+                int leadTrim = 0;
+                while (cell.Start + leadTrim < cell.Start + cell.Length && blockText[cell.Start + leadTrim] == ' ')
+                    leadTrim++;
+
+                var align = parsed.Table!.Alignments[c];
+                double cellContentWidth = colWidths[c] - _tableCellPadding * 2;
+                double fullTextW = MeasureStringWidth(cellContent, parsed.Kind, parsed.Runs, cell.Start + leadTrim);
+                double alignOffset = align switch
+                {
+                    ColumnAlignment.Center => Math.Max(0, (cellContentWidth - fullTextW) / 2),
+                    ColumnAlignment.Right => Math.Max(0, cellContentWidth - fullTextW),
+                    _ => 0,
+                };
+
+                double localX = x - cx - _tableCellPadding - alignOffset;
+                double accum = 0;
+                int runIdx = 0;
+                for (int i = 0; i < cellContent.Length; i++)
+                {
+                    var style = GetStyleAtOffset(parsed.Runs, cell.Start + leadTrim + i, ref runIdx);
+                    double charW = MeasureCharWidth(cellContent[i], parsed.Kind, style);
+                    if (localX < accum + charW / 2)
+                        return cell.Start + leadTrim + i;
+                    accum += charW;
+                }
+                return cell.Start + leadTrim + cellContent.Length;
+            }
+            cx += colWidths[c];
         }
         return vl.StartOffset + vl.Length;
     }
@@ -1426,6 +1598,152 @@ public partial class DocsCanvas : FrameworkElement
         if (!shift) _doc.CollapseSelection();
     }
 
+    public void InsertTable(int columns, int rows)
+    {
+        SealAndStopTimer();
+        _doc.BeginUndoGroup();
+        if (_doc.HasSelection) _doc.DeleteSelection();
+
+        string header = "| " + string.Join(" | ", Enumerable.Range(1, columns).Select(c => $"Header {c}")) + " |";
+        string separator = "| " + string.Join(" | ", Enumerable.Repeat("---", columns)) + " |";
+        var lines = new List<string> { header, separator };
+        for (int r = 0; r < rows; r++)
+            lines.Add("|" + string.Concat(Enumerable.Repeat("  |", columns)));
+
+        if (_doc.CursorOffset > 0)
+            _doc.InsertParagraphBreak();
+
+        _doc.Paste(string.Join("\n", lines));
+        _doc.CursorBlock -= lines.Count - 1;
+        _doc.CursorOffset = 2;
+        _doc.CollapseSelection();
+        _doc.SealUndoGroup();
+        InvalidateLayout();
+        InvalidateVisual();
+        EnsureCursorVisible();
+    }
+
+    private static bool IsTableRow(ParsedBlock parsed) =>
+        parsed.Kind is BlockKind.TableHeaderRow or BlockKind.TableDataRow or BlockKind.TableSeparatorRow;
+
+    private bool HandleTableTab(bool shift, out bool textChanged)
+    {
+        textChanged = false;
+        if (_parsedBlocks == null) return false;
+        var parsed = _parsedBlocks[_doc.CursorBlock];
+        if (parsed.TableRow == null || parsed.Table == null) return false;
+
+        SealAndStopTimer();
+        var cells = parsed.TableRow.Cells;
+        string blockText = _doc.GetBlockText(_doc.CursorBlock);
+        int colCount = parsed.Table.ColumnCount;
+
+        // find current cell
+        int curCell = -1;
+        for (int c = 0; c < cells.Count; c++)
+        {
+            if (_doc.CursorOffset >= cells[c].Start &&
+                _doc.CursorOffset <= cells[c].Start + cells[c].Length)
+            { curCell = c; break; }
+        }
+        if (curCell < 0) curCell = 0;
+
+        if (!shift)
+        {
+            if (curCell + 1 < cells.Count)
+            {
+                var next = cells[curCell + 1];
+                MoveCursorToCell(next, blockText);
+            }
+            else
+            {
+                // move to first cell of next data row
+                for (int b = _doc.CursorBlock + 1; b < _doc.BlockCount; b++)
+                {
+                    var p = _parsedBlocks[b];
+                    if (p.IsTableSeparator) continue;
+                    if (p.TableRow != null && p.Table == parsed.Table)
+                    {
+                        _doc.CursorBlock = b;
+                        var nextBlockText = _doc.GetBlockText(b);
+                        MoveCursorToCell(p.TableRow.Cells[0], nextBlockText);
+                        break;
+                    }
+                    break;
+                }
+            }
+        }
+        else
+        {
+            if (curCell > 0)
+            {
+                var prev = cells[curCell - 1];
+                MoveCursorToCell(prev, blockText);
+            }
+            else
+            {
+                // move to last cell of previous data row
+                for (int b = _doc.CursorBlock - 1; b >= 0; b--)
+                {
+                    var p = _parsedBlocks[b];
+                    if (p.IsTableSeparator) continue;
+                    if (p.TableRow != null && p.Table == parsed.Table)
+                    {
+                        _doc.CursorBlock = b;
+                        var prevBlockText = _doc.GetBlockText(b);
+                        var lastCell = p.TableRow.Cells[^1];
+                        MoveCursorToCell(lastCell, prevBlockText);
+                        break;
+                    }
+                    break;
+                }
+            }
+        }
+
+        _doc.CollapseSelection();
+        return true;
+    }
+
+    private void MoveCursorToCell(TableCellInfo cell, string blockText)
+    {
+        int start = cell.Start;
+        int end = cell.Start + cell.Length;
+        while (start < end && blockText[start] == ' ') start++;
+        while (end > start && blockText[end - 1] == ' ') end--;
+        _doc.CursorOffset = start;
+        _doc.AnchorBlock = _doc.CursorBlock;
+        _doc.AnchorOffset = end;
+    }
+
+    private bool HandleTableEnter(out bool textChanged)
+    {
+        textChanged = false;
+        if (_parsedBlocks == null) return false;
+        var parsed = _parsedBlocks[_doc.CursorBlock];
+        if (parsed.Table == null) return false;
+
+        int colCount = parsed.Table.ColumnCount;
+        string newRow = "|" + string.Concat(Enumerable.Repeat("  |", colCount));
+
+        _doc.BeginUndoGroup();
+        if (_doc.HasSelection) _doc.DeleteSelection();
+
+        // find last row of this table
+        int insertAfter = _doc.CursorBlock;
+        for (int b = insertAfter + 1; b < _doc.BlockCount && _parsedBlocks[b].Table == parsed.Table; b++)
+            insertAfter = b;
+
+        _doc.CursorBlock = insertAfter;
+        _doc.CursorOffset = _doc.GetBlockLength(insertAfter);
+        _doc.InsertParagraphBreak();
+        _doc.Paste(newRow);
+        _doc.CursorOffset = 2; // position in first cell
+        _doc.CollapseSelection();
+        _doc.SealUndoGroup();
+        textChanged = true;
+        return true;
+    }
+
     // --- Keyboard ---
 
     protected override void OnKeyDown(KeyEventArgs e)
@@ -1440,8 +1758,16 @@ public partial class DocsCanvas : FrameworkElement
 
         switch (e.Key)
         {
+            case Key.Tab:
+                if (HandleTableTab(shift, out textChanged))
+                    break;
+                handled = false;
+                break;
+
             case Key.Return:
                 SealAndStopTimer();
+                if (HandleTableEnter(out textChanged))
+                    break;
                 _doc.BeginUndoGroup();
                 if (_doc.HasSelection) _doc.DeleteSelection();
                 _doc.InsertParagraphBreak();
@@ -1614,6 +1940,8 @@ public partial class DocsCanvas : FrameworkElement
         double viewBottom = effectiveScroll + ActualHeight;
 
         DrawCodeBlockBackgrounds(dc, effectiveScroll, viewTop, viewBottom);
+        if (IsVisual)
+            DrawTableBackgrounds(dc, effectiveScroll, viewTop, viewBottom);
 
         if (_doc.HasSelection)
             DrawSelection(dc, effectiveScroll);
@@ -1636,7 +1964,11 @@ public partial class DocsCanvas : FrameworkElement
 
                 double textX = _padding;
 
-                if (map != null)
+                if (IsVisual && parsed.Table != null && parsed.TableRow != null)
+                {
+                    DrawTableRow(dc, vl, blockText, parsed, lineY, effectiveScroll, fontSize, baseTypeface);
+                }
+                else if (map != null)
                 {
                     if (HasImagesOnLine(vl, map))
                     {
@@ -1760,6 +2092,20 @@ public partial class DocsCanvas : FrameworkElement
         if (parsed.Kind == BlockKind.Blockquote && vl.StartOffset == 0 && vl.Length >= 2)
             ft.SetForegroundBrush(_palette.Syntax, 0, 2);
 
+        if (parsed.Kind == BlockKind.TableSeparatorRow)
+        {
+            ft.SetForegroundBrush(_palette.Syntax, 0, vl.Length);
+        }
+        else if (parsed.Kind is BlockKind.TableHeaderRow or BlockKind.TableDataRow)
+        {
+            for (int ci = vl.StartOffset; ci < vlEnd; ci++)
+            {
+                if (ci > 0 && blockText[ci - 1] == '\\') continue;
+                if (blockText[ci] == '|')
+                    DimRange(ft, vl, ci, 1);
+            }
+        }
+
         if (parsed.Images != null)
         {
             foreach (var img in parsed.Images)
@@ -1828,6 +2174,157 @@ public partial class DocsCanvas : FrameworkElement
 
             dc.DrawRectangle(_palette.CodeBackground, null,
                 new Rect(0, lineY - effectiveScroll, contentWidth, lineH));
+        }
+    }
+
+    private void DrawTableBackgrounds(DrawingContext dc, double effectiveScroll,
+        double viewTop, double viewBottom)
+    {
+        int i = 0;
+        while (i < _visualLines.Count)
+        {
+            var vl = _visualLines[i];
+            var parsed = _parsedBlocks![vl.BlockIndex];
+            if (parsed.Table == null || parsed.Kind is not (BlockKind.TableHeaderRow or BlockKind.TableDataRow))
+            {
+                i++;
+                continue;
+            }
+
+            var tableInfo = parsed.Table;
+            int tableStart = i;
+            int tableEnd = i;
+            while (tableEnd < _visualLines.Count)
+            {
+                var p = _parsedBlocks[_visualLines[tableEnd].BlockIndex];
+                if (p.Table != tableInfo) break;
+                tableEnd++;
+            }
+
+            double tableY = _lineYPositions[tableStart];
+            double tableBottom = tableEnd > 0
+                ? _lineYPositions[tableEnd - 1] + GetEffectiveLineHeight(_visualLines[tableEnd - 1])
+                : tableY;
+
+            if (tableBottom >= viewTop && tableY <= viewBottom
+                && _tableColumnWidths.TryGetValue(tableInfo, out var colWidths))
+            {
+                double tableWidth = 0;
+                foreach (var w in colWidths) tableWidth += w;
+                double tableX = _padding;
+                double yTop = tableY - effectiveScroll;
+                double tableH = tableBottom - tableY;
+
+                dc.DrawRectangle(_palette.TableBackground, null,
+                    new Rect(tableX, yTop, tableWidth, tableH));
+
+                double headerH = GetLineHeight(_visualLines[tableStart].BlockKind);
+                dc.DrawRectangle(_palette.TableHeaderBackground, null,
+                    new Rect(tableX, yTop, tableWidth, headerH));
+
+                dc.DrawRectangle(null, _palette.TableBorderPen,
+                    new Rect(tableX, yTop, tableWidth, tableH));
+
+                for (int row = tableStart; row < tableEnd; row++)
+                {
+                    double rowY = _lineYPositions[row] - effectiveScroll;
+                    if (row > tableStart)
+                        dc.DrawLine(_palette.TableBorderPen,
+                            new Point(tableX, rowY), new Point(tableX + tableWidth, rowY));
+                }
+
+                double cx = tableX;
+                for (int c = 0; c < colWidths.Length - 1; c++)
+                {
+                    cx += colWidths[c];
+                    dc.DrawLine(_palette.TableBorderPen,
+                        new Point(cx, yTop), new Point(cx, yTop + tableH));
+                }
+            }
+
+            i = tableEnd;
+        }
+    }
+
+    private void DrawTableRow(DrawingContext dc, VisualLine vl, string blockText,
+        ParsedBlock parsed, double lineY, double effectiveScroll,
+        double fontSize, Typeface baseTypeface)
+    {
+        if (parsed.TableRow == null || parsed.Table == null) return;
+        if (!_tableColumnWidths.TryGetValue(parsed.Table, out var colWidths)) return;
+
+        double x = _padding;
+        double y = lineY - effectiveScroll;
+        double lineH = GetLineHeight(vl.BlockKind);
+        bool isHeader = parsed.Kind == BlockKind.TableHeaderRow;
+
+        for (int c = 0; c < Math.Min(parsed.TableRow.Cells.Count, colWidths.Length); c++)
+        {
+            var cell = parsed.TableRow.Cells[c];
+            string cellText = blockText.Substring(cell.Start, cell.Length).Trim();
+            if (cellText.Length == 0) { x += colWidths[c]; continue; }
+
+            var cellTypeface = isHeader ? _boldTypeface : baseTypeface;
+            var ft = new FormattedText(cellText, CultureInfo.InvariantCulture,
+                FlowDirection.LeftToRight, cellTypeface, fontSize,
+                _palette.Foreground, _dpiScale);
+
+            ApplyInlineStylesForCell(ft, cellText, parsed, cell, blockText);
+
+            var align = parsed.Table.Alignments[c];
+            double cellContentWidth = colWidths[c] - _tableCellPadding * 2;
+            double textX;
+            if (align == ColumnAlignment.Center)
+                textX = x + _tableCellPadding + Math.Max(0, (cellContentWidth - ft.Width) / 2);
+            else if (align == ColumnAlignment.Right)
+                textX = x + _tableCellPadding + Math.Max(0, cellContentWidth - ft.Width);
+            else
+                textX = x + _tableCellPadding;
+
+            var clipRect = new Rect(x, y, colWidths[c], lineH);
+            dc.PushClip(new RectangleGeometry(clipRect));
+            dc.DrawText(ft, new Point(textX, y));
+            dc.Pop();
+
+            x += colWidths[c];
+        }
+    }
+
+    private static void ApplyInlineStylesForCell(FormattedText ft, string cellText,
+        ParsedBlock parsed, TableCellInfo cell, string blockText)
+    {
+        if (parsed.Runs.Count <= 1) return;
+
+        int rawStart = cell.Start;
+        int rawEnd = cell.Start + cell.Length;
+        int leadingTrim = 0;
+        while (rawStart + leadingTrim < rawEnd && blockText[rawStart + leadingTrim] == ' ')
+            leadingTrim++;
+        int contentStart = rawStart + leadingTrim;
+
+        foreach (var run in parsed.Runs)
+        {
+            if (run.Style == InlineStyle.Normal || run.Style == InlineStyle.Image) continue;
+            int runEnd = run.Start + run.Length;
+            if (runEnd <= contentStart || run.Start >= rawEnd) continue;
+
+            int overlapStart = Math.Max(run.Start, contentStart) - contentStart;
+            int overlapEnd = Math.Min(runEnd, rawEnd) - contentStart;
+            int len = Math.Min(overlapEnd - overlapStart, cellText.Length - overlapStart);
+            if (len <= 0 || overlapStart >= cellText.Length) continue;
+
+            switch (run.Style)
+            {
+                case InlineStyle.Bold or InlineStyle.BoldItalic:
+                    ft.SetFontWeight(FontWeights.Bold, overlapStart, len);
+                    break;
+            }
+            if (run.Style is InlineStyle.Italic or InlineStyle.BoldItalic)
+                ft.SetFontStyle(FontStyles.Italic, overlapStart, len);
+            if (run.Style == InlineStyle.Code)
+                ft.SetFontFamily(new FontFamily("Cascadia Mono,Consolas"), overlapStart, len);
+            if (run.Style == InlineStyle.Strikethrough)
+                ft.SetTextDecorations(TextDecorations.Strikethrough, overlapStart, len);
         }
     }
 

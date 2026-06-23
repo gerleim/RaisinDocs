@@ -71,7 +71,7 @@ public partial class DocsCanvas
     private void EnsureCursorOnVisibleBlock(bool? preferForward = null)
     {
         if (_parsedBlocks == null) return;
-        if (!_parsedBlocks[_doc.CursorBlock].IsFenceDelimiter) return;
+        if (!_parsedBlocks[_doc.CursorBlock].IsSkippedInVisual) return;
 
         bool forward = preferForward ?? true;
 
@@ -79,7 +79,7 @@ public partial class DocsCanvas
         {
             for (int i = _doc.CursorBlock + 1; i < _doc.BlockCount; i++)
             {
-                if (!_parsedBlocks[i].IsFenceDelimiter)
+                if (!_parsedBlocks[i].IsSkippedInVisual)
                 {
                     _doc.CursorBlock = i;
                     _doc.CursorOffset = 0;
@@ -91,7 +91,7 @@ public partial class DocsCanvas
         {
             for (int i = _doc.CursorBlock - 1; i >= 0; i--)
             {
-                if (!_parsedBlocks[i].IsFenceDelimiter)
+                if (!_parsedBlocks[i].IsSkippedInVisual)
                 {
                     _doc.CursorBlock = i;
                     _doc.CursorOffset = _doc.GetBlockLength(i);
@@ -106,7 +106,7 @@ public partial class DocsCanvas
         {
             for (int i = _doc.CursorBlock - 1; i >= 0; i--)
             {
-                if (!_parsedBlocks[i].IsFenceDelimiter)
+                if (!_parsedBlocks[i].IsSkippedInVisual)
                 {
                     _doc.CursorBlock = i;
                     _doc.CursorOffset = _doc.GetBlockLength(i);
@@ -118,7 +118,7 @@ public partial class DocsCanvas
         {
             for (int i = _doc.CursorBlock + 1; i < _doc.BlockCount; i++)
             {
-                if (!_parsedBlocks[i].IsFenceDelimiter)
+                if (!_parsedBlocks[i].IsSkippedInVisual)
                 {
                     _doc.CursorBlock = i;
                     _doc.CursorOffset = 0;
@@ -133,10 +133,12 @@ public partial class DocsCanvas
     private bool HandleBackVisual()
     {
         SkipBackspacePastHiddenVisual();
-        if (_doc.CursorOffset == 0 && _doc.CursorBlock > 0 &&
-            _parsedBlocks != null && _parsedBlocks[_doc.CursorBlock - 1].IsFenceDelimiter)
+        if (_doc.CursorOffset == 0 && _doc.CursorBlock > 0 && _parsedBlocks != null)
         {
-            return false;
+            if (_parsedBlocks[_doc.CursorBlock - 1].IsSkippedInVisual)
+                return false;
+            if (IsTableRow(_parsedBlocks[_doc.CursorBlock]) || IsTableRow(_parsedBlocks[_doc.CursorBlock - 1]))
+                return false;
         }
 
         int prevBlock = _doc.CursorBlock;
@@ -154,10 +156,12 @@ public partial class DocsCanvas
     {
         SkipDeletePastHiddenVisual();
         if (_doc.CursorOffset >= _doc.GetBlockLength(_doc.CursorBlock) &&
-            _doc.CursorBlock < _doc.BlockCount - 1 &&
-            _parsedBlocks != null && _parsedBlocks[_doc.CursorBlock + 1].IsFenceDelimiter)
+            _doc.CursorBlock < _doc.BlockCount - 1 && _parsedBlocks != null)
         {
-            return false;
+            if (_parsedBlocks[_doc.CursorBlock + 1].IsSkippedInVisual)
+                return false;
+            if (IsTableRow(_parsedBlocks[_doc.CursorBlock]) || IsTableRow(_parsedBlocks[_doc.CursorBlock + 1]))
+                return false;
         }
 
         int prevBlocks = _doc.BlockCount;
@@ -189,7 +193,7 @@ public partial class DocsCanvas
             _doc.MoveLeft();
             if (!shift) _doc.CollapseSelection();
             EnsureCursorOnVisibleBlock(preferForward: false);
-            if (_parsedBlocks != null && _parsedBlocks[_doc.CursorBlock].IsFenceDelimiter)
+            if (_parsedBlocks != null && _parsedBlocks[_doc.CursorBlock].IsSkippedInVisual)
             {
                 _doc.CursorBlock = origBlock;
                 _doc.CursorOffset = origOffset;
@@ -217,7 +221,7 @@ public partial class DocsCanvas
             _doc.MoveRight();
             if (!shift) _doc.CollapseSelection();
             EnsureCursorOnVisibleBlock(preferForward: true);
-            if (_parsedBlocks != null && _parsedBlocks[_doc.CursorBlock].IsFenceDelimiter)
+            if (_parsedBlocks != null && _parsedBlocks[_doc.CursorBlock].IsSkippedInVisual)
             {
                 _doc.CursorBlock = origBlock;
                 _doc.CursorOffset = origOffset;

@@ -130,6 +130,12 @@
                                           ToolTip="Blockquote">
                                 <TextBlock Text="&#x201C;" FontSize="18" FontWeight="Bold" Margin="0,-4,0,0" />
                             </ToggleButton>
+                            <Button x:Name="PART_InsertTable" Style="{StaticResource SplitButtonPart}"
+                                    Padding="6,2" ToolTip="Insert table">
+                                <Path Width="14" Height="14" Stretch="Uniform"
+                                      Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=local:DocsFormattingBar}}"
+                                      Data="M1,1 H15 V13 H1 Z M1,5 H15 M1,9 H15 M6,1 V13 M11,1 V13" />
+                            </Button>
 
                             <Border Style="{StaticResource SeparatorLine}" />
 

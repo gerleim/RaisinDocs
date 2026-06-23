@@ -105,6 +105,16 @@ public class BlockVisualMap
             }
         }
 
+        if (parsed.Kind is BlockKind.TableHeaderRow or BlockKind.TableDataRow)
+        {
+            for (int i = 0; i < blockText.Length; i++)
+            {
+                if (i > 0 && blockText[i - 1] == '\\') continue;
+                if (blockText[i] == '|')
+                    ranges.Add(new HiddenRange(i, 1));
+            }
+        }
+
         foreach (var run in parsed.Runs)
         {
             if (run.Style == InlineStyle.Normal) continue;

@@ -379,6 +379,54 @@ public class BlockVisualMapTests
         map.Images.Should().BeNull();
     }
 
+    // --- Tables ---
+
+    private static List<BlockVisualMap> ComputeTableMaps(params string[] blocks)
+    {
+        var parsed = MarkdownParser.Parse(i => blocks[i], blocks.Length);
+        return parsed.Select((p, i) => BlockVisualMap.Compute(p, blocks[i])).ToList();
+    }
+
+    [Fact]
+    public void Table_PipesHidden()
+    {
+        var maps = ComputeTableMaps("| A | B |", "| --- | --- |", "| 1 | 2 |");
+        var headerMap = maps[0];
+        // "| A | B |" — pipes at 0, 4, 8 are hidden
+        headerMap.IsHidden(0).Should().BeTrue();  // leading |
+        headerMap.IsHidden(4).Should().BeTrue();  // middle |
+        headerMap.IsHidden(8).Should().BeTrue();  // trailing |
+        headerMap.IsHidden(2).Should().BeFalse(); // 'A'
+        headerMap.IsHidden(6).Should().BeFalse(); // 'B'
+    }
+
+    [Fact]
+    public void Table_DataRowPipesHidden()
+    {
+        var maps = ComputeTableMaps("| A |", "| --- |", "| hello |");
+        var dataMap = maps[2];
+        // "| hello |" — pipes at 0 and 8
+        dataMap.IsHidden(0).Should().BeTrue();  // leading |
+        dataMap.IsHidden(8).Should().BeTrue();  // trailing |
+    }
+
+    [Fact]
+    public void Table_BuildDisplayString_HidesPipes()
+    {
+        var maps = ComputeTableMaps("| A | B |", "| --- | --- |", "| 1 | 2 |");
+        maps[0].BuildDisplayString("| A | B |", 0, 9).Should().Be(" A  B ");
+    }
+
+    [Fact]
+    public void Table_RawToVisual_AcrossCellBoundary()
+    {
+        var maps = ComputeTableMaps("| A | B |", "| --- | --- |", "| 1 | 2 |");
+        var m = maps[0];
+        // raw 0 = '|' (hidden), raw 1 = ' ', raw 2 = 'A', raw 3 = ' ', raw 4 = '|' (hidden)
+        m.RawToVisual(1).Should().Be(0);  // ' ' after hidden leading pipe
+        m.RawToVisual(5).Should().Be(3);  // ' ' after hidden middle pipe
+    }
+
     // --- IsFenceDelimiter ---
 
     [Fact]

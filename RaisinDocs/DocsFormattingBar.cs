@@ -88,6 +88,16 @@ public class DocsFormattingBar : Control
         _bulletButton = WireToggle("PART_Bullet", () => Canvas?.ToggleBulletList());
         _quoteButton = WireToggle("PART_Quote", () => Canvas?.ToggleBlockquote());
 
+        var insertTableButton = GetTemplateChild("PART_InsertTable") as Button;
+        if (insertTableButton != null)
+        {
+            insertTableButton.Click += (_, _) =>
+            {
+                Canvas?.InsertTable(3, 2);
+                Canvas?.Focus();
+            };
+        }
+
         _editModeButton = GetTemplateChild("PART_EditMode") as ToggleButton;
         _editModeIcon = GetTemplateChild("PART_EditModeIcon") as Path;
         if (_editModeButton != null)

@@ -526,4 +526,182 @@ public class MarkdownParserTests
         var result = ParseBlocks("just plain text");
         result[0].Images.Should().BeNull();
     }
+
+    // --- Tables ---
+
+    [Fact]
+    public void Table_BasicDetection()
+    {
+        var result = ParseBlocks("| A | B |", "| --- | --- |", "| 1 | 2 |");
+        result[0].Kind.Should().Be(BlockKind.TableHeaderRow);
+        result[1].Kind.Should().Be(BlockKind.TableSeparatorRow);
+        result[2].Kind.Should().Be(BlockKind.TableDataRow);
+    }
+
+    [Fact]
+    public void Table_SeparatorRow_IsTableSeparator()
+    {
+        var result = ParseBlocks("| A |", "| --- |", "| 1 |");
+        result[1].IsTableSeparator.Should().BeTrue();
+        result[0].IsTableSeparator.Should().BeFalse();
+        result[2].IsTableSeparator.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Table_SharedTableInfo()
+    {
+        var result = ParseBlocks("| A | B |", "| --- | --- |", "| 1 | 2 |");
+        result[0].Table.Should().NotBeNull();
+        result[0].Table.Should().BeSameAs(result[1].Table);
+        result[0].Table.Should().BeSameAs(result[2].Table);
+        result[0].Table!.ColumnCount.Should().Be(2);
+    }
+
+    [Fact]
+    public void Table_AlignmentLeft()
+    {
+        var result = ParseBlocks("| A |", "| --- |", "| 1 |");
+        result[0].Table!.Alignments[0].Should().Be(ColumnAlignment.Left);
+    }
+
+    [Fact]
+    public void Table_AlignmentCenter()
+    {
+        var result = ParseBlocks("| A |", "| :---: |", "| 1 |");
+        result[0].Table!.Alignments[0].Should().Be(ColumnAlignment.Center);
+    }
+
+    [Fact]
+    public void Table_AlignmentRight()
+    {
+        var result = ParseBlocks("| A |", "| ---: |", "| 1 |");
+        result[0].Table!.Alignments[0].Should().Be(ColumnAlignment.Right);
+    }
+
+    [Fact]
+    public void Table_MixedAlignments()
+    {
+        var result = ParseBlocks("| A | B | C |", "| --- | :---: | ---: |", "| 1 | 2 | 3 |");
+        var aligns = result[0].Table!.Alignments;
+        aligns[0].Should().Be(ColumnAlignment.Left);
+        aligns[1].Should().Be(ColumnAlignment.Center);
+        aligns[2].Should().Be(ColumnAlignment.Right);
+    }
+
+    [Fact]
+    public void Table_CellBoundaries()
+    {
+        var result = ParseBlocks("| A | B |", "| --- | --- |", "| 1 | 2 |");
+        var headerCells = result[0].TableRow!.Cells;
+        headerCells.Should().HaveCount(2);
+        // "| A | B |" — cells are " A " and " B "
+        "| A | B |".Substring(headerCells[0].Start, headerCells[0].Length).Should().Contain("A");
+        "| A | B |".Substring(headerCells[1].Start, headerCells[1].Length).Should().Contain("B");
+    }
+
+    [Fact]
+    public void Table_DataRowCellBoundaries()
+    {
+        var result = ParseBlocks("| A |", "| --- |", "| hello |");
+        var cells = result[2].TableRow!.Cells;
+        cells.Should().HaveCount(1);
+        "| hello |".Substring(cells[0].Start, cells[0].Length).Should().Contain("hello");
+    }
+
+    [Fact]
+    public void Table_WithoutLeadingTrailingPipes()
+    {
+        var result = ParseBlocks("A | B", "--- | ---", "1 | 2");
+        result[0].Kind.Should().Be(BlockKind.TableHeaderRow);
+        result[1].Kind.Should().Be(BlockKind.TableSeparatorRow);
+        result[2].Kind.Should().Be(BlockKind.TableDataRow);
+        result[0].Table!.ColumnCount.Should().Be(2);
+    }
+
+    [Fact]
+    public void Table_SingleColumn()
+    {
+        var result = ParseBlocks("| A |", "| --- |", "| 1 |");
+        result[0].Kind.Should().Be(BlockKind.TableHeaderRow);
+        result[0].Table!.ColumnCount.Should().Be(1);
+    }
+
+    [Fact]
+    public void Table_InlineStylesInCells()
+    {
+        var result = ParseBlocks("| **bold** | `code` |", "| --- | --- |", "| data |");
+        result[0].Kind.Should().Be(BlockKind.TableHeaderRow);
+        result[0].Runs.Should().Contain(r => r.Style == InlineStyle.Bold);
+        result[0].Runs.Should().Contain(r => r.Style == InlineStyle.Code);
+    }
+
+    [Fact]
+    public void Table_EscapedPipe_NotCellBoundary()
+    {
+        var result = ParseBlocks(@"| A \| B | C |", "| --- | --- |", "| 1 | 2 |");
+        result[0].Kind.Should().Be(BlockKind.TableHeaderRow);
+        result[0].Table!.ColumnCount.Should().Be(2);
+        var cells = result[0].TableRow!.Cells;
+        cells.Should().HaveCount(2);
+    }
+
+    [Fact]
+    public void Table_InsideFencedCode_NotDetected()
+    {
+        var result = ParseBlocks("```", "| A | B |", "| --- | --- |", "| 1 | 2 |", "```");
+        result[1].Kind.Should().Be(BlockKind.FencedCodeLine);
+        result[2].Kind.Should().Be(BlockKind.FencedCodeLine);
+        result[3].Kind.Should().Be(BlockKind.FencedCodeLine);
+    }
+
+    [Fact]
+    public void Table_FollowedByParagraph()
+    {
+        var result = ParseBlocks("| A |", "| --- |", "| 1 |", "normal text");
+        result[0].Kind.Should().Be(BlockKind.TableHeaderRow);
+        result[1].Kind.Should().Be(BlockKind.TableSeparatorRow);
+        result[2].Kind.Should().Be(BlockKind.TableDataRow);
+        result[3].Kind.Should().Be(BlockKind.Paragraph);
+    }
+
+    [Fact]
+    public void Table_MultipleDataRows()
+    {
+        var result = ParseBlocks("| A |", "| --- |", "| 1 |", "| 2 |", "| 3 |");
+        result[2].Kind.Should().Be(BlockKind.TableDataRow);
+        result[3].Kind.Should().Be(BlockKind.TableDataRow);
+        result[4].Kind.Should().Be(BlockKind.TableDataRow);
+    }
+
+    [Fact]
+    public void Table_InvalidSeparator_NotDetected()
+    {
+        var result = ParseBlocks("| A | B |", "| not separator |", "| 1 | 2 |");
+        result[0].Kind.Should().Be(BlockKind.Paragraph);
+        result[1].Kind.Should().Be(BlockKind.Paragraph);
+    }
+
+    [Fact]
+    public void Table_ColumnCountMismatch_NotDetected()
+    {
+        var result = ParseBlocks("| A | B | C |", "| --- | --- |", "| 1 | 2 |");
+        result[0].Kind.Should().Be(BlockKind.Paragraph);
+    }
+
+    [Fact]
+    public void Table_LeftColonAlignment()
+    {
+        var result = ParseBlocks("| A |", "| :--- |", "| 1 |");
+        result[0].Table!.Alignments[0].Should().Be(ColumnAlignment.Left);
+    }
+
+    [Fact]
+    public void Table_TwoSeparateTables()
+    {
+        var result = ParseBlocks("| A |", "| --- |", "| 1 |", "text", "| B |", "| --- |", "| 2 |");
+        result[0].Kind.Should().Be(BlockKind.TableHeaderRow);
+        result[0].Table.Should().NotBeSameAs(result[4].Table);
+        result[3].Kind.Should().Be(BlockKind.Paragraph);
+        result[4].Kind.Should().Be(BlockKind.TableHeaderRow);
+    }
 }
