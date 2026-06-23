@@ -144,6 +144,7 @@ public partial class DocsCanvas : FrameworkElement
     private Point _hoverPosition;
 
     public event EventHandler? FormattingChanged;
+    public event EventHandler? EditModeChanged;
 
     public string GetText() => _doc.GetText();
 
@@ -154,6 +155,20 @@ public partial class DocsCanvas : FrameworkElement
     }
 
     public void ToggleTheme() => Theme = Theme == EditorTheme.Light ? EditorTheme.Dark : EditorTheme.Light;
+
+    public void ToggleEditMode()
+    {
+        SealAndStopTimer();
+        _editMode = _editMode == EditMode.Source ? EditMode.Visual : EditMode.Source;
+        InvalidateLayout();
+        if (IsVisual)
+        {
+            ComputeLayout();
+            EnsureCursorOnVisibleBlock();
+            SkipCursorToVisible(forward: true);
+        }
+        EditModeChanged?.Invoke(this, EventArgs.Empty);
+    }
 
     public void CycleImagePreview()
     {
@@ -1555,17 +1570,7 @@ public partial class DocsCanvas : FrameworkElement
 
             case Key.M:
                 if (ctrl)
-                {
-                    SealAndStopTimer();
-                    _editMode = _editMode == EditMode.Source ? EditMode.Visual : EditMode.Source;
-                    InvalidateLayout();
-                    if (IsVisual)
-                    {
-                        ComputeLayout();
-                        EnsureCursorOnVisibleBlock();
-                        SkipCursorToVisible(forward: true);
-                    }
-                }
+                    ToggleEditMode();
                 else handled = false;
                 break;
 

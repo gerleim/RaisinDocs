@@ -133,6 +133,15 @@
 
                             <Border Style="{StaticResource SeparatorLine}" />
 
+                            <ToggleButton x:Name="PART_EditMode" Style="{StaticResource FormattingToggle}"
+                                          ToolTip="Source mode (Ctrl+M)">
+                                <Path x:Name="PART_EditModeIcon"
+                                      Width="16" Height="14" Stretch="Uniform"
+                                      Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=local:DocsFormattingBar}}" />
+                            </ToggleButton>
+
+                            <Border Style="{StaticResource SeparatorLine}" />
+
                             <Border x:Name="PART_ImagePreviewBorder"
                                     BorderBrush="#CCC" BorderThickness="1" CornerRadius="3"
                                     Margin="1,0" Height="28" ToolTip="Image Preview: Off">
