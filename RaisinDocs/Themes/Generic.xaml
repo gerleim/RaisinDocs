@@ -40,6 +40,34 @@
         </Setter>
     </Style>
 
+    <Style x:Key="SplitButtonPart" TargetType="Button">
+        <Setter Property="Height" Value="28" />
+        <Setter Property="Padding" Value="4,2" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Foreground" Value="{Binding Foreground, RelativeSource={RelativeSource AncestorType=local:DocsFormattingBar}}" />
+        <Setter Property="HorizontalContentAlignment" Value="Center" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="Focusable" Value="False" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="Bd"
+                            Background="{TemplateBinding Background}"
+                            Padding="{TemplateBinding Padding}">
+                        <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                          VerticalAlignment="{TemplateBinding VerticalContentAlignment}" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="#20000000" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
     <Style x:Key="SeparatorLine" TargetType="Border">
         <Setter Property="Width" Value="1" />
         <Setter Property="Margin" Value="4,4" />
@@ -102,6 +130,26 @@
                                           ToolTip="Blockquote">
                                 <TextBlock Text="&#x201C;" FontSize="18" FontWeight="Bold" Margin="0,-4,0,0" />
                             </ToggleButton>
+
+                            <Border Style="{StaticResource SeparatorLine}" />
+
+                            <Border x:Name="PART_ImagePreviewBorder"
+                                    BorderBrush="#CCC" BorderThickness="1" CornerRadius="3"
+                                    Margin="1,0" Height="28" ToolTip="Image Preview: Off">
+                                <StackPanel Orientation="Horizontal">
+                                    <Button x:Name="PART_ImagePreview" Style="{StaticResource SplitButtonPart}"
+                                            Padding="6,2,2,2">
+                                        <Path x:Name="PART_ImagePreviewIcon"
+                                              Width="16" Height="14" Stretch="Uniform"
+                                              Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=local:DocsFormattingBar}}" />
+                                    </Button>
+                                    <Border Width="1" Background="#40000000" Margin="0,4" />
+                                    <Button x:Name="PART_ImagePreviewArrow" Style="{StaticResource SplitButtonPart}"
+                                            Padding="2,2,4,2">
+                                        <TextBlock Text="&#x25BE;" FontSize="10" Margin="0,-1,0,0" />
+                                    </Button>
+                                </StackPanel>
+                            </Border>
 
                             <Border Style="{StaticResource SeparatorLine}" />
 

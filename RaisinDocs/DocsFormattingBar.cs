@@ -1,11 +1,39 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Media;
+using System.Windows.Shapes;
 
 namespace RaisinDocs;
 
 public class DocsFormattingBar : Control
 {
+    // Image frame with diagonal slash
+    private static readonly Geometry IconOff = Geometry.Parse(
+        "M1,1 H15 V13 H1 Z M2,2 H14 V12 H2 Z M1,13 L15,1");
+
+    // Image frame with mountain landscape and sun
+    private static readonly Geometry IconInline = Geometry.Parse(
+        "M1,1 H15 V13 H1 Z M2,2 H14 V12 H2 Z " +
+        "M11.5,4 A1.5,1.5,0,1,1,11.49,4 " +
+        "M2,12 L5.5,6.5 L7.5,9 L10,5.5 L14,12 Z");
+
+    // Image frame with eye symbol
+    private static readonly Geometry IconOnHover = Geometry.Parse(
+        "M1,1 H15 V13 H1 Z M2,2 H14 V12 H2 Z " +
+        "M3,7 C5,3.5 11,3.5 13,7 C11,10.5 5,10.5 3,7 Z " +
+        "M8,5.5 A1.5,1.5,0,1,1,7.99,5.5");
+
+    static DocsFormattingBar()
+    {
+        IconOff.Freeze();
+        IconInline.Freeze();
+        IconOnHover.Freeze();
+
+        DefaultStyleKeyProperty.OverrideMetadata(typeof(DocsFormattingBar),
+            new FrameworkPropertyMetadata(typeof(DocsFormattingBar)));
+    }
+
     public static readonly DependencyProperty CanvasProperty =
         DependencyProperty.Register(nameof(Canvas), typeof(DocsCanvas), typeof(DocsFormattingBar),
             new PropertyMetadata(null, OnCanvasChanged));
@@ -14,12 +42,6 @@ public class DocsFormattingBar : Control
     {
         get => (DocsCanvas?)GetValue(CanvasProperty);
         set => SetValue(CanvasProperty, value);
-    }
-
-    static DocsFormattingBar()
-    {
-        DefaultStyleKeyProperty.OverrideMetadata(typeof(DocsFormattingBar),
-            new FrameworkPropertyMetadata(typeof(DocsFormattingBar)));
     }
 
     private ToggleButton? _boldButton;
@@ -33,6 +55,10 @@ public class DocsFormattingBar : Control
     private ToggleButton? _bulletButton;
     private ToggleButton? _quoteButton;
     private ToggleButton? _themeButton;
+    private Button? _imagePreviewButton;
+    private Button? _imagePreviewArrow;
+    private Border? _imagePreviewBorder;
+    private Path? _imagePreviewIcon;
 
     public override void OnApplyTemplate()
     {
@@ -48,6 +74,25 @@ public class DocsFormattingBar : Control
         _h3Button = WireToggle("PART_H3", () => Canvas?.ToggleHeading(3));
         _bulletButton = WireToggle("PART_Bullet", () => Canvas?.ToggleBulletList());
         _quoteButton = WireToggle("PART_Quote", () => Canvas?.ToggleBlockquote());
+
+        _imagePreviewBorder = GetTemplateChild("PART_ImagePreviewBorder") as Border;
+        _imagePreviewButton = GetTemplateChild("PART_ImagePreview") as Button;
+        _imagePreviewArrow = GetTemplateChild("PART_ImagePreviewArrow") as Button;
+        _imagePreviewIcon = GetTemplateChild("PART_ImagePreviewIcon") as Path;
+        if (_imagePreviewButton != null)
+        {
+            _imagePreviewButton.Click += (_, _) =>
+            {
+                Canvas?.CycleImagePreview();
+                Canvas?.Focus();
+                UpdateImagePreviewButton();
+            };
+        }
+        if (_imagePreviewArrow != null)
+        {
+            _imagePreviewArrow.Click += (_, _) => ShowImagePreviewMenu();
+        }
+        UpdateImagePreviewButton();
 
         _themeButton = GetTemplateChild("PART_Theme") as ToggleButton;
         if (_themeButton != null)
@@ -105,6 +150,60 @@ public class DocsFormattingBar : Control
         if (_themeButton.Content is System.Windows.Controls.TextBlock tb)
             tb.Text = isDark ? "☾" : "☀";
         _themeButton.ToolTip = isDark ? "Switch to light theme" : "Switch to dark theme";
+    }
+
+    private void UpdateImagePreviewButton()
+    {
+        if (_imagePreviewBorder == null || Canvas == null) return;
+        var mode = Canvas.CurrentImagePreview;
+        _imagePreviewBorder.ToolTip = mode switch
+        {
+            DocsCanvas.ImagePreviewMode.Inline => "Image Preview: Inline",
+            DocsCanvas.ImagePreviewMode.OnHover => "Image Preview: On Hover",
+            _ => "Image Preview: Off",
+        };
+        if (_imagePreviewIcon != null)
+        {
+            _imagePreviewIcon.Data = mode switch
+            {
+                DocsCanvas.ImagePreviewMode.Inline => IconInline,
+                DocsCanvas.ImagePreviewMode.OnHover => IconOnHover,
+                _ => IconOff,
+            };
+        }
+    }
+
+    private void ShowImagePreviewMenu()
+    {
+        if (Canvas == null || _imagePreviewBorder == null) return;
+        var current = Canvas.CurrentImagePreview;
+        var menu = new ContextMenu();
+
+        foreach (var mode in new[] {
+            DocsCanvas.ImagePreviewMode.Off,
+            DocsCanvas.ImagePreviewMode.Inline,
+            DocsCanvas.ImagePreviewMode.OnHover })
+        {
+            string label = mode switch
+            {
+                DocsCanvas.ImagePreviewMode.Inline => "Inline",
+                DocsCanvas.ImagePreviewMode.OnHover => "On Hover",
+                _ => "Off",
+            };
+            var item = new MenuItem { Header = label, IsChecked = mode == current };
+            var capturedMode = mode;
+            item.Click += (_, _) =>
+            {
+                Canvas?.SetImagePreview(capturedMode);
+                Canvas?.Focus();
+                UpdateImagePreviewButton();
+            };
+            menu.Items.Add(item);
+        }
+
+        menu.PlacementTarget = _imagePreviewBorder;
+        menu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
+        menu.IsOpen = true;
     }
 
     private void UpdateButtonStates()

@@ -137,6 +137,12 @@ public partial class DocsCanvas : FrameworkElement
     private EditMode _editMode = EditMode.Source;
     public EditMode CurrentEditMode => _editMode;
 
+    public enum ImagePreviewMode { Off, Inline, OnHover }
+    private ImagePreviewMode _imagePreview = ImagePreviewMode.Off;
+    public ImagePreviewMode CurrentImagePreview => _imagePreview;
+    private InlineImage? _hoveredImage;
+    private Point _hoverPosition;
+
     public event EventHandler? FormattingChanged;
 
     public string GetText() => _doc.GetText();
@@ -148,6 +154,26 @@ public partial class DocsCanvas : FrameworkElement
     }
 
     public void ToggleTheme() => Theme = Theme == EditorTheme.Light ? EditorTheme.Dark : EditorTheme.Light;
+
+    public void CycleImagePreview()
+    {
+        _imagePreview = _imagePreview switch
+        {
+            ImagePreviewMode.Off => ImagePreviewMode.Inline,
+            ImagePreviewMode.Inline => ImagePreviewMode.OnHover,
+            _ => ImagePreviewMode.Off,
+        };
+        _hoveredImage = null;
+        InvalidateLayout();
+    }
+
+    public void SetImagePreview(ImagePreviewMode mode)
+    {
+        if (_imagePreview == mode) return;
+        _imagePreview = mode;
+        _hoveredImage = null;
+        InvalidateLayout();
+    }
 
     // --- Public formatting API ---
 
@@ -359,6 +385,11 @@ public partial class DocsCanvas : FrameworkElement
     internal void TestSetEditMode(EditMode mode)
     {
         _editMode = mode;
+        InvalidateLayout();
+    }
+    internal void TestSetImagePreview(ImagePreviewMode mode)
+    {
+        _imagePreview = mode;
         InvalidateLayout();
     }
     internal void TestComputeLayout() => ComputeLayout();
@@ -645,6 +676,21 @@ public partial class DocsCanvas : FrameworkElement
         return maxH;
     }
 
+    private double GetSourceInlineImageHeight(VisualLine vl, IReadOnlyList<InlineImage> images)
+    {
+        double totalH = 0;
+        int vlEnd = vl.StartOffset + vl.Length;
+        foreach (var img in images)
+        {
+            if (img.Start >= vl.StartOffset && img.Start < vlEnd)
+            {
+                var (_, h) = GetImageSize(img, _layoutMaxWidth);
+                totalH += h;
+            }
+        }
+        return totalH;
+    }
+
     // --- Layout ---
 
     private void ComputeLayout()
@@ -744,6 +790,12 @@ public partial class DocsCanvas : FrameworkElement
             {
                 double imgH = GetImageMaxLineHeight(vl, map);
                 if (imgH > 0) vl = vl with { OverrideHeight = imgH };
+            }
+            else if (!IsVisual && _imagePreview == ImagePreviewMode.Inline && parsed.Images != null)
+            {
+                double imgH = GetSourceInlineImageHeight(vl, parsed.Images);
+                if (imgH > 0)
+                    vl = vl with { OverrideHeight = GetLineHeight(parsed.Kind) + imgH };
             }
             _visualLines.Add(vl);
             pos += lineLen;
@@ -1116,6 +1168,7 @@ public partial class DocsCanvas : FrameworkElement
         if (!IsMouseCaptured)
         {
             Cursor = IsInScrollbarArea(pos) ? Cursors.Arrow : Cursors.IBeam;
+            UpdateHoverImage(pos);
             return;
         }
 
@@ -1150,6 +1203,61 @@ public partial class DocsCanvas : FrameworkElement
         _isDraggingThumb = false;
         if (IsMouseCaptured)
             ReleaseMouseCapture();
+    }
+
+    protected override void OnMouseLeave(MouseEventArgs e)
+    {
+        base.OnMouseLeave(e);
+        if (_hoveredImage != null)
+        {
+            _hoveredImage = null;
+            InvalidateVisual();
+        }
+    }
+
+    private void UpdateHoverImage(Point pos)
+    {
+        if (IsVisual || _imagePreview != ImagePreviewMode.OnHover || _parsedBlocks == null)
+        {
+            if (_hoveredImage != null) { _hoveredImage = null; InvalidateVisual(); }
+            return;
+        }
+
+        ComputeLayout();
+        double effectiveScroll = _scrollOffset + _smoother.Offset;
+        double hitY = pos.Y + effectiveScroll;
+        int vli = HitTestVisualLine(hitY);
+        if (vli < 0 || vli >= _visualLines.Count)
+        {
+            if (_hoveredImage != null) { _hoveredImage = null; InvalidateVisual(); }
+            return;
+        }
+
+        var vl = _visualLines[vli];
+        var parsed = _parsedBlocks[vl.BlockIndex];
+        if (parsed.Images == null)
+        {
+            if (_hoveredImage != null) { _hoveredImage = null; InvalidateVisual(); }
+            return;
+        }
+
+        int offset = HitTestInVisualLine(vli, pos.X - _padding);
+        InlineImage? found = null;
+        foreach (var img in parsed.Images)
+        {
+            if (offset >= img.Start && offset < img.Start + img.Length)
+            {
+                found = img;
+                break;
+            }
+        }
+
+        if (found != _hoveredImage)
+        {
+            _hoveredImage = found;
+            _hoverPosition = pos;
+            InvalidateVisual();
+        }
     }
 
     // --- Text input ---
@@ -1560,6 +1668,9 @@ public partial class DocsCanvas : FrameworkElement
                         _palette.Foreground, _dpiScale);
                     ApplyInlineStyles(ft, vl, parsed);
                     dc.DrawText(ft, new Point(textX, lineY - effectiveScroll));
+
+                    if (_imagePreview == ImagePreviewMode.Inline && parsed.Images != null)
+                        DrawSourceInlineImages(dc, vl, parsed.Images, lineY, effectiveScroll);
                 }
             }
         }
@@ -1572,6 +1683,9 @@ public partial class DocsCanvas : FrameworkElement
             double lineH = GetEffectiveLineHeight(_visualLines[vli]);
             dc.DrawLine(_palette.CursorPen, new Point(cx, cy), new Point(cx, cy + lineH));
         }
+
+        if (!IsVisual && _imagePreview == ImagePreviewMode.OnHover && _hoveredImage != null)
+            DrawHoverImagePreview(dc);
 
         if (_scrollbarVisible)
             DrawScrollbar(dc);
