@@ -937,4 +937,80 @@ public class DocumentTests
         doc.CursorBlock.Should().Be(0);
         doc.CursorOffset.Should().Be(5);
     }
+
+    [Fact]
+    public void MoveWordRight_SkipsWordThenWhitespace()
+    {
+        var doc = CreateDoc("hello world test");
+        doc.CursorOffset = 0;
+        doc.MoveWordRight();
+        doc.CursorOffset.Should().Be(6);
+    }
+
+    [Fact]
+    public void MoveWordRight_FromMiddleOfWord()
+    {
+        var doc = CreateDoc("hello world");
+        doc.CursorOffset = 2;
+        doc.MoveWordRight();
+        doc.CursorOffset.Should().Be(6);
+    }
+
+    [Fact]
+    public void MoveWordRight_AtEndOfBlock_CrossesToNextBlock()
+    {
+        var doc = CreateDoc("hello", "world");
+        doc.CursorBlock = 0;
+        doc.CursorOffset = 5;
+        doc.MoveWordRight();
+        doc.CursorBlock.Should().Be(1);
+        doc.CursorOffset.Should().Be(0);
+    }
+
+    [Fact]
+    public void MoveWordLeft_SkipsWhitespaceThenWord()
+    {
+        var doc = CreateDoc("hello world test");
+        doc.CursorOffset = 12;
+        doc.MoveWordLeft();
+        doc.CursorOffset.Should().Be(6);
+    }
+
+    [Fact]
+    public void MoveWordLeft_FromMiddleOfWord()
+    {
+        var doc = CreateDoc("hello world");
+        doc.CursorOffset = 8;
+        doc.MoveWordLeft();
+        doc.CursorOffset.Should().Be(6);
+    }
+
+    [Fact]
+    public void MoveWordLeft_AtStartOfBlock_CrossesToPreviousBlock()
+    {
+        var doc = CreateDoc("hello", "world");
+        doc.CursorBlock = 1;
+        doc.CursorOffset = 0;
+        doc.MoveWordLeft();
+        doc.CursorBlock.Should().Be(0);
+        doc.CursorOffset.Should().Be(5);
+    }
+
+    [Fact]
+    public void MoveWordRight_SkipsPunctuation()
+    {
+        var doc = CreateDoc("foo(bar, baz)");
+        doc.CursorOffset = 0;
+        doc.MoveWordRight();
+        doc.CursorOffset.Should().Be(4);
+    }
+
+    [Fact]
+    public void MoveWordLeft_SkipsPunctuation()
+    {
+        var doc = CreateDoc("foo(bar, baz)");
+        doc.CursorOffset = 13;
+        doc.MoveWordLeft();
+        doc.CursorOffset.Should().Be(9);
+    }
 }

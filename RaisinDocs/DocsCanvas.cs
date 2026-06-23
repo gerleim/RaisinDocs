@@ -433,8 +433,8 @@ public partial class DocsCanvas : FrameworkElement
         ComputeLayout();
         switch (key)
         {
-            case Key.Left: HandleLeft(shift); break;
-            case Key.Right: HandleRight(shift); break;
+            case Key.Left: HandleLeft(shift, ctrl); break;
+            case Key.Right: HandleRight(shift, ctrl); break;
             case Key.Up: HandleUp(shift); break;
             case Key.Down: HandleDown(shift); break;
             case Key.Home: HandleHome(shift, ctrl); break;
@@ -1517,20 +1517,58 @@ public partial class DocsCanvas : FrameworkElement
         ResetUndoSealTimer();
     }
 
-    private void HandleLeft(bool shift)
+    private void HandleLeft(bool shift, bool ctrl = false)
     {
         SealAndStopTimer();
-        if (IsVisual) HandleLeftVisual(shift);
-        else HandleLeftSource(shift);
-        if (!shift) _doc.CollapseSelection();
+        if (ctrl)
+        {
+            if (!shift && _doc.HasSelection)
+            {
+                var (sb, so, _, _) = _doc.GetOrderedSelection();
+                _doc.CursorBlock = sb;
+                _doc.CursorOffset = so;
+                _doc.CollapseSelection();
+            }
+            else
+            {
+                _doc.MoveWordLeft();
+            }
+            if (IsVisual) SkipCursorOverHiddenRanges(forward: false);
+            if (!shift) _doc.CollapseSelection();
+        }
+        else
+        {
+            if (IsVisual) HandleLeftVisual(shift);
+            else HandleLeftSource(shift);
+            if (!shift) _doc.CollapseSelection();
+        }
     }
 
-    private void HandleRight(bool shift)
+    private void HandleRight(bool shift, bool ctrl = false)
     {
         SealAndStopTimer();
-        if (IsVisual) HandleRightVisual(shift);
-        else HandleRightSource(shift);
-        if (!shift) _doc.CollapseSelection();
+        if (ctrl)
+        {
+            if (!shift && _doc.HasSelection)
+            {
+                var (_, _, eb, eo) = _doc.GetOrderedSelection();
+                _doc.CursorBlock = eb;
+                _doc.CursorOffset = eo;
+                _doc.CollapseSelection();
+            }
+            else
+            {
+                _doc.MoveWordRight();
+            }
+            if (IsVisual) SkipCursorOverHiddenRanges(forward: true);
+            if (!shift) _doc.CollapseSelection();
+        }
+        else
+        {
+            if (IsVisual) HandleRightVisual(shift);
+            else HandleRightSource(shift);
+            if (!shift) _doc.CollapseSelection();
+        }
     }
 
     private void HandleHome(bool shift, bool ctrl)
@@ -1785,11 +1823,11 @@ public partial class DocsCanvas : FrameworkElement
                 break;
 
             case Key.Left:
-                HandleLeft(shift);
+                HandleLeft(shift, ctrl);
                 break;
 
             case Key.Right:
-                HandleRight(shift);
+                HandleRight(shift, ctrl);
                 break;
 
             case Key.Up:

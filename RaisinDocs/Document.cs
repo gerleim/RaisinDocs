@@ -359,6 +359,35 @@ public class Document
         }
     }
 
+    public void MoveWordLeft()
+    {
+        var text = _blocks[CursorBlock].ToString();
+        int pos = CursorOffset;
+        if (pos == 0)
+        {
+            MoveLeft();
+            return;
+        }
+        while (pos > 0 && !char.IsLetterOrDigit(text[pos - 1])) pos--;
+        while (pos > 0 && char.IsLetterOrDigit(text[pos - 1])) pos--;
+        CursorOffset = pos;
+    }
+
+    public void MoveWordRight()
+    {
+        var text = _blocks[CursorBlock].ToString();
+        int pos = CursorOffset;
+        int len = text.Length;
+        if (pos >= len)
+        {
+            MoveRight();
+            return;
+        }
+        while (pos < len && char.IsLetterOrDigit(text[pos])) pos++;
+        while (pos < len && !char.IsLetterOrDigit(text[pos])) pos++;
+        CursorOffset = pos;
+    }
+
     public void Paste(string text)
     {
         text = text.Replace("\r\n", "\n").Replace("\r", "\n");
