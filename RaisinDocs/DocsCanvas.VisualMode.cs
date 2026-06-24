@@ -546,6 +546,192 @@ public partial class DocsCanvas
         return vl.StartOffset + vl.Length;
     }
 
+    private void ComputeAllTableColumnWidths(double maxWidth)
+    {
+        var seen = new HashSet<TableInfo>();
+        for (int bi = 0; bi < _doc.BlockCount; bi++)
+        {
+            var parsed = _parsedBlocks![bi];
+            if (parsed.Table == null || parsed.TableRow == null) continue;
+            if (!seen.Add(parsed.Table)) continue;
+
+            int colCount = parsed.Table.ColumnCount;
+            var widths = new double[colCount];
+
+            for (int bj = bi; bj < _doc.BlockCount; bj++)
+            {
+                var p = _parsedBlocks[bj];
+                if (p.Table != parsed.Table) break;
+                if (p.IsTableSeparator || p.TableRow == null) continue;
+
+                string text = _doc.GetBlockText(bj);
+                for (int c = 0; c < Math.Min(p.TableRow.Cells.Count, colCount); c++)
+                {
+                    var cell = p.TableRow.Cells[c];
+                    string cellText = text.Substring(cell.Start, cell.Length).Trim();
+                    double w = MeasureStringWidth(cellText, p.Kind, p.Runs, cell.Start);
+                    if (w > widths[c]) widths[c] = w;
+                }
+            }
+
+            for (int c = 0; c < colCount; c++)
+                widths[c] += _tableCellPadding * 2;
+
+            _tableColumnWidths[parsed.Table] = widths;
+        }
+    }
+
+    private void DrawTableBackgrounds(DrawingContext dc, double effectiveScroll,
+        double viewTop, double viewBottom)
+    {
+        int i = 0;
+        while (i < _visualLines.Count)
+        {
+            var vl = _visualLines[i];
+            var parsed = _parsedBlocks![vl.BlockIndex];
+            if (parsed.Table == null || parsed.Kind is not (BlockKind.TableHeaderRow or BlockKind.TableDataRow))
+            {
+                i++;
+                continue;
+            }
+
+            var tableInfo = parsed.Table;
+            int tableStart = i;
+            int tableEnd = i;
+            while (tableEnd < _visualLines.Count)
+            {
+                var p = _parsedBlocks[_visualLines[tableEnd].BlockIndex];
+                if (p.Table != tableInfo) break;
+                tableEnd++;
+            }
+
+            double tableY = _lineYPositions[tableStart];
+            double tableBottom = tableEnd > 0
+                ? _lineYPositions[tableEnd - 1] + GetEffectiveLineHeight(_visualLines[tableEnd - 1])
+                : tableY;
+
+            if (tableBottom >= viewTop && tableY <= viewBottom
+                && _tableColumnWidths.TryGetValue(tableInfo, out var colWidths))
+            {
+                double tableWidth = 0;
+                foreach (var w in colWidths) tableWidth += w;
+                double tableX = _padding;
+                double yTop = tableY - effectiveScroll;
+                double tableH = tableBottom - tableY;
+
+                dc.DrawRectangle(_palette.TableBackground, null,
+                    new Rect(tableX, yTop, tableWidth, tableH));
+
+                double headerH = GetLineHeight(_visualLines[tableStart].BlockKind);
+                dc.DrawRectangle(_palette.TableHeaderBackground, null,
+                    new Rect(tableX, yTop, tableWidth, headerH));
+
+                dc.DrawRectangle(null, _palette.TableBorderPen,
+                    new Rect(tableX, yTop, tableWidth, tableH));
+
+                for (int row = tableStart; row < tableEnd; row++)
+                {
+                    double rowY = _lineYPositions[row] - effectiveScroll;
+                    if (row > tableStart)
+                        dc.DrawLine(_palette.TableBorderPen,
+                            new Point(tableX, rowY), new Point(tableX + tableWidth, rowY));
+                }
+
+                double cx = tableX;
+                for (int c = 0; c < colWidths.Length - 1; c++)
+                {
+                    cx += colWidths[c];
+                    dc.DrawLine(_palette.TableBorderPen,
+                        new Point(cx, yTop), new Point(cx, yTop + tableH));
+                }
+            }
+
+            i = tableEnd;
+        }
+    }
+
+    private void DrawTableRow(DrawingContext dc, VisualLine vl, string blockText,
+        ParsedBlock parsed, double lineY, double effectiveScroll,
+        double fontSize, Typeface baseTypeface)
+    {
+        if (parsed.TableRow == null || parsed.Table == null) return;
+        if (!_tableColumnWidths.TryGetValue(parsed.Table, out var colWidths)) return;
+
+        double x = _padding;
+        double y = lineY - effectiveScroll;
+        double lineH = GetLineHeight(vl.BlockKind);
+        bool isHeader = parsed.Kind == BlockKind.TableHeaderRow;
+
+        for (int c = 0; c < Math.Min(parsed.TableRow.Cells.Count, colWidths.Length); c++)
+        {
+            var cell = parsed.TableRow.Cells[c];
+            string cellText = blockText.Substring(cell.Start, cell.Length).Trim();
+            if (cellText.Length == 0) { x += colWidths[c]; continue; }
+
+            var cellTypeface = isHeader ? _boldTypeface : baseTypeface;
+            var ft = new FormattedText(cellText, CultureInfo.InvariantCulture,
+                FlowDirection.LeftToRight, cellTypeface, fontSize,
+                _palette.Foreground, _dpiScale);
+
+            ApplyInlineStylesForCell(ft, cellText, parsed, cell, blockText);
+
+            var align = parsed.Table.Alignments[c];
+            double cellContentWidth = colWidths[c] - _tableCellPadding * 2;
+            double textX;
+            if (align == ColumnAlignment.Center)
+                textX = x + _tableCellPadding + Math.Max(0, (cellContentWidth - ft.Width) / 2);
+            else if (align == ColumnAlignment.Right)
+                textX = x + _tableCellPadding + Math.Max(0, cellContentWidth - ft.Width);
+            else
+                textX = x + _tableCellPadding;
+
+            var clipRect = new Rect(x, y, colWidths[c], lineH);
+            dc.PushClip(new RectangleGeometry(clipRect));
+            dc.DrawText(ft, new Point(textX, y));
+            dc.Pop();
+
+            x += colWidths[c];
+        }
+    }
+
+    private static void ApplyInlineStylesForCell(FormattedText ft, string cellText,
+        ParsedBlock parsed, TableCellInfo cell, string blockText)
+    {
+        if (parsed.Runs.Count <= 1) return;
+
+        int rawStart = cell.Start;
+        int rawEnd = cell.Start + cell.Length;
+        int leadingTrim = 0;
+        while (rawStart + leadingTrim < rawEnd && blockText[rawStart + leadingTrim] == ' ')
+            leadingTrim++;
+        int contentStart = rawStart + leadingTrim;
+
+        foreach (var run in parsed.Runs)
+        {
+            if (run.Style == InlineStyle.Normal || run.Style == InlineStyle.Image) continue;
+            int runEnd = run.Start + run.Length;
+            if (runEnd <= contentStart || run.Start >= rawEnd) continue;
+
+            int overlapStart = Math.Max(run.Start, contentStart) - contentStart;
+            int overlapEnd = Math.Min(runEnd, rawEnd) - contentStart;
+            int len = Math.Min(overlapEnd - overlapStart, cellText.Length - overlapStart);
+            if (len <= 0 || overlapStart >= cellText.Length) continue;
+
+            switch (run.Style)
+            {
+                case InlineStyle.Bold or InlineStyle.BoldItalic:
+                    ft.SetFontWeight(FontWeights.Bold, overlapStart, len);
+                    break;
+            }
+            if (run.Style is InlineStyle.Italic or InlineStyle.BoldItalic)
+                ft.SetFontStyle(FontStyles.Italic, overlapStart, len);
+            if (run.Style == InlineStyle.Code)
+                ft.SetFontFamily(new FontFamily("Cascadia Mono,Consolas"), overlapStart, len);
+            if (run.Style == InlineStyle.Strikethrough)
+                ft.SetTextDecorations(TextDecorations.Strikethrough, overlapStart, len);
+        }
+    }
+
     private void ClampCursorToTableCell()
     {
         if (_parsedBlocks == null) return;
