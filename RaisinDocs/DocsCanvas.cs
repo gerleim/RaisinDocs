@@ -968,7 +968,7 @@ public partial class DocsCanvas : FrameworkElement
         if (IsVisual && parsed.Table != null && parsed.TableRow != null
             && _tableColumnWidths.TryGetValue(parsed.Table, out var colWidths))
         {
-            return CursorXInTableRow(parsed, colWidths, localOffset);
+            return CursorXInTableRow(vl.BlockIndex, parsed, colWidths, localOffset);
         }
 
         string blockText = _doc.GetBlockText(vl.BlockIndex);
@@ -1009,10 +1009,10 @@ public partial class DocsCanvas : FrameworkElement
         return x;
     }
 
-    private double CursorXInTableRow(ParsedBlock parsed, double[] colWidths, int cursorOffset)
+    private double CursorXInTableRow(int blockIndex, ParsedBlock parsed, double[] colWidths, int cursorOffset)
     {
         var cells = parsed.TableRow!.Cells;
-        string blockText = _doc.GetBlockText(_doc.CursorBlock);
+        string blockText = _doc.GetBlockText(blockIndex);
 
         // find which cell the cursor is in
         double x = 0;
@@ -1791,10 +1791,16 @@ public partial class DocsCanvas : FrameworkElement
         _doc.BeginUndoGroup();
         if (_doc.HasSelection) _doc.DeleteSelection();
 
-        // find last row of this table
         int insertAfter = _doc.CursorBlock;
-        for (int b = insertAfter + 1; b < _doc.BlockCount && _parsedBlocks[b].Table == parsed.Table; b++)
-            insertAfter = b;
+        if (parsed.Kind == BlockKind.TableHeaderRow || parsed.Kind == BlockKind.TableSeparatorRow)
+        {
+            // skip past separator row so new row goes after it
+            for (int b = insertAfter + 1; b < _doc.BlockCount; b++)
+            {
+                if (_parsedBlocks[b].Kind == BlockKind.TableSeparatorRow) { insertAfter = b; continue; }
+                break;
+            }
+        }
 
         _doc.CursorBlock = insertAfter;
         _doc.CursorOffset = _doc.GetBlockLength(insertAfter);
@@ -2420,16 +2426,32 @@ public partial class DocsCanvas : FrameworkElement
             var parsed = _parsedBlocks![vl.BlockIndex];
             var map = IsVisual ? _visualMaps?[vl.BlockIndex] : null;
 
-            double x1 = MeasureRangeWidth(blockText, vl.StartOffset, hlStart - vl.StartOffset,
-                parsed.Runs, parsed.Kind, map);
-            double x2 = MeasureRangeWidth(blockText, vl.StartOffset, hlEnd - vl.StartOffset,
-                parsed.Runs, parsed.Kind, map);
-
-            if (map != null && map.ReplacementPrefix != null && vl.StartOffset == 0)
+            double x1, x2;
+            if (IsVisual && parsed.Table != null && parsed.TableRow != null)
             {
-                double prefixW = MeasureReplacementPrefix(map.ReplacementPrefix!, parsed.Kind);
-                x1 += prefixW;
-                x2 += prefixW;
+                if (_tableColumnWidths.TryGetValue(parsed.Table, out var colWidths))
+                {
+                    x1 = CursorXInTableRow(vl.BlockIndex, parsed, colWidths, hlStart);
+                    x2 = CursorXInTableRow(vl.BlockIndex, parsed, colWidths, hlEnd);
+                }
+                else
+                {
+                    x1 = 0; x2 = 0;
+                }
+            }
+            else
+            {
+                x1 = MeasureRangeWidth(blockText, vl.StartOffset, hlStart - vl.StartOffset,
+                    parsed.Runs, parsed.Kind, map);
+                x2 = MeasureRangeWidth(blockText, vl.StartOffset, hlEnd - vl.StartOffset,
+                    parsed.Runs, parsed.Kind, map);
+
+                if (map != null && map.ReplacementPrefix != null && vl.StartOffset == 0)
+                {
+                    double prefixW = MeasureReplacementPrefix(map.ReplacementPrefix!, parsed.Kind);
+                    x1 += prefixW;
+                    x2 += prefixW;
+                }
             }
 
             bool selectionContinues = Document.ComparePositions(vl.BlockIndex, vlEnd, eb, eo) < 0;
@@ -2438,8 +2460,10 @@ public partial class DocsCanvas : FrameworkElement
             else if (selectionContinues)
                 x2 += 4;
 
-            dc.DrawRectangle(_palette.Selection, null,
-                new Rect(_padding + x1, lineY - effectiveScroll, x2 - x1, lineH));
+            double selW = Math.Max(0, x2 - x1);
+            if (selW > 0)
+                dc.DrawRectangle(_palette.Selection, null,
+                    new Rect(_padding + x1, lineY - effectiveScroll, selW, lineH));
         }
     }
 
