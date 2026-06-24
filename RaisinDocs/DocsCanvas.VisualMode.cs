@@ -202,8 +202,13 @@ public partial class DocsCanvas
                 _doc.CursorBlock = origBlock;
                 _doc.CursorOffset = origOffset;
             }
-            SkipCursorOverHiddenRanges(forward: false);
-            CrossToPreviousBlockIfHiddenStart();
+            if (_parsedBlocks != null && IsTableRow(_parsedBlocks[_doc.CursorBlock]))
+                ClampCursorToTableCell();
+            else
+            {
+                SkipCursorOverHiddenRanges(forward: false);
+                CrossToPreviousBlockIfHiddenStart();
+            }
         }
     }
 
@@ -234,8 +239,13 @@ public partial class DocsCanvas
                 _doc.CursorBlock = origBlock;
                 _doc.CursorOffset = origOffset;
             }
-            SkipCursorOverHiddenRanges(forward: true);
-            CrossToNextBlockIfHiddenEnd();
+            if (_parsedBlocks != null && IsTableRow(_parsedBlocks[_doc.CursorBlock]))
+                ClampCursorToTableCell();
+            else
+            {
+                SkipCursorOverHiddenRanges(forward: true);
+                CrossToNextBlockIfHiddenEnd();
+            }
         }
     }
 
@@ -277,10 +287,10 @@ public partial class DocsCanvas
                         _doc.CursorOffset = cellRanges[c + 1].Start;
                         return true;
                     }
-                    // at end of last cell — cross to next row
+                    // at end of last cell — cross to next row or leave table
                     if (MoveToAdjacentTableRow(parsed, forward: true))
                         return true;
-                    return true;
+                    return MoveOutOfTable(parsed, forward: true);
                 }
             }
             return true;
@@ -304,10 +314,10 @@ public partial class DocsCanvas
                         _doc.CursorOffset = cellRanges[c - 1].End;
                         return true;
                     }
-                    // at start of first cell — cross to previous row
+                    // at start of first cell — cross to previous row or leave table
                     if (MoveToAdjacentTableRow(parsed, forward: false))
                         return true;
-                    return true;
+                    return MoveOutOfTable(parsed, forward: false);
                 }
             }
             return true;
@@ -357,6 +367,39 @@ public partial class DocsCanvas
             }
         }
         return false;
+    }
+
+    private bool MoveOutOfTable(ParsedBlock parsed, bool forward)
+    {
+        if (_parsedBlocks == null || parsed.Table == null) return false;
+
+        if (forward)
+        {
+            for (int b = _doc.CursorBlock + 1; b < _doc.BlockCount; b++)
+            {
+                if (_parsedBlocks[b].Table != parsed.Table)
+                {
+                    _doc.CursorBlock = b;
+                    _doc.CursorOffset = 0;
+                    SkipCursorOverHiddenRanges(forward: true);
+                    return true;
+                }
+            }
+        }
+        else
+        {
+            for (int b = _doc.CursorBlock - 1; b >= 0; b--)
+            {
+                if (_parsedBlocks[b].Table != parsed.Table)
+                {
+                    _doc.CursorBlock = b;
+                    _doc.CursorOffset = _doc.GetBlockLength(b);
+                    SkipCursorOverHiddenRanges(forward: false);
+                    return true;
+                }
+            }
+        }
+        return true;
     }
 
     private void CrossToPreviousBlockIfHiddenStart()

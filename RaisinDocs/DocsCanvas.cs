@@ -978,10 +978,21 @@ public partial class DocsCanvas : FrameworkElement
 
         if (localOffset == 0) return x;
 
+        if (map == null)
+        {
+            string lineText = blockText.Substring(vl.StartOffset, vl.Length);
+            var ft = new FormattedText(lineText, CultureInfo.InvariantCulture,
+                FlowDirection.LeftToRight, GetBlockBaseTypeface(vl.BlockKind),
+                GetBlockFontSize(vl.BlockKind), _palette.Foreground, _dpiScale);
+            ApplyInlineStyles(ft, vl, parsed);
+            var geom = ft.BuildHighlightGeometry(new Point(0, 0), 0, localOffset);
+            return x + (geom != null ? geom.Bounds.Right : ft.WidthIncludingTrailingWhitespace);
+        }
+
         int runIdx = 0;
         for (int i = vl.StartOffset; i < vl.StartOffset + localOffset; i++)
         {
-            if (map != null && map.IsHidden(i))
+            if (map.IsHidden(i))
             {
                 var img = FindImageAtRawOffset(map.Images, i);
                 if (img != null)
@@ -1071,7 +1082,7 @@ public partial class DocsCanvas : FrameworkElement
             int offset = vl.StartOffset + i;
             if (map != null && map.IsHidden(offset))
             {
-                var img = FindImageAtRawOffset(map?.Images, offset);
+                var img = FindImageAtRawOffset(map.Images, offset);
                 if (img != null)
                 {
                     var (imgW, _) = GetImageSize(img.Value, _layoutMaxWidth);

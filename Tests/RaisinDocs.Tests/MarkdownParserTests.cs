@@ -704,4 +704,31 @@ public class MarkdownParserTests
         result[3].Kind.Should().Be(BlockKind.Paragraph);
         result[4].Kind.Should().Be(BlockKind.TableHeaderRow);
     }
+
+    [Fact]
+    public void Table_LastRow_HasSameRunsAsOtherRows()
+    {
+        var result = ParseBlocks(
+            "| Shortcut | Action |",
+            "|---|---|",
+            "| Ctrl+B | Toggle bold |",
+            "| Ctrl+I | Toggle italic |",
+            "| Ctrl+Z | Undo |",
+            "| Ctrl+Y | Redo |",
+            "| Ctrl+X / C / V | Cut / Copy / Paste |",
+            "| Tab | Toggle Source / Visual mode |"
+        );
+
+        // All data rows should have single Normal run (no unexpected styles)
+        for (int i = 2; i < result.Count; i++)
+        {
+            result[i].Kind.Should().Be(BlockKind.TableDataRow, $"block {i}");
+            result[i].Runs.Should().HaveCount(1, $"block {i} should have 1 run");
+            result[i].Runs[0].Style.Should().Be(InlineStyle.Normal, $"block {i} run style");
+        }
+
+        // Last row cells should parse correctly
+        var lastRow = result[7];
+        lastRow.TableRow!.Cells.Should().HaveCount(2);
+    }
 }
