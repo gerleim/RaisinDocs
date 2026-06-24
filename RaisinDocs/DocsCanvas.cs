@@ -1668,6 +1668,7 @@ public partial class DocsCanvas : FrameworkElement
 
         _doc.BeginUndoGroup();
         if (_doc.HasSelection) _doc.DeleteSelection();
+        _doc.CollapseSelection();
 
         int insertAfter = _doc.CursorBlock;
         if (parsed.Kind == BlockKind.TableHeaderRow || parsed.Kind == BlockKind.TableSeparatorRow)
@@ -2126,6 +2127,14 @@ public partial class DocsCanvas : FrameworkElement
 
     private void DrawSelection(DrawingContext dc, double effectiveScroll)
     {
+        var rectSel = TryGetTableRectSelection();
+        if (rectSel != null)
+        {
+            var r = rectSel.Value;
+            DrawTableRectSelection(dc, effectiveScroll, r.StartCol, r.EndCol, r.StartBlock, r.EndBlock, r.Table);
+            return;
+        }
+
         var (sb, so, eb, eo) = _doc.GetOrderedSelection();
         double viewTop = effectiveScroll;
         double viewBottom = effectiveScroll + ActualHeight;

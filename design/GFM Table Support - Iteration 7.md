@@ -128,3 +128,10 @@ Phase 7 (Toolbar)    ── depends on all above
 - **Phase 5**: run TestApp, switch to Visual mode, verify grid rendering
 - **Phase 6**: `dotnet test Tests/RaisinDocs.Tests.UI/` — cursor navigation tests
 - **End-to-end**: test markdown with tables of various sizes, alignments, inline styles in cells, tables adjacent to other block types
+
+## Future Enhancements
+
+- **Column alignment editing**: Right-click context menu on column header to change alignment (Left / Center / Right). Modifies the separator row text — e.g. `---` to `:---:` or `---:` via `RemoveTextAt` + `InsertTextAt` on the separator block.
+- **Rectangular cell selection**: Spreadsheet-like selection of N×M cell areas in visual mode. Copy produces markdown table rows with selected columns only. Paste fills cells from cursor position.
+- **Wide table horizontal scroll**: Tables exceeding viewport width currently clip. Add horizontal scroll support.
+- **Delete row / Delete column**: Context menu or keyboard shortcut to remove rows or columns from a table.

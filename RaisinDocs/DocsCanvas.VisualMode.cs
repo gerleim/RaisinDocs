@@ -460,6 +460,77 @@ public partial class DocsCanvas
             SkipCursorOverHiddenRanges(forward: true);
     }
 
+    // --- Visual mode: rectangular table selection ---
+
+    private void DrawTableRectSelection(DrawingContext dc, double effectiveScroll,
+        int startCol, int endCol, int startBlock, int endBlock, TableInfo table)
+    {
+        if (!_tableColumnWidths.TryGetValue(table, out var colWidths)) return;
+
+        double xStart = 0;
+        for (int c = 0; c < startCol && c < colWidths.Length; c++)
+            xStart += colWidths[c];
+        double xEnd = xStart;
+        for (int c = startCol; c <= endCol && c < colWidths.Length; c++)
+            xEnd += colWidths[c];
+
+        double viewTop = effectiveScroll;
+        double viewBottom = effectiveScroll + ActualHeight;
+
+        for (int i = 0; i < _visualLines.Count; i++)
+        {
+            var vl = _visualLines[i];
+            if (vl.BlockIndex < startBlock || vl.BlockIndex > endBlock) continue;
+            var parsed = _parsedBlocks![vl.BlockIndex];
+            if (parsed.IsTableSeparator) continue;
+
+            double lineY = _lineYPositions[i];
+            double lineH = GetEffectiveLineHeight(vl);
+            if (lineY + lineH < viewTop) continue;
+            if (lineY > viewBottom) break;
+
+            dc.DrawRectangle(_palette.Selection, null,
+                new Rect(_padding + xStart, lineY - effectiveScroll, xEnd - xStart, lineH));
+        }
+    }
+
+    private static int FindCellIndexAtOffset(IReadOnlyList<TableCellInfo> cells, int offset)
+    {
+        for (int c = 0; c < cells.Count; c++)
+        {
+            if (offset <= cells[c].Start + cells[c].Length)
+                return c;
+        }
+        return cells.Count - 1;
+    }
+
+    private (int StartCol, int EndCol, int StartBlock, int EndBlock, TableInfo Table)?
+        TryGetTableRectSelection()
+    {
+        if (!IsVisual || _parsedBlocks == null || !_doc.HasSelection) return null;
+
+        var anchorParsed = _parsedBlocks[_doc.AnchorBlock];
+        var cursorParsed = _parsedBlocks[_doc.CursorBlock];
+
+        if (anchorParsed.Table == null || cursorParsed.Table == null) return null;
+        if (anchorParsed.Table != cursorParsed.Table) return null;
+        if (anchorParsed.TableRow == null || cursorParsed.TableRow == null) return null;
+
+        int anchorCol = FindCellIndexAtOffset(anchorParsed.TableRow.Cells, _doc.AnchorOffset);
+        int cursorCol = FindCellIndexAtOffset(cursorParsed.TableRow.Cells, _doc.CursorOffset);
+
+        if (_doc.AnchorBlock == _doc.CursorBlock && anchorCol == cursorCol)
+            return null;
+
+        return (
+            Math.Min(anchorCol, cursorCol),
+            Math.Max(anchorCol, cursorCol),
+            Math.Min(_doc.AnchorBlock, _doc.CursorBlock),
+            Math.Max(_doc.AnchorBlock, _doc.CursorBlock),
+            anchorParsed.Table
+        );
+    }
+
     private double CursorXInTableRow(int blockIndex, ParsedBlock parsed, double[] colWidths, int cursorOffset)
     {
         var cells = parsed.TableRow!.Cells;
