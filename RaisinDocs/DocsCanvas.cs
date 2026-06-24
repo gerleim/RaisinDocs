@@ -1009,49 +1009,6 @@ public partial class DocsCanvas : FrameworkElement
         return x;
     }
 
-    private double CursorXInTableRow(int blockIndex, ParsedBlock parsed, double[] colWidths, int cursorOffset)
-    {
-        var cells = parsed.TableRow!.Cells;
-        string blockText = _doc.GetBlockText(blockIndex);
-
-        // find which cell the cursor is in
-        double x = 0;
-        for (int c = 0; c < cells.Count && c < colWidths.Length; c++)
-        {
-            var cell = cells[c];
-            int cellEnd = cell.Start + cell.Length;
-            if (cursorOffset >= cell.Start && cursorOffset <= cellEnd)
-            {
-                string cellContent = blockText.Substring(cell.Start, cell.Length).Trim();
-                int leadTrim = 0;
-                while (cell.Start + leadTrim < cellEnd && blockText[cell.Start + leadTrim] == ' ')
-                    leadTrim++;
-
-                int offsetInContent = Math.Clamp(cursorOffset - cell.Start - leadTrim, 0, cellContent.Length);
-                int runIdx = 0;
-                double textW = 0;
-                for (int i = 0; i < offsetInContent; i++)
-                {
-                    var style = GetStyleAtOffset(parsed.Runs, cell.Start + leadTrim + i, ref runIdx);
-                    textW += MeasureCharWidth(cellContent[i], parsed.Kind, style);
-                }
-
-                var align = parsed.Table!.Alignments[c];
-                double cellContentWidth = colWidths[c] - _tableCellPadding * 2;
-                double fullTextW = MeasureStringWidth(cellContent, parsed.Kind, parsed.Runs, cell.Start + leadTrim);
-                double alignOffset = align switch
-                {
-                    ColumnAlignment.Center => Math.Max(0, (cellContentWidth - fullTextW) / 2),
-                    ColumnAlignment.Right => Math.Max(0, cellContentWidth - fullTextW),
-                    _ => 0,
-                };
-                return x + _tableCellPadding + alignOffset + textW;
-            }
-            x += colWidths[c];
-        }
-        return x;
-    }
-
     private int HitTestInVisualLine(int vlIndex, double x)
     {
         var vl = _visualLines[vlIndex];
@@ -1098,50 +1055,6 @@ public partial class DocsCanvas : FrameworkElement
             if (x < accum + charW / 2)
                 return offset;
             accum += charW;
-        }
-        return vl.StartOffset + vl.Length;
-    }
-
-    private int HitTestInTableRow(VisualLine vl, ParsedBlock parsed, double[] colWidths, double x)
-    {
-        var cells = parsed.TableRow!.Cells;
-        string blockText = _doc.GetBlockText(vl.BlockIndex);
-        double cx = 0;
-
-        for (int c = 0; c < cells.Count && c < colWidths.Length; c++)
-        {
-            if (x < cx + colWidths[c] || c == cells.Count - 1 || c == colWidths.Length - 1)
-            {
-                var cell = cells[c];
-                string cellContent = blockText.Substring(cell.Start, cell.Length).Trim();
-                int leadTrim = 0;
-                while (cell.Start + leadTrim < cell.Start + cell.Length && blockText[cell.Start + leadTrim] == ' ')
-                    leadTrim++;
-
-                var align = parsed.Table!.Alignments[c];
-                double cellContentWidth = colWidths[c] - _tableCellPadding * 2;
-                double fullTextW = MeasureStringWidth(cellContent, parsed.Kind, parsed.Runs, cell.Start + leadTrim);
-                double alignOffset = align switch
-                {
-                    ColumnAlignment.Center => Math.Max(0, (cellContentWidth - fullTextW) / 2),
-                    ColumnAlignment.Right => Math.Max(0, cellContentWidth - fullTextW),
-                    _ => 0,
-                };
-
-                double localX = x - cx - _tableCellPadding - alignOffset;
-                double accum = 0;
-                int runIdx = 0;
-                for (int i = 0; i < cellContent.Length; i++)
-                {
-                    var style = GetStyleAtOffset(parsed.Runs, cell.Start + leadTrim + i, ref runIdx);
-                    double charW = MeasureCharWidth(cellContent[i], parsed.Kind, style);
-                    if (localX < accum + charW / 2)
-                        return cell.Start + leadTrim + i;
-                    accum += charW;
-                }
-                return cell.Start + leadTrim + cellContent.Length;
-            }
-            cx += colWidths[c];
         }
         return vl.StartOffset + vl.Length;
     }
