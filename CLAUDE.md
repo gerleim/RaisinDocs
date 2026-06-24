@@ -18,6 +18,9 @@ dotnet test Tests/RaisinDocs.Tests/RaisinDocs.Tests.csproj
 # Run a single test
 dotnet test Tests/RaisinDocs.Tests/RaisinDocs.Tests.csproj --filter "FullyQualifiedName~TestMethodName"
 
+# UI tests
+dotnet test Tests/RaisinDocs.Tests.UI/RaisinDocs.Tests.UI.csproj
+
 # Run test app
 dotnet run --project RaisinDocs.TestApp/RaisinDocs.TestApp.csproj
 ```
@@ -39,12 +42,17 @@ dotnet build RaisinDocs.slnx -p:UseProjectReferences=false
 - **RaisinDocs** — The editor control library (DocsCanvas, Document)
 - **RaisinDocs.TestApp** — WPF app hosting DocsCanvas in AvalonDock with dark theme
 - **Tests/RaisinDocs.Tests** — xUnit v3 + FluentAssertions tests for the Document model
+- **Tests/RaisinDocs.Tests.UI** — xUnit UI tests (DocsCanvas rendering/layout)
 
 ### Key classes
 
-- **DocsCanvas** — Custom `FrameworkElement` handling rendering, input, scrolling, selection, and layout. Renders text via `FormattedText`/`GlyphTypeface` with viewport culling and smooth scrolling. Owns the `Document` instance and delegates all text mutations to it.
+- **DocsCanvas** — Custom `FrameworkElement` handling rendering, input, scrolling, selection, and layout. Renders text via `FormattedText`/`GlyphTypeface` with viewport culling and smooth scrolling. Owns the `Document` instance and delegates all text mutations to it. Split across partial classes:
+  - `DocsCanvas.cs` — core rendering (`OnRender`), layout, measurement, keyboard/mouse input
+  - `DocsCanvas.VisualMode.cs` — visual-mode-only logic: cursor navigation over hidden ranges, table cell navigation/hit-testing/rendering, image rendering
+  - `DocsCanvas.SourceMode.cs` — source-mode-only logic: source cursor navigation, inline image preview
 - **Document** — Testable document model: `List<StringBuilder>` blocks, cursor/anchor positions, text mutations (insert, delete, paste), selection, undo/redo, and navigation. No UI dependencies — all tests target this class.
-- **MarkdownParser** — Static class that classifies blocks (`BlockKind`: paragraph, H1–H6, list item, fenced code) and parses inline styles (`StyledRun`: bold, italic, bold-italic, code). DocsCanvas calls this to drive styled rendering; Document knows nothing about markdown.
+- **MarkdownParser** — Static class that classifies blocks (`BlockKind`: paragraph, H1–H6, list item, fenced code, table rows) and parses inline styles (`StyledRun`: bold, italic, bold-italic, code). DocsCanvas calls this to drive styled rendering; Document knows nothing about markdown.
+- **BlockVisualMap** — Computes hidden ranges for visual mode (markdown syntax characters hidden from display). Used for cursor skip logic and display string building.
 
 ### Key dependencies
 
