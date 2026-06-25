@@ -1699,7 +1699,8 @@ public partial class DocsCanvas : FrameworkElement
         base.OnKeyDown(e);
         bool handled = true;
         bool shift = Keyboard.Modifiers.HasFlag(ModifierKeys.Shift);
-        bool ctrl = Keyboard.Modifiers.HasFlag(ModifierKeys.Control);
+        bool alt = Keyboard.Modifiers.HasFlag(ModifierKeys.Alt);
+        bool ctrl = Keyboard.Modifiers.HasFlag(ModifierKeys.Control) && !alt;
         bool textChanged = false;
 
         ComputeLayout();
