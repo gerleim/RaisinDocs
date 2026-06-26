@@ -72,6 +72,20 @@ public partial class DocsEditor : UserControl
 
     public void MarkClean() => PART_Canvas.MarkClean();
 
+    public DocsEditorState GetState() => new()
+    {
+        Theme = PART_Canvas.Theme,
+        EditMode = PART_Canvas.CurrentEditMode,
+        ImagePreview = PART_Canvas.CurrentImagePreview,
+    };
+
+    public void ApplyState(DocsEditorState state)
+    {
+        Theme = state.Theme;
+        PART_Canvas.SetEditMode(state.EditMode);
+        PART_Canvas.SetImagePreview(state.ImagePreview);
+    }
+
     private static void OnDocumentBasePathChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
     {
         var editor = (DocsEditor)d;

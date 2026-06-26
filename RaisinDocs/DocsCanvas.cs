@@ -191,10 +191,14 @@ public partial class DocsCanvas : FrameworkElement
 
     public void ToggleTheme() => SetCurrentValue(ThemeProperty, Theme == EditorTheme.Light ? EditorTheme.Dark : EditorTheme.Light);
 
-    public void ToggleEditMode()
+    public void ToggleEditMode() =>
+        SetEditMode(_editMode == EditMode.Source ? EditMode.Visual : EditMode.Source);
+
+    public void SetEditMode(EditMode mode)
     {
+        if (_editMode == mode) return;
         SealAndStopTimer();
-        _editMode = _editMode == EditMode.Source ? EditMode.Visual : EditMode.Source;
+        _editMode = mode;
         InvalidateLayout();
         if (IsVisual)
         {

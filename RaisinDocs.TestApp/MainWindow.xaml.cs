@@ -1,4 +1,5 @@
 using System.IO;
+using System.Text.Json;
 using System.Windows;
 using AvalonDock.Themes;
 using Raisin.WPF.Base;
@@ -7,9 +8,11 @@ namespace RaisinDocs.TestApp;
 
 public partial class MainWindow : Window
 {
-    private static readonly string SavePath = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "RaisinDocs", "scratch.md");
+    private static readonly string SaveDir = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "RaisinDocs");
+
+    private static readonly string ContentPath = Path.Combine(SaveDir, "scratch.md");
+    private static readonly string StatePath = Path.Combine(SaveDir, "editor-state.json");
 
     public MainWindow()
     {
@@ -27,14 +30,24 @@ public partial class MainWindow : Window
 
     private void LoadContent()
     {
-        Editor.DocumentBasePath = Path.GetDirectoryName(SavePath)!;
-        if (File.Exists(SavePath))
-            Editor.SetText(File.ReadAllText(SavePath));
+        Editor.DocumentBasePath = Path.GetDirectoryName(ContentPath)!;
+        if (File.Exists(ContentPath))
+            Editor.SetText(File.ReadAllText(ContentPath));
+        if (File.Exists(StatePath))
+        {
+            try
+            {
+                var state = JsonSerializer.Deserialize<DocsEditorState>(File.ReadAllText(StatePath));
+                if (state != null) Editor.ApplyState(state);
+            }
+            catch (JsonException) { }
+        }
     }
 
     private void SaveContent()
     {
-        Directory.CreateDirectory(Path.GetDirectoryName(SavePath)!);
-        File.WriteAllText(SavePath, Editor.GetText());
+        Directory.CreateDirectory(SaveDir);
+        File.WriteAllText(ContentPath, Editor.GetText());
+        File.WriteAllText(StatePath, JsonSerializer.Serialize(Editor.GetState()));
     }
 }
