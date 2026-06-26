@@ -200,6 +200,8 @@ public class DocsFormattingBar : Control
         _editModeButton.ToolTip = isVisual ? "Visual mode (Ctrl+M)" : "Source mode (Ctrl+M)";
         if (_editModeIcon != null)
             _editModeIcon.Data = isVisual ? IconVisual : IconSource;
+        if (_imagePreviewBorder != null)
+            _imagePreviewBorder.IsEnabled = !isVisual;
     }
 
     private void UpdateImagePreviewButton()
