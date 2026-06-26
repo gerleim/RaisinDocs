@@ -106,6 +106,27 @@ public partial class DocsCanvas : FrameworkElement
 
     public event EventHandler? ThemeChanged;
 
+    private static readonly DependencyPropertyKey IsDirtyPropertyKey =
+        DependencyProperty.RegisterReadOnly(nameof(IsDirty), typeof(bool), typeof(DocsCanvas),
+            new PropertyMetadata(false));
+
+    public static readonly DependencyProperty IsDirtyProperty = IsDirtyPropertyKey.DependencyProperty;
+
+    public bool IsDirty
+    {
+        get => (bool)GetValue(IsDirtyProperty);
+        private set
+        {
+            if (value == IsDirty) return;
+            SetValue(IsDirtyPropertyKey, value);
+            IsDirtyChanged?.Invoke(this, EventArgs.Empty);
+        }
+    }
+
+    public event EventHandler? IsDirtyChanged;
+
+    public void MarkClean() => IsDirty = false;
+
     private readonly Document _doc = new();
 
     private bool _cursorVisible = true;
@@ -155,6 +176,7 @@ public partial class DocsCanvas : FrameworkElement
     private InlineImage? _hoveredImage;
     private Point _hoverPosition;
 
+    public event EventHandler? ContentChanged;
     public event EventHandler? FormattingChanged;
     public event EventHandler? EditModeChanged;
 
@@ -163,6 +185,7 @@ public partial class DocsCanvas : FrameworkElement
     public void SetText(string text)
     {
         _doc.SetText(text);
+        IsDirty = false;
         InvalidateLayout();
     }
 
@@ -441,6 +464,46 @@ public partial class DocsCanvas : FrameworkElement
             case Key.End: HandleEnd(shift, ctrl); break;
         }
     }
+    internal void TestSetSelection(int anchorBlock, int anchorOffset, int cursorBlock, int cursorOffset)
+    {
+        _doc.AnchorBlock = anchorBlock;
+        _doc.AnchorOffset = anchorOffset;
+        _doc.CursorBlock = cursorBlock;
+        _doc.CursorOffset = cursorOffset;
+    }
+    internal int TestAnchorBlock => _doc.AnchorBlock;
+    internal int TestAnchorOffset => _doc.AnchorOffset;
+    internal string TestGetBlockText(int block) => _doc.GetBlockText(block);
+    internal (int StartCol, int EndCol, int StartBlock, int EndBlock)?
+        TestTryGetTableRectSelection()
+    {
+        ComputeLayout();
+        var r = TryGetTableRectSelection();
+        if (r == null) return null;
+        return (r.Value.StartCol, r.Value.EndCol, r.Value.StartBlock, r.Value.EndBlock);
+    }
+    internal string? TestGetTableRectSelectedText()
+    {
+        ComputeLayout();
+        var r = TryGetTableRectSelection();
+        if (r == null) return null;
+        return GetTableRectSelectedText(r.Value);
+    }
+    internal bool TestClearTableRectCells()
+    {
+        ComputeLayout();
+        var r = TryGetTableRectSelection();
+        if (r == null) return false;
+        _doc.BeginUndoGroup();
+        ClearTableRectCells(r.Value);
+        _doc.SealUndoGroup();
+        return true;
+    }
+    internal bool TestHandleTableEnter()
+    {
+        ComputeLayout();
+        return HandleTableEnter(out _);
+    }
 
     private readonly DispatcherTimer _undoSealTimer;
     private enum LastActionKind { None, Typing, Deleting }
@@ -471,6 +534,8 @@ public partial class DocsCanvas : FrameworkElement
             _lastAction = LastActionKind.None;
         };
 
+        _doc.ContentChanged += () => { IsDirty = true; ContentChanged?.Invoke(this, EventArgs.Empty); };
+
         Loaded += (_, _) => { EnsureMeasured(); Focus(); };
         IsVisibleChanged += (_, e) =>
         {
@@ -483,6 +548,8 @@ public partial class DocsCanvas : FrameworkElement
     {
         _undoSealTimer.Stop();
         _undoSealTimer.Start();
+        IsDirty = true;
+        ContentChanged?.Invoke(this, EventArgs.Empty);
     }
 
     private void SealAndStopTimer()
@@ -1364,7 +1431,17 @@ public partial class DocsCanvas : FrameworkElement
         }
         _doc.BeginUndoGroup();
 
-        if (_doc.HasSelection) _doc.DeleteSelection();
+        if (_doc.HasSelection)
+        {
+            var rect = TryGetTableRectSelection();
+            if (rect != null)
+            {
+                ClearTableRectCells(rect.Value);
+                MoveCursorToRectStart(rect.Value);
+            }
+            else
+                _doc.DeleteSelection();
+        }
 
         foreach (char c in e.Text)
         {
@@ -1393,7 +1470,11 @@ public partial class DocsCanvas : FrameworkElement
         _doc.BeginUndoGroup();
         if (_doc.HasSelection)
         {
-            _doc.DeleteSelection();
+            var rect = TryGetTableRectSelection();
+            if (rect != null)
+                ClearTableRectCells(rect.Value);
+            else
+                _doc.DeleteSelection();
             textChanged = true;
         }
         else if (IsVisual) textChanged = HandleBackVisual();
@@ -1412,7 +1493,11 @@ public partial class DocsCanvas : FrameworkElement
         _doc.BeginUndoGroup();
         if (_doc.HasSelection)
         {
-            _doc.DeleteSelection();
+            var rect = TryGetTableRectSelection();
+            if (rect != null)
+                ClearTableRectCells(rect.Value);
+            else
+                _doc.DeleteSelection();
             textChanged = true;
         }
         else if (IsVisual) textChanged = HandleDeleteVisual();
@@ -1769,7 +1854,11 @@ public partial class DocsCanvas : FrameworkElement
             case Key.C:
                 if (ctrl && _doc.HasSelection)
                 {
-                    try { Clipboard.SetText(_doc.GetSelectedText()); }
+                    var rectC = TryGetTableRectSelection();
+                    string copyText = rectC != null
+                        ? GetTableRectSelectedText(rectC.Value)
+                        : _doc.GetSelectedText();
+                    try { Clipboard.SetText(copyText); }
                     catch { }
                 }
                 else handled = false;
@@ -1779,10 +1868,17 @@ public partial class DocsCanvas : FrameworkElement
                 if (ctrl && _doc.HasSelection)
                 {
                     SealAndStopTimer();
-                    try { Clipboard.SetText(_doc.GetSelectedText()); }
+                    var rectX = TryGetTableRectSelection();
+                    string cutText = rectX != null
+                        ? GetTableRectSelectedText(rectX.Value)
+                        : _doc.GetSelectedText();
+                    try { Clipboard.SetText(cutText); }
                     catch { }
                     _doc.BeginUndoGroup();
-                    _doc.DeleteSelection();
+                    if (rectX != null)
+                        ClearTableRectCells(rectX.Value);
+                    else
+                        _doc.DeleteSelection();
                     _doc.SealUndoGroup();
                     textChanged = true;
                 }

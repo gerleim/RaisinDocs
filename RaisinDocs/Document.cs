@@ -27,6 +27,8 @@ public class Document
     public bool CanUndo => _currentGroupStart != null || _undoStack.Count > 0;
     public bool CanRedo => _redoStack.Count > 0;
 
+    public event Action? ContentChanged;
+
     private DocumentSnapshot CaptureSnapshot()
     {
         var blocks = new string[_blocks.Count];
@@ -77,6 +79,7 @@ public class Document
                 for (int i = MaxUndoDepth - 1; i >= 0; i--)
                     _undoStack.Push(keep[i]);
             }
+            ContentChanged?.Invoke();
         }
         _currentGroupStart = null;
     }
@@ -87,6 +90,7 @@ public class Document
         if (_undoStack.Count == 0) return false;
         _redoStack.Push(CaptureSnapshot());
         RestoreSnapshot(_undoStack.Pop());
+        ContentChanged?.Invoke();
         return true;
     }
 
@@ -96,6 +100,7 @@ public class Document
         if (_redoStack.Count == 0) return false;
         _undoStack.Push(CaptureSnapshot());
         RestoreSnapshot(_redoStack.Pop());
+        ContentChanged?.Invoke();
         return true;
     }
 

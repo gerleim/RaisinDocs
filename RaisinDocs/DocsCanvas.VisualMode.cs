@@ -494,6 +494,68 @@ public partial class DocsCanvas
         }
     }
 
+    private string GetTableRectSelectedText(
+        (int StartCol, int EndCol, int StartBlock, int EndBlock, TableInfo Table) rect)
+    {
+        var lines = new List<string>();
+        for (int b = rect.StartBlock; b <= rect.EndBlock; b++)
+        {
+            var parsed = _parsedBlocks![b];
+            if (parsed.IsTableSeparator || parsed.TableRow == null) continue;
+
+            string blockText = _doc.GetBlockText(b);
+            var cells = parsed.TableRow.Cells;
+            var cellTexts = new List<string>();
+            for (int c = rect.StartCol; c <= rect.EndCol && c < cells.Count; c++)
+            {
+                var cell = cells[c];
+                cellTexts.Add(blockText.Substring(cell.Start, cell.Length).Trim());
+            }
+            lines.Add("| " + string.Join(" | ", cellTexts) + " |");
+        }
+        return string.Join("\r\n", lines);
+    }
+
+    private void ClearTableRectCells(
+        (int StartCol, int EndCol, int StartBlock, int EndBlock, TableInfo Table) rect)
+    {
+        for (int b = rect.StartBlock; b <= rect.EndBlock; b++)
+        {
+            var parsed = _parsedBlocks![b];
+            if (parsed.IsTableSeparator || parsed.TableRow == null) continue;
+
+            var cells = parsed.TableRow.Cells;
+            for (int c = Math.Min(rect.EndCol, cells.Count - 1); c >= rect.StartCol; c--)
+            {
+                var cell = cells[c];
+                _doc.RemoveTextAt(b, cell.Start, cell.Length);
+                _doc.InsertTextAt(b, cell.Start, " ");
+            }
+        }
+        _doc.CollapseSelection();
+    }
+
+    private void MoveCursorToRectStart(
+        (int StartCol, int EndCol, int StartBlock, int EndBlock, TableInfo Table) rect)
+    {
+        for (int b = rect.StartBlock; b <= rect.EndBlock; b++)
+        {
+            var parsed = _parsedBlocks![b];
+            if (parsed.IsTableSeparator || parsed.TableRow == null) continue;
+            if (rect.StartCol < parsed.TableRow.Cells.Count)
+            {
+                var cell = parsed.TableRow.Cells[rect.StartCol];
+                string blockText = _doc.GetBlockText(b);
+                int s = cell.Start;
+                while (s < cell.Start + cell.Length && blockText[s] == ' ') s++;
+                _doc.CursorBlock = b;
+                _doc.CursorOffset = s;
+                _doc.CollapseSelection();
+                return;
+            }
+        }
+    }
+
     private static int FindCellIndexAtOffset(IReadOnlyList<TableCellInfo> cells, int offset)
     {
         for (int c = 0; c < cells.Count; c++)
