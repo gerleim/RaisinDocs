@@ -529,7 +529,7 @@ public partial class DocsCanvas
             {
                 var cell = cells[c];
                 _doc.RemoveTextAt(b, cell.Start, cell.Length);
-                _doc.InsertTextAt(b, cell.Start, " ");
+                _doc.InsertTextAt(b, cell.Start, "  ");
             }
         }
         _doc.CollapseSelection();

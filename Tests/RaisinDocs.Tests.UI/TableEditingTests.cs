@@ -104,14 +104,14 @@ public class TableEditingTests
     // --- ClearTableRectCells ---
 
     [StaFact]
-    public void ClearCells_ReplacesWithSingleSpace()
+    public void ClearCells_ReplacesWithTwoSpaces()
     {
         var canvas = CreateCanvas(TestTable);
         // Select Action column across both data rows
         canvas.TestSetSelection(2, 10, 3, 10);
         canvas.TestClearTableRectCells().Should().BeTrue();
-        canvas.TestGetBlockText(2).Should().Be("| Ctrl+B | |");
-        canvas.TestGetBlockText(3).Should().Be("| Ctrl+I | |");
+        canvas.TestGetBlockText(2).Should().Be("| Ctrl+B |  |");
+        canvas.TestGetBlockText(3).Should().Be("| Ctrl+I |  |");
     }
 
     [StaFact]
@@ -121,8 +121,8 @@ public class TableEditingTests
         // Select Shortcut column across both data rows
         canvas.TestSetSelection(2, 2, 3, 2);
         canvas.TestClearTableRectCells().Should().BeTrue();
-        canvas.TestGetBlockText(2).Should().Be("| | Toggle bold |");
-        canvas.TestGetBlockText(3).Should().Be("| | Toggle italic |");
+        canvas.TestGetBlockText(2).Should().Be("|  | Toggle bold |");
+        canvas.TestGetBlockText(3).Should().Be("|  | Toggle italic |");
     }
 
     // --- HandleTableEnter ---
