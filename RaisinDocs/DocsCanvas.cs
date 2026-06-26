@@ -189,7 +189,7 @@ public partial class DocsCanvas : FrameworkElement
         InvalidateLayout();
     }
 
-    public void ToggleTheme() => Theme = Theme == EditorTheme.Light ? EditorTheme.Dark : EditorTheme.Light;
+    public void ToggleTheme() => SetCurrentValue(ThemeProperty, Theme == EditorTheme.Light ? EditorTheme.Dark : EditorTheme.Light);
 
     public void ToggleEditMode()
     {

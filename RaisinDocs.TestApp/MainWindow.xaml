@@ -15,15 +15,17 @@
                 <avalonDock:LayoutPanel Orientation="Horizontal">
                     <avalonDock:LayoutDocumentPane>
                         <avalonDock:LayoutDocument Title="Document 1" CanClose="False">
-                            <DockPanel>
-                                <docs:DocsFormattingBar DockPanel.Dock="Top"
-                                                        Canvas="{Binding ElementName=Canvas}"
-                                                        Background="#2D2D2D"
-                                                        BorderBrush="#3F3F3F"
-                                                        BorderThickness="0,0,0,1"
-                                                        Foreground="#D4D4D4" />
-                                <docs:DocsCanvas x:Name="Canvas" />
-                            </DockPanel>
+                            <docs:DocsEditor x:Name="Editor">
+                                <docs:DocsEditor.Resources>
+                                    <Style TargetType="docs:DocsFormattingBar"
+                                           BasedOn="{StaticResource {x:Type docs:DocsFormattingBar}}">
+                                        <Setter Property="Background" Value="#2D2D2D" />
+                                        <Setter Property="Foreground" Value="#D4D4D4" />
+                                        <Setter Property="BorderBrush" Value="#3F3F3F" />
+                                        <Setter Property="BorderThickness" Value="0,0,0,1" />
+                                    </Style>
+                                </docs:DocsEditor.Resources>
+                            </docs:DocsEditor>
                         </avalonDock:LayoutDocument>
                     </avalonDock:LayoutDocumentPane>
                 </avalonDock:LayoutPanel>

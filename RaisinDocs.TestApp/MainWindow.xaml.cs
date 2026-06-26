@@ -27,14 +27,14 @@ public partial class MainWindow : Window
 
     private void LoadContent()
     {
-        Canvas.DocumentBasePath = Path.GetDirectoryName(SavePath)!;
+        Editor.DocumentBasePath = Path.GetDirectoryName(SavePath)!;
         if (File.Exists(SavePath))
-            Canvas.SetText(File.ReadAllText(SavePath));
+            Editor.SetText(File.ReadAllText(SavePath));
     }
 
     private void SaveContent()
     {
         Directory.CreateDirectory(Path.GetDirectoryName(SavePath)!);
-        File.WriteAllText(SavePath, Canvas.GetText());
+        File.WriteAllText(SavePath, Editor.GetText());
     }
 }
