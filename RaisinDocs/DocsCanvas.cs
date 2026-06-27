@@ -22,7 +22,7 @@ public partial class DocsCanvas : FrameworkElement
     private const double ScrollBarWidth = 14;
     private const double ScrollBarMinThumb = 20;
 
-    public enum EditorTheme { Light, Dark }
+    public enum EditorTheme { Light, Dark, DarkBlue }
 
     private sealed record ThemePalette(
         Brush Background, Brush Foreground, Pen CursorPen,
@@ -32,6 +32,7 @@ public partial class DocsCanvas : FrameworkElement
 
     private static readonly ThemePalette _lightPalette;
     private static readonly ThemePalette _darkPalette;
+    private static readonly ThemePalette _darkBluePalette;
     private ThemePalette _palette = _lightPalette!;
 
     private static readonly double[] _headingFontSizes = [32, 26, 22, 18, 16, 14];
@@ -63,6 +64,19 @@ public partial class DocsCanvas : FrameworkElement
             tableBg: Color.FromArgb(15, 255, 255, 255),
             tableHeaderBg: Color.FromArgb(30, 255, 255, 255),
             tableBorder: Color.FromArgb(60, 255, 255, 255));
+
+        _darkBluePalette = BuildPalette(
+            background: Color.FromRgb(13, 17, 23),
+            foreground: Color.FromRgb(212, 212, 212),
+            cursor: Colors.White,
+            selection: Color.FromArgb(100, 30, 60, 120),
+            scrollTrack: Color.FromArgb(30, 140, 160, 255),
+            scrollThumb: Color.FromArgb(120, 100, 120, 180),
+            syntax: Color.FromArgb(180, 90, 100, 130),
+            codeBackground: Color.FromArgb(25, 100, 140, 255),
+            tableBg: Color.FromArgb(15, 100, 140, 255),
+            tableHeaderBg: Color.FromArgb(30, 100, 140, 255),
+            tableBorder: Color.FromArgb(60, 100, 140, 255));
     }
 
     private static ThemePalette BuildPalette(
@@ -100,7 +114,12 @@ public partial class DocsCanvas : FrameworkElement
     private static void OnThemePropertyChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
     {
         var canvas = (DocsCanvas)d;
-        canvas._palette = canvas.Theme == EditorTheme.Dark ? _darkPalette : _lightPalette;
+        canvas._palette = canvas.Theme switch
+        {
+            EditorTheme.Dark => _darkPalette,
+            EditorTheme.DarkBlue => _darkBluePalette,
+            _ => _lightPalette,
+        };
         canvas.ThemeChanged?.Invoke(canvas, EventArgs.Empty);
     }
 
@@ -189,7 +208,12 @@ public partial class DocsCanvas : FrameworkElement
         InvalidateLayout();
     }
 
-    public void ToggleTheme() => SetCurrentValue(ThemeProperty, Theme == EditorTheme.Light ? EditorTheme.Dark : EditorTheme.Light);
+    public void ToggleTheme() => SetCurrentValue(ThemeProperty, Theme switch
+    {
+        EditorTheme.Light => EditorTheme.Dark,
+        EditorTheme.Dark => EditorTheme.DarkBlue,
+        _ => EditorTheme.Light,
+    });
 
     public void ToggleEditMode() =>
         SetEditMode(_editMode == EditMode.Source ? EditMode.Visual : EditMode.Source);

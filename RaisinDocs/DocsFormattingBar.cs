@@ -33,6 +33,45 @@ public class DocsFormattingBar : Control
         "M1,7 C3.5,2 12.5,2 15,7 C12.5,12 3.5,12 1,7 Z " +
         "M8,5 A2,2,0,1,1,7.99,5");
 
+    // Bullet list: three horizontal lines with dots
+    private static readonly Geometry IconBullet = Geometry.Parse(
+        "M2,3 A1.5,1.5,0,1,1,1.99,3 Z M5.5,2 H14 V4 H5.5 Z " +
+        "M2,7.5 A1.5,1.5,0,1,1,1.99,7.5 Z M5.5,6.5 H14 V8.5 H5.5 Z " +
+        "M2,12 A1.5,1.5,0,1,1,1.99,12 Z M5.5,11 H14 V13 H5.5 Z");
+
+    // Blockquote: opening quote mark
+    private static readonly Geometry IconQuote = Geometry.Parse(
+        "M2,9 C2,5.5 4,3 7,2 L7,3.5 C5,4.5 4.2,6 4,7.5 L6.5,7.5 V12 H2 Z " +
+        "M9,9 C9,5.5 11,3 14,2 L14,3.5 C12,4.5 11.2,6 11,7.5 L13.5,7.5 V12 H9 Z");
+
+    // Dropdown arrow: small chevron down
+    private static readonly Geometry IconDropdownArrow = Geometry.Parse(
+        "M3,5 L8,10 L13,5");
+
+    // Sun icon for light theme (filled shapes only — no stroke)
+    private static readonly Geometry IconSun = Geometry.Parse(
+        "M8,3.5 A4,4,0,1,1,7.99,3.5 Z " +
+        "M7.2,0 H8.8 V2.2 H7.2 Z M7.2,13.8 H8.8 V16 H7.2 Z " +
+        "M0,7.2 V8.8 H2.2 V7.2 Z M13.8,7.2 V8.8 H16 V7.2 Z " +
+        "M1.6,1.2 L2.8,1.2 L4,3.6 L2.8,4 Z " +
+        "M13.2,1.2 L14.4,1.2 L13.2,4 L12,3.6 Z " +
+        "M1.6,14.8 L2.8,12 L4,12.4 L2.8,14.8 Z " +
+        "M12,12.4 L13.2,12 L14.4,14.8 L13.2,14.8 Z");
+
+    // Full moon with craters (EvenOdd cuts holes) — asymmetric layout to avoid smiley face
+    private static readonly Geometry IconMoon = Geometry.Parse(
+        "M8,1 A6,6,0,1,1,7.99,1 Z " +
+        "M6.5,4 A1.4,1.4,0,1,1,6.49,4 Z " +
+        "M10.5,8 A1,1,0,1,1,10.49,8 Z " +
+        "M7,10.5 A0.7,0.7,0,1,1,6.99,10.5 Z " +
+        "M9,5.5 A0.6,0.6,0,1,1,8.99,5.5 Z");
+
+    // Crescent moon (C-shape) icon for dark-blue theme — outer circle (7,7) r=6, inner circle (10,7) r=5
+    private static readonly Geometry IconCrescent = Geometry.Parse(
+        "M10.3,2 A6,6,0,1,0,10.3,12 A5,5,0,0,1,10.3,2 Z");
+
+    private static readonly Brush CrescentBrush = new SolidColorBrush(Color.FromRgb(100, 149, 237));
+
     static DocsFormattingBar()
     {
         IconOff.Freeze();
@@ -40,6 +79,13 @@ public class DocsFormattingBar : Control
         IconOnHover.Freeze();
         IconSource.Freeze();
         IconVisual.Freeze();
+        IconBullet.Freeze();
+        IconQuote.Freeze();
+        IconDropdownArrow.Freeze();
+        IconSun.Freeze();
+        IconMoon.Freeze();
+        IconCrescent.Freeze();
+        CrescentBrush.Freeze();
 
         DefaultStyleKeyProperty.OverrideMetadata(typeof(DocsFormattingBar),
             new FrameworkPropertyMetadata(typeof(DocsFormattingBar)));
@@ -68,6 +114,9 @@ public class DocsFormattingBar : Control
     private ToggleButton? _themeButton;
     private ToggleButton? _editModeButton;
     private Path? _editModeIcon;
+    private Path? _themeIcon;
+    private Path? _bulletIcon;
+    private Path? _quoteIcon;
     private Button? _imagePreviewButton;
     private Button? _imagePreviewArrow;
     private Border? _imagePreviewBorder;
@@ -86,7 +135,11 @@ public class DocsFormattingBar : Control
         _h2Button = WireToggle("PART_H2", () => Canvas?.ToggleHeading(2));
         _h3Button = WireToggle("PART_H3", () => Canvas?.ToggleHeading(3));
         _bulletButton = WireToggle("PART_Bullet", () => Canvas?.ToggleBulletList());
+        _bulletIcon = GetTemplateChild("PART_BulletIcon") as Path;
+        if (_bulletIcon != null) _bulletIcon.Data = IconBullet;
         _quoteButton = WireToggle("PART_Quote", () => Canvas?.ToggleBlockquote());
+        _quoteIcon = GetTemplateChild("PART_QuoteIcon") as Path;
+        if (_quoteIcon != null) _quoteIcon.Data = IconQuote;
 
         var insertTableButton = GetTemplateChild("PART_InsertTable") as Button;
         if (insertTableButton != null)
@@ -131,6 +184,8 @@ public class DocsFormattingBar : Control
         UpdateImagePreviewButton();
 
         _themeButton = GetTemplateChild("PART_Theme") as ToggleButton;
+        _themeIcon = GetTemplateChild("PART_ThemeIcon") as Path;
+        if (_themeIcon != null && _themeIcon.Data == null) _themeIcon.Data = IconSun;
         if (_themeButton != null)
         {
             _themeButton.Click += (_, _) =>
@@ -185,11 +240,27 @@ public class DocsFormattingBar : Control
     private void UpdateThemeButton()
     {
         if (_themeButton == null || Canvas == null) return;
-        bool isDark = Canvas.Theme == DocsCanvas.EditorTheme.Dark;
-        SetCheckedSilent(_themeButton, isDark);
-        if (_themeButton.Content is System.Windows.Controls.TextBlock tb)
-            tb.Text = isDark ? "☾" : "☀";
-        _themeButton.ToolTip = isDark ? "Switch to light theme" : "Switch to dark theme";
+        var theme = Canvas.Theme;
+        SetCheckedSilent(_themeButton, theme != DocsCanvas.EditorTheme.Light);
+        if (_themeIcon != null)
+        {
+            _themeIcon.Data = theme switch
+            {
+                DocsCanvas.EditorTheme.Dark => IconMoon,
+                DocsCanvas.EditorTheme.DarkBlue => IconCrescent,
+                _ => IconSun,
+            };
+            if (theme == DocsCanvas.EditorTheme.DarkBlue)
+                _themeIcon.SetValue(Shape.FillProperty, CrescentBrush);
+            else
+                _themeIcon.ClearValue(Shape.FillProperty);
+        }
+        _themeButton.ToolTip = theme switch
+        {
+            DocsCanvas.EditorTheme.Light => "Switch to dark theme",
+            DocsCanvas.EditorTheme.Dark => "Switch to dark blue theme",
+            _ => "Switch to light theme",
+        };
     }
 
     private void UpdateEditModeButton()

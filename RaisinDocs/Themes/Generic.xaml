@@ -158,11 +158,15 @@
 
                             <ToggleButton x:Name="PART_Bullet" Style="{StaticResource FormattingToggle}"
                                           ToolTip="Bullet list">
-                                <TextBlock Text="&#x2022;" FontSize="16" />
+                                <Path x:Name="PART_BulletIcon"
+                                      Width="14" Height="14" Stretch="Uniform"
+                                      Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=local:DocsFormattingBar}}" />
                             </ToggleButton>
                             <ToggleButton x:Name="PART_Quote" Style="{StaticResource FormattingToggle}"
                                           ToolTip="Blockquote">
-                                <TextBlock Text="&#x201C;" FontSize="18" FontWeight="Bold" Margin="0,-4,0,0" />
+                                <Path x:Name="PART_QuoteIcon"
+                                      Width="14" Height="14" Stretch="Uniform"
+                                      Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=local:DocsFormattingBar}}" />
                             </ToggleButton>
                             <Button x:Name="PART_InsertTable" Style="{StaticResource FormattingButton}"
                                     ToolTip="Insert table">
@@ -196,7 +200,10 @@
                                     <Border Width="1" Background="#40000000" Margin="0,4" />
                                     <Button x:Name="PART_ImagePreviewArrow" Style="{StaticResource SplitButtonPart}"
                                             Padding="2,2,4,2">
-                                        <TextBlock Text="&#x25BE;" FontSize="10" Margin="0,-1,0,0" />
+                                        <Path Width="10" Height="10" Stretch="Uniform"
+                                              Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=local:DocsFormattingBar}}"
+                                              StrokeThickness="1.5" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
+                                              Data="M3,5 L8,10 L13,5" />
                                     </Button>
                                 </StackPanel>
                             </Border>
@@ -205,7 +212,9 @@
 
                             <ToggleButton x:Name="PART_Theme" Style="{StaticResource FormattingToggle}"
                                           ToolTip="Switch to dark theme">
-                                <TextBlock Text="&#x2600;" FontSize="14" />
+                                <Path x:Name="PART_ThemeIcon"
+                                      Width="14" Height="14" Stretch="Uniform"
+                                      Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=local:DocsFormattingBar}}" />
                             </ToggleButton>
                         </StackPanel>
                     </Border>
