@@ -18,6 +18,7 @@ RaisinDocs is none of these. It renders text directly with `FormattedText` and `
 
 - **Source and Visual modes** — toggle between raw markdown syntax and a WYSIWYG view that hides markers and shows styled text
 - **CommonMark 0.31.2** — headings, bold, italic, bold-italic, strikethrough, inline code, fenced code blocks, bullet lists, blockquotes
+- **GFM tables** — pipe-delimited tables with cell navigation, rectangular selection, row/column insert/delete
 - **Inline images** — `![alt](url)` with async loading from local files and HTTP URLs, scale-to-fit, placeholders for missing images
 - **Image Preview in Source mode** — three modes (Off / Inline / On Hover) via a split button on the formatting bar
 - **Undo / redo** — VS Code-style grouping with 600ms timer, Ctrl+Z / Ctrl+Y
@@ -33,14 +34,20 @@ RaisinDocs is none of these. It renders text directly with `FormattedText` and `
 
 ```xml
 <Window xmlns:docs="clr-namespace:RaisinDocs;assembly=RaisinDocs">
-    <DockPanel>
-        <docs:DocsFormattingBar DockPanel.Dock="Top"
-                                Canvas="{Binding ElementName=Editor}"
-                                Background="#2D2D2D"
-                                Foreground="#D4D4D4" />
-        <docs:DocsCanvas x:Name="Editor" />
-    </DockPanel>
+    <docs:DocsEditor x:Name="Editor" ShowToolbar="True" />
 </Window>
+```
+
+`DocsEditor` wraps the canvas and formatting bar into a single control. Set `ShowToolbar="False"` to hide the toolbar.
+
+For custom toolbar placement, compose the parts manually instead:
+
+```xml
+<DockPanel>
+    <docs:DocsFormattingBar DockPanel.Dock="Top"
+                            Canvas="{Binding ElementName=Canvas}" />
+    <docs:DocsCanvas x:Name="Canvas" />
+</DockPanel>
 ```
 
 ### Code-behind
@@ -55,9 +62,13 @@ File.WriteAllText("document.md", Editor.GetText());
 
 // Theme
 Editor.Theme = DocsCanvas.EditorTheme.Dark;
-```
 
-The formatting bar is optional — `DocsCanvas` works standalone. Bind the bar's `Canvas` property to your canvas instance and it picks up all formatting state automatically.
+// Persist and restore editor state (theme, edit mode, image preview)
+var state = Editor.GetState();
+File.WriteAllText("state.json", JsonSerializer.Serialize(state));
+// ... later ...
+Editor.ApplyState(JsonSerializer.Deserialize<DocsEditorState>(json));
+```
 
 ### Keyboard shortcuts
 
@@ -65,10 +76,10 @@ The formatting bar is optional — `DocsCanvas` works standalone. Bind the bar's
 |---|---|
 | Ctrl+B | Toggle bold |
 | Ctrl+I | Toggle italic |
+| Ctrl+M | Toggle Source / Visual mode |
 | Ctrl+Z | Undo |
 | Ctrl+Y | Redo |
 | Ctrl+X / C / V | Cut / Copy / Paste |
-| Tab | Toggle Source / Visual mode |
 
 ## Requirements
 
