@@ -148,7 +148,7 @@ A trailing `\` is a hard break only when:
 - Click checkbox to toggle checked state, with undo support
 - Toolbar button to insert/toggle task list item
 
-### 9 — Inline links
+### 9 — Inline links ✅
 - See `design/Inline Links - Iteration 9.md` for detailed plan
 - CommonMark inline link syntax: `[text](url)` with optional title
 - Parser detects bracket/paren structure (reuses image parsing helpers), assigns InlineStyle.Link
@@ -165,7 +165,7 @@ A trailing `\` is a hard break only when:
 - Extended autolinks — bare URLs auto-linked without `<>` syntax (follow-on to iteration 9)
 
 ### Future
-- ~~Links (clickable in view mode, editable syntax in edit mode)~~ — planned as iteration 9
+- ~~Links (clickable in view mode, editable syntax in edit mode)~~ — ✅ implemented in iteration 9
 - Motion blur during smooth scroll (ghost copies offset in scroll direction, like RaisinTerminal2)
 - Image display sizing: GFM has no sizing syntax; options include inline HTML (`<img src="url" width="300">`), Obsidian-style pipe syntax (`![alt|300](url)`), or visual drag-resize that auto-generates markup. Typora's drag-to-resize UX is the gold standard. Could also auto-downscale pasted images to reduce file size.
 - Reference-style images (`![alt][ref]` with `[ref]: url "title"` definitions)

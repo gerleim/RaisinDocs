@@ -20,6 +20,7 @@ RaisinDocs is none of these. It renders text directly with `FormattedText` and `
 - **CommonMark 0.31.2** — headings, bold, italic, bold-italic, strikethrough, inline code, fenced code blocks, bullet lists, blockquotes, hard/soft line breaks
 - **GFM tables** — pipe-delimited tables with cell navigation, rectangular selection, row/column insert/delete
 - **GFM task lists** — `- [ ]` / `- [x]` checkboxes with click-to-toggle in visual mode
+- **Inline links** — `[text](url)` with blue underline styling, Ctrl+Click to open, URL tooltip on hover
 - **Inline images** — `![alt](url)` with async loading from local files and HTTP URLs, scale-to-fit, placeholders for missing images
 - **Image Preview in Source mode** — three modes (Off / Inline / On Hover) via a split button on the formatting bar
 - **Undo / redo** — VS Code-style grouping with 600ms timer, Ctrl+Z / Ctrl+Y
@@ -80,6 +81,7 @@ Editor.ApplyState(JsonSerializer.Deserialize<DocsEditorState>(json));
 | Ctrl+M | Toggle Source / Visual mode |
 | Ctrl+Z | Undo |
 | Ctrl+Y | Redo |
+| Ctrl+K | Insert link |
 | Shift+Enter | Hard line break (visible `\` marker) |
 | Ctrl+Enter | Soft break (single newline, no marker) |
 | Ctrl+X / C / V | Cut / Copy / Paste |
