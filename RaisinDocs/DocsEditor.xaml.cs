@@ -77,6 +77,8 @@ public partial class DocsEditor : UserControl
         Theme = PART_Canvas.Theme,
         EditMode = PART_Canvas.CurrentEditMode,
         ImagePreview = PART_Canvas.CurrentImagePreview,
+        SoftBreak = PART_Canvas.CurrentSoftBreak,
+        HardBreak = PART_Canvas.CurrentHardBreak,
     };
 
     public void ApplyState(DocsEditorState state)
@@ -84,6 +86,8 @@ public partial class DocsEditor : UserControl
         Theme = state.Theme;
         PART_Canvas.SetEditMode(state.EditMode);
         PART_Canvas.SetImagePreview(state.ImagePreview);
+        PART_Canvas.SetSoftBreak(state.SoftBreak);
+        PART_Canvas.SetHardBreak(state.HardBreak);
     }
 
     private static void OnDocumentBasePathChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)

@@ -482,4 +482,38 @@ public class BlockVisualMapTests
         parsed[5].IsFenceDelimiter.Should().BeTrue();
         parsed[6].Kind.Should().Be(BlockKind.Heading1);
     }
+
+    // --- Hard break marker hiding ---
+
+    [Fact]
+    public void TrailingBackslash_HiddenInVisual()
+    {
+        var map = ComputeMap("hello\\");
+        map.IsHidden(5).Should().BeTrue();
+        map.IsHidden(4).Should().BeFalse();
+    }
+
+    [Fact]
+    public void TrailingTwoSpaces_HiddenInVisual()
+    {
+        var map = ComputeMap("hello  ");
+        map.IsHidden(5).Should().BeTrue();
+        map.IsHidden(6).Should().BeTrue();
+        map.IsHidden(4).Should().BeFalse();
+    }
+
+    [Fact]
+    public void SingleTrailingSpace_NotHidden()
+    {
+        var map = ComputeMap("hello ");
+        map.IsHidden(5).Should().BeFalse();
+    }
+
+    [Fact]
+    public void TrailingBackslash_InFencedCode_NotHidden()
+    {
+        var map = ComputeMap("path\\to\\file", BlockKind.FencedCodeLine);
+        for (int i = 0; i < "path\\to\\file".Length; i++)
+            map.IsHidden(i).Should().BeFalse();
+    }
 }

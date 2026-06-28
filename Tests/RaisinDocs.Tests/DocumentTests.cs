@@ -103,6 +103,48 @@ public class DocumentTests
 
     // --- Hard break (Shift+Enter) ---
 
+    [Fact]
+    public void HardBreak_Backslash_AppendsMarkerAndSplits()
+    {
+        var doc = CreateDoc("hello world");
+        doc.CursorOffset = 5;
+        doc.Paste("\\");
+        doc.InsertParagraphBreak();
+
+        doc.BlockCount.Should().Be(2);
+        doc.GetBlockText(0).Should().Be("hello\\");
+        doc.GetBlockText(1).Should().Be(" world");
+        doc.CursorBlock.Should().Be(1);
+        doc.CursorOffset.Should().Be(0);
+    }
+
+    [Fact]
+    public void HardBreak_TrailingSpaces_AppendsMarkerAndSplits()
+    {
+        var doc = CreateDoc("hello world");
+        doc.CursorOffset = 5;
+        doc.Paste("  ");
+        doc.InsertParagraphBreak();
+
+        doc.BlockCount.Should().Be(2);
+        doc.GetBlockText(0).Should().Be("hello  ");
+        doc.GetBlockText(1).Should().Be(" world");
+    }
+
+    [Fact]
+    public void NewParagraph_TwoBreaksCreatesBlankLine()
+    {
+        var doc = CreateDoc("hello");
+        doc.InsertParagraphBreak();
+        doc.InsertParagraphBreak();
+
+        doc.BlockCount.Should().Be(3);
+        doc.GetBlockText(0).Should().Be("hello");
+        doc.GetBlockText(1).Should().BeEmpty();
+        doc.GetBlockText(2).Should().BeEmpty();
+        doc.CursorBlock.Should().Be(2);
+    }
+
     // --- Backspace ---
 
     [Fact]

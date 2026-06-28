@@ -195,6 +195,13 @@ public partial class DocsCanvas : FrameworkElement
     private InlineImage? _hoveredImage;
     private Point _hoverPosition;
 
+    public enum SoftBreakMode { Relaxed, Strict }
+    public enum HardBreakStyle { Backslash, TrailingSpaces }
+    private SoftBreakMode _softBreak = SoftBreakMode.Relaxed;
+    private HardBreakStyle _hardBreak = HardBreakStyle.Backslash;
+    public SoftBreakMode CurrentSoftBreak => _softBreak;
+    public HardBreakStyle CurrentHardBreak => _hardBreak;
+
     public event EventHandler? ContentChanged;
     public event EventHandler? FormattingChanged;
     public event EventHandler? EditModeChanged;
@@ -251,6 +258,19 @@ public partial class DocsCanvas : FrameworkElement
         _imagePreview = mode;
         _hoveredImage = null;
         InvalidateLayout();
+    }
+
+    public void SetSoftBreak(SoftBreakMode mode)
+    {
+        if (_softBreak == mode) return;
+        _softBreak = mode;
+        InvalidateLayout();
+    }
+
+    public void SetHardBreak(HardBreakStyle style)
+    {
+        if (_hardBreak == style) return;
+        _hardBreak = style;
     }
 
     // --- Public formatting API ---
@@ -898,8 +918,6 @@ public partial class DocsCanvas : FrameworkElement
                 for (int prev = _visualLines[i - 1].BlockIndex; prev < bi && !paragraphBreak; prev++)
                 {
                     if (_doc.GetBlockLength(prev) == 0)
-                        paragraphBreak = true;
-                    else if (_doc.GetBlockText(prev).EndsWith("  "))
                         paragraphBreak = true;
                 }
                 if (paragraphBreak)
@@ -1832,7 +1850,21 @@ public partial class DocsCanvas : FrameworkElement
                     break;
                 _doc.BeginUndoGroup();
                 if (_doc.HasSelection) _doc.DeleteSelection();
-                _doc.InsertParagraphBreak();
+                if (shift)
+                {
+                    string marker = _hardBreak == HardBreakStyle.Backslash ? "\\" : "  ";
+                    _doc.Paste(marker);
+                    _doc.InsertParagraphBreak();
+                }
+                else if (ctrl)
+                {
+                    _doc.InsertParagraphBreak();
+                }
+                else
+                {
+                    _doc.InsertParagraphBreak();
+                    _doc.InsertParagraphBreak();
+                }
                 _doc.CollapseSelection();
                 _doc.SealUndoGroup();
                 textChanged = true;

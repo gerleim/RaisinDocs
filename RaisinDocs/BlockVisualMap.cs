@@ -144,6 +144,18 @@ public class BlockVisualMap
             ranges.Add(new HiddenRange(runEnd - markerLen, markerLen));
         }
 
+        if (parsed.Kind != BlockKind.FencedCodeLine)
+        {
+            if (blockText.EndsWith("\\"))
+                ranges.Add(new HiddenRange(blockText.Length - 1, 1));
+            else if (blockText.EndsWith("  "))
+            {
+                int trailStart = blockText.Length;
+                while (trailStart > 0 && blockText[trailStart - 1] == ' ') trailStart--;
+                ranges.Add(new HiddenRange(trailStart, blockText.Length - trailStart));
+            }
+        }
+
         if (parsed.Images != null)
         {
             foreach (var img in parsed.Images)
