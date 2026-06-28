@@ -128,7 +128,7 @@ A trailing `\` is a hard break only when:
 - Three distinct vector icons drawn via WPF Path geometry: slashed frame (Off), mountain landscape (Inline), eye symbol (On Hover)
 - No existing markdown editors (Typora, Obsidian, VS Code, Mark Text) offer an embeddable native control — RaisinDocs is unique as a reusable WPF markdown editor component
 
-### 7 — Tables
+### 7 — Tables ✅
 - See `design/GFM Table Support - Iteration 7.md` for detailed plan
 - GFM table syntax: header row, separator row (with column alignment), data rows
 - Parser detects table context across consecutive blocks (two-pass, like fenced code)
@@ -137,10 +137,11 @@ A trailing `\` is a hard break only when:
 - Visual mode: grid rendering with borders, cell padding, header styling, column alignment
 - Tab/Shift+Tab cell navigation, Enter inserts new row
 - Toolbar button to insert table template
+- Rectangular cell selection with copy and clear operations
 
 ### GFM extensions roadmap
 - ~~Strikethrough (`~~text~~`)~~ — ✅ implemented in iteration 4
-- Tables — iteration 7 (above)
+- ~~Tables~~ — ✅ implemented in iteration 7
 - Task list items (`- [ ]` unchecked, `- [x]` checked) — checkbox rendering in Visual mode, toggle on click
 - Extended autolinks — bare URLs auto-linked without `<>` syntax
 
