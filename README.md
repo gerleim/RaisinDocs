@@ -17,13 +17,14 @@ RaisinDocs is none of these. It renders text directly with `FormattedText` and `
 ## Features
 
 - **Source and Visual modes** — toggle between raw markdown syntax and a WYSIWYG view that hides markers and shows styled text
-- **CommonMark 0.31.2** — headings, bold, italic, bold-italic, strikethrough, inline code, fenced code blocks, bullet lists, blockquotes
+- **CommonMark 0.31.2** — headings, bold, italic, bold-italic, strikethrough, inline code, fenced code blocks, bullet lists, blockquotes, hard/soft line breaks
 - **GFM tables** — pipe-delimited tables with cell navigation, rectangular selection, row/column insert/delete
+- **GFM task lists** — `- [ ]` / `- [x]` checkboxes with click-to-toggle in visual mode
 - **Inline images** — `![alt](url)` with async loading from local files and HTTP URLs, scale-to-fit, placeholders for missing images
 - **Image Preview in Source mode** — three modes (Off / Inline / On Hover) via a split button on the formatting bar
 - **Undo / redo** — VS Code-style grouping with 600ms timer, Ctrl+Z / Ctrl+Y
 - **Formatting bar** — toolbar control with toggle buttons for all inline and block styles, theme switch, image preview switch
-- **Light and dark themes** — `EditorTheme.Light` / `EditorTheme.Dark` with a single property
+- **Three themes** — `EditorTheme.Light` / `EditorTheme.Dark` / `EditorTheme.DarkBlue` with a single property
 - **Smooth scrolling** — exponential decay animation, custom-drawn proportional scrollbar
 - **Viewport culling** — only draws visible lines, scales to large documents
 - **Full keyboard navigation** — arrow keys, Home/End, Ctrl+Home/End, Page Up/Down, word-level movement with Ctrl
@@ -79,6 +80,8 @@ Editor.ApplyState(JsonSerializer.Deserialize<DocsEditorState>(json));
 | Ctrl+M | Toggle Source / Visual mode |
 | Ctrl+Z | Undo |
 | Ctrl+Y | Redo |
+| Shift+Enter | Hard line break (visible `\` marker) |
+| Ctrl+Enter | Soft break (single newline, no marker) |
 | Ctrl+X / C / V | Cut / Copy / Paste |
 
 ## Requirements

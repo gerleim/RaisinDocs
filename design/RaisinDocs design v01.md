@@ -139,7 +139,7 @@ A trailing `\` is a hard break only when:
 - Toolbar button to insert table template
 - Rectangular cell selection with copy and clear operations
 
-### 8 — Task list items
+### 8 — Task list items ✅
 - See `design/GFM Task Lists - Iteration 8.md` for detailed plan
 - GFM task list syntax: `- [ ] unchecked`, `- [x] checked`
 - Parser detects checkbox prefix, assigns TaskListItemUnchecked / TaskListItemChecked BlockKind
@@ -151,7 +151,7 @@ A trailing `\` is a hard break only when:
 ### GFM extensions roadmap
 - ~~Strikethrough (`~~text~~`)~~ — ✅ implemented in iteration 4
 - ~~Tables~~ — ✅ implemented in iteration 7
-- Task list items — iteration 8 (above)
+- ~~Task list items~~ — ✅ implemented in iteration 8
 - Extended autolinks — bare URLs auto-linked without `<>` syntax
 
 ### Future

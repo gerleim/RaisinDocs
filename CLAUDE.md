@@ -51,8 +51,9 @@ dotnet build RaisinDocs.slnx -p:UseProjectReferences=false
   - `DocsCanvas.VisualMode.cs` — visual-mode-only logic: cursor navigation over hidden ranges, table cell navigation/hit-testing/rendering, image rendering
   - `DocsCanvas.SourceMode.cs` — source-mode-only logic: source cursor navigation, inline image preview
 - **Document** — Testable document model: `List<StringBuilder>` blocks, cursor/anchor positions, text mutations (insert, delete, paste), selection, undo/redo, and navigation. No UI dependencies — all tests target this class.
-- **MarkdownParser** — Static class that classifies blocks (`BlockKind`: paragraph, H1–H6, list item, fenced code, table rows) and parses inline styles (`StyledRun`: bold, italic, bold-italic, code). DocsCanvas calls this to drive styled rendering; Document knows nothing about markdown.
+- **MarkdownParser** — Static class that classifies blocks (`BlockKind`: paragraph, H1–H6, list item, task list items, fenced code, table rows) and parses inline styles (`StyledRun`: bold, italic, bold-italic, code). DocsCanvas calls this to drive styled rendering; Document knows nothing about markdown.
 - **BlockVisualMap** — Computes hidden ranges for visual mode (markdown syntax characters hidden from display). Used for cursor skip logic and display string building.
+- **DocsEditor** — `UserControl` wrapping `DocsCanvas` + `DocsFormattingBar` into a single drop-in control. Exposes `ShowToolbar`, `Theme`, `IsDirty`, `DocumentBasePath` dependency properties, state persistence via `GetState`/`ApplyState` with `DocsEditorState`.
 
 ### Key dependencies
 
