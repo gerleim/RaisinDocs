@@ -1869,8 +1869,13 @@ public partial class DocsCanvas : FrameworkElement
                 }
                 else
                 {
+                    string blockText = _doc.GetBlockText(_doc.CursorBlock);
+                    var blockKind = MarkdownParser.ClassifyBlock(blockText);
+                    bool isStandalone = (blockKind >= BlockKind.Heading1 && blockKind <= BlockKind.Heading6)
+                                     || MarkdownParser.IsFenceLine(blockText);
                     _doc.InsertParagraphBreak();
-                    _doc.InsertParagraphBreak();
+                    if (!isStandalone)
+                        _doc.InsertParagraphBreak();
                 }
                 _doc.CollapseSelection();
                 _doc.SealUndoGroup();

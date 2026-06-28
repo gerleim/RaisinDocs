@@ -20,6 +20,21 @@ Markdown newlines are not plain text newlines:
 
 The document model must distinguish these from iteration 2 onward. A naive "one newline = one line" model would have to be torn out later.
 
+### Keyboard mapping
+
+| Key | Effect |
+|---|---|
+| Enter | Paragraph break (blank line). For standalone blocks (headings, fenced code delimiters) inserts a single break instead — blank line is redundant since the block is already visually distinct. |
+| Shift+Enter | Hard line break: appends `\` (or `  `) then splits. Skipped for headings (next line is already a new paragraph). Won't duplicate an existing trailing marker. |
+| Ctrl+Enter | Soft break (single newline, no marker). |
+
+### Hard break marker rules (CommonMark §6.7)
+
+A trailing `\` is a hard break only when:
+- It is the last character on the line (not followed by spaces)
+- It is NOT inside a code span or fenced code block
+- The count of consecutive trailing backslashes is odd (`\\` = escaped literal, `\\\` = escaped + hard break)
+
 ## Rendering
 
 - `DrawingContext` with `FormattedText`/`GlyphRun` for text
@@ -69,7 +84,7 @@ The document model must distinguish these from iteration 2 onward. A naive "one 
 - Style-aware rendering via `FormattedText` range styling (SetFontWeight/SetFontStyle/SetFontFamily)
 - Heading font sizes: H1=32, H2=26, H3=22, H4=18, H5=16, H6=14; code=14pt Cascadia Mono
 - Variable line heights per block kind, with style-aware character measurement and word wrapping
-- Syntax marker dimming (`#`, `- `, `**`, `*`, `` ` ``) in gray
+- Syntax marker dimming (`#`, `- `, `**`, `*`, `` ` ``, trailing `\` hard break) in gray
 - Subtle gray background behind fenced code blocks
 - Hit testing, cursor positioning, and selection updated for mixed styles
 - 34 parser tests (block classification, inline parsing, fenced code, edge cases)
