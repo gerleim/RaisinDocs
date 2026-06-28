@@ -805,6 +805,161 @@ public class MarkdownParserTests
         lastRow.TableRow!.Cells.Should().HaveCount(2);
     }
 
+    // --- Inline parsing: links ---
+
+    [Fact]
+    public void Link_BasicSyntax_ParsedCorrectly()
+    {
+        var result = ParseBlocks("[click here](https://example.com)");
+        result[0].Links.Should().HaveCount(1);
+        var link = result[0].Links![0];
+        link.Start.Should().Be(0);
+        link.Length.Should().Be(33);
+        link.Text.Should().Be("click here");
+        link.Url.Should().Be("https://example.com");
+        link.Title.Should().BeNull();
+    }
+
+    [Fact]
+    public void Link_WithTitle()
+    {
+        var result = ParseBlocks("[text](url \"My Title\")");
+        result[0].Links.Should().HaveCount(1);
+        var link = result[0].Links![0];
+        link.Url.Should().Be("url");
+        link.Title.Should().Be("My Title");
+    }
+
+    [Fact]
+    public void Link_AngleBracketDestination()
+    {
+        var result = ParseBlocks("[text](<url with spaces>)");
+        result[0].Links.Should().HaveCount(1);
+        result[0].Links![0].Url.Should().Be("url with spaces");
+    }
+
+    [Fact]
+    public void Link_WithInlineBold()
+    {
+        var result = ParseBlocks("[**bold** text](url)");
+        result[0].Links.Should().HaveCount(1);
+        result[0].Links![0].Text.Should().Be("**bold** text");
+        // The whole range is marked as Link, suppressing bold
+        result[0].Runs.Should().HaveCount(1);
+        result[0].Runs[0].Style.Should().Be(InlineStyle.Link);
+    }
+
+    [Fact]
+    public void Link_MissingClosingParen_NotParsed()
+    {
+        var result = ParseBlocks("[text](url");
+        result[0].Links.Should().BeNull();
+    }
+
+    [Fact]
+    public void Link_ImageSyntax_StaysAsImage()
+    {
+        var result = ParseBlocks("![alt](image.png)");
+        result[0].Images.Should().HaveCount(1);
+        result[0].Links.Should().BeNull();
+    }
+
+    [Fact]
+    public void Link_InsideFencedCode_NotParsed()
+    {
+        var result = ParseBlocks("```", "[text](url)", "```");
+        result[1].Links.Should().BeNull();
+    }
+
+    [Fact]
+    public void Link_InsideCodeSpan_NotParsed()
+    {
+        var result = ParseBlocks("`[text](url)`");
+        result[0].Links.Should().BeNull();
+        result[0].Runs[0].Style.Should().Be(InlineStyle.Code);
+    }
+
+    [Fact]
+    public void Link_MultiplePerBlock()
+    {
+        var result = ParseBlocks("[a](url1) and [b](url2)");
+        result[0].Links.Should().HaveCount(2);
+        result[0].Links![0].Text.Should().Be("a");
+        result[0].Links![0].Url.Should().Be("url1");
+        result[0].Links![1].Text.Should().Be("b");
+        result[0].Links![1].Url.Should().Be("url2");
+    }
+
+    [Fact]
+    public void Link_AdjacentToImage()
+    {
+        var result = ParseBlocks("[link](a) ![img](b)");
+        result[0].Links.Should().HaveCount(1);
+        result[0].Links![0].Text.Should().Be("link");
+        result[0].Images.Should().HaveCount(1);
+        result[0].Images![0].AltText.Should().Be("img");
+    }
+
+    [Fact]
+    public void Link_EmptyText()
+    {
+        var result = ParseBlocks("[](url)");
+        result[0].Links.Should().HaveCount(1);
+        result[0].Links![0].Text.Should().BeEmpty();
+        result[0].Links![0].Url.Should().Be("url");
+    }
+
+    [Fact]
+    public void Link_WithSurroundingText()
+    {
+        var result = ParseBlocks("before [link](url) after");
+        result[0].Links.Should().HaveCount(1);
+        result[0].Runs.Should().HaveCount(3);
+        result[0].Runs[0].Should().Be(new StyledRun(0, 7, InlineStyle.Normal));
+        result[0].Runs[1].Should().Be(new StyledRun(7, 11, InlineStyle.Link));
+        result[0].Runs[2].Should().Be(new StyledRun(18, 6, InlineStyle.Normal));
+    }
+
+    [Fact]
+    public void Link_StyleArrayCoversEntireSpan()
+    {
+        var result = ParseBlocks("[text](url)");
+        var runs = result[0].Runs;
+        runs.Should().HaveCount(1);
+        runs[0].Start.Should().Be(0);
+        runs[0].Length.Should().Be(11);
+        runs[0].Style.Should().Be(InlineStyle.Link);
+    }
+
+    [Fact]
+    public void Link_NoLinks_PropertyIsNull()
+    {
+        var result = ParseBlocks("just plain text");
+        result[0].Links.Should().BeNull();
+    }
+
+    [Fact]
+    public void Link_UnclosedBracket_NotParsed()
+    {
+        var result = ParseBlocks("[text without closing");
+        result[0].Links.Should().BeNull();
+    }
+
+    [Fact]
+    public void Link_NoBracketAfterClose_NotParsed()
+    {
+        var result = ParseBlocks("[text] no paren");
+        result[0].Links.Should().BeNull();
+    }
+
+    [Fact]
+    public void Link_BalancedParensInUrl()
+    {
+        var result = ParseBlocks("[wiki](https://en.wikipedia.org/wiki/Foo_(bar))");
+        result[0].Links.Should().HaveCount(1);
+        result[0].Links![0].Url.Should().Be("https://en.wikipedia.org/wiki/Foo_(bar)");
+    }
+
     // --- IsTrailingHardBreak ---
 
     [Fact]

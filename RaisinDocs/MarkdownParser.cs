@@ -9,11 +9,14 @@ public enum InlineStyle
     Code,
     Strikethrough,
     Image,
+    Link,
 }
 
 public readonly record struct StyledRun(int Start, int Length, InlineStyle Style);
 
 public readonly record struct InlineImage(int Start, int Length, string AltText, string Url, string? Title);
+
+public readonly record struct InlineLink(int Start, int Length, string Text, string Url, string? Title);
 
 public enum BlockKind
 {
@@ -57,6 +60,7 @@ public class ParsedBlock
     public bool IsTableSeparator { get; init; }
     public bool IsSkippedInVisual => IsFenceDelimiter || IsTableSeparator;
     public IReadOnlyList<InlineImage>? Images { get; init; }
+    public IReadOnlyList<InlineLink>? Links { get; init; }
     public TableRowInfo? TableRow { get; init; }
     public TableInfo? Table { get; init; }
 }
@@ -96,11 +100,12 @@ public static class MarkdownParser
 
             var kind = ClassifyBlock(text);
             List<InlineImage>? images = null;
+            List<InlineLink>? links = null;
             var runs = kind == BlockKind.FencedCodeLine
                 ? [new StyledRun(0, text.Length, InlineStyle.Normal)]
-                : ParseInlines(text, out images);
+                : ParseInlines(text, out images, out links);
 
-            result.Add(new ParsedBlock { Kind = kind, Runs = runs, Images = images });
+            result.Add(new ParsedBlock { Kind = kind, Runs = runs, Images = images, Links = links });
         }
 
         DetectTables(result, getBlockText);
@@ -141,6 +146,7 @@ public static class MarkdownParser
                 Kind = BlockKind.TableHeaderRow,
                 Runs = blocks[i].Runs,
                 Images = blocks[i].Images,
+                Links = blocks[i].Links,
                 TableRow = headerRow,
                 Table = tableInfo,
             };
@@ -165,6 +171,7 @@ public static class MarkdownParser
                     Kind = BlockKind.TableDataRow,
                     Runs = blocks[j].Runs,
                     Images = blocks[j].Images,
+                    Links = blocks[j].Links,
                     TableRow = new TableRowInfo { Cells = dataCells },
                     Table = tableInfo,
                 };
@@ -346,7 +353,13 @@ public static class MarkdownParser
 
     internal static List<StyledRun> ParseInlines(string text, out List<InlineImage>? images)
     {
+        return ParseInlines(text, out images, out _);
+    }
+
+    internal static List<StyledRun> ParseInlines(string text, out List<InlineImage>? images, out List<InlineLink>? links)
+    {
         images = null;
+        links = null;
         if (text.Length == 0)
             return [new StyledRun(0, 0, InlineStyle.Normal)];
 
@@ -354,6 +367,7 @@ public static class MarkdownParser
 
         MarkCodeSpans(text, styles);
         images = MarkImages(text, styles);
+        links = MarkLinks(text, styles);
         MarkStrikethrough(text, styles);
         MarkEmphasis(text, styles);
 
@@ -442,6 +456,55 @@ public static class MarkdownParser
             i = parenClose + 1;
         }
         return images;
+    }
+
+    private static List<InlineLink>? MarkLinks(string text, InlineStyle[] styles)
+    {
+        List<InlineLink>? links = null;
+        int i = 0;
+        while (i <= text.Length - 4) // minimum: [](x)
+        {
+            if (text[i] != '[' || styles[i] != InlineStyle.Normal)
+            {
+                i++;
+                continue;
+            }
+
+            // skip if preceded by ! (that's an image, already consumed)
+            if (i > 0 && text[i - 1] == '!' && styles[i - 1] == InlineStyle.Image)
+            {
+                i++;
+                continue;
+            }
+
+            int textStart = i + 1;
+            int bracketClose = FindMatchingBracket(text, textStart);
+            if (bracketClose < 0 || bracketClose + 1 >= text.Length || text[bracketClose + 1] != '(')
+            {
+                i++;
+                continue;
+            }
+
+            int parenOpen = bracketClose + 2;
+            int parenClose = ParseDestinationAndTitle(text, parenOpen, out string url, out string? title);
+            if (parenClose < 0)
+            {
+                i++;
+                continue;
+            }
+
+            string linkText = text[textStart..bracketClose];
+            int totalLength = parenClose + 1 - i;
+
+            links ??= [];
+            links.Add(new InlineLink(i, totalLength, linkText, url, title));
+
+            for (int j = i; j <= parenClose; j++)
+                styles[j] = InlineStyle.Link;
+
+            i = parenClose + 1;
+        }
+        return links;
     }
 
     private static int FindMatchingBracket(string text, int from)

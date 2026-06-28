@@ -590,4 +590,86 @@ public class BlockVisualMapTests
         var map = ComputeMap("hi\\\\\\");
         map.IsHidden(4).Should().BeTrue();
     }
+
+    // --- Links ---
+
+    [Fact]
+    public void Link_BracketAndUrlHidden_TextVisible()
+    {
+        // [text](url) — positions: [=0, text=1-4, ]=5, (=6, url=7-9, )=10
+        var map = ComputeMap("[text](url)");
+        map.IsHidden(0).Should().BeTrue();   // [
+        map.IsHidden(1).Should().BeFalse();  // t
+        map.IsHidden(2).Should().BeFalse();  // e
+        map.IsHidden(3).Should().BeFalse();  // x
+        map.IsHidden(4).Should().BeFalse();  // t
+        map.IsHidden(5).Should().BeTrue();   // ]
+        map.IsHidden(6).Should().BeTrue();   // (
+        map.IsHidden(7).Should().BeTrue();   // u
+        map.IsHidden(8).Should().BeTrue();   // r
+        map.IsHidden(9).Should().BeTrue();   // l
+        map.IsHidden(10).Should().BeTrue();  // )
+    }
+
+    [Fact]
+    public void Link_WithTitle_AllSyntaxHidden()
+    {
+        // [text](url "title") — ](url "title") all hidden
+        var map = ComputeMap("[text](url \"title\")");
+        map.IsHidden(0).Should().BeTrue();   // [
+        map.IsHidden(1).Should().BeFalse();  // t
+        map.IsHidden(4).Should().BeFalse();  // t
+        map.IsHidden(5).Should().BeTrue();   // ]
+        map.IsHidden(18).Should().BeTrue();  // )
+    }
+
+    [Fact]
+    public void Link_DisplayString_ShowsOnlyText()
+    {
+        var map = ComputeMap("[click here](https://example.com)");
+        var display = map.BuildDisplayString("[click here](https://example.com)", 0, 33);
+        display.Should().Be("click here");
+    }
+
+    [Fact]
+    public void Link_RawToVisual()
+    {
+        // [text](url) — text starts at raw 1, visual 0
+        var map = ComputeMap("[text](url)");
+        map.RawToVisual(0).Should().Be(0);   // before [ → visual 0
+        map.RawToVisual(1).Should().Be(0);   // t → visual 0
+        map.RawToVisual(5).Should().Be(4);   // ] → visual 4 (end of text)
+    }
+
+    [Fact]
+    public void Link_VisualToRaw()
+    {
+        // [text](url) — visual 0 = raw 1 (t), visual 3 = raw 4 (t)
+        var map = ComputeMap("[text](url)");
+        map.VisualToRaw(0).Should().Be(1);   // visual start → raw 1 (past [)
+        map.VisualToRaw(4).Should().Be(11);  // past visual text → raw 11 (past ))
+    }
+
+    [Fact]
+    public void Link_MultipleLinks_BothHidden()
+    {
+        var map = ComputeMap("[a](u1) [b](u2)");
+        // First link: [=0, a=1, ]=2...(u1)=3-6
+        map.IsHidden(0).Should().BeTrue();   // [
+        map.IsHidden(1).Should().BeFalse();  // a
+        map.IsHidden(2).Should().BeTrue();   // ]
+        // Second link: [=8, b=9, ]=10...(u2)=11-14
+        map.IsHidden(8).Should().BeTrue();   // [
+        map.IsHidden(9).Should().BeFalse();  // b
+        map.IsHidden(10).Should().BeTrue();  // ]
+    }
+
+    [Fact]
+    public void Link_LinksPropertyPopulated()
+    {
+        var map = ComputeMap("[text](url)");
+        map.Links.Should().HaveCount(1);
+        map.Links![0].Text.Should().Be("text");
+        map.Links![0].Url.Should().Be("url");
+    }
 }

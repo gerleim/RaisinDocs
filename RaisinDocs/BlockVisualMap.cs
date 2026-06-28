@@ -9,12 +9,15 @@ public class BlockVisualMap
     public IReadOnlyList<HiddenRange> HiddenRanges { get; }
     public string? ReplacementPrefix { get; }
     public IReadOnlyList<InlineImage>? Images { get; }
+    public IReadOnlyList<InlineLink>? Links { get; }
 
-    public BlockVisualMap(IReadOnlyList<HiddenRange> hiddenRanges, string? replacementPrefix = null, IReadOnlyList<InlineImage>? images = null)
+    public BlockVisualMap(IReadOnlyList<HiddenRange> hiddenRanges, string? replacementPrefix = null,
+        IReadOnlyList<InlineImage>? images = null, IReadOnlyList<InlineLink>? links = null)
     {
         HiddenRanges = hiddenRanges;
         ReplacementPrefix = replacementPrefix;
         Images = images;
+        Links = links;
     }
 
     public bool IsHidden(int rawOffset)
@@ -135,7 +138,7 @@ public class BlockVisualMap
         {
             if (run.Style == InlineStyle.Normal) continue;
 
-            if (run.Style == InlineStyle.Image) continue;
+            if (run.Style is InlineStyle.Image or InlineStyle.Link) continue;
 
             int markerLen = run.Style switch
             {
@@ -169,9 +172,19 @@ public class BlockVisualMap
                 ranges.Add(new HiddenRange(img.Start, img.Length));
         }
 
+        if (parsed.Links != null)
+        {
+            foreach (var link in parsed.Links)
+            {
+                ranges.Add(new HiddenRange(link.Start, 1));
+                int closeBracket = link.Start + 1 + link.Text.Length;
+                ranges.Add(new HiddenRange(closeBracket, link.Start + link.Length - closeBracket));
+            }
+        }
+
         ranges.Sort((a, b) => a.Start.CompareTo(b.Start));
 
-        return new BlockVisualMap(ranges, replacementPrefix, parsed.Images);
+        return new BlockVisualMap(ranges, replacementPrefix, parsed.Images, parsed.Links);
     }
 
     private static int CountBackticks(string text, int start)

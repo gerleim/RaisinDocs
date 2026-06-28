@@ -246,6 +246,11 @@ public partial class DocsCanvas : FrameworkElement
     public ImagePreviewMode CurrentImagePreview => _imagePreview;
     private InlineImage? _hoveredImage;
     private Point _hoverPosition;
+    private string? _hoveredLinkUrl;
+    private readonly System.Windows.Controls.ToolTip _linkToolTip = new()
+    {
+        Placement = System.Windows.Controls.Primitives.PlacementMode.Relative,
+    };
 
     public enum SoftBreakMode { Relaxed, Strict }
     public enum HardBreakStyle { Backslash, TrailingSpaces }
@@ -281,6 +286,10 @@ public partial class DocsCanvas : FrameworkElement
     {
         if (_editMode == mode) return;
         SealAndStopTimer();
+        _smoother.Cancel();
+
+        var anchor = ComputeScrollAnchor();
+
         _editMode = mode;
         InvalidateLayout();
         if (IsVisual)
@@ -289,7 +298,59 @@ public partial class DocsCanvas : FrameworkElement
             EnsureCursorOnVisibleBlock();
             SkipCursorToVisible(forward: true);
         }
+        else
+        {
+            ComputeLayout();
+        }
+
+        ApplyScrollAnchor(anchor);
         EditModeChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    private (int BlockIndex, double OffsetInViewport) ComputeScrollAnchor()
+    {
+        if (_visualLines.Count == 0 || _lineYPositions.Count == 0)
+            return (_doc.CursorBlock, 0);
+
+        int cursorVli = CursorToVisualLineIndex();
+        double cursorY = _lineYPositions[cursorVli];
+        double cursorBottom = cursorY + GetEffectiveLineHeight(_visualLines[cursorVli]);
+        double viewTop = _scrollOffset;
+        double viewBottom = _scrollOffset + ActualHeight;
+
+        bool cursorVisible = cursorBottom > viewTop && cursorY < viewBottom;
+
+        if (cursorVisible)
+        {
+            return (_doc.CursorBlock, cursorY - viewTop);
+        }
+
+        int topVli = HitTestVisualLine(viewTop);
+        int topBlock = _visualLines[topVli].BlockIndex;
+        double topBlockY = _lineYPositions[topVli];
+        return (topBlock, topBlockY - viewTop);
+    }
+
+    private void ApplyScrollAnchor((int BlockIndex, double OffsetInViewport) anchor)
+    {
+        if (_visualLines.Count == 0 || _lineYPositions.Count == 0)
+            return;
+
+        int targetVli = -1;
+        for (int i = 0; i < _visualLines.Count; i++)
+        {
+            if (_visualLines[i].BlockIndex >= anchor.BlockIndex)
+            {
+                targetVli = i;
+                break;
+            }
+        }
+        if (targetVli < 0)
+            targetVli = _visualLines.Count - 1;
+
+        double newY = _lineYPositions[targetVli];
+        _scrollOffset = newY - anchor.OffsetInViewport;
+        ClampScroll();
     }
 
     public void CycleImagePreview()
@@ -382,6 +443,38 @@ public partial class DocsCanvas : FrameworkElement
     public void ToggleBlockquote()
     {
         ToggleBlockPrefixForSelection("> ");
+    }
+
+    public void InsertLink()
+    {
+        SealAndStopTimer();
+        _doc.BeginUndoGroup();
+
+        if (_doc.HasSelection)
+        {
+            var (sb, so, eb, eo) = _doc.GetOrderedSelection();
+            _doc.InsertTextAt(eb, eo, "](url)");
+            _doc.InsertTextAt(sb, so, "[");
+            _doc.CursorBlock = eb;
+            _doc.CursorOffset = eo + 3;
+            _doc.AnchorBlock = eb;
+            _doc.AnchorOffset = eo + 6;
+        }
+        else
+        {
+            int b = _doc.CursorBlock;
+            int o = _doc.CursorOffset;
+            _doc.InsertTextAt(b, o, "[](url)");
+            _doc.CursorBlock = b;
+            _doc.CursorOffset = o + 3;
+            _doc.AnchorBlock = b;
+            _doc.AnchorOffset = o + 6;
+        }
+
+        _doc.SealUndoGroup();
+        InvalidateLayout();
+        EnsureCursorVisible();
+        RaiseFormattingChanged();
     }
 
     public void ToggleFencedCode()
@@ -868,7 +961,7 @@ public partial class DocsCanvas : FrameworkElement
         var cached = _imageCache.Get(img.Url, DocumentBasePath, maxWidth);
         if (cached != null)
             return (cached.Value.Width, cached.Value.Height);
-        _imageCache.RequestLoad(img.Url, DocumentBasePath, () => InvalidateVisual());
+        _imageCache.RequestLoad(img.Url, DocumentBasePath, () => InvalidateLayout());
         return (20, 20);
     }
 
@@ -1639,6 +1732,12 @@ public partial class DocsCanvas : FrameworkElement
             return;
         }
 
+        if (IsVisual && Keyboard.Modifiers.HasFlag(ModifierKeys.Control) && TryOpenLinkAtClick(pos))
+        {
+            e.Handled = true;
+            return;
+        }
+
         SealAndStopTimer();
 
         HitTestToPosition(pos, out int block, out int offset);
@@ -1672,7 +1771,42 @@ public partial class DocsCanvas : FrameworkElement
         var pos = e.GetPosition(this);
         if (!IsMouseCaptured)
         {
-            Cursor = IsInScrollbarArea(pos) ? Cursors.Arrow : Cursors.IBeam;
+            if (IsInScrollbarArea(pos))
+                Cursor = Cursors.Arrow;
+            else if (IsVisual)
+            {
+                ComputeLayout();
+                var hoverLink = GetLinkAtPosition(pos);
+                if (hoverLink != null)
+                {
+                    Cursor = Keyboard.Modifiers.HasFlag(ModifierKeys.Control) ? Cursors.Hand : Cursors.IBeam;
+                    var url = hoverLink.Value.Url;
+                    if (_hoveredLinkUrl != url)
+                    {
+                        _hoveredLinkUrl = url;
+                        double effectiveScroll = _scrollOffset + _smoother.Offset;
+                        int vli = HitTestVisualLine(pos.Y + effectiveScroll);
+                        double lineY = _lineYPositions[vli] - effectiveScroll;
+                        double lineH = GetEffectiveLineHeight(_visualLines[vli]);
+                        _linkToolTip.Content = url;
+                        _linkToolTip.PlacementTarget = this;
+                        _linkToolTip.HorizontalOffset = _padding;
+                        _linkToolTip.VerticalOffset = lineY + lineH;
+                        _linkToolTip.IsOpen = true;
+                    }
+                }
+                else
+                {
+                    Cursor = Cursors.IBeam;
+                    if (_hoveredLinkUrl != null)
+                    {
+                        _hoveredLinkUrl = null;
+                        _linkToolTip.IsOpen = false;
+                    }
+                }
+            }
+            else
+                Cursor = Cursors.IBeam;
             UpdateHoverImage(pos);
             return;
         }
@@ -1717,6 +1851,11 @@ public partial class DocsCanvas : FrameworkElement
         {
             _hoveredImage = null;
             InvalidateVisual();
+        }
+        if (_hoveredLinkUrl != null)
+        {
+            _hoveredLinkUrl = null;
+            _linkToolTip.IsOpen = false;
         }
     }
 
@@ -2371,9 +2510,21 @@ public partial class DocsCanvas : FrameworkElement
                 else handled = false;
                 break;
 
+            case Key.K:
+                if (ctrl) InsertLink();
+                else handled = false;
+                break;
+
             case Key.M:
                 if (ctrl)
+                {
                     ToggleEditMode();
+                    ResetBlink();
+                    InvalidateVisual();
+                    e.Handled = true;
+                    RaiseFormattingChanged();
+                    return;
+                }
                 else handled = false;
                 break;
 
@@ -2599,6 +2750,10 @@ public partial class DocsCanvas : FrameworkElement
                 case InlineStyle.Strikethrough:
                     ft.SetTextDecorations(TextDecorations.Strikethrough, localStart, count);
                     break;
+                case InlineStyle.Link:
+                    ft.SetForegroundBrush(_checkboxCheckedBrush, localStart, count);
+                    ft.SetTextDecorations(TextDecorations.Underline, localStart, count);
+                    break;
             }
         }
 
@@ -2661,9 +2816,22 @@ public partial class DocsCanvas : FrameworkElement
             }
         }
 
+        if (parsed.Links != null)
+        {
+            foreach (var link in parsed.Links)
+            {
+                int linkEnd = link.Start + link.Length;
+                if (linkEnd <= vl.StartOffset || link.Start >= vlEnd) continue;
+
+                DimRange(ft, vl, link.Start, 1);
+                int closeBracket = link.Start + 1 + link.Text.Length;
+                DimRange(ft, vl, closeBracket, linkEnd - closeBracket);
+            }
+        }
+
         foreach (var run in parsed.Runs)
         {
-            if (run.Style == InlineStyle.Normal || run.Style == InlineStyle.Image) continue;
+            if (run.Style is InlineStyle.Normal or InlineStyle.Image or InlineStyle.Link) continue;
             int runEnd = run.Start + run.Length;
             if (runEnd <= vl.StartOffset || run.Start >= vlEnd) continue;
 

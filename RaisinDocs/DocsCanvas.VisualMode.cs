@@ -8,6 +8,57 @@ public partial class DocsCanvas
 {
     // --- Visual mode: task list checkbox toggle ---
 
+    private bool TryOpenLinkAtClick(Point pos)
+    {
+        if (_parsedBlocks == null || _visualMaps == null) return false;
+
+        HitTestToPosition(pos, out int block, out int offset);
+        if (block >= _parsedBlocks.Count) return false;
+
+        var parsed = _parsedBlocks[block];
+        if (parsed.Links == null) return false;
+
+        foreach (var link in parsed.Links)
+        {
+            int textStart = link.Start + 1;
+            int textEnd = link.Start + 1 + link.Text.Length;
+            if (offset >= textStart && offset < textEnd)
+            {
+                var url = link.Url;
+                if (url.StartsWith("http://") || url.StartsWith("https://") || url.StartsWith("file://"))
+                {
+                    try
+                    {
+                        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(url) { UseShellExecute = true });
+                    }
+                    catch { }
+                }
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private InlineLink? GetLinkAtPosition(Point pos)
+    {
+        if (_parsedBlocks == null || _visualMaps == null) return null;
+
+        HitTestToPosition(pos, out int block, out int offset);
+        if (block >= _parsedBlocks.Count) return null;
+
+        var parsed = _parsedBlocks[block];
+        if (parsed.Links == null) return null;
+
+        foreach (var link in parsed.Links)
+        {
+            int textStart = link.Start + 1;
+            int textEnd = link.Start + 1 + link.Text.Length;
+            if (offset >= textStart && offset < textEnd)
+                return link;
+        }
+        return null;
+    }
+
     private bool TryToggleTaskListCheckbox(Point pos)
     {
         if (_parsedBlocks == null) return false;
@@ -962,6 +1013,10 @@ public partial class DocsCanvas
                     break;
                 case InlineStyle.Strikethrough:
                     ft.SetTextDecorations(TextDecorations.Strikethrough, visStart, count);
+                    break;
+                case InlineStyle.Link:
+                    ft.SetForegroundBrush(_checkboxCheckedBrush, visStart, count);
+                    ft.SetTextDecorations(TextDecorations.Underline, visStart, count);
                     break;
             }
         }
