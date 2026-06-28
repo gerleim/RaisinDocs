@@ -135,3 +135,4 @@ Phase 7 (Toolbar)    ── depends on all above
 - **Rectangular cell selection**: Spreadsheet-like selection of N×M cell areas in visual mode. Copy produces markdown table rows with selected columns only. Paste fills cells from cursor position.
 - **Wide table horizontal scroll**: Tables exceeding viewport width currently clip. Add horizontal scroll support.
 - **Delete row / Delete column**: Context menu or keyboard shortcut to remove rows or columns from a table.
+- **Context-aware toolbar disabling**: Disable the Insert Table button when the cursor is in a context where table insertion is invalid — inside a table (GFM has no nested tables), inside a fenced code block (would be literal text), or inside a list item. The same principle applies to other toolbar buttons (e.g. heading toggle inside a code block).

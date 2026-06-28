@@ -25,6 +25,8 @@ public enum BlockKind
     Heading5,
     Heading6,
     UnorderedListItem,
+    TaskListItemUnchecked,
+    TaskListItemChecked,
     FencedCodeLine,
     Blockquote,
     TableHeaderRow,
@@ -300,7 +302,14 @@ public static class MarkdownParser
             return BlockKind.Heading1;
 
         if (text.StartsWith("- ") || text.StartsWith("* "))
+        {
+            if (text.Length >= 6 && text[2] == '[' && text[4] == ']' && text[5] == ' ')
+            {
+                if (text[3] == ' ') return BlockKind.TaskListItemUnchecked;
+                if (text[3] is 'x' or 'X') return BlockKind.TaskListItemChecked;
+            }
             return BlockKind.UnorderedListItem;
+        }
 
         if (text.StartsWith("> ") || text == ">")
             return BlockKind.Blockquote;

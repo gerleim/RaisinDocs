@@ -6,6 +6,36 @@ namespace RaisinDocs;
 
 public partial class DocsCanvas
 {
+    // --- Visual mode: task list checkbox toggle ---
+
+    private bool TryToggleTaskListCheckbox(Point pos)
+    {
+        if (_parsedBlocks == null) return false;
+
+        double effectiveScroll = _scrollOffset + _smoother.Offset;
+        int vli = HitTestVisualLine(pos.Y + effectiveScroll);
+        var vl = _visualLines[vli];
+        if (vl.StartOffset != 0) return false;
+
+        var parsed = _parsedBlocks[vl.BlockIndex];
+        if (parsed.Kind is not (BlockKind.TaskListItemUnchecked or BlockKind.TaskListItemChecked))
+            return false;
+
+        if (pos.X > _padding + _listIndent)
+            return false;
+
+        SealAndStopTimer();
+        _doc.BeginUndoGroup();
+        char newChar = parsed.Kind == BlockKind.TaskListItemChecked ? ' ' : 'x';
+        _doc.RemoveTextAt(vl.BlockIndex, 3, 1);
+        _doc.InsertTextAt(vl.BlockIndex, 3, newChar.ToString());
+        _doc.SealUndoGroup();
+
+        IsDirty = true;
+        InvalidateLayout();
+        return true;
+    }
+
     // --- Visual mode: cursor helpers ---
 
     private void SkipCursorOverHiddenRanges(bool forward)
@@ -960,11 +990,19 @@ public partial class DocsCanvas
 
         if (map.ReplacementPrefix != null && vl.StartOffset == 0)
         {
-            var prefixFt = new FormattedText(map.ReplacementPrefix,
-                CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
-                _normalTypeface, fontSize, _palette.Syntax, _dpiScale);
-            dc.DrawText(prefixFt, new Point(_padding, screenY));
-            x += MeasureReplacementPrefix(map.ReplacementPrefix, parsed.Kind);
+            if (parsed.Kind is BlockKind.TaskListItemUnchecked or BlockKind.TaskListItemChecked)
+            {
+                x += DrawTaskListCheckbox(dc, parsed.Kind == BlockKind.TaskListItemChecked,
+                    _padding, screenY, parsed.Kind);
+            }
+            else
+            {
+                var prefixFt = new FormattedText(map.ReplacementPrefix,
+                    CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
+                    _normalTypeface, fontSize, _palette.Syntax, _dpiScale);
+                dc.DrawText(prefixFt, new Point(_padding, screenY));
+                x += MeasureReplacementPrefix(map.ReplacementPrefix, parsed.Kind);
+            }
         }
 
         int vlEnd = vl.StartOffset + vl.Length;
@@ -1008,6 +1046,39 @@ public partial class DocsCanvas
 
         if (segStart < vlEnd)
             DrawTextSegment(dc, blockText, segStart, vlEnd, map, parsed, fontSize, baseTypeface, x, screenY);
+    }
+
+    private double DrawTaskListCheckbox(DrawingContext dc, bool isChecked, double x, double screenY, BlockKind blockKind)
+    {
+        double lineH = GetLineHeight(blockKind);
+        double boxSize = Math.Round(lineH * 0.65);
+        double yOffset = Math.Round((lineH - boxSize) / 2);
+        double checkboxX = x + _listIndent - boxSize - 4;
+        double checkboxY = screenY + yOffset;
+        var rect = new Rect(checkboxX, checkboxY, boxSize, boxSize);
+        double radius = 2.5;
+
+        if (isChecked)
+        {
+            dc.DrawRoundedRectangle(_checkboxCheckedBrush, null, rect, radius, radius);
+            var pen = new Pen(_palette.Background, 1.6);
+            pen.Freeze();
+            double cx = checkboxX, cy = checkboxY, s = boxSize;
+            dc.DrawLine(pen,
+                new Point(cx + s * 0.22, cy + s * 0.52),
+                new Point(cx + s * 0.42, cy + s * 0.72));
+            dc.DrawLine(pen,
+                new Point(cx + s * 0.42, cy + s * 0.72),
+                new Point(cx + s * 0.78, cy + s * 0.28));
+        }
+        else
+        {
+            var pen = new Pen(_palette.Syntax, 1.2);
+            pen.Freeze();
+            dc.DrawRoundedRectangle(null, pen, rect, radius, radius);
+        }
+
+        return _listIndent;
     }
 
     private double DrawTextSegment(DrawingContext dc, string blockText,

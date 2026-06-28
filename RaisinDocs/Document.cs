@@ -328,6 +328,9 @@ public class Document
             var hp = new string('#', h) + " ";
             if (text.StartsWith(hp)) return hp;
         }
+        if (text.Length >= 6 && (text.StartsWith("- ") || text.StartsWith("* "))
+            && text[2] == '[' && (text[3] == ' ' || text[3] == 'x' || text[3] == 'X') && text[4] == ']' && text[5] == ' ')
+            return text.Substring(0, 6);
         if (text.StartsWith("- ")) return "- ";
         if (text.StartsWith("* ")) return "* ";
         if (text.StartsWith("> ")) return "> ";

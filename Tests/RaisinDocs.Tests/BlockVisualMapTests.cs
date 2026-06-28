@@ -379,6 +379,58 @@ public class BlockVisualMapTests
         map.Images.Should().BeNull();
     }
 
+    // --- Task list items ---
+
+    [Fact]
+    public void TaskListUnchecked_PrefixHidden()
+    {
+        var map = ComputeMap("- [ ] Task");
+        for (int i = 0; i < 6; i++)
+            map.IsHidden(i).Should().BeTrue($"offset {i} should be hidden");
+        map.IsHidden(6).Should().BeFalse();
+    }
+
+    [Fact]
+    public void TaskListChecked_PrefixHidden()
+    {
+        var map = ComputeMap("- [x] Task");
+        for (int i = 0; i < 6; i++)
+            map.IsHidden(i).Should().BeTrue($"offset {i} should be hidden");
+        map.IsHidden(6).Should().BeFalse();
+    }
+
+    [Fact]
+    public void TaskListUnchecked_ReplacementPrefix()
+    {
+        var map = ComputeMap("- [ ] Task");
+        map.ReplacementPrefix.Should().Contain("☐");
+    }
+
+    [Fact]
+    public void TaskListChecked_ReplacementPrefix()
+    {
+        var map = ComputeMap("- [x] Task");
+        map.ReplacementPrefix.Should().Contain("☑");
+    }
+
+    [Fact]
+    public void TaskList_RawToVisual()
+    {
+        var map = ComputeMap("- [ ] Task");
+        int prefixLen = map.ReplacementPrefix!.Length;
+        map.RawToVisual(6).Should().Be(prefixLen);
+        map.RawToVisual(7).Should().Be(prefixLen + 1);
+    }
+
+    [Fact]
+    public void TaskList_VisualToRaw()
+    {
+        var map = ComputeMap("- [ ] Task");
+        int prefixLen = map.ReplacementPrefix!.Length;
+        map.VisualToRaw(prefixLen).Should().Be(6);
+        map.VisualToRaw(prefixLen + 1).Should().Be(7);
+    }
+
     // --- Tables ---
 
     private static List<BlockVisualMap> ComputeTableMaps(params string[] blocks)

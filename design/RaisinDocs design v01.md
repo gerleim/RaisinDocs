@@ -139,10 +139,19 @@ A trailing `\` is a hard break only when:
 - Toolbar button to insert table template
 - Rectangular cell selection with copy and clear operations
 
+### 8 — Task list items
+- See `design/GFM Task Lists - Iteration 8.md` for detailed plan
+- GFM task list syntax: `- [ ] unchecked`, `- [x] checked`
+- Parser detects checkbox prefix, assigns TaskListItemUnchecked / TaskListItemChecked BlockKind
+- Source mode: dimmed checkbox prefix
+- Visual mode: rendered checkbox glyph (empty square / filled with checkmark), checked items dimmed/struck
+- Click checkbox to toggle checked state, with undo support
+- Toolbar button to insert/toggle task list item
+
 ### GFM extensions roadmap
 - ~~Strikethrough (`~~text~~`)~~ — ✅ implemented in iteration 4
 - ~~Tables~~ — ✅ implemented in iteration 7
-- Task list items (`- [ ]` unchecked, `- [x]` checked) — checkbox rendering in Visual mode, toggle on click
+- Task list items — iteration 8 (above)
 - Extended autolinks — bare URLs auto-linked without `<>` syntax
 
 ### Future

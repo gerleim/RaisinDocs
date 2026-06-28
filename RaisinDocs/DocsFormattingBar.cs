@@ -39,6 +39,15 @@ public class DocsFormattingBar : Control
         "M2,7.5 A1.5,1.5,0,1,1,1.99,7.5 Z M5.5,6.5 H14 V8.5 H5.5 Z " +
         "M2,12 A1.5,1.5,0,1,1,1.99,12 Z M5.5,11 H14 V13 H5.5 Z");
 
+    // Task list: three lines with checkboxes
+    private static readonly Geometry IconTaskList = Geometry.Parse(
+        "M1,2 H4 V5 H1 Z M2,3.8 L2.8,4.6 L4,2.4 " +
+        "M5.5,2.5 H14 V4.5 H5.5 Z " +
+        "M1,6.5 H4 V9.5 H1 Z " +
+        "M5.5,7 H14 V9 H5.5 Z " +
+        "M1,11 H4 V14 H1 Z M2,12.8 L2.8,13.6 L4,11.4 " +
+        "M5.5,11.5 H14 V13.5 H5.5 Z");
+
     // Blockquote: opening quote mark
     private static readonly Geometry IconQuote = Geometry.Parse(
         "M2,9 C2,5.5 4,3 7,2 L7,3.5 C5,4.5 4.2,6 4,7.5 L6.5,7.5 V12 H2 Z " +
@@ -80,6 +89,7 @@ public class DocsFormattingBar : Control
         IconSource.Freeze();
         IconVisual.Freeze();
         IconBullet.Freeze();
+        IconTaskList.Freeze();
         IconQuote.Freeze();
         IconDropdownArrow.Freeze();
         IconSun.Freeze();
@@ -110,12 +120,14 @@ public class DocsFormattingBar : Control
     private ToggleButton? _h2Button;
     private ToggleButton? _h3Button;
     private ToggleButton? _bulletButton;
+    private ToggleButton? _taskListButton;
     private ToggleButton? _quoteButton;
     private ToggleButton? _themeButton;
     private ToggleButton? _editModeButton;
     private Path? _editModeIcon;
     private Path? _themeIcon;
     private Path? _bulletIcon;
+    private Path? _taskListIcon;
     private Path? _quoteIcon;
     private Button? _imagePreviewButton;
     private Button? _imagePreviewArrow;
@@ -137,6 +149,9 @@ public class DocsFormattingBar : Control
         _bulletButton = WireToggle("PART_Bullet", () => Canvas?.ToggleBulletList());
         _bulletIcon = GetTemplateChild("PART_BulletIcon") as Path;
         if (_bulletIcon != null) _bulletIcon.Data = IconBullet;
+        _taskListButton = WireToggle("PART_TaskList", () => Canvas?.ToggleTaskList());
+        _taskListIcon = GetTemplateChild("PART_TaskListIcon") as Path;
+        if (_taskListIcon != null) _taskListIcon.Data = IconTaskList;
         _quoteButton = WireToggle("PART_Quote", () => Canvas?.ToggleBlockquote());
         _quoteIcon = GetTemplateChild("PART_QuoteIcon") as Path;
         if (_quoteIcon != null) _quoteIcon.Data = IconQuote;
@@ -345,6 +360,7 @@ public class DocsFormattingBar : Control
         SetCheckedSilent(_h2Button, kind == BlockKind.Heading2);
         SetCheckedSilent(_h3Button, kind == BlockKind.Heading3);
         SetCheckedSilent(_bulletButton, kind == BlockKind.UnorderedListItem);
+        SetCheckedSilent(_taskListButton, kind is BlockKind.TaskListItemUnchecked or BlockKind.TaskListItemChecked);
         SetCheckedSilent(_quoteButton, kind == BlockKind.Blockquote);
     }
 

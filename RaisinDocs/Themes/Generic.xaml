@@ -162,6 +162,12 @@
                                       Width="14" Height="14" Stretch="Uniform"
                                       Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=local:DocsFormattingBar}}" />
                             </ToggleButton>
+                            <ToggleButton x:Name="PART_TaskList" Style="{StaticResource FormattingToggle}"
+                                          ToolTip="Task list">
+                                <Path x:Name="PART_TaskListIcon"
+                                      Width="14" Height="14" Stretch="Uniform"
+                                      Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=local:DocsFormattingBar}}" />
+                            </ToggleButton>
                             <ToggleButton x:Name="PART_Quote" Style="{StaticResource FormattingToggle}"
                                           ToolTip="Blockquote">
                                 <Path x:Name="PART_QuoteIcon"

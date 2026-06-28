@@ -103,6 +103,79 @@ public class MarkdownParserTests
         result[0].Kind.Should().Be(BlockKind.Paragraph);
     }
 
+    // --- Task list items ---
+
+    [Fact]
+    public void TaskListUnchecked_Dash()
+    {
+        var result = ParseBlocks("- [ ] buy milk");
+        result[0].Kind.Should().Be(BlockKind.TaskListItemUnchecked);
+    }
+
+    [Fact]
+    public void TaskListChecked_Dash()
+    {
+        var result = ParseBlocks("- [x] buy milk");
+        result[0].Kind.Should().Be(BlockKind.TaskListItemChecked);
+    }
+
+    [Fact]
+    public void TaskListChecked_UppercaseX()
+    {
+        var result = ParseBlocks("- [X] buy milk");
+        result[0].Kind.Should().Be(BlockKind.TaskListItemChecked);
+    }
+
+    [Fact]
+    public void TaskListUnchecked_Star()
+    {
+        var result = ParseBlocks("* [ ] buy milk");
+        result[0].Kind.Should().Be(BlockKind.TaskListItemUnchecked);
+    }
+
+    [Fact]
+    public void TaskListChecked_Star()
+    {
+        var result = ParseBlocks("* [x] buy milk");
+        result[0].Kind.Should().Be(BlockKind.TaskListItemChecked);
+    }
+
+    [Fact]
+    public void TaskList_InlineStyles()
+    {
+        var result = ParseBlocks("- [ ] **bold** task");
+        result[0].Kind.Should().Be(BlockKind.TaskListItemUnchecked);
+        result[0].Runs.Should().Contain(new StyledRun(6, 8, InlineStyle.Bold));
+    }
+
+    [Fact]
+    public void TaskList_NoSpaceAfterBracket_IsRegularList()
+    {
+        var result = ParseBlocks("- [x]word");
+        result[0].Kind.Should().Be(BlockKind.UnorderedListItem);
+    }
+
+    [Fact]
+    public void TaskList_InvalidChar_IsRegularList()
+    {
+        var result = ParseBlocks("- [a] text");
+        result[0].Kind.Should().Be(BlockKind.UnorderedListItem);
+    }
+
+    [Fact]
+    public void TaskList_InsideFencedCode_NotDetected()
+    {
+        var result = ParseBlocks("```", "- [ ] not a task", "```");
+        result[1].Kind.Should().Be(BlockKind.FencedCodeLine);
+    }
+
+    [Fact]
+    public void TaskList_EmptyTextAfterCheckbox()
+    {
+        var result = ParseBlocks("- [ ] ");
+        result[0].Kind.Should().Be(BlockKind.TaskListItemUnchecked);
+    }
+
     // --- Fenced code blocks ---
 
     [Fact]

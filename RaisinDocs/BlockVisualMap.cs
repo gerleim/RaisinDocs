@@ -96,6 +96,14 @@ public class BlockVisualMap
             if (blockText.Length >= prefixLen)
                 ranges.Add(new HiddenRange(0, prefixLen));
         }
+        else if (parsed.Kind is BlockKind.TaskListItemUnchecked or BlockKind.TaskListItemChecked)
+        {
+            if (blockText.Length >= 6)
+            {
+                ranges.Add(new HiddenRange(0, 6));
+                replacementPrefix = parsed.Kind == BlockKind.TaskListItemChecked ? "  ☑ " : "  ☐ ";
+            }
+        }
         else if (parsed.Kind == BlockKind.UnorderedListItem)
         {
             if (blockText.StartsWith("- ") || blockText.StartsWith("* "))
