@@ -35,10 +35,14 @@ public partial class DocsCanvas : FrameworkElement
     private static readonly ThemePalette _darkBluePalette;
     private ThemePalette _palette = _lightPalette!;
 
+    private static readonly Brush _checkboxCheckedBrush;
     private static readonly double[] _headingFontSizes = [32, 26, 22, 18, 16, 14];
 
     static DocsCanvas()
     {
+        _checkboxCheckedBrush = new SolidColorBrush(Color.FromRgb(0x2B, 0x7A, 0xE0));
+        _checkboxCheckedBrush.Freeze();
+
         _lightPalette = BuildPalette(
             background: Colors.White,
             foreground: Colors.Black,
@@ -162,9 +166,56 @@ public partial class DocsCanvas : FrameworkElement
 
     private readonly Dictionary<BlockKind, double> _lineHeights = new();
 
+    private readonly record struct JoinSegment(int BlockIndex, int OffsetInJoined, int Length);
+
+    private sealed class ParagraphGroup
+    {
+        public required JoinSegment[] Segments { get; init; }
+        public required string JoinedText { get; init; }
+        public required BlockVisualMap JoinedMap { get; init; }
+        public required ParsedBlock JoinedParsed { get; init; }
+        public required int[] SoftBreakOffsets { get; init; }
+
+        public bool ContainsBlock(int blockIndex)
+        {
+            foreach (var seg in Segments)
+                if (seg.BlockIndex == blockIndex) return true;
+            return false;
+        }
+
+        public int SourceToJoined(int blockIndex, int offset)
+        {
+            foreach (var seg in Segments)
+            {
+                if (seg.BlockIndex == blockIndex)
+                    return seg.OffsetInJoined + Math.Min(offset, seg.Length);
+            }
+            return -1;
+        }
+
+        public (int BlockIndex, int Offset) JoinedToSource(int joinedOffset)
+        {
+            for (int i = 0; i < Segments.Length; i++)
+            {
+                var seg = Segments[i];
+                int segEnd = seg.OffsetInJoined + seg.Length;
+                if (joinedOffset >= seg.OffsetInJoined && joinedOffset <= segEnd)
+                    return (seg.BlockIndex, joinedOffset - seg.OffsetInJoined);
+                if (i < Segments.Length - 1 && joinedOffset == segEnd + 1)
+                    continue;
+            }
+            var last = Segments[^1];
+            return (last.BlockIndex, last.Length);
+        }
+
+        public int FirstBlock => Segments[0].BlockIndex;
+        public int LastBlock => Segments[^1].BlockIndex;
+    }
+
     private record struct VisualLine(int BlockIndex, int StartOffset, int Length, BlockKind BlockKind)
     {
         public double OverrideHeight { get; init; }
+        public ParagraphGroup? Group { get; init; }
     }
     private readonly List<VisualLine> _visualLines = [];
     private readonly List<double> _lineYPositions = [];
@@ -181,6 +232,7 @@ public partial class DocsCanvas : FrameworkElement
 
     private List<ParsedBlock>? _parsedBlocks;
     private List<BlockVisualMap>? _visualMaps;
+    private Dictionary<int, ParagraphGroup>? _blockToGroup;
     private readonly ImageCache _imageCache = new();
 
     public string? DocumentBasePath { get; set; }
@@ -320,6 +372,11 @@ public partial class DocsCanvas : FrameworkElement
     public void ToggleBulletList()
     {
         ToggleBlockPrefixForSelection("- ");
+    }
+
+    public void ToggleTaskList()
+    {
+        ToggleBlockPrefixForSelection("- [ ] ");
     }
 
     public void ToggleBlockquote()
@@ -552,6 +609,13 @@ public partial class DocsCanvas : FrameworkElement
         ComputeLayout();
         return HandleTableEnter(out _);
     }
+    internal void TestHandleEnter(bool shift = false, bool ctrl = false)
+    {
+        _parsedBlocks = null;
+        InvalidateLayout();
+        ComputeLayout();
+        HandleEnter(shift, ctrl);
+    }
 
     private readonly DispatcherTimer _undoSealTimer;
     private enum LastActionKind { None, Typing, Deleting }
@@ -723,6 +787,7 @@ public partial class DocsCanvas : FrameworkElement
         _layoutDirty = true;
         _parsedBlocks = null;
         _visualMaps = null;
+        _blockToGroup = null;
         InvalidateVisual();
     }
 
@@ -790,6 +855,8 @@ public partial class DocsCanvas : FrameworkElement
 
     private double MeasureReplacementPrefix(string prefix, BlockKind blockKind)
     {
+        if (blockKind is BlockKind.TaskListItemUnchecked or BlockKind.TaskListItemChecked)
+            return _listIndent;
         double total = 0;
         for (int i = 0; i < prefix.Length; i++)
             total += MeasureCharWidth(prefix[i], blockKind, InlineStyle.Normal);
@@ -853,6 +920,7 @@ public partial class DocsCanvas : FrameworkElement
     {
         if (!_layoutDirty) return;
         _layoutDirty = false;
+        EnsureMeasured();
 
         _parsedBlocks ??= MarkdownParser.Parse(i => _doc.GetBlockText(i), _doc.BlockCount);
 
@@ -872,6 +940,119 @@ public partial class DocsCanvas : FrameworkElement
         }
     }
 
+    private void BuildParagraphGroups()
+    {
+        _blockToGroup = new Dictionary<int, ParagraphGroup>();
+        var groupBlocks = new List<int>();
+
+        for (int bi = 0; bi <= _doc.BlockCount; bi++)
+        {
+            bool canContinue = false;
+            if (bi < _doc.BlockCount && _parsedBlocks![bi].Kind == BlockKind.Paragraph
+                && _doc.GetBlockLength(bi) > 0 && groupBlocks.Count > 0)
+            {
+                int prev = groupBlocks[^1];
+                string prevText = _doc.GetBlockText(prev);
+                var prevParsed = _parsedBlocks![prev];
+                bool prevHardBreak = MarkdownParser.IsTrailingHardBreak(prevParsed, prevText)
+                    || (prevText.Length >= 2 && prevText.EndsWith("  "));
+                if (!prevHardBreak)
+                {
+                    bool hasEmptyBetween = false;
+                    for (int mid = prev + 1; mid < bi; mid++)
+                    {
+                        if (_doc.GetBlockLength(mid) == 0) { hasEmptyBetween = true; break; }
+                    }
+                    canContinue = !hasEmptyBetween;
+                }
+            }
+
+            if (canContinue)
+            {
+                groupBlocks.Add(bi);
+            }
+            else
+            {
+                if (groupBlocks.Count >= 2)
+                    EmitParagraphGroup(groupBlocks);
+                groupBlocks.Clear();
+                if (bi < _doc.BlockCount && _parsedBlocks![bi].Kind == BlockKind.Paragraph
+                    && _doc.GetBlockLength(bi) > 0)
+                    groupBlocks.Add(bi);
+            }
+        }
+    }
+
+    private void EmitParagraphGroup(List<int> blockIndices)
+    {
+        var sb = new System.Text.StringBuilder();
+        var segments = new JoinSegment[blockIndices.Count];
+        var softBreakOffsets = new List<int>();
+
+        for (int i = 0; i < blockIndices.Count; i++)
+        {
+            if (i > 0)
+            {
+                softBreakOffsets.Add(sb.Length);
+                sb.Append('¶');
+            }
+            int bi = blockIndices[i];
+            string text = _doc.GetBlockText(bi);
+            segments[i] = new JoinSegment(bi, sb.Length, text.Length);
+            sb.Append(text);
+        }
+
+        string joinedText = sb.ToString();
+
+        var mergedRuns = new List<StyledRun>();
+        var mergedImages = new List<InlineImage>();
+        var mergedHiddenRanges = new List<HiddenRange>();
+
+        for (int i = 0; i < segments.Length; i++)
+        {
+            var seg = segments[i];
+            var parsed = _parsedBlocks![seg.BlockIndex];
+            var map = _visualMaps![seg.BlockIndex];
+
+            foreach (var run in parsed.Runs)
+                mergedRuns.Add(new StyledRun(run.Start + seg.OffsetInJoined, run.Length, run.Style));
+
+            if (parsed.Images != null)
+            {
+                foreach (var img in parsed.Images)
+                    mergedImages.Add(new InlineImage(
+                        img.Start + seg.OffsetInJoined, img.Length, img.AltText, img.Url, img.Title));
+            }
+
+            foreach (var hr in map.HiddenRanges)
+                mergedHiddenRanges.Add(new HiddenRange(hr.Start + seg.OffsetInJoined, hr.Length));
+        }
+
+        mergedRuns.Sort((a, b) => a.Start.CompareTo(b.Start));
+        mergedHiddenRanges.Sort((a, b) => a.Start.CompareTo(b.Start));
+
+        var joinedParsed = new ParsedBlock
+        {
+            Kind = BlockKind.Paragraph,
+            Runs = mergedRuns,
+            Images = mergedImages.Count > 0 ? mergedImages : null,
+        };
+        var joinedMap = new BlockVisualMap(mergedHiddenRanges,
+            images: mergedImages.Count > 0 ? mergedImages : null);
+
+        var group = new ParagraphGroup
+        {
+            Segments = segments,
+            JoinedText = joinedText,
+            JoinedMap = joinedMap,
+            JoinedParsed = joinedParsed,
+            SoftBreakOffsets = softBreakOffsets.ToArray(),
+        };
+
+        foreach (var seg in segments)
+            _blockToGroup![seg.BlockIndex] = group;
+    }
+
     private void ComputeLayoutCore(double maxWidth)
     {
         _visualLines.Clear();
@@ -881,7 +1062,10 @@ public partial class DocsCanvas : FrameworkElement
         _layoutMaxWidth = maxWidth;
 
         if (IsVisual)
+        {
             ComputeAllTableColumnWidths(maxWidth);
+            BuildParagraphGroups();
+        }
 
         for (int bi = 0; bi < _doc.BlockCount; bi++)
         {
@@ -890,7 +1074,21 @@ public partial class DocsCanvas : FrameworkElement
             if (IsVisual && parsed.IsSkippedInVisual)
                 continue;
 
+            if (IsVisual && _blockToGroup != null && _blockToGroup.TryGetValue(bi, out var group))
+            {
+                if (bi == group.FirstBlock)
+                    WrapSegmentJoined(group, maxWidth);
+                continue;
+            }
+
             string text = _doc.GetBlockText(bi);
+
+            if (text.Length == 0)
+            {
+                _visualLines.Add(new VisualLine(bi, 0, 0, parsed.Kind) { OverrideHeight = _paragraphGap });
+                continue;
+            }
+
             var map = IsVisual ? _visualMaps?[bi] : null;
 
             if (IsVisual && parsed.Table != null && parsed.Kind is BlockKind.TableHeaderRow or BlockKind.TableDataRow)
@@ -914,15 +1112,21 @@ public partial class DocsCanvas : FrameworkElement
             int bi = _visualLines[i].BlockIndex;
             if (i > 0 && bi != _visualLines[i - 1].BlockIndex)
             {
+                var curGroup = _visualLines[i].Group;
+                var prevGroup = _visualLines[i - 1].Group;
+                if (curGroup != null && prevGroup == curGroup)
+                    goto skipGap;
+
                 bool paragraphBreak = false;
                 for (int prev = _visualLines[i - 1].BlockIndex; prev < bi && !paragraphBreak; prev++)
                 {
                     if (_doc.GetBlockLength(prev) == 0)
                         paragraphBreak = true;
                 }
-                if (paragraphBreak)
+                if (paragraphBreak && _doc.GetBlockLength(_visualLines[i - 1].BlockIndex) > 0)
                     y += _paragraphGap;
             }
+            skipGap:
             _lineYPositions.Add(y);
             var lineVl = _visualLines[i];
             double lineH = GetLineHeight(lineVl.BlockKind);
@@ -967,6 +1171,32 @@ public partial class DocsCanvas : FrameworkElement
         }
     }
 
+    private void WrapSegmentJoined(ParagraphGroup group, double maxWidth)
+    {
+        string text = group.JoinedText;
+        if (text.Length == 0)
+        {
+            _visualLines.Add(new VisualLine(group.FirstBlock, 0, 0, BlockKind.Paragraph)
+                { Group = group });
+            return;
+        }
+
+        int pos = 0;
+        while (pos < text.Length)
+        {
+            int lineLen = FitLine(text, pos, maxWidth, group.JoinedParsed, group.JoinedMap);
+            var (bi, _) = group.JoinedToSource(pos);
+            var vl = new VisualLine(bi, pos, lineLen, BlockKind.Paragraph) { Group = group };
+            if (group.JoinedMap.Images != null)
+            {
+                double imgH = GetImageMaxLineHeight(vl, group.JoinedMap);
+                if (imgH > 0) vl = vl with { OverrideHeight = imgH };
+            }
+            _visualLines.Add(vl);
+            pos += lineLen;
+        }
+    }
+
     private int FitLine(string text, int start, double maxWidth, ParsedBlock parsed,
         BlockVisualMap? map = null, int blockOffset = 0)
     {
@@ -995,7 +1225,7 @@ public partial class DocsCanvas : FrameworkElement
                 }
                 continue;
             }
-            if (text[i] == ' ') lastSpace = i;
+            if (text[i] is ' ' or '¶') lastSpace = i;
             var style = GetStyleAtOffset(parsed.Runs, rawOffset, ref runIdx);
             width += MeasureCharWidth(text[i], parsed.Kind, style);
             anyVisible = true;
@@ -1030,7 +1260,13 @@ public partial class DocsCanvas : FrameworkElement
         for (int i = _visualLines.Count - 1; i >= 0; i--)
         {
             var vl = _visualLines[i];
-            if (vl.BlockIndex == _doc.CursorBlock && vl.StartOffset <= _doc.CursorOffset)
+            if (vl.Group != null)
+            {
+                int joined = vl.Group.SourceToJoined(_doc.CursorBlock, _doc.CursorOffset);
+                if (joined >= 0 && joined >= vl.StartOffset && joined <= vl.StartOffset + vl.Length)
+                    return i;
+            }
+            else if (vl.BlockIndex == _doc.CursorBlock && vl.StartOffset <= _doc.CursorOffset)
                 return i;
         }
         return 0;
@@ -1039,14 +1275,23 @@ public partial class DocsCanvas : FrameworkElement
     private double CursorXInVisualLine(int vlIndex)
     {
         var vl = _visualLines[vlIndex];
-        int localOffset = Math.Clamp(_doc.CursorOffset - vl.StartOffset, 0, vl.Length);
+
+        if (vl.Group != null)
+        {
+            int joinedOffset = vl.Group.SourceToJoined(_doc.CursorBlock, _doc.CursorOffset);
+            int localOffset = Math.Clamp(joinedOffset - vl.StartOffset, 0, vl.Length);
+            if (localOffset == 0) return 0;
+            return MeasureJoinedRange(vl.Group, vl.StartOffset, localOffset);
+        }
+
+        int localOff = Math.Clamp(_doc.CursorOffset - vl.StartOffset, 0, vl.Length);
         var map = IsVisual ? _visualMaps?[vl.BlockIndex] : null;
 
         var parsed = _parsedBlocks![vl.BlockIndex];
         if (IsVisual && parsed.Table != null && parsed.TableRow != null
             && _tableColumnWidths.TryGetValue(parsed.Table, out var colWidths))
         {
-            return CursorXInTableRow(vl.BlockIndex, parsed, colWidths, localOffset);
+            return CursorXInTableRow(vl.BlockIndex, parsed, colWidths, localOff);
         }
 
         string blockText = _doc.GetBlockText(vl.BlockIndex);
@@ -1054,7 +1299,7 @@ public partial class DocsCanvas : FrameworkElement
         if (map != null && map.ReplacementPrefix != null && vl.StartOffset == 0)
             x += MeasureReplacementPrefix(map.ReplacementPrefix!, vl.BlockKind);
 
-        if (localOffset == 0) return x;
+        if (localOff == 0) return x;
 
         if (map == null)
         {
@@ -1063,12 +1308,12 @@ public partial class DocsCanvas : FrameworkElement
                 FlowDirection.LeftToRight, GetBlockBaseTypeface(vl.BlockKind),
                 GetBlockFontSize(vl.BlockKind), _palette.Foreground, _dpiScale);
             ApplyInlineStyles(ft, vl, parsed);
-            var geom = ft.BuildHighlightGeometry(new Point(0, 0), 0, localOffset);
+            var geom = ft.BuildHighlightGeometry(new Point(0, 0), 0, localOff);
             return x + (geom != null ? geom.Bounds.Right : ft.WidthIncludingTrailingWhitespace);
         }
 
         int runIdx = 0;
-        for (int i = vl.StartOffset; i < vl.StartOffset + localOffset; i++)
+        for (int i = vl.StartOffset; i < vl.StartOffset + localOff; i++)
         {
             if (map.IsHidden(i))
             {
@@ -1087,10 +1332,19 @@ public partial class DocsCanvas : FrameworkElement
         return x;
     }
 
+    private double MeasureJoinedRange(ParagraphGroup group, int start, int length)
+    {
+        return MeasureRangeWidth(group.JoinedText, start, length,
+            group.JoinedParsed.Runs, BlockKind.Paragraph, group.JoinedMap);
+    }
+
     private int HitTestInVisualLine(int vlIndex, double x)
     {
         var vl = _visualLines[vlIndex];
         if (vl.Length == 0) return vl.StartOffset;
+
+        if (vl.Group != null)
+            return HitTestInJoinedLine(vl, x);
 
         var parsed = _parsedBlocks![vl.BlockIndex];
         if (IsVisual && parsed.Table != null && parsed.TableRow != null
@@ -1130,6 +1384,37 @@ public partial class DocsCanvas : FrameworkElement
             }
             var style = GetStyleAtOffset(parsed.Runs, offset, ref runIdx);
             double charW = MeasureCharWidth(blockText[offset], parsed.Kind, style);
+            if (x < accum + charW / 2)
+                return offset;
+            accum += charW;
+        }
+        return vl.StartOffset + vl.Length;
+    }
+
+    private int HitTestInJoinedLine(VisualLine vl, double x)
+    {
+        var group = vl.Group!;
+        double accum = 0;
+        int runIdx = 0;
+
+        for (int i = 0; i < vl.Length; i++)
+        {
+            int offset = vl.StartOffset + i;
+            if (group.JoinedMap.IsHidden(offset))
+            {
+                var img = FindImageAtRawOffset(group.JoinedMap.Images, offset);
+                if (img != null)
+                {
+                    var (imgW, _) = GetImageSize(img.Value, _layoutMaxWidth);
+                    if (x < accum + imgW / 2)
+                        return offset;
+                    accum += imgW;
+                    i += img.Value.Length - 1;
+                }
+                continue;
+            }
+            var style = GetStyleAtOffset(group.JoinedParsed.Runs, offset, ref runIdx);
+            double charW = MeasureCharWidth(group.JoinedText[offset], BlockKind.Paragraph, style);
             if (x < accum + charW / 2)
                 return offset;
             accum += charW;
@@ -1246,8 +1531,19 @@ public partial class DocsCanvas : FrameworkElement
     {
         double effectiveScroll = _scrollOffset + _smoother.Offset;
         int vli = HitTestVisualLine(pos.Y + effectiveScroll);
-        blockIndex = _visualLines[vli].BlockIndex;
-        charOffset = HitTestInVisualLine(vli, pos.X - _padding);
+        var vl = _visualLines[vli];
+        int rawOffset = HitTestInVisualLine(vli, pos.X - _padding);
+        if (vl.Group != null)
+        {
+            var (bi, bo) = vl.Group.JoinedToSource(rawOffset);
+            blockIndex = bi;
+            charOffset = bo;
+        }
+        else
+        {
+            blockIndex = vl.BlockIndex;
+            charOffset = rawOffset;
+        }
     }
 
     // --- Scroll ---
@@ -1333,6 +1629,12 @@ public partial class DocsCanvas : FrameworkElement
             }
             CaptureMouse();
             InvalidateVisual();
+            e.Handled = true;
+            return;
+        }
+
+        if (IsVisual && TryToggleTaskListCheckbox(pos))
+        {
             e.Handled = true;
             return;
         }
@@ -1616,7 +1918,17 @@ public partial class DocsCanvas : FrameworkElement
         else
         {
             int vli = CursorToVisualLineIndex();
-            _doc.CursorOffset = _visualLines[vli].StartOffset;
+            var vl = _visualLines[vli];
+            if (vl.Group != null)
+            {
+                var (bi, bo) = vl.Group.JoinedToSource(vl.StartOffset);
+                _doc.CursorBlock = bi;
+                _doc.CursorOffset = bo;
+            }
+            else
+            {
+                _doc.CursorOffset = vl.StartOffset;
+            }
         }
         if (IsVisual) HandleHomeVisual();
         if (!shift) _doc.CollapseSelection();
@@ -1634,7 +1946,16 @@ public partial class DocsCanvas : FrameworkElement
         {
             int vli = CursorToVisualLineIndex();
             var vl = _visualLines[vli];
-            _doc.CursorOffset = vl.StartOffset + vl.Length;
+            if (vl.Group != null)
+            {
+                var (bi, bo) = vl.Group.JoinedToSource(vl.StartOffset + vl.Length);
+                _doc.CursorBlock = bi;
+                _doc.CursorOffset = bo;
+            }
+            else
+            {
+                _doc.CursorOffset = vl.StartOffset + vl.Length;
+            }
         }
         if (IsVisual) HandleEndVisual();
         if (!shift) _doc.CollapseSelection();
@@ -1648,8 +1969,7 @@ public partial class DocsCanvas : FrameworkElement
         {
             double x = CursorXInVisualLine(vli);
             vli--;
-            _doc.CursorBlock = _visualLines[vli].BlockIndex;
-            _doc.CursorOffset = HitTestInVisualLine(vli, x);
+            SetCursorFromVisualLine(vli, x);
         }
         if (IsVisual) HandleUpVisual();
         if (!shift) _doc.CollapseSelection();
@@ -1663,11 +1983,27 @@ public partial class DocsCanvas : FrameworkElement
         {
             double x = CursorXInVisualLine(vli);
             vli++;
-            _doc.CursorBlock = _visualLines[vli].BlockIndex;
-            _doc.CursorOffset = HitTestInVisualLine(vli, x);
+            SetCursorFromVisualLine(vli, x);
         }
         if (IsVisual) HandleDownVisual();
         if (!shift) _doc.CollapseSelection();
+    }
+
+    private void SetCursorFromVisualLine(int vli, double x)
+    {
+        var vl = _visualLines[vli];
+        int rawOffset = HitTestInVisualLine(vli, x);
+        if (vl.Group != null)
+        {
+            var (bi, bo) = vl.Group.JoinedToSource(rawOffset);
+            _doc.CursorBlock = bi;
+            _doc.CursorOffset = bo;
+        }
+        else
+        {
+            _doc.CursorBlock = vl.BlockIndex;
+            _doc.CursorOffset = rawOffset;
+        }
     }
 
     public void InsertTable(int columns, int rows)
@@ -1697,6 +2033,60 @@ public partial class DocsCanvas : FrameworkElement
 
     private static bool IsTableRow(ParsedBlock parsed) =>
         parsed.Kind is BlockKind.TableHeaderRow or BlockKind.TableDataRow or BlockKind.TableSeparatorRow;
+
+    private void HandleEnter(bool shift, bool ctrl)
+    {
+        _doc.BeginUndoGroup();
+        if (_doc.HasSelection) _doc.DeleteSelection();
+        if (shift)
+        {
+            var blockKind = MarkdownParser.ClassifyBlock(_doc.GetBlockText(_doc.CursorBlock));
+            bool isHeading = blockKind >= BlockKind.Heading1 && blockKind <= BlockKind.Heading6;
+            if (!isHeading)
+            {
+                string marker = _hardBreak == HardBreakStyle.Backslash ? "\\" : "  ";
+                string beforeCursor = _doc.GetBlockText(_doc.CursorBlock)[.._doc.CursorOffset];
+                if (!beforeCursor.EndsWith(marker))
+                    _doc.Paste(marker);
+            }
+            _doc.InsertParagraphBreak();
+        }
+        else if (ctrl)
+        {
+            _doc.InsertParagraphBreak();
+        }
+        else
+        {
+            string blockText = _doc.GetBlockText(_doc.CursorBlock);
+            var blockKind = MarkdownParser.ClassifyBlock(blockText);
+            bool isStandalone = (blockKind >= BlockKind.Heading1 && blockKind <= BlockKind.Heading6)
+                             || MarkdownParser.IsFenceLine(blockText);
+            StripTrailingHardBreak();
+            _doc.InsertParagraphBreak();
+            if (!isStandalone
+                && (_doc.GetBlockLength(_doc.CursorBlock) > 0
+                    || _doc.CursorBlock == _doc.BlockCount - 1))
+                _doc.InsertParagraphBreak();
+        }
+        _doc.CollapseSelection();
+        _doc.SealUndoGroup();
+    }
+
+    private void StripTrailingHardBreak()
+    {
+        string text = _doc.GetBlockText(_doc.CursorBlock);
+        if (text.EndsWith("\\"))
+        {
+            _doc.CursorOffset = text.Length;
+            _doc.Backspace();
+        }
+        else if (text.EndsWith("  "))
+        {
+            _doc.CursorOffset = text.Length;
+            _doc.Backspace();
+            _doc.Backspace();
+        }
+    }
 
     private bool HandleTableTab(bool shift, out bool textChanged)
     {
@@ -1848,37 +2238,7 @@ public partial class DocsCanvas : FrameworkElement
                 SealAndStopTimer();
                 if (HandleTableEnter(out textChanged))
                     break;
-                _doc.BeginUndoGroup();
-                if (_doc.HasSelection) _doc.DeleteSelection();
-                if (shift)
-                {
-                    var blockKind = MarkdownParser.ClassifyBlock(_doc.GetBlockText(_doc.CursorBlock));
-                    bool isHeading = blockKind >= BlockKind.Heading1 && blockKind <= BlockKind.Heading6;
-                    if (!isHeading)
-                    {
-                        string marker = _hardBreak == HardBreakStyle.Backslash ? "\\" : "  ";
-                        string beforeCursor = _doc.GetBlockText(_doc.CursorBlock)[.._doc.CursorOffset];
-                        if (!beforeCursor.EndsWith(marker))
-                            _doc.Paste(marker);
-                    }
-                    _doc.InsertParagraphBreak();
-                }
-                else if (ctrl)
-                {
-                    _doc.InsertParagraphBreak();
-                }
-                else
-                {
-                    string blockText = _doc.GetBlockText(_doc.CursorBlock);
-                    var blockKind = MarkdownParser.ClassifyBlock(blockText);
-                    bool isStandalone = (blockKind >= BlockKind.Heading1 && blockKind <= BlockKind.Heading6)
-                                     || MarkdownParser.IsFenceLine(blockText);
-                    _doc.InsertParagraphBreak();
-                    if (!isStandalone)
-                        _doc.InsertParagraphBreak();
-                }
-                _doc.CollapseSelection();
-                _doc.SealUndoGroup();
+                HandleEnter(shift, ctrl);
                 textChanged = true;
                 break;
 
@@ -2073,58 +2433,78 @@ public partial class DocsCanvas : FrameworkElement
 
             if (vl.Length > 0)
             {
-                string blockText = _doc.GetBlockText(vl.BlockIndex);
-                var parsed = _parsedBlocks![vl.BlockIndex];
-                double fontSize = GetBlockFontSize(parsed.Kind);
-                var baseTypeface = GetBlockBaseTypeface(parsed.Kind);
-                var map = IsVisual ? _visualMaps?[vl.BlockIndex] : null;
-
-                double textX = _padding;
-
-                if (IsVisual && parsed.Table != null && parsed.TableRow != null)
+                if (vl.Group != null)
                 {
-                    DrawTableRow(dc, vl, blockText, parsed, lineY, effectiveScroll, fontSize, baseTypeface);
-                }
-                else if (map != null)
-                {
-                    if (HasImagesOnLine(vl, map))
-                    {
-                        DrawVisualLineWithImages(dc, vl, blockText, parsed, map,
-                            lineY, effectiveScroll, fontSize, baseTypeface);
-                    }
-                    else
-                    {
-                        if (map.ReplacementPrefix != null && vl.StartOffset == 0)
-                        {
-                            var prefixFt = new FormattedText(map.ReplacementPrefix!,
-                                CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
-                                _normalTypeface, fontSize, _palette.Syntax, _dpiScale);
-                            dc.DrawText(prefixFt, new Point(_padding, lineY - effectiveScroll));
-                            textX += MeasureReplacementPrefix(map.ReplacementPrefix!, parsed.Kind);
-                        }
-
-                        string displayText = map.BuildDisplayString(blockText, vl.StartOffset, vl.Length);
-                        if (displayText.Length > 0)
-                        {
-                            var ft = new FormattedText(displayText, CultureInfo.InvariantCulture,
-                                FlowDirection.LeftToRight, baseTypeface, fontSize,
-                                _palette.Foreground, _dpiScale);
-                            ApplyInlineStylesVisual(ft, vl, parsed, map);
-                            dc.DrawText(ft, new Point(textX, lineY - effectiveScroll));
-                        }
-                    }
+                    DrawJoinedLine(dc, vl, lineY, effectiveScroll);
                 }
                 else
                 {
-                    string text = blockText.Substring(vl.StartOffset, vl.Length);
-                    var ft = new FormattedText(text, CultureInfo.InvariantCulture,
-                        FlowDirection.LeftToRight, baseTypeface, fontSize,
-                        _palette.Foreground, _dpiScale);
-                    ApplyInlineStyles(ft, vl, parsed);
-                    dc.DrawText(ft, new Point(textX, lineY - effectiveScroll));
+                    string blockText = _doc.GetBlockText(vl.BlockIndex);
+                    var parsed = _parsedBlocks![vl.BlockIndex];
+                    double fontSize = GetBlockFontSize(parsed.Kind);
+                    var baseTypeface = GetBlockBaseTypeface(parsed.Kind);
+                    var map = IsVisual ? _visualMaps?[vl.BlockIndex] : null;
 
-                    if (_imagePreview == ImagePreviewMode.Inline && parsed.Images != null)
-                        DrawSourceInlineImages(dc, vl, parsed.Images, lineY, effectiveScroll);
+                    double textX = _padding;
+
+                    if (IsVisual && parsed.Table != null && parsed.TableRow != null)
+                    {
+                        DrawTableRow(dc, vl, blockText, parsed, lineY, effectiveScroll, fontSize, baseTypeface);
+                    }
+                    else if (map != null)
+                    {
+                        if (HasImagesOnLine(vl, map))
+                        {
+                            DrawVisualLineWithImages(dc, vl, blockText, parsed, map,
+                                lineY, effectiveScroll, fontSize, baseTypeface);
+                        }
+                        else
+                        {
+                            if (map.ReplacementPrefix != null && vl.StartOffset == 0)
+                            {
+                                if (parsed.Kind is BlockKind.TaskListItemUnchecked or BlockKind.TaskListItemChecked)
+                                {
+                                    textX += DrawTaskListCheckbox(dc, parsed.Kind == BlockKind.TaskListItemChecked,
+                                        _padding, lineY - effectiveScroll, parsed.Kind);
+                                }
+                                else
+                                {
+                                    var prefixFt = new FormattedText(map.ReplacementPrefix!,
+                                        CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
+                                        _normalTypeface, fontSize, _palette.Syntax, _dpiScale);
+                                    dc.DrawText(prefixFt, new Point(_padding, lineY - effectiveScroll));
+                                    textX += MeasureReplacementPrefix(map.ReplacementPrefix!, parsed.Kind);
+                                }
+                            }
+
+                            string displayText = map.BuildDisplayString(blockText, vl.StartOffset, vl.Length);
+                            if (displayText.Length > 0)
+                            {
+                                var ft = new FormattedText(displayText, CultureInfo.InvariantCulture,
+                                    FlowDirection.LeftToRight, baseTypeface, fontSize,
+                                    _palette.Foreground, _dpiScale);
+                                ApplyInlineStylesVisual(ft, vl, parsed, map);
+                                if (parsed.Kind == BlockKind.TaskListItemChecked)
+                                {
+                                    ft.SetForegroundBrush(_palette.Syntax, 0, displayText.Length);
+                                    ft.SetTextDecorations(TextDecorations.Strikethrough, 0, displayText.Length);
+                                }
+                                dc.DrawText(ft, new Point(textX, lineY - effectiveScroll));
+                            }
+                        }
+                    }
+                    else
+                    {
+                        string text = blockText.Substring(vl.StartOffset, vl.Length);
+                        var ft = new FormattedText(text, CultureInfo.InvariantCulture,
+                            FlowDirection.LeftToRight, baseTypeface, fontSize,
+                            _palette.Foreground, _dpiScale);
+                        ApplyInlineStyles(ft, vl, parsed);
+                        dc.DrawText(ft, new Point(textX, lineY - effectiveScroll));
+
+                        if (_imagePreview == ImagePreviewMode.Inline && parsed.Images != null)
+                            DrawSourceInlineImages(dc, vl, parsed.Images, lineY, effectiveScroll);
+                    }
                 }
             }
         }
@@ -2143,6 +2523,47 @@ public partial class DocsCanvas : FrameworkElement
 
         if (_scrollbarVisible)
             DrawScrollbar(dc);
+    }
+
+    private void DrawJoinedLine(DrawingContext dc, VisualLine vl,
+        double lineY, double effectiveScroll)
+    {
+        var group = vl.Group!;
+
+        if (HasImagesOnLine(vl, group.JoinedMap))
+        {
+            DrawVisualLineWithImages(dc, vl, group.JoinedText, group.JoinedParsed,
+                group.JoinedMap, lineY, effectiveScroll,
+                GetBlockFontSize(BlockKind.Paragraph), GetBlockBaseTypeface(BlockKind.Paragraph));
+            return;
+        }
+
+        string displayText = BuildJoinedDisplayString(group, vl.StartOffset, vl.Length);
+        if (displayText.Length == 0) return;
+
+        double fontSize = GetBlockFontSize(BlockKind.Paragraph);
+        var baseTypeface = GetBlockBaseTypeface(BlockKind.Paragraph);
+
+        var ft = new FormattedText(displayText, CultureInfo.InvariantCulture,
+            FlowDirection.LeftToRight, baseTypeface, fontSize,
+            _palette.Foreground, _dpiScale);
+        ApplyInlineStylesVisual(ft, vl, group.JoinedParsed, group.JoinedMap);
+
+        int visPos = 0;
+        for (int i = vl.StartOffset; i < vl.StartOffset + vl.Length; i++)
+        {
+            if (group.JoinedMap.IsHidden(i)) continue;
+            if (Array.IndexOf(group.SoftBreakOffsets, i) >= 0 && visPos < displayText.Length)
+                ft.SetForegroundBrush(_palette.Syntax, visPos, 1);
+            visPos++;
+        }
+
+        dc.DrawText(ft, new Point(_padding, lineY - effectiveScroll));
+    }
+
+    private string BuildJoinedDisplayString(ParagraphGroup group, int start, int length)
+    {
+        return group.JoinedMap.BuildDisplayString(group.JoinedText, start, length);
     }
 
     private void ApplyInlineStyles(FormattedText ft, VisualLine vl, ParsedBlock parsed)
@@ -2199,7 +2620,11 @@ public partial class DocsCanvas : FrameworkElement
                 ft.SetForegroundBrush(_palette.Syntax, localStart, localEnd - localStart);
         }
 
-        if (parsed.Kind == BlockKind.UnorderedListItem && vl.Length >= 2)
+        if (parsed.Kind is BlockKind.TaskListItemUnchecked or BlockKind.TaskListItemChecked && vl.StartOffset == 0 && vl.Length >= 6)
+        {
+            ft.SetForegroundBrush(_palette.Syntax, 0, 6);
+        }
+        else if (parsed.Kind == BlockKind.UnorderedListItem && vl.Length >= 2)
         {
             string vlText = blockText.Substring(vl.StartOffset, Math.Min(vl.Length, 2));
             if (vlText is "- " or "* ")
@@ -2319,6 +2744,12 @@ public partial class DocsCanvas : FrameworkElement
             if (lineY + lineH < viewTop) continue;
             if (lineY > viewBottom) break;
 
+            if (vl.Group != null)
+            {
+                DrawJoinedSelection(dc, vl, lineY, lineH, effectiveScroll, sb, so, eb, eo);
+                continue;
+            }
+
             int vlEnd = vl.StartOffset + vl.Length;
 
             bool startsBeforeSelEnd = Document.ComparePositions(vl.BlockIndex, vl.StartOffset, eb, eo) < 0;
@@ -2373,6 +2804,41 @@ public partial class DocsCanvas : FrameworkElement
                 dc.DrawRectangle(_palette.Selection, null,
                     new Rect(_padding + x1, lineY - effectiveScroll, selW, lineH));
         }
+    }
+
+    private void DrawJoinedSelection(DrawingContext dc, VisualLine vl,
+        double lineY, double lineH, double effectiveScroll,
+        int sb, int so, int eb, int eo)
+    {
+        var group = vl.Group!;
+        int selStartJoined = group.SourceToJoined(sb, so);
+        int selEndJoined = group.SourceToJoined(eb, eo);
+        if (selStartJoined < 0)
+            selStartJoined = sb < group.FirstBlock ? 0 : group.JoinedText.Length;
+        if (selEndJoined < 0)
+            selEndJoined = eb > group.LastBlock ? group.JoinedText.Length : 0;
+
+        int vlStart = vl.StartOffset;
+        int vlEnd = vl.StartOffset + vl.Length;
+
+        if (vlEnd <= selStartJoined || vlStart >= selEndJoined) return;
+
+        int hlStart = Math.Max(vlStart, selStartJoined);
+        int hlEnd = Math.Min(vlEnd, selEndJoined);
+
+        double x1 = MeasureJoinedRange(group, vlStart, hlStart - vlStart);
+        double x2 = MeasureJoinedRange(group, vlStart, hlEnd - vlStart);
+
+        bool selectionContinues = vlEnd < selEndJoined;
+        if (selectionContinues && x2 - x1 < 4)
+            x2 = x1 + 4;
+        else if (selectionContinues)
+            x2 += 4;
+
+        double selW = Math.Max(0, x2 - x1);
+        if (selW > 0)
+            dc.DrawRectangle(_palette.Selection, null,
+                new Rect(_padding + x1, lineY - effectiveScroll, selW, lineH));
     }
 
     private double MeasureRangeWidth(string text, int start, int length,
