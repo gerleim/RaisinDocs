@@ -731,4 +731,48 @@ public class MarkdownParserTests
         var lastRow = result[7];
         lastRow.TableRow!.Cells.Should().HaveCount(2);
     }
+
+    // --- IsTrailingHardBreak ---
+
+    [Fact]
+    public void IsTrailingHardBreak_SimpleBackslash_ReturnsTrue()
+    {
+        var parsed = ParseBlocks("hello\\")[0];
+        MarkdownParser.IsTrailingHardBreak(parsed, "hello\\").Should().BeTrue();
+    }
+
+    [Fact]
+    public void IsTrailingHardBreak_NoBackslash_ReturnsFalse()
+    {
+        var parsed = ParseBlocks("hello")[0];
+        MarkdownParser.IsTrailingHardBreak(parsed, "hello").Should().BeFalse();
+    }
+
+    [Fact]
+    public void IsTrailingHardBreak_EscapedBackslash_ReturnsFalse()
+    {
+        var parsed = ParseBlocks("hello\\\\")[0];
+        MarkdownParser.IsTrailingHardBreak(parsed, "hello\\\\").Should().BeFalse();
+    }
+
+    [Fact]
+    public void IsTrailingHardBreak_TripleBackslash_ReturnsTrue()
+    {
+        var parsed = ParseBlocks("hi\\\\\\")[0];
+        MarkdownParser.IsTrailingHardBreak(parsed, "hi\\\\\\").Should().BeTrue();
+    }
+
+    [Fact]
+    public void IsTrailingHardBreak_InCodeSpan_ReturnsFalse()
+    {
+        var parsed = ParseBlocks("`code\\`")[0];
+        MarkdownParser.IsTrailingHardBreak(parsed, "`code\\`").Should().BeFalse();
+    }
+
+    [Fact]
+    public void IsTrailingHardBreak_InFencedCode_ReturnsFalse()
+    {
+        var blocks = ParseBlocks("```", "path\\", "```");
+        MarkdownParser.IsTrailingHardBreak(blocks[1], "path\\").Should().BeFalse();
+    }
 }

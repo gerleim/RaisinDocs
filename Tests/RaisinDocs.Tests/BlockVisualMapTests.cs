@@ -516,4 +516,26 @@ public class BlockVisualMapTests
         for (int i = 0; i < "path\\to\\file".Length; i++)
             map.IsHidden(i).Should().BeFalse();
     }
+
+    [Fact]
+    public void TrailingBackslash_InCodeSpan_NotHidden()
+    {
+        var map = ComputeMap("`code\\`");
+        map.IsHidden(5).Should().BeFalse();
+    }
+
+    [Fact]
+    public void EscapedBackslash_DoubleTrailing_NotHidden()
+    {
+        var map = ComputeMap("hello\\\\");
+        map.IsHidden(5).Should().BeFalse();
+        map.IsHidden(6).Should().BeFalse();
+    }
+
+    [Fact]
+    public void TripleTrailingBackslash_LastOneHidden()
+    {
+        var map = ComputeMap("hi\\\\\\");
+        map.IsHidden(4).Should().BeTrue();
+    }
 }

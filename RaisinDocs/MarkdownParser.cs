@@ -308,6 +308,28 @@ public static class MarkdownParser
         return BlockKind.Paragraph;
     }
 
+    public static bool IsTrailingHardBreak(ParsedBlock parsed, string blockText)
+    {
+        if (parsed.Kind == BlockKind.FencedCodeLine) return false;
+        if (!blockText.EndsWith('\\')) return false;
+
+        int count = 0;
+        for (int i = blockText.Length - 1; i >= 0 && blockText[i] == '\\'; i--)
+            count++;
+        if (count % 2 == 0) return false;
+
+        int backslashPos = blockText.Length - 1;
+        foreach (var run in parsed.Runs)
+        {
+            if (run.Style == InlineStyle.Code &&
+                backslashPos >= run.Start &&
+                backslashPos < run.Start + run.Length)
+                return false;
+        }
+
+        return true;
+    }
+
     internal static List<StyledRun> ParseInlines(string text)
     {
         return ParseInlines(text, out _);

@@ -1852,8 +1852,15 @@ public partial class DocsCanvas : FrameworkElement
                 if (_doc.HasSelection) _doc.DeleteSelection();
                 if (shift)
                 {
-                    string marker = _hardBreak == HardBreakStyle.Backslash ? "\\" : "  ";
-                    _doc.Paste(marker);
+                    var blockKind = MarkdownParser.ClassifyBlock(_doc.GetBlockText(_doc.CursorBlock));
+                    bool isHeading = blockKind >= BlockKind.Heading1 && blockKind <= BlockKind.Heading6;
+                    if (!isHeading)
+                    {
+                        string marker = _hardBreak == HardBreakStyle.Backslash ? "\\" : "  ";
+                        string beforeCursor = _doc.GetBlockText(_doc.CursorBlock)[.._doc.CursorOffset];
+                        if (!beforeCursor.EndsWith(marker))
+                            _doc.Paste(marker);
+                    }
                     _doc.InsertParagraphBreak();
                 }
                 else if (ctrl)
@@ -2244,6 +2251,9 @@ public partial class DocsCanvas : FrameworkElement
             DimRange(ft, vl, run.Start, markerLen);
             DimRange(ft, vl, runEnd - markerLen, markerLen);
         }
+
+        if (MarkdownParser.IsTrailingHardBreak(parsed, blockText))
+            DimRange(ft, vl, blockText.Length - 1, 1);
     }
 
     private static int CountBackticks(string text, int start)
