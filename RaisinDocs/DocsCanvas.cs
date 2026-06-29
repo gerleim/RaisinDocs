@@ -259,8 +259,12 @@ public partial class DocsCanvas : FrameworkElement
     private Popup? _linkPopup;
     private TextBox? _linkPopupText;
     private TextBox? _linkPopupUrl;
-    private InlineLink? _linkPopupEditing;
     private int _linkPopupBlock;
+    private int _linkPopupStart;
+    private int _linkPopupCurrentLength;
+    private string _linkPopupOriginalText = "";
+    private bool _linkPopupUpdating;
+    private bool _linkPopupCancelling;
 
     public enum SoftBreakMode { Relaxed, Strict }
     public enum HardBreakStyle { Backslash, TrailingSpaces }
@@ -489,11 +493,44 @@ public partial class DocsCanvas : FrameworkElement
             BuildLinkPopup();
 
         var existingLink = GetLinkAtCursor();
-        _linkPopupEditing = existingLink;
         _linkPopupBlock = _doc.CursorBlock;
 
-        _linkPopupText!.Text = existingLink?.Text ?? GetSelectedText() ?? "";
-        _linkPopupUrl!.Text = existingLink?.Url ?? "";
+        _doc.BeginUndoGroup();
+        _linkPopupUpdating = true;
+
+        if (existingLink != null)
+        {
+            var link = existingLink.Value;
+            _linkPopupStart = link.Start;
+            _linkPopupCurrentLength = link.Length;
+            _linkPopupOriginalText = _doc.GetBlockText(_linkPopupBlock).Substring(link.Start, link.Length);
+            _linkPopupText!.Text = link.Text;
+            _linkPopupUrl!.Text = link.Url;
+        }
+        else
+        {
+            string? selText = _doc.HasSelection ? GetSelectedText() : null;
+            if (selText != null)
+            {
+                var (_, so, _, eo) = _doc.GetOrderedSelection();
+                _linkPopupStart = so;
+                _linkPopupCurrentLength = eo - so;
+                _linkPopupOriginalText = selText;
+                _doc.AnchorBlock = _doc.CursorBlock;
+                _doc.AnchorOffset = _doc.CursorOffset;
+                _linkPopupText!.Text = selText;
+            }
+            else
+            {
+                _linkPopupStart = _doc.CursorOffset;
+                _linkPopupCurrentLength = 0;
+                _linkPopupOriginalText = "";
+                _linkPopupText!.Text = "";
+            }
+            _linkPopupUrl!.Text = "";
+        }
+
+        _linkPopupUpdating = false;
 
         ApplyLinkPopupTheme();
 
@@ -526,79 +563,52 @@ public partial class DocsCanvas : FrameworkElement
         return _doc.GetBlockText(sb).Substring(so, eo - so);
     }
 
-    private void ConfirmLinkPopup()
+    private void OnLinkPopupContentChanged(object? sender, TextChangedEventArgs e)
     {
-        if (_linkPopup == null || !_linkPopup.IsOpen) return;
+        if (_linkPopupUpdating || _linkPopup is not { IsOpen: true }) return;
 
         string text = _linkPopupText!.Text.Trim();
         string url = _linkPopupUrl!.Text.Trim();
 
-        _linkPopup.IsOpen = false;
-        Focus();
-
-        if (string.IsNullOrEmpty(url) && _linkPopupEditing != null)
-        {
-            SealAndStopTimer();
-            _doc.BeginUndoGroup();
-            var link = _linkPopupEditing.Value;
-            _doc.RemoveTextAt(_linkPopupBlock, link.Start, link.Length);
-            string plainText = string.IsNullOrEmpty(text) ? link.Text : text;
-            _doc.InsertTextAt(_linkPopupBlock, link.Start, plainText);
-            _doc.CursorBlock = _linkPopupBlock;
-            _doc.CursorOffset = link.Start + plainText.Length;
-            _doc.AnchorBlock = _doc.CursorBlock;
-            _doc.AnchorOffset = _doc.CursorOffset;
-            _doc.SealUndoGroup();
-        }
-        else if (!string.IsNullOrEmpty(url))
+        string newContent;
+        if (!string.IsNullOrEmpty(url))
         {
             if (string.IsNullOrEmpty(text)) text = url;
-            string linkMarkdown = $"[{text}]({url})";
-
-            SealAndStopTimer();
-            _doc.BeginUndoGroup();
-
-            if (_linkPopupEditing != null)
-            {
-                var link = _linkPopupEditing.Value;
-                _doc.RemoveTextAt(_linkPopupBlock, link.Start, link.Length);
-                _doc.InsertTextAt(_linkPopupBlock, link.Start, linkMarkdown);
-                _doc.CursorBlock = _linkPopupBlock;
-                _doc.CursorOffset = link.Start + linkMarkdown.Length;
-            }
-            else if (_doc.HasSelection)
-            {
-                _doc.DeleteSelection();
-                int b = _doc.CursorBlock;
-                int o = _doc.CursorOffset;
-                _doc.InsertTextAt(b, o, linkMarkdown);
-                _doc.CursorBlock = b;
-                _doc.CursorOffset = o + linkMarkdown.Length;
-            }
-            else
-            {
-                int b = _doc.CursorBlock;
-                int o = _doc.CursorOffset;
-                _doc.InsertTextAt(b, o, linkMarkdown);
-                _doc.CursorBlock = b;
-                _doc.CursorOffset = o + linkMarkdown.Length;
-            }
-
-            _doc.AnchorBlock = _doc.CursorBlock;
-            _doc.AnchorOffset = _doc.CursorOffset;
-            _doc.SealUndoGroup();
+            newContent = $"[{text}]({url})";
+        }
+        else
+        {
+            newContent = text;
         }
 
+        _doc.RemoveTextAt(_linkPopupBlock, _linkPopupStart, _linkPopupCurrentLength);
+        if (newContent.Length > 0)
+            _doc.InsertTextAt(_linkPopupBlock, _linkPopupStart, newContent);
+        _linkPopupCurrentLength = newContent.Length;
+
         InvalidateLayout();
-        EnsureCursorVisible();
-        RaiseFormattingChanged();
+    }
+
+    private void CloseLinkPopup()
+    {
+        if (_linkPopup is { IsOpen: true })
+            _linkPopup.IsOpen = false;
     }
 
     private void CancelLinkPopup()
     {
-        if (_linkPopup != null)
-            _linkPopup.IsOpen = false;
-        Focus();
+        if (_linkPopup is not { IsOpen: true }) return;
+
+        _doc.RemoveTextAt(_linkPopupBlock, _linkPopupStart, _linkPopupCurrentLength);
+        if (_linkPopupOriginalText.Length > 0)
+            _doc.InsertTextAt(_linkPopupBlock, _linkPopupStart, _linkPopupOriginalText);
+        _doc.CursorBlock = _linkPopupBlock;
+        _doc.CursorOffset = _linkPopupStart + _linkPopupOriginalText.Length;
+        _doc.AnchorBlock = _doc.CursorBlock;
+        _doc.AnchorOffset = _doc.CursorOffset;
+        _doc.SealUndoGroup();
+        _linkPopupCancelling = true;
+        _linkPopup.IsOpen = false;
     }
 
     private static TextBox CreatePlainTextBox(double minWidth)
@@ -630,12 +640,15 @@ public partial class DocsCanvas : FrameworkElement
         _linkPopupText = CreatePlainTextBox(180);
         _linkPopupUrl = CreatePlainTextBox(220);
 
+        _linkPopupText.TextChanged += OnLinkPopupContentChanged;
+        _linkPopupUrl.TextChanged += OnLinkPopupContentChanged;
+
         void HandleKey(object? s, KeyEventArgs e)
         {
             if (e.Key == Key.K && Keyboard.Modifiers == ModifierKeys.Control) { CancelLinkPopup(); e.Handled = true; }
             else if (e.Key == Key.Escape) { CancelLinkPopup(); e.Handled = true; }
             else if (e.Key == Key.Enter && s == _linkPopupText) { _linkPopupUrl!.Focus(); _linkPopupUrl.SelectAll(); e.Handled = true; }
-            else if (e.Key == Key.Enter && s == _linkPopupUrl) { ConfirmLinkPopup(); e.Handled = true; }
+            else if (e.Key == Key.Enter && s == _linkPopupUrl) { CloseLinkPopup(); e.Handled = true; }
         }
         _linkPopupText.KeyDown += HandleKey;
         _linkPopupUrl.KeyDown += HandleKey;
@@ -661,7 +674,23 @@ public partial class DocsCanvas : FrameworkElement
             Child = border,
             StaysOpen = false,
         };
-        _linkPopup.Closed += (_, _) => Focus();
+        _linkPopup.Closed += (_, _) =>
+        {
+            if (!_linkPopupCancelling)
+            {
+                _doc.CursorBlock = _linkPopupBlock;
+                _doc.CursorOffset = _linkPopupStart + _linkPopupCurrentLength;
+                _doc.AnchorBlock = _doc.CursorBlock;
+                _doc.AnchorOffset = _doc.CursorOffset;
+                _doc.SealUndoGroup();
+            }
+            _linkPopupCancelling = false;
+            _linkPopupUpdating = false;
+            Focus();
+            InvalidateLayout();
+            EnsureCursorVisible();
+            RaiseFormattingChanged();
+        };
     }
 
     private void ApplyLinkPopupTheme()
