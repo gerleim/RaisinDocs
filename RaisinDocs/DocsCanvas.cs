@@ -1,5 +1,7 @@
 using System.Globalization;
 using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
@@ -124,6 +126,8 @@ public partial class DocsCanvas : FrameworkElement
             EditorTheme.DarkBlue => _darkBluePalette,
             _ => _lightPalette,
         };
+        if (canvas._linkPopup is { IsOpen: true })
+            canvas.ApplyLinkPopupTheme();
         canvas.ThemeChanged?.Invoke(canvas, EventArgs.Empty);
     }
 
@@ -247,10 +251,16 @@ public partial class DocsCanvas : FrameworkElement
     private InlineImage? _hoveredImage;
     private Point _hoverPosition;
     private string? _hoveredLinkUrl;
-    private readonly System.Windows.Controls.ToolTip _linkToolTip = new()
+    private readonly ToolTip _linkToolTip = new()
     {
-        Placement = System.Windows.Controls.Primitives.PlacementMode.Relative,
+        Placement = PlacementMode.Relative,
     };
+
+    private Popup? _linkPopup;
+    private TextBox? _linkPopupText;
+    private TextBox? _linkPopupUrl;
+    private InlineLink? _linkPopupEditing;
+    private int _linkPopupBlock;
 
     public enum SoftBreakMode { Relaxed, Strict }
     public enum HardBreakStyle { Backslash, TrailingSpaces }
@@ -447,34 +457,268 @@ public partial class DocsCanvas : FrameworkElement
 
     public void InsertLink()
     {
+        if (_linkPopup is { IsOpen: true })
+        {
+            CancelLinkPopup();
+            return;
+        }
+
         SealAndStopTimer();
-        _doc.BeginUndoGroup();
+        ComputeLayout();
+        ShowLinkPopup();
+    }
 
-        if (_doc.HasSelection)
+    private InlineLink? GetLinkAtCursor()
+    {
+        if (_parsedBlocks == null || _doc.CursorBlock >= _parsedBlocks.Count) return null;
+        var parsed = _parsedBlocks[_doc.CursorBlock];
+        if (parsed.Links == null) return null;
+
+        int offset = _doc.CursorOffset;
+        foreach (var link in parsed.Links)
         {
-            var (sb, so, eb, eo) = _doc.GetOrderedSelection();
-            _doc.InsertTextAt(eb, eo, "](url)");
-            _doc.InsertTextAt(sb, so, "[");
-            _doc.CursorBlock = eb;
-            _doc.CursorOffset = eo + 3;
-            _doc.AnchorBlock = eb;
-            _doc.AnchorOffset = eo + 6;
+            if (offset >= link.Start && offset < link.Start + link.Length)
+                return link;
         }
+        return null;
+    }
+
+    private void ShowLinkPopup()
+    {
+        if (_linkPopup == null)
+            BuildLinkPopup();
+
+        var existingLink = GetLinkAtCursor();
+        _linkPopupEditing = existingLink;
+        _linkPopupBlock = _doc.CursorBlock;
+
+        _linkPopupText!.Text = existingLink?.Text ?? GetSelectedText() ?? "";
+        _linkPopupUrl!.Text = existingLink?.Url ?? "";
+
+        ApplyLinkPopupTheme();
+
+        int vli = CursorToVisualLineIndex();
+        double effectiveScroll = _scrollOffset + _smoother.Offset;
+        double lineY = _lineYPositions[vli] - effectiveScroll;
+        double lineH = GetEffectiveLineHeight(_visualLines[vli]);
+
+        _linkPopup!.PlacementTarget = this;
+        _linkPopup.Placement = PlacementMode.Relative;
+        _linkPopup.HorizontalOffset = _padding;
+        _linkPopup.VerticalOffset = lineY + lineH + 4;
+        _linkPopup.IsOpen = true;
+
+        if (existingLink != null)
+            _linkPopupUrl!.Focus();
+        else if (!string.IsNullOrEmpty(_linkPopupText!.Text))
+            _linkPopupUrl!.Focus();
         else
+            _linkPopupText!.Focus();
+
+        _linkPopupUrl!.SelectAll();
+    }
+
+    private string? GetSelectedText()
+    {
+        if (!_doc.HasSelection) return null;
+        var (sb, so, eb, eo) = _doc.GetOrderedSelection();
+        if (sb != eb) return null;
+        return _doc.GetBlockText(sb).Substring(so, eo - so);
+    }
+
+    private void ConfirmLinkPopup()
+    {
+        if (_linkPopup == null || !_linkPopup.IsOpen) return;
+
+        string text = _linkPopupText!.Text.Trim();
+        string url = _linkPopupUrl!.Text.Trim();
+
+        _linkPopup.IsOpen = false;
+        Focus();
+
+        if (string.IsNullOrEmpty(url) && _linkPopupEditing != null)
         {
-            int b = _doc.CursorBlock;
-            int o = _doc.CursorOffset;
-            _doc.InsertTextAt(b, o, "[](url)");
-            _doc.CursorBlock = b;
-            _doc.CursorOffset = o + 3;
-            _doc.AnchorBlock = b;
-            _doc.AnchorOffset = o + 6;
+            SealAndStopTimer();
+            _doc.BeginUndoGroup();
+            var link = _linkPopupEditing.Value;
+            _doc.RemoveTextAt(_linkPopupBlock, link.Start, link.Length);
+            string plainText = string.IsNullOrEmpty(text) ? link.Text : text;
+            _doc.InsertTextAt(_linkPopupBlock, link.Start, plainText);
+            _doc.CursorBlock = _linkPopupBlock;
+            _doc.CursorOffset = link.Start + plainText.Length;
+            _doc.AnchorBlock = _doc.CursorBlock;
+            _doc.AnchorOffset = _doc.CursorOffset;
+            _doc.SealUndoGroup();
+        }
+        else if (!string.IsNullOrEmpty(url))
+        {
+            if (string.IsNullOrEmpty(text)) text = url;
+            string linkMarkdown = $"[{text}]({url})";
+
+            SealAndStopTimer();
+            _doc.BeginUndoGroup();
+
+            if (_linkPopupEditing != null)
+            {
+                var link = _linkPopupEditing.Value;
+                _doc.RemoveTextAt(_linkPopupBlock, link.Start, link.Length);
+                _doc.InsertTextAt(_linkPopupBlock, link.Start, linkMarkdown);
+                _doc.CursorBlock = _linkPopupBlock;
+                _doc.CursorOffset = link.Start + linkMarkdown.Length;
+            }
+            else if (_doc.HasSelection)
+            {
+                _doc.DeleteSelection();
+                int b = _doc.CursorBlock;
+                int o = _doc.CursorOffset;
+                _doc.InsertTextAt(b, o, linkMarkdown);
+                _doc.CursorBlock = b;
+                _doc.CursorOffset = o + linkMarkdown.Length;
+            }
+            else
+            {
+                int b = _doc.CursorBlock;
+                int o = _doc.CursorOffset;
+                _doc.InsertTextAt(b, o, linkMarkdown);
+                _doc.CursorBlock = b;
+                _doc.CursorOffset = o + linkMarkdown.Length;
+            }
+
+            _doc.AnchorBlock = _doc.CursorBlock;
+            _doc.AnchorOffset = _doc.CursorOffset;
+            _doc.SealUndoGroup();
         }
 
-        _doc.SealUndoGroup();
         InvalidateLayout();
         EnsureCursorVisible();
         RaiseFormattingChanged();
+    }
+
+    private void CancelLinkPopup()
+    {
+        if (_linkPopup != null)
+            _linkPopup.IsOpen = false;
+        Focus();
+    }
+
+    private void BuildLinkPopup()
+    {
+        _linkPopupText = new TextBox
+        {
+            MinWidth = 200,
+            Margin = new Thickness(0, 0, 8, 0),
+            Padding = new Thickness(4, 2, 4, 2),
+            VerticalContentAlignment = VerticalAlignment.Center,
+        };
+        _linkPopupUrl = new TextBox
+        {
+            MinWidth = 250,
+            Margin = new Thickness(0, 0, 8, 0),
+            Padding = new Thickness(4, 2, 4, 2),
+            VerticalContentAlignment = VerticalAlignment.Center,
+        };
+
+        _linkPopupText.KeyDown += (_, e) =>
+        {
+            if (e.Key == Key.Enter) { _linkPopupUrl.Focus(); _linkPopupUrl.SelectAll(); e.Handled = true; }
+            else if (e.Key == Key.Escape) { CancelLinkPopup(); e.Handled = true; }
+        };
+        _linkPopupUrl.KeyDown += (_, e) =>
+        {
+            if (e.Key == Key.Enter) { ConfirmLinkPopup(); e.Handled = true; }
+            else if (e.Key == Key.Escape) { CancelLinkPopup(); e.Handled = true; }
+        };
+
+        var okButton = new Button
+        {
+            Content = "OK",
+            MinWidth = 50,
+            Padding = new Thickness(8, 2, 8, 2),
+            Margin = new Thickness(0, 0, 4, 0),
+            IsDefault = false,
+        };
+        okButton.Click += (_, _) => ConfirmLinkPopup();
+
+        var cancelButton = new Button
+        {
+            Content = "Cancel",
+            MinWidth = 50,
+            Padding = new Thickness(8, 2, 8, 2),
+            IsCancel = false,
+        };
+        cancelButton.Click += (_, _) => CancelLinkPopup();
+
+        var textLabel = new TextBlock { Text = "Text", Margin = new Thickness(0, 0, 4, 0), VerticalAlignment = VerticalAlignment.Center };
+        var urlLabel = new TextBlock { Text = "URL", Margin = new Thickness(0, 0, 4, 0), VerticalAlignment = VerticalAlignment.Center };
+
+        var panel = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Margin = new Thickness(8, 6, 8, 6),
+        };
+        panel.Children.Add(textLabel);
+        panel.Children.Add(_linkPopupText);
+        panel.Children.Add(urlLabel);
+        panel.Children.Add(_linkPopupUrl);
+        panel.Children.Add(okButton);
+        panel.Children.Add(cancelButton);
+
+        var border = new Border
+        {
+            Child = panel,
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(4),
+            Effect = new System.Windows.Media.Effects.DropShadowEffect
+            {
+                BlurRadius = 8,
+                ShadowDepth = 2,
+                Opacity = 0.3,
+            },
+        };
+
+        _linkPopup = new Popup
+        {
+            Child = border,
+            StaysOpen = false,
+            AllowsTransparency = true,
+            PopupAnimation = PopupAnimation.Fade,
+        };
+        _linkPopup.Closed += (_, _) => Focus();
+    }
+
+    private void ApplyLinkPopupTheme()
+    {
+        if (_linkPopup?.Child is not Border border) return;
+
+        var bg = _palette.Background;
+        var fg = _palette.Foreground;
+        var borderBrush = _palette.Syntax;
+
+        border.Background = bg;
+        border.BorderBrush = borderBrush;
+
+        var textBoxBg = _palette.CodeBackground;
+
+        foreach (var child in ((StackPanel)border.Child).Children)
+        {
+            if (child is TextBox tb)
+            {
+                tb.Background = textBoxBg;
+                tb.Foreground = fg;
+                tb.BorderBrush = borderBrush;
+                tb.CaretBrush = fg;
+            }
+            else if (child is TextBlock lbl)
+            {
+                lbl.Foreground = fg;
+            }
+            else if (child is Button btn)
+            {
+                btn.Background = textBoxBg;
+                btn.Foreground = fg;
+                btn.BorderBrush = borderBrush;
+            }
+        }
     }
 
     public void ToggleFencedCode()
