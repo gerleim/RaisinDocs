@@ -156,13 +156,20 @@ A trailing `\` is a hard break only when:
 - Visual mode: hidden syntax markers, blue underlined link text, URL tooltip on hover
 - Ctrl+Click opens URL in default browser
 - Ctrl+K keyboard shortcut to insert/edit link, toolbar button
-- Future follow-on: GFM extended autolinks (bare URL detection)
+### 10 — Extended autolinks ✅
+- GFM extended autolinks: bare `https://`, `http://`, `www.` URLs auto-detected as clickable links
+- Parser scans for URL prefixes, extends to whitespace, trims trailing punctuation (`.,:;?!` etc.), handles balanced parens
+- Reuses `InlineStyle.Link` and `InlineLink` with `Text == Url` convention to distinguish from traditional links
+- No hidden ranges or syntax dimming for autolinks (URL IS the display text)
+- `www.` URLs get `http://` prepended for opening
+- Ctrl+Click, tooltip on hover, visual mode rendering all work via existing link infrastructure
+- 18 tests (15 parser + 3 visual map)
 
 ### GFM extensions roadmap
 - ~~Strikethrough (`~~text~~`)~~ — ✅ implemented in iteration 4
 - ~~Tables~~ — ✅ implemented in iteration 7
 - ~~Task list items~~ — ✅ implemented in iteration 8
-- Extended autolinks — bare URLs auto-linked without `<>` syntax (follow-on to iteration 9)
+- ~~Extended autolinks~~ — ✅ implemented in iteration 10
 
 ### Future
 - ~~Links (clickable in view mode, editable syntax in edit mode)~~ — ✅ implemented in iteration 9
