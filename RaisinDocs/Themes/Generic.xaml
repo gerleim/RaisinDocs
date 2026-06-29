@@ -175,7 +175,7 @@
                                       Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=local:DocsFormattingBar}}" />
                             </ToggleButton>
                             <Button x:Name="PART_Link" Style="{StaticResource FormattingButton}"
-                                    ToolTip="Insert link (Ctrl+K)">
+                                    ToolTip="Link (Ctrl+K)">
                                 <Path x:Name="PART_LinkIcon"
                                       Width="14" Height="14" Stretch="Uniform"
                                       Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=local:DocsFormattingBar}}"
