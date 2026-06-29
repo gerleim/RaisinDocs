@@ -601,87 +601,65 @@ public partial class DocsCanvas : FrameworkElement
         Focus();
     }
 
+    private static TextBox CreatePlainTextBox(double minWidth)
+    {
+        var tb = new TextBox
+        {
+            MinWidth = minWidth,
+            Padding = new Thickness(3, 1, 3, 1),
+            BorderThickness = new Thickness(1),
+            VerticalContentAlignment = VerticalAlignment.Center,
+        };
+
+        var factory = new FrameworkElementFactory(typeof(Border), "Bd");
+        factory.SetValue(Border.BackgroundProperty, new TemplateBindingExtension(Control.BackgroundProperty));
+        factory.SetValue(Border.BorderBrushProperty, new TemplateBindingExtension(Control.BorderBrushProperty));
+        factory.SetValue(Border.BorderThicknessProperty, new TemplateBindingExtension(Control.BorderThicknessProperty));
+
+        var contentHost = new FrameworkElementFactory(typeof(ScrollViewer), "PART_ContentHost");
+        factory.AppendChild(contentHost);
+
+        var template = new ControlTemplate(typeof(TextBox)) { VisualTree = factory };
+        tb.Template = template;
+
+        return tb;
+    }
+
     private void BuildLinkPopup()
     {
-        _linkPopupText = new TextBox
-        {
-            MinWidth = 200,
-            Margin = new Thickness(0, 0, 8, 0),
-            Padding = new Thickness(4, 2, 4, 2),
-            VerticalContentAlignment = VerticalAlignment.Center,
-        };
-        _linkPopupUrl = new TextBox
-        {
-            MinWidth = 250,
-            Margin = new Thickness(0, 0, 8, 0),
-            Padding = new Thickness(4, 2, 4, 2),
-            VerticalContentAlignment = VerticalAlignment.Center,
-        };
+        _linkPopupText = CreatePlainTextBox(180);
+        _linkPopupUrl = CreatePlainTextBox(220);
 
-        _linkPopupText.KeyDown += (_, e) =>
+        void HandleKey(object? s, KeyEventArgs e)
         {
-            if (e.Key == Key.Enter) { _linkPopupUrl.Focus(); _linkPopupUrl.SelectAll(); e.Handled = true; }
+            if (e.Key == Key.K && Keyboard.Modifiers == ModifierKeys.Control) { CancelLinkPopup(); e.Handled = true; }
             else if (e.Key == Key.Escape) { CancelLinkPopup(); e.Handled = true; }
-        };
-        _linkPopupUrl.KeyDown += (_, e) =>
-        {
-            if (e.Key == Key.Enter) { ConfirmLinkPopup(); e.Handled = true; }
-            else if (e.Key == Key.Escape) { CancelLinkPopup(); e.Handled = true; }
-        };
-
-        var okButton = new Button
-        {
-            Content = "OK",
-            MinWidth = 50,
-            Padding = new Thickness(8, 2, 8, 2),
-            Margin = new Thickness(0, 0, 4, 0),
-            IsDefault = false,
-        };
-        okButton.Click += (_, _) => ConfirmLinkPopup();
-
-        var cancelButton = new Button
-        {
-            Content = "Cancel",
-            MinWidth = 50,
-            Padding = new Thickness(8, 2, 8, 2),
-            IsCancel = false,
-        };
-        cancelButton.Click += (_, _) => CancelLinkPopup();
-
-        var textLabel = new TextBlock { Text = "Text", Margin = new Thickness(0, 0, 4, 0), VerticalAlignment = VerticalAlignment.Center };
-        var urlLabel = new TextBlock { Text = "URL", Margin = new Thickness(0, 0, 4, 0), VerticalAlignment = VerticalAlignment.Center };
+            else if (e.Key == Key.Enter && s == _linkPopupText) { _linkPopupUrl!.Focus(); _linkPopupUrl.SelectAll(); e.Handled = true; }
+            else if (e.Key == Key.Enter && s == _linkPopupUrl) { ConfirmLinkPopup(); e.Handled = true; }
+        }
+        _linkPopupText.KeyDown += HandleKey;
+        _linkPopupUrl.KeyDown += HandleKey;
 
         var panel = new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            Margin = new Thickness(8, 6, 8, 6),
+            Margin = new Thickness(6, 4, 6, 4),
         };
-        panel.Children.Add(textLabel);
+        panel.Children.Add(new TextBlock { Text = "Text", Margin = new Thickness(0, 0, 4, 0), VerticalAlignment = VerticalAlignment.Center, FontSize = 12 });
         panel.Children.Add(_linkPopupText);
-        panel.Children.Add(urlLabel);
+        panel.Children.Add(new TextBlock { Text = "URL", Margin = new Thickness(8, 0, 4, 0), VerticalAlignment = VerticalAlignment.Center, FontSize = 12 });
         panel.Children.Add(_linkPopupUrl);
-        panel.Children.Add(okButton);
-        panel.Children.Add(cancelButton);
 
         var border = new Border
         {
             Child = panel,
             BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(4),
-            Effect = new System.Windows.Media.Effects.DropShadowEffect
-            {
-                BlurRadius = 8,
-                ShadowDepth = 2,
-                Opacity = 0.3,
-            },
         };
 
         _linkPopup = new Popup
         {
             Child = border,
             StaysOpen = false,
-            AllowsTransparency = true,
-            PopupAnimation = PopupAnimation.Fade,
         };
         _linkPopup.Closed += (_, _) => Focus();
     }
@@ -690,33 +668,21 @@ public partial class DocsCanvas : FrameworkElement
     {
         if (_linkPopup?.Child is not Border border) return;
 
-        var bg = _palette.Background;
-        var fg = _palette.Foreground;
-        var borderBrush = _palette.Syntax;
-
-        border.Background = bg;
-        border.BorderBrush = borderBrush;
-
-        var textBoxBg = _palette.CodeBackground;
+        border.Background = _palette.Background;
+        border.BorderBrush = _palette.Syntax;
 
         foreach (var child in ((StackPanel)border.Child).Children)
         {
             if (child is TextBox tb)
             {
-                tb.Background = textBoxBg;
-                tb.Foreground = fg;
-                tb.BorderBrush = borderBrush;
-                tb.CaretBrush = fg;
+                tb.Background = _palette.CodeBackground;
+                tb.Foreground = _palette.Foreground;
+                tb.BorderBrush = _palette.Syntax;
+                tb.CaretBrush = _palette.Foreground;
             }
             else if (child is TextBlock lbl)
             {
-                lbl.Foreground = fg;
-            }
-            else if (child is Button btn)
-            {
-                btn.Background = textBoxBg;
-                btn.Foreground = fg;
-                btn.BorderBrush = borderBrush;
+                lbl.Foreground = _palette.Foreground;
             }
         }
     }
