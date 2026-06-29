@@ -8,6 +8,13 @@ public partial class DocsCanvas
 {
     // --- Visual mode: task list checkbox toggle ---
 
+    private static void GetLinkTextRange(InlineLink link, out int textStart, out int textEnd)
+    {
+        bool isAutolink = link.Text == link.Url;
+        textStart = isAutolink ? link.Start : link.Start + 1;
+        textEnd = textStart + link.Text.Length;
+    }
+
     private bool TryOpenLinkAtClick(Point pos)
     {
         if (_parsedBlocks == null || _visualMaps == null) return false;
@@ -20,8 +27,7 @@ public partial class DocsCanvas
 
         foreach (var link in parsed.Links)
         {
-            int textStart = link.Start + 1;
-            int textEnd = link.Start + 1 + link.Text.Length;
+            GetLinkTextRange(link, out int textStart, out int textEnd);
             if (offset >= textStart && offset < textEnd)
             {
                 var url = link.Url;
@@ -51,8 +57,7 @@ public partial class DocsCanvas
 
         foreach (var link in parsed.Links)
         {
-            int textStart = link.Start + 1;
-            int textEnd = link.Start + 1 + link.Text.Length;
+            GetLinkTextRange(link, out int textStart, out int textEnd);
             if (offset >= textStart && offset < textEnd)
                 return link;
         }

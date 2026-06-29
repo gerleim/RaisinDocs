@@ -3030,6 +3030,7 @@ public partial class DocsCanvas : FrameworkElement
         {
             foreach (var link in parsed.Links)
             {
+                if (link.Text == link.Url) continue;
                 int linkEnd = link.Start + link.Length;
                 if (linkEnd <= vl.StartOffset || link.Start >= vlEnd) continue;
 

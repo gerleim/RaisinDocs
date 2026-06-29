@@ -176,6 +176,7 @@ public class BlockVisualMap
         {
             foreach (var link in parsed.Links)
             {
+                if (link.Text == link.Url) continue;
                 ranges.Add(new HiddenRange(link.Start, 1));
                 int closeBracket = link.Start + 1 + link.Text.Length;
                 ranges.Add(new HiddenRange(closeBracket, link.Start + link.Length - closeBracket));

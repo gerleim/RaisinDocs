@@ -672,4 +672,30 @@ public class BlockVisualMapTests
         map.Links![0].Text.Should().Be("text");
         map.Links![0].Url.Should().Be("url");
     }
+
+    // --- Autolinks ---
+
+    [Fact]
+    public void Autolink_NoHiddenRanges()
+    {
+        var map = ComputeMap("see https://example.com end");
+        for (int i = 4; i < 23; i++)
+            map.IsHidden(i).Should().BeFalse($"offset {i} should be visible");
+    }
+
+    [Fact]
+    public void Autolink_DisplayStringUnchanged()
+    {
+        string text = "see https://example.com end";
+        var map = ComputeMap(text);
+        map.BuildDisplayString(text, 0, text.Length).Should().Be(text);
+    }
+
+    [Fact]
+    public void Autolink_RawToVisual_Identity()
+    {
+        var map = ComputeMap("see https://example.com end");
+        map.RawToVisual(4).Should().Be(4);
+        map.RawToVisual(23).Should().Be(23);
+    }
 }

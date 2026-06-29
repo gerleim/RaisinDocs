@@ -960,6 +960,134 @@ public class MarkdownParserTests
         result[0].Links![0].Url.Should().Be("https://en.wikipedia.org/wiki/Foo_(bar)");
     }
 
+    // --- Autolinks ---
+
+    [Fact]
+    public void Autolink_HttpsUrl()
+    {
+        var result = ParseBlocks("visit https://example.com today");
+        result[0].Links.Should().HaveCount(1);
+        var link = result[0].Links![0];
+        link.Text.Should().Be("https://example.com");
+        link.Url.Should().Be("https://example.com");
+        link.Start.Should().Be(6);
+        link.Length.Should().Be(19);
+    }
+
+    [Fact]
+    public void Autolink_HttpUrl()
+    {
+        var result = ParseBlocks("see http://example.com/path");
+        result[0].Links.Should().HaveCount(1);
+        result[0].Links![0].Url.Should().Be("http://example.com/path");
+    }
+
+    [Fact]
+    public void Autolink_WwwUrl()
+    {
+        var result = ParseBlocks("go to www.example.com");
+        result[0].Links.Should().HaveCount(1);
+        var link = result[0].Links![0];
+        link.Text.Should().Be("www.example.com");
+        link.Url.Should().Be("http://www.example.com");
+    }
+
+    [Fact]
+    public void Autolink_TrailingPunctuation_Trimmed()
+    {
+        var result = ParseBlocks("see https://example.com.");
+        result[0].Links.Should().HaveCount(1);
+        result[0].Links![0].Url.Should().Be("https://example.com");
+    }
+
+    [Fact]
+    public void Autolink_TrailingComma_Trimmed()
+    {
+        var result = ParseBlocks("see https://example.com, and");
+        result[0].Links.Should().HaveCount(1);
+        result[0].Links![0].Url.Should().Be("https://example.com");
+    }
+
+    [Fact]
+    public void Autolink_InsideCodeSpan_NotDetected()
+    {
+        var result = ParseBlocks("`https://example.com`");
+        result[0].Links.Should().BeNull();
+    }
+
+    [Fact]
+    public void Autolink_InsideExistingLink_NotDetected()
+    {
+        var result = ParseBlocks("[click](https://example.com)");
+        result[0].Links.Should().HaveCount(1);
+        result[0].Links![0].Text.Should().Be("click");
+    }
+
+    [Fact]
+    public void Autolink_Multiple()
+    {
+        var result = ParseBlocks("https://a.com and https://b.com");
+        result[0].Links.Should().HaveCount(2);
+        result[0].Links![0].Url.Should().Be("https://a.com");
+        result[0].Links![1].Url.Should().Be("https://b.com");
+    }
+
+    [Fact]
+    public void Autolink_BalancedParens()
+    {
+        var result = ParseBlocks("see https://en.wikipedia.org/wiki/Foo_(bar) ok");
+        result[0].Links.Should().HaveCount(1);
+        result[0].Links![0].Url.Should().Be("https://en.wikipedia.org/wiki/Foo_(bar)");
+    }
+
+    [Fact]
+    public void Autolink_UnbalancedTrailingParen_Trimmed()
+    {
+        var result = ParseBlocks("(see https://example.com)");
+        result[0].Links.Should().HaveCount(1);
+        result[0].Links![0].Url.Should().Be("https://example.com");
+    }
+
+    [Fact]
+    public void Autolink_AtEndOfLine()
+    {
+        var result = ParseBlocks("visit https://example.com");
+        result[0].Links.Should().HaveCount(1);
+        result[0].Links![0].Url.Should().Be("https://example.com");
+    }
+
+    [Fact]
+    public void Autolink_WithQueryString()
+    {
+        var result = ParseBlocks("https://example.com/search?q=test&page=1");
+        result[0].Links.Should().HaveCount(1);
+        result[0].Links![0].Url.Should().Be("https://example.com/search?q=test&page=1");
+    }
+
+    [Fact]
+    public void Autolink_TextEqualsUrl()
+    {
+        var result = ParseBlocks("https://example.com");
+        var link = result[0].Links![0];
+        link.Text.Should().Be(link.Url);
+    }
+
+    [Fact]
+    public void Autolink_PrefixOnly_NotDetected()
+    {
+        var result = ParseBlocks("see https:// end");
+        result[0].Links.Should().BeNull();
+    }
+
+    [Fact]
+    public void Autolink_AdjacentToTraditionalLink()
+    {
+        var result = ParseBlocks("[a](url1) https://b.com");
+        result[0].Links.Should().HaveCount(2);
+        result[0].Links![0].Text.Should().Be("a");
+        result[0].Links![1].Text.Should().Be("https://b.com");
+    }
+
     // --- IsTrailingHardBreak ---
 
     [Fact]

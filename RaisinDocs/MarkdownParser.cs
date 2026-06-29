@@ -368,6 +368,7 @@ public static class MarkdownParser
         MarkCodeSpans(text, styles);
         images = MarkImages(text, styles);
         links = MarkLinks(text, styles);
+        links = MarkAutolinks(text, styles, links);
         MarkStrikethrough(text, styles);
         MarkEmphasis(text, styles);
 
@@ -505,6 +506,81 @@ public static class MarkdownParser
             i = parenClose + 1;
         }
         return links;
+    }
+
+    private static readonly string[] _autolinkPrefixes = ["https://", "http://", "www."];
+
+    private static List<InlineLink>? MarkAutolinks(string text, InlineStyle[] styles, List<InlineLink>? links)
+    {
+        for (int i = 0; i < text.Length; i++)
+        {
+            if (styles[i] != InlineStyle.Normal) continue;
+
+            string? matchedPrefix = null;
+            foreach (var prefix in _autolinkPrefixes)
+            {
+                if (i + prefix.Length < text.Length &&
+                    text.AsSpan(i, prefix.Length).Equals(prefix.AsSpan(), StringComparison.OrdinalIgnoreCase))
+                {
+                    matchedPrefix = prefix;
+                    break;
+                }
+            }
+            if (matchedPrefix == null) continue;
+
+            if (i > 0 && !char.IsWhiteSpace(text[i - 1]) && text[i - 1] != '(' && text[i - 1] != '"' && text[i - 1] != '\'')
+                continue;
+
+            int urlEnd = i + matchedPrefix.Length;
+            if (urlEnd >= text.Length || char.IsWhiteSpace(text[urlEnd])) continue;
+
+            while (urlEnd < text.Length && text[urlEnd] != '<' && !char.IsWhiteSpace(text[urlEnd]))
+                urlEnd++;
+
+            urlEnd = TrimAutolinkTrailing(text, i, urlEnd);
+
+            int length = urlEnd - i;
+            if (length <= matchedPrefix.Length) continue;
+
+            string urlText = text[i..urlEnd];
+            string url = matchedPrefix == "www."
+                ? "http://" + urlText
+                : urlText;
+
+            links ??= [];
+            links.Add(new InlineLink(i, length, urlText, url, null));
+
+            for (int j = i; j < urlEnd; j++)
+                styles[j] = InlineStyle.Link;
+
+            i = urlEnd - 1;
+        }
+        return links;
+    }
+
+    private static int TrimAutolinkTrailing(string text, int start, int end)
+    {
+        while (end > start)
+        {
+            char c = text[end - 1];
+            if (c == '?' || c == '!' || c == '.' || c == ',' || c == ':' || c == ';' || c == '*' || c == '_' || c == '~' || c == '\'' || c == '"')
+            {
+                end--;
+                continue;
+            }
+            if (c == ')')
+            {
+                int open = 0, close = 0;
+                for (int j = start; j < end; j++)
+                {
+                    if (text[j] == '(') open++;
+                    else if (text[j] == ')') close++;
+                }
+                if (close > open) { end--; continue; }
+            }
+            break;
+        }
+        return end;
     }
 
     private static int FindMatchingBracket(string text, int from)
