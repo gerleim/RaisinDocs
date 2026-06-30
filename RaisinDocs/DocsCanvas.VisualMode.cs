@@ -1034,6 +1034,50 @@ public partial class DocsCanvas
                     break;
             }
         }
+
+        ApplyColorSpansVisual(ft, vl, parsed, map);
+    }
+
+    private void ApplyColorSpansVisual(FormattedText ft, VisualLine vl,
+        ParsedBlock parsed, BlockVisualMap map)
+    {
+        int ftLen = ft.Text.Length;
+
+        if (parsed.BlockColor?.Foreground is { } blockFg)
+        {
+            var brush = new SolidColorBrush(Color.FromRgb(blockFg.R, blockFg.G, blockFg.B));
+            brush.Freeze();
+            int vlVisLen = Math.Min(ftLen, map.RawToVisual(vl.StartOffset + vl.Length) - map.RawToVisual(vl.StartOffset));
+            if (vlVisLen > 0)
+                ft.SetForegroundBrush(brush, 0, vlVisLen);
+        }
+
+        var colorSpans = map.ColorSpans;
+        if (colorSpans == null) return;
+
+        int vlEnd = vl.StartOffset + vl.Length;
+        int vlVisBase = map.RawToVisual(vl.StartOffset);
+
+        foreach (var cs in colorSpans)
+        {
+            int csEnd = cs.Start + cs.Length;
+            if (csEnd <= vl.StartOffset || cs.Start >= vlEnd) continue;
+
+            int rawStart = Math.Max(cs.Start, vl.StartOffset);
+            int rawEnd = Math.Min(csEnd, vlEnd);
+            int visStart = map.RawToVisual(rawStart) - vlVisBase;
+            int visEnd = map.RawToVisual(rawEnd) - vlVisBase;
+            visEnd = Math.Min(visEnd, ftLen);
+            int count = visEnd - visStart;
+            if (count <= 0 || visStart < 0 || visStart >= ftLen) continue;
+
+            if (cs.Foreground is { } fg)
+            {
+                var brush = new SolidColorBrush(Color.FromRgb(fg.R, fg.G, fg.B));
+                brush.Freeze();
+                ft.SetForegroundBrush(brush, visStart, count);
+            }
+        }
     }
 
     private bool HasImagesOnLine(VisualLine vl, BlockVisualMap map)

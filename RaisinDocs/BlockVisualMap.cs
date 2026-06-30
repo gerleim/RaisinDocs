@@ -10,14 +10,17 @@ public class BlockVisualMap
     public string? ReplacementPrefix { get; }
     public IReadOnlyList<InlineImage>? Images { get; }
     public IReadOnlyList<InlineLink>? Links { get; }
+    public IReadOnlyList<ColorSpan>? ColorSpans { get; }
 
     public BlockVisualMap(IReadOnlyList<HiddenRange> hiddenRanges, string? replacementPrefix = null,
-        IReadOnlyList<InlineImage>? images = null, IReadOnlyList<InlineLink>? links = null)
+        IReadOnlyList<InlineImage>? images = null, IReadOnlyList<InlineLink>? links = null,
+        IReadOnlyList<ColorSpan>? colorSpans = null)
     {
         HiddenRanges = hiddenRanges;
         ReplacementPrefix = replacementPrefix;
         Images = images;
         Links = links;
+        ColorSpans = colorSpans;
     }
 
     public bool IsHidden(int rawOffset)
@@ -183,9 +186,16 @@ public class BlockVisualMap
             }
         }
 
+        var colorTagRanges = MarkdownParser.FindInlineColorTagRanges(blockText);
+        if (colorTagRanges != null)
+        {
+            foreach (var tag in colorTagRanges)
+                ranges.Add(tag);
+        }
+
         ranges.Sort((a, b) => a.Start.CompareTo(b.Start));
 
-        return new BlockVisualMap(ranges, replacementPrefix, parsed.Images, parsed.Links);
+        return new BlockVisualMap(ranges, replacementPrefix, parsed.Images, parsed.Links, parsed.ColorSpans);
     }
 
     private static int CountBackticks(string text, int start)

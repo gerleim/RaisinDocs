@@ -549,6 +549,59 @@ public partial class DocsCanvas : FrameworkElement
         ShowLinkPopup();
     }
 
+    public void InsertFgColor(string colorName)
+    {
+        InsertColorWrapper($"<!--@fg:{colorName}-->", "<!--/@fg-->");
+    }
+
+    public void InsertBgColor(string colorName)
+    {
+        InsertColorWrapper($"<!--@bg:{colorName}-->", "<!--/@bg-->");
+    }
+
+    private void InsertColorWrapper(string opener, string closer)
+    {
+        SealAndStopTimer();
+        _doc.BeginUndoGroup();
+
+        if (_doc.HasSelection)
+        {
+            var (sb, so, eb, eo) = _doc.GetOrderedSelection();
+            if (sb == eb)
+            {
+                _doc.InsertTextAt(sb, eo, closer);
+                _doc.InsertTextAt(sb, so, opener);
+                _doc.CursorBlock = sb;
+                _doc.CursorOffset = eo + opener.Length;
+                _doc.AnchorBlock = sb;
+                _doc.AnchorOffset = _doc.CursorOffset;
+            }
+            else
+            {
+                _doc.InsertTextAt(eb, eo, closer);
+                _doc.InsertTextAt(sb, so, opener);
+                _doc.CursorBlock = eb;
+                _doc.CursorOffset = eo + (sb == eb ? opener.Length : 0);
+                _doc.AnchorBlock = _doc.CursorBlock;
+                _doc.AnchorOffset = _doc.CursorOffset;
+            }
+        }
+        else
+        {
+            int block = _doc.CursorBlock;
+            int offset = _doc.CursorOffset;
+            _doc.InsertTextAt(block, offset, opener + closer);
+            _doc.CursorOffset = offset + opener.Length;
+            _doc.AnchorBlock = block;
+            _doc.AnchorOffset = _doc.CursorOffset;
+        }
+
+        _doc.SealUndoGroup();
+        InvalidateLayout();
+        EnsureCursorVisible();
+        RaiseFormattingChanged();
+    }
+
     private InlineLink? GetLinkAtCursor()
     {
         if (_parsedBlocks == null || _doc.CursorBlock >= _parsedBlocks.Count) return null;
@@ -1441,6 +1494,7 @@ public partial class DocsCanvas : FrameworkElement
         var mergedRuns = new List<StyledRun>();
         var mergedImages = new List<InlineImage>();
         var mergedHiddenRanges = new List<HiddenRange>();
+        var mergedColorSpans = new List<ColorSpan>();
 
         for (int i = 0; i < segments.Length; i++)
         {
@@ -1458,6 +1512,13 @@ public partial class DocsCanvas : FrameworkElement
                         img.Start + seg.OffsetInJoined, img.Length, img.AltText, img.Url, img.Title));
             }
 
+            if (parsed.ColorSpans != null)
+            {
+                foreach (var cs in parsed.ColorSpans)
+                    mergedColorSpans.Add(new ColorSpan(
+                        cs.Start + seg.OffsetInJoined, cs.Length, cs.Foreground, cs.Background));
+            }
+
             foreach (var hr in map.HiddenRanges)
                 mergedHiddenRanges.Add(new HiddenRange(hr.Start + seg.OffsetInJoined, hr.Length));
         }
@@ -1470,9 +1531,11 @@ public partial class DocsCanvas : FrameworkElement
             Kind = BlockKind.Paragraph,
             Runs = mergedRuns,
             Images = mergedImages.Count > 0 ? mergedImages : null,
+            ColorSpans = mergedColorSpans.Count > 0 ? mergedColorSpans : null,
         };
         var joinedMap = new BlockVisualMap(mergedHiddenRanges,
-            images: mergedImages.Count > 0 ? mergedImages : null);
+            images: mergedImages.Count > 0 ? mergedImages : null,
+            colorSpans: mergedColorSpans.Count > 0 ? mergedColorSpans : null);
 
         var group = new ParagraphGroup
         {
@@ -2954,6 +3017,7 @@ public partial class DocsCanvas : FrameworkElement
         double viewBottom = effectiveScroll + ActualHeight;
 
         DrawCodeBlockBackgrounds(dc, effectiveScroll, viewTop, viewBottom);
+        DrawColorBlockBackgrounds(dc, effectiveScroll, viewTop, viewBottom);
         if (IsVisual)
             DrawTableBackgrounds(dc, effectiveScroll, viewTop, viewBottom);
 
@@ -3145,7 +3209,42 @@ public partial class DocsCanvas : FrameworkElement
             }
         }
 
+        ApplyColorSpans(ft, vl, parsed);
         ApplySyntaxDimming(ft, vl, parsed);
+    }
+
+    private void ApplyColorSpans(FormattedText ft, VisualLine vl, ParsedBlock parsed)
+    {
+        if (parsed.ColorSpans == null && parsed.BlockColor == null) return;
+
+        if (parsed.BlockColor?.Foreground is { } blockFg)
+        {
+            var brush = new SolidColorBrush(Color.FromRgb(blockFg.R, blockFg.G, blockFg.B));
+            brush.Freeze();
+            ft.SetForegroundBrush(brush, 0, vl.Length);
+        }
+
+        if (parsed.ColorSpans != null)
+        {
+            foreach (var cs in parsed.ColorSpans)
+            {
+                int csEnd = cs.Start + cs.Length;
+                int vlEnd = vl.StartOffset + vl.Length;
+                if (csEnd <= vl.StartOffset || cs.Start >= vlEnd) continue;
+
+                int localStart = Math.Max(0, cs.Start - vl.StartOffset);
+                int localEnd = Math.Min(vl.Length, csEnd - vl.StartOffset);
+                int count = localEnd - localStart;
+                if (count <= 0) continue;
+
+                if (cs.Foreground is { } fg)
+                {
+                    var brush = new SolidColorBrush(Color.FromRgb(fg.R, fg.G, fg.B));
+                    brush.Freeze();
+                    ft.SetForegroundBrush(brush, localStart, count);
+                }
+            }
+        }
     }
 
     private void ApplySyntaxDimming(FormattedText ft, VisualLine vl, ParsedBlock parsed)
@@ -3178,6 +3277,9 @@ public partial class DocsCanvas : FrameworkElement
             ft.SetForegroundBrush(_palette.Syntax, 0, 2);
 
         if (parsed.Kind == BlockKind.LinkDefinition)
+            ft.SetForegroundBrush(_palette.Syntax, 0, vl.Length);
+
+        if (parsed.Kind is BlockKind.ThemeDefinition or BlockKind.ColorDivOpen or BlockKind.ColorDivClose)
             ft.SetForegroundBrush(_palette.Syntax, 0, vl.Length);
 
         if (parsed.Kind == BlockKind.TableSeparatorRow)
@@ -3244,6 +3346,13 @@ public partial class DocsCanvas : FrameworkElement
 
         if (MarkdownParser.IsTrailingHardBreak(parsed, blockText))
             DimRange(ft, vl, blockText.Length - 1, 1);
+
+        var tagRanges = MarkdownParser.FindInlineColorTagRanges(blockText);
+        if (tagRanges != null)
+        {
+            foreach (var tag in tagRanges)
+                DimRange(ft, vl, tag.Start, tag.Length);
+        }
     }
 
     private static int CountBackticks(string text, int start)
@@ -3278,6 +3387,31 @@ public partial class DocsCanvas : FrameworkElement
             if (lineY > viewBottom) break;
 
             dc.DrawRectangle(_palette.CodeBackground, null,
+                new Rect(0, lineY - effectiveScroll, contentWidth, lineH));
+        }
+    }
+
+    private void DrawColorBlockBackgrounds(DrawingContext dc, double effectiveScroll,
+        double viewTop, double viewBottom)
+    {
+        if (_parsedBlocks == null) return;
+        double contentWidth = _scrollbarVisible ? ActualWidth - ScrollBarWidth : ActualWidth;
+
+        for (int i = 0; i < _visualLines.Count; i++)
+        {
+            var vl = _visualLines[i];
+            if (vl.BlockIndex >= _parsedBlocks.Count) continue;
+            var parsed = _parsedBlocks[vl.BlockIndex];
+            if (parsed.BlockColor?.Background is not { } bg) continue;
+
+            double lineH = GetEffectiveLineHeight(vl);
+            double lineY = _lineYPositions[i];
+            if (lineY + lineH < viewTop) continue;
+            if (lineY > viewBottom) break;
+
+            var brush = new SolidColorBrush(Color.FromArgb(40, bg.R, bg.G, bg.B));
+            brush.Freeze();
+            dc.DrawRectangle(brush, null,
                 new Rect(0, lineY - effectiveScroll, contentWidth, lineH));
         }
     }

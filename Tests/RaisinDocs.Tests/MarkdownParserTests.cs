@@ -1247,4 +1247,301 @@ public class MarkdownParserTests
         var blocks = ParseBlocks("```", "path\\", "```");
         MarkdownParser.IsTrailingHardBreak(blocks[1], "path\\").Should().BeFalse();
     }
+
+    // --- Theme parsing ---
+
+    [Fact]
+    public void ThemeBlock_ParsesHexColors()
+    {
+        var theme = MarkdownParser.ParseThemeBlock("<!--@theme\n  warning = #FF6B6B\n  accent = #4ECDC4\n-->");
+        theme.Should().HaveCount(2);
+        theme["warning"].Should().Be(new RgbColor(0xFF, 0x6B, 0x6B));
+        theme["accent"].Should().Be(new RgbColor(0x4E, 0xCD, 0xC4));
+    }
+
+    [Fact]
+    public void ThemeBlock_ParsesShortHex()
+    {
+        var theme = MarkdownParser.ParseThemeBlock("<!--@theme\nred = #F00\n-->");
+        theme["red"].Should().Be(new RgbColor(0xFF, 0x00, 0x00));
+    }
+
+    [Fact]
+    public void ThemeBlock_ParsesNamedColors()
+    {
+        var theme = MarkdownParser.ParseThemeBlock("<!--@theme\nwarn = red\ninfo = dodgerblue\n-->");
+        theme["warn"].Should().Be(new RgbColor(255, 0, 0));
+        theme["info"].Should().Be(new RgbColor(30, 144, 255));
+    }
+
+    [Fact]
+    public void ThemeBlock_CaseInsensitiveLookup()
+    {
+        var theme = MarkdownParser.ParseThemeBlock("<!--@theme\nMyColor = #AABBCC\n-->");
+        theme.ContainsKey("mycolor").Should().BeTrue();
+        theme.ContainsKey("MYCOLOR").Should().BeTrue();
+    }
+
+    [Fact]
+    public void ThemeBlock_SkipsInvalidValues()
+    {
+        var theme = MarkdownParser.ParseThemeBlock("<!--@theme\ngood = #FF0000\nbad = notacolor\nalso_bad = #ZZZZZZ\n-->");
+        theme.Should().HaveCount(1);
+        theme.ContainsKey("good").Should().BeTrue();
+    }
+
+    [Fact]
+    public void ThemeBlock_EmptyBlock()
+    {
+        var theme = MarkdownParser.ParseThemeBlock("<!--@theme\n-->");
+        theme.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void ThemeBlock_WhitespaceVariations()
+    {
+        var theme = MarkdownParser.ParseThemeBlock("<!--@theme\n  a=#FF0000\n  b =  #00FF00  \n-->");
+        theme.Should().HaveCount(2);
+        theme["a"].Should().Be(new RgbColor(255, 0, 0));
+        theme["b"].Should().Be(new RgbColor(0, 255, 0));
+    }
+
+    [Fact]
+    public void ThemeBlock_ClassifiedAsThemeDefinition()
+    {
+        var blocks = ParseBlocks("<!--@theme\nwarn = red\n-->");
+        blocks[0].Kind.Should().Be(BlockKind.ThemeDefinition);
+        blocks[0].IsSkippedInVisual.Should().BeTrue();
+    }
+
+    [Fact]
+    public void MultipleThemeBlocks_Merge()
+    {
+        var blocks = ParseBlocks(
+            "<!--@theme\na = #FF0000\nb = #00FF00\n-->",
+            "hello",
+            "<!--@theme\nb = #0000FF\nc = #FFFFFF\n-->");
+
+        var coloredBlock = blocks[1];
+        coloredBlock.Kind.Should().Be(BlockKind.Paragraph);
+    }
+
+    // --- Inline color tags ---
+
+    [Fact]
+    public void InlineColor_FgWithTheme()
+    {
+        var theme = new Dictionary<string, RgbColor>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["warning"] = new(255, 0, 0)
+        };
+        var spans = MarkdownParser.ParseInlineColorTags("hello <!--@fg:warning-->red text<!--/@fg--> end", theme);
+        spans.Should().NotBeNull();
+        spans.Should().HaveCount(1);
+        spans![0].Foreground.Should().Be(new RgbColor(255, 0, 0));
+        spans[0].Background.Should().BeNull();
+        spans[0].Start.Should().Be(24);
+        "hello <!--@fg:warning-->red text<!--/@fg--> end"[spans[0].Start..].Should().StartWith("red text");
+    }
+
+    [Fact]
+    public void InlineColor_BgWithTheme()
+    {
+        var theme = new Dictionary<string, RgbColor>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["highlight"] = new(255, 255, 0)
+        };
+        var spans = MarkdownParser.ParseInlineColorTags("<!--@bg:highlight-->text<!--/@bg-->", theme);
+        spans.Should().HaveCount(1);
+        spans![0].Background.Should().Be(new RgbColor(255, 255, 0));
+        spans[0].Foreground.Should().BeNull();
+    }
+
+    [Fact]
+    public void InlineColor_FgAndBgCombined()
+    {
+        var theme = new Dictionary<string, RgbColor>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["accent"] = new(0, 255, 0),
+            ["highlight"] = new(255, 255, 0)
+        };
+        var spans = MarkdownParser.ParseInlineColorTags("<!--@fg:accent bg:highlight-->text<!--/@-->", theme);
+        spans.Should().HaveCount(1);
+        spans![0].Foreground.Should().Be(new RgbColor(0, 255, 0));
+        spans[0].Background.Should().Be(new RgbColor(255, 255, 0));
+    }
+
+    [Fact]
+    public void InlineColor_LiteralHex()
+    {
+        var spans = MarkdownParser.ParseInlineColorTags("<!--@fg:#FF0000-->red<!--/@fg-->", null);
+        spans.Should().HaveCount(1);
+        spans![0].Foreground.Should().Be(new RgbColor(255, 0, 0));
+    }
+
+    [Fact]
+    public void InlineColor_UnresolvedName_NoSpan()
+    {
+        var spans = MarkdownParser.ParseInlineColorTags("<!--@fg:unknown-->text<!--/@fg-->", null);
+        spans.Should().BeNull();
+    }
+
+    [Fact]
+    public void InlineColor_NamedCssColor_NoTheme()
+    {
+        var spans = MarkdownParser.ParseInlineColorTags("<!--@fg:red-->text<!--/@fg-->", null);
+        spans.Should().HaveCount(1);
+        spans![0].Foreground.Should().Be(new RgbColor(255, 0, 0));
+    }
+
+    [Fact]
+    public void InlineColor_Unclosed_ExtendsToEnd()
+    {
+        var spans = MarkdownParser.ParseInlineColorTags("<!--@fg:red-->text to end", null);
+        spans.Should().HaveCount(1);
+        spans![0].Start.Should().Be(14);
+        spans![0].Length.Should().Be(11);
+    }
+
+    [Fact]
+    public void InlineColor_MultipleSpans()
+    {
+        var spans = MarkdownParser.ParseInlineColorTags(
+            "<!--@fg:red-->one<!--/@fg--> <!--@fg:blue-->two<!--/@fg-->", null);
+        spans.Should().HaveCount(2);
+    }
+
+    [Fact]
+    public void InlineColor_IntegratedParse_WithTheme()
+    {
+        var blocks = ParseBlocks(
+            "<!--@theme\nwarn = #FF6B6B\n-->",
+            "hello <!--@fg:warn-->warning<!--/@fg--> end");
+        blocks[1].ColorSpans.Should().HaveCount(1);
+        blocks[1].ColorSpans![0].Foreground.Should().Be(new RgbColor(0xFF, 0x6B, 0x6B));
+    }
+
+    // --- Block div ---
+
+    [Fact]
+    public void ColorDivOpen_Classified()
+    {
+        var blocks = ParseBlocks("<!--@div fg:red-->");
+        blocks[0].Kind.Should().Be(BlockKind.ColorDivOpen);
+        blocks[0].IsSkippedInVisual.Should().BeTrue();
+    }
+
+    [Fact]
+    public void ColorDivClose_Classified()
+    {
+        var blocks = ParseBlocks("<!--/@div-->");
+        blocks[0].Kind.Should().Be(BlockKind.ColorDivClose);
+        blocks[0].IsSkippedInVisual.Should().BeTrue();
+    }
+
+    [Fact]
+    public void ColorDiv_AppliesBlockColor()
+    {
+        var blocks = ParseBlocks(
+            "<!--@div fg:red-->",
+            "colored paragraph",
+            "<!--/@div-->");
+        blocks[1].BlockColor.Should().NotBeNull();
+        blocks[1].BlockColor!.Value.Foreground.Should().Be(new RgbColor(255, 0, 0));
+    }
+
+    [Fact]
+    public void ColorDiv_BgOnly()
+    {
+        var blocks = ParseBlocks(
+            "<!--@div bg:#00FF00-->",
+            "paragraph",
+            "<!--/@div-->");
+        blocks[1].BlockColor!.Value.Foreground.Should().BeNull();
+        blocks[1].BlockColor!.Value.Background.Should().Be(new RgbColor(0, 255, 0));
+    }
+
+    [Fact]
+    public void ColorDiv_FgAndBg()
+    {
+        var blocks = ParseBlocks(
+            "<!--@div fg:red bg:blue-->",
+            "paragraph",
+            "<!--/@div-->");
+        blocks[1].BlockColor!.Value.Foreground.Should().Be(new RgbColor(255, 0, 0));
+        blocks[1].BlockColor!.Value.Background.Should().Be(new RgbColor(0, 0, 255));
+    }
+
+    [Fact]
+    public void ColorDiv_NestedDivs_InnerOverrides()
+    {
+        var blocks = ParseBlocks(
+            "<!--@div fg:red-->",
+            "outer",
+            "<!--@div fg:blue-->",
+            "inner",
+            "<!--/@div-->",
+            "back to outer",
+            "<!--/@div-->");
+        blocks[1].BlockColor!.Value.Foreground.Should().Be(new RgbColor(255, 0, 0));
+        blocks[3].BlockColor!.Value.Foreground.Should().Be(new RgbColor(0, 0, 255));
+        blocks[5].BlockColor!.Value.Foreground.Should().Be(new RgbColor(255, 0, 0));
+    }
+
+    [Fact]
+    public void ColorDiv_Unclosed_ImplicitClose()
+    {
+        var blocks = ParseBlocks(
+            "<!--@div fg:red-->",
+            "paragraph");
+        blocks[1].BlockColor!.Value.Foreground.Should().Be(new RgbColor(255, 0, 0));
+    }
+
+    [Fact]
+    public void ColorDiv_WithThemeColors()
+    {
+        var blocks = ParseBlocks(
+            "<!--@theme\naccent = #4ECDC4\n-->",
+            "<!--@div fg:accent-->",
+            "styled text",
+            "<!--/@div-->");
+        blocks[2].BlockColor!.Value.Foreground.Should().Be(new RgbColor(0x4E, 0xCD, 0xC4));
+    }
+
+    [Fact]
+    public void ColorDiv_EmptyDiv()
+    {
+        var blocks = ParseBlocks(
+            "<!--@div fg:red-->",
+            "<!--/@div-->");
+        blocks.Should().HaveCount(2);
+    }
+
+    [Fact]
+    public void ColorDiv_DoesNotAffectOutsideBlocks()
+    {
+        var blocks = ParseBlocks(
+            "before",
+            "<!--@div fg:red-->",
+            "inside",
+            "<!--/@div-->",
+            "after");
+        blocks[0].BlockColor.Should().BeNull();
+        blocks[2].BlockColor!.Value.Foreground.Should().Be(new RgbColor(255, 0, 0));
+        blocks[4].BlockColor.Should().BeNull();
+    }
+
+    [Fact]
+    public void ThemeBlock_InsideFencedCode_NotParsed()
+    {
+        var blocks = ParseBlocks("```", "<!--@theme\nwarn = red\n-->", "```");
+        blocks[1].Kind.Should().Be(BlockKind.FencedCodeLine);
+    }
+
+    [Fact]
+    public void ColorDiv_InsideFencedCode_NotParsed()
+    {
+        var blocks = ParseBlocks("```", "<!--@div fg:red-->", "```");
+        blocks[1].Kind.Should().Be(BlockKind.FencedCodeLine);
+    }
 }

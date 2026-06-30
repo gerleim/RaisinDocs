@@ -1,5 +1,14 @@
 namespace RaisinDocs;
 
+public readonly record struct RgbColor(byte R, byte G, byte B)
+{
+    public string ToHex() => $"#{R:X2}{G:X2}{B:X2}";
+}
+
+public readonly record struct ColorSpan(int Start, int Length, RgbColor? Foreground, RgbColor? Background);
+
+public readonly record struct BlockColor(RgbColor? Foreground, RgbColor? Background);
+
 public enum InlineStyle
 {
     Normal,
@@ -36,6 +45,9 @@ public enum BlockKind
     TableSeparatorRow,
     TableDataRow,
     LinkDefinition,
+    ThemeDefinition,
+    ColorDivOpen,
+    ColorDivClose,
 }
 
 public enum ColumnAlignment { Left, Center, Right }
@@ -59,9 +71,12 @@ public class ParsedBlock
     public required IReadOnlyList<StyledRun> Runs { get; init; }
     public bool IsFenceDelimiter { get; init; }
     public bool IsTableSeparator { get; init; }
-    public bool IsSkippedInVisual => IsFenceDelimiter || IsTableSeparator || Kind == BlockKind.LinkDefinition;
+    public bool IsSkippedInVisual => IsFenceDelimiter || IsTableSeparator || Kind == BlockKind.LinkDefinition
+        || Kind == BlockKind.ThemeDefinition || Kind == BlockKind.ColorDivOpen || Kind == BlockKind.ColorDivClose;
     public IReadOnlyList<InlineImage>? Images { get; init; }
     public IReadOnlyList<InlineLink>? Links { get; init; }
+    public IReadOnlyList<ColorSpan>? ColorSpans { get; init; }
+    public BlockColor? BlockColor { get; init; }
     public TableRowInfo? TableRow { get; init; }
     public TableInfo? Table { get; init; }
 }
@@ -71,6 +86,7 @@ public static class MarkdownParser
     public static List<ParsedBlock> Parse(Func<int, string> getBlockText, int blockCount)
     {
         var defs = CollectLinkDefinitions(getBlockText, blockCount);
+        var theme = CollectThemeDefinitions(getBlockText, blockCount);
 
         var result = new List<ParsedBlock>(blockCount);
         bool insideFence = false;
@@ -101,6 +117,37 @@ public static class MarkdownParser
                 continue;
             }
 
+            if (IsThemeBlock(text))
+            {
+                result.Add(new ParsedBlock
+                {
+                    Kind = BlockKind.ThemeDefinition,
+                    Runs = [new StyledRun(0, text.Length, InlineStyle.Normal)],
+                });
+                continue;
+            }
+
+            if (IsColorDivOpen(text))
+            {
+                result.Add(new ParsedBlock
+                {
+                    Kind = BlockKind.ColorDivOpen,
+                    Runs = [new StyledRun(0, text.Length, InlineStyle.Normal)],
+                    BlockColor = ParseDivProperties(text, theme),
+                });
+                continue;
+            }
+
+            if (IsColorDivClose(text))
+            {
+                result.Add(new ParsedBlock
+                {
+                    Kind = BlockKind.ColorDivClose,
+                    Runs = [new StyledRun(0, text.Length, InlineStyle.Normal)],
+                });
+                continue;
+            }
+
             if (TryParseLinkDefinition(text, out _, out _, out _))
             {
                 result.Add(new ParsedBlock
@@ -118,12 +165,92 @@ public static class MarkdownParser
                 ? [new StyledRun(0, text.Length, InlineStyle.Normal)]
                 : ParseInlines(text, out images, out links, defs);
 
-            result.Add(new ParsedBlock { Kind = kind, Runs = runs, Images = images, Links = links });
+            var colorSpans = (kind == BlockKind.FencedCodeLine) ? null : ParseInlineColorTags(text, theme);
+
+            result.Add(new ParsedBlock { Kind = kind, Runs = runs, Images = images, Links = links, ColorSpans = colorSpans });
         }
 
         DetectTables(result, getBlockText);
+        ApplyBlockDivColors(result);
 
         return result;
+    }
+
+    private static Dictionary<string, RgbColor>? CollectThemeDefinitions(
+        Func<int, string> getBlockText, int blockCount)
+    {
+        Dictionary<string, RgbColor>? theme = null;
+        bool insideFence = false;
+        for (int i = 0; i < blockCount; i++)
+        {
+            string text = getBlockText(i);
+            if (IsFenceLine(text)) { insideFence = !insideFence; continue; }
+            if (insideFence) continue;
+
+            if (IsThemeBlock(text))
+            {
+                var parsed = ParseThemeBlock(text);
+                if (parsed.Count > 0)
+                {
+                    theme ??= new(StringComparer.OrdinalIgnoreCase);
+                    foreach (var kvp in parsed)
+                        theme[kvp.Key] = kvp.Value;
+                }
+            }
+        }
+        return theme;
+    }
+
+    private static void ApplyBlockDivColors(List<ParsedBlock> blocks)
+    {
+        var divStack = new Stack<BlockColor>();
+
+        for (int i = 0; i < blocks.Count; i++)
+        {
+            var block = blocks[i];
+
+            if (block.Kind == BlockKind.ColorDivOpen && block.BlockColor != null)
+            {
+                divStack.Push(block.BlockColor.Value);
+                continue;
+            }
+
+            if (block.Kind == BlockKind.ColorDivClose)
+            {
+                if (divStack.Count > 0) divStack.Pop();
+                continue;
+            }
+
+            if (divStack.Count > 0 && block.Kind != BlockKind.ThemeDefinition)
+            {
+                var merged = MergeBlockColors(divStack);
+                blocks[i] = new ParsedBlock
+                {
+                    Kind = block.Kind,
+                    Runs = block.Runs,
+                    IsFenceDelimiter = block.IsFenceDelimiter,
+                    IsTableSeparator = block.IsTableSeparator,
+                    Images = block.Images,
+                    Links = block.Links,
+                    ColorSpans = block.ColorSpans,
+                    BlockColor = merged,
+                    TableRow = block.TableRow,
+                    Table = block.Table,
+                };
+            }
+        }
+    }
+
+    private static BlockColor MergeBlockColors(Stack<BlockColor> stack)
+    {
+        RgbColor? fg = null, bg = null;
+        foreach (var bc in stack)
+        {
+            fg ??= bc.Foreground;
+            bg ??= bc.Background;
+            if (fg != null && bg != null) break;
+        }
+        return new BlockColor(fg, bg);
     }
 
     private static Dictionary<string, (string Url, string? Title)>? CollectLinkDefinitions(
@@ -939,4 +1066,489 @@ public static class MarkdownParser
         runs.Add(new StyledRun(start, styles.Length - start, current));
         return runs;
     }
+
+    // ---- Comment-based extensions (<!--@...-->) ----
+
+    private const string ThemeOpen = "<!--@theme";
+    private const string CommentClose = "-->";
+    private const string DivOpen = "<!--@div ";
+    private const string DivClose = "<!--/@div-->";
+
+    internal static bool IsThemeBlock(string text)
+    {
+        var trimmed = text.AsSpan().Trim();
+        return trimmed.StartsWith(ThemeOpen.AsSpan(), StringComparison.OrdinalIgnoreCase)
+               && trimmed.EndsWith(CommentClose.AsSpan(), StringComparison.Ordinal);
+    }
+
+    internal static bool IsColorDivOpen(string text)
+    {
+        var trimmed = text.AsSpan().Trim();
+        return trimmed.StartsWith(DivOpen.AsSpan(), StringComparison.OrdinalIgnoreCase)
+               && trimmed.EndsWith(CommentClose.AsSpan(), StringComparison.Ordinal);
+    }
+
+    internal static bool IsColorDivClose(string text)
+    {
+        return text.AsSpan().Trim().Equals(DivClose.AsSpan(), StringComparison.OrdinalIgnoreCase);
+    }
+
+    internal static Dictionary<string, RgbColor> ParseThemeBlock(string text)
+    {
+        var result = new Dictionary<string, RgbColor>(StringComparer.OrdinalIgnoreCase);
+        var trimmed = text.AsSpan().Trim();
+        if (!trimmed.StartsWith(ThemeOpen.AsSpan(), StringComparison.OrdinalIgnoreCase)
+            || !trimmed.EndsWith(CommentClose.AsSpan(), StringComparison.Ordinal))
+            return result;
+
+        var body = trimmed[ThemeOpen.Length..^CommentClose.Length];
+
+        foreach (var rawLine in SplitLines(body))
+        {
+            var line = rawLine.AsSpan().Trim();
+            if (line.IsEmpty) continue;
+
+            int eq = line.IndexOf('=');
+            if (eq < 0) continue;
+
+            var name = line[..eq].Trim();
+            var value = line[(eq + 1)..].Trim();
+            if (name.IsEmpty || value.IsEmpty) continue;
+
+            if (TryParseColor(value, out var color))
+                result[name.ToString()] = color;
+        }
+        return result;
+    }
+
+    internal static BlockColor? ParseDivProperties(string text, Dictionary<string, RgbColor>? theme)
+    {
+        var trimmed = text.AsSpan().Trim();
+        if (!trimmed.StartsWith(DivOpen.AsSpan(), StringComparison.OrdinalIgnoreCase)
+            || !trimmed.EndsWith(CommentClose.AsSpan(), StringComparison.Ordinal))
+            return null;
+
+        var props = trimmed[DivOpen.Length..^CommentClose.Length].Trim();
+        return ParseColorProperties(props, theme);
+    }
+
+    private static BlockColor? ParseColorProperties(ReadOnlySpan<char> props, Dictionary<string, RgbColor>? theme)
+    {
+        RgbColor? fg = null, bg = null;
+
+        while (!props.IsEmpty)
+        {
+            while (!props.IsEmpty && props[0] == ' ') props = props[1..];
+            if (props.IsEmpty) break;
+
+            int space = props.IndexOf(' ');
+            var token = space >= 0 ? props[..space] : props;
+            props = space >= 0 ? props[(space + 1)..] : ReadOnlySpan<char>.Empty;
+
+            if (token.StartsWith("fg:".AsSpan(), StringComparison.OrdinalIgnoreCase))
+            {
+                if (ResolveColor(token[3..], theme, out var c)) fg = c;
+            }
+            else if (token.StartsWith("bg:".AsSpan(), StringComparison.OrdinalIgnoreCase))
+            {
+                if (ResolveColor(token[3..], theme, out var c)) bg = c;
+            }
+        }
+
+        if (fg == null && bg == null) return null;
+        return new BlockColor(fg, bg);
+    }
+
+    internal static List<ColorSpan>? ParseInlineColorTags(string text, Dictionary<string, RgbColor>? theme)
+    {
+        List<ColorSpan>? spans = null;
+        var openFg = new Stack<(int tagEnd, RgbColor color)>();
+        var openBg = new Stack<(int tagEnd, RgbColor color)>();
+
+        int i = 0;
+        while (i < text.Length - 6)
+        {
+            if (text[i] != '<' || i + 4 >= text.Length || text[i + 1] != '!' || text[i + 2] != '-' || text[i + 3] != '-')
+            {
+                i++;
+                continue;
+            }
+
+            if (text[i + 4] == '@')
+            {
+                int closeIdx = text.IndexOf("-->", i + 5, StringComparison.Ordinal);
+                if (closeIdx < 0) { i++; continue; }
+
+                int tagEnd = closeIdx + 3;
+                var body = text.AsSpan()[(i + 5)..closeIdx].Trim();
+
+                if (body.StartsWith("fg:".AsSpan(), StringComparison.OrdinalIgnoreCase))
+                {
+                    int spaceInBody = body.IndexOf(' ');
+                    var fgToken = spaceInBody >= 0 ? body[3..spaceInBody] : body[3..];
+                    if (ResolveColor(fgToken, theme, out var fgColor))
+                        openFg.Push((tagEnd, fgColor));
+
+                    if (spaceInBody >= 0)
+                    {
+                        var rest = body[(spaceInBody + 1)..].Trim();
+                        if (rest.StartsWith("bg:".AsSpan(), StringComparison.OrdinalIgnoreCase)
+                            && ResolveColor(rest[3..], theme, out var bgColor))
+                            openBg.Push((tagEnd, bgColor));
+                    }
+                }
+                else if (body.StartsWith("bg:".AsSpan(), StringComparison.OrdinalIgnoreCase))
+                {
+                    int spaceInBody = body.IndexOf(' ');
+                    var bgToken = spaceInBody >= 0 ? body[3..spaceInBody] : body[3..];
+                    if (ResolveColor(bgToken, theme, out var bgColor))
+                        openBg.Push((tagEnd, bgColor));
+
+                    if (spaceInBody >= 0)
+                    {
+                        var rest = body[(spaceInBody + 1)..].Trim();
+                        if (rest.StartsWith("fg:".AsSpan(), StringComparison.OrdinalIgnoreCase)
+                            && ResolveColor(rest[3..], theme, out var fgColor))
+                            openFg.Push((tagEnd, fgColor));
+                    }
+                }
+
+                i = tagEnd;
+                continue;
+            }
+
+            if (i + 5 < text.Length && text[i + 4] == '/' && text[i + 5] == '@')
+            {
+                int closeIdx = text.IndexOf("-->", i + 6, StringComparison.Ordinal);
+                if (closeIdx < 0) { i++; continue; }
+
+                int tagEnd = closeIdx + 3;
+                var body = text.AsSpan()[(i + 6)..closeIdx].Trim();
+
+                bool closeFg = body.Equals("fg".AsSpan(), StringComparison.OrdinalIgnoreCase)
+                               || body.IsEmpty;
+                bool closeBg = body.Equals("bg".AsSpan(), StringComparison.OrdinalIgnoreCase)
+                               || body.IsEmpty;
+
+                if (closeFg && openFg.Count > 0)
+                {
+                    var (start, color) = openFg.Pop();
+                    if (start < i)
+                    {
+                        spans ??= [];
+                        AddOrMergeColorSpan(ref spans, start, i - start, color, null);
+                    }
+                }
+                if (closeBg && openBg.Count > 0)
+                {
+                    var (start, color) = openBg.Pop();
+                    if (start < i)
+                    {
+                        spans ??= [];
+                        AddOrMergeColorSpan(ref spans, start, i - start, null, color);
+                    }
+                }
+
+                i = tagEnd;
+                continue;
+            }
+
+            i++;
+        }
+
+        // Unclosed tags: extend to end of block
+        while (openFg.Count > 0)
+        {
+            var (start, color) = openFg.Pop();
+            if (start < text.Length)
+            {
+                spans ??= [];
+                AddOrMergeColorSpan(ref spans, start, text.Length - start, color, null);
+            }
+        }
+        while (openBg.Count > 0)
+        {
+            var (start, color) = openBg.Pop();
+            if (start < text.Length)
+            {
+                spans ??= [];
+                AddOrMergeColorSpan(ref spans, start, text.Length - start, null, color);
+            }
+        }
+
+        return spans;
+    }
+
+    internal static List<HiddenRange>? FindInlineColorTagRanges(string text)
+    {
+        List<HiddenRange>? ranges = null;
+        int i = 0;
+        while (i < text.Length - 6)
+        {
+            if (text[i] != '<' || i + 4 >= text.Length || text[i + 1] != '!' || text[i + 2] != '-' || text[i + 3] != '-')
+            {
+                i++;
+                continue;
+            }
+
+            bool isOpener = text[i + 4] == '@';
+            bool isCloser = i + 5 < text.Length && text[i + 4] == '/' && text[i + 5] == '@';
+
+            if (isOpener || isCloser)
+            {
+                int searchFrom = isOpener ? i + 5 : i + 6;
+                int closeIdx = text.IndexOf("-->", searchFrom, StringComparison.Ordinal);
+                if (closeIdx >= 0)
+                {
+                    int tagEnd = closeIdx + 3;
+                    ranges ??= [];
+                    ranges.Add(new HiddenRange(i, tagEnd - i));
+                    i = tagEnd;
+                    continue;
+                }
+            }
+            i++;
+        }
+        return ranges;
+    }
+
+    private static void AddOrMergeColorSpan(ref List<ColorSpan> spans, int start, int length,
+        RgbColor? fg, RgbColor? bg)
+    {
+        for (int i = 0; i < spans.Count; i++)
+        {
+            var existing = spans[i];
+            if (existing.Start == start && existing.Length == length)
+            {
+                spans[i] = new ColorSpan(start, length,
+                    fg ?? existing.Foreground, bg ?? existing.Background);
+                return;
+            }
+        }
+        spans.Add(new ColorSpan(start, length, fg, bg));
+    }
+
+    internal static bool TryParseColor(ReadOnlySpan<char> value, out RgbColor color)
+    {
+        color = default;
+        if (value.IsEmpty) return false;
+
+        if (value[0] == '#')
+        {
+            var hex = value[1..];
+            if (hex.Length == 6
+                && byte.TryParse(hex[..2], System.Globalization.NumberStyles.HexNumber, null, out byte r6)
+                && byte.TryParse(hex[2..4], System.Globalization.NumberStyles.HexNumber, null, out byte g6)
+                && byte.TryParse(hex[4..6], System.Globalization.NumberStyles.HexNumber, null, out byte b6))
+            {
+                color = new RgbColor(r6, g6, b6);
+                return true;
+            }
+            if (hex.Length == 3
+                && byte.TryParse(stackalloc char[] { hex[0], hex[0] }, System.Globalization.NumberStyles.HexNumber, null, out byte r3)
+                && byte.TryParse(stackalloc char[] { hex[1], hex[1] }, System.Globalization.NumberStyles.HexNumber, null, out byte g3)
+                && byte.TryParse(stackalloc char[] { hex[2], hex[2] }, System.Globalization.NumberStyles.HexNumber, null, out byte b3))
+            {
+                color = new RgbColor(r3, g3, b3);
+                return true;
+            }
+            return false;
+        }
+
+        return TryGetNamedColor(value, out color);
+    }
+
+    private static bool ResolveColor(ReadOnlySpan<char> name, Dictionary<string, RgbColor>? theme, out RgbColor color)
+    {
+        color = default;
+        if (name.IsEmpty) return false;
+
+        if (name[0] == '#')
+            return TryParseColor(name, out color);
+
+        var nameStr = name.ToString();
+        if (theme != null && theme.TryGetValue(nameStr, out color))
+            return true;
+
+        return TryGetNamedColor(name, out color);
+    }
+
+    private static List<string> SplitLines(ReadOnlySpan<char> text)
+    {
+        var lines = new List<string>();
+        var str = text.ToString();
+        int start = 0;
+        for (int i = 0; i < str.Length; i++)
+        {
+            if (str[i] == '\n')
+            {
+                lines.Add(str[start..i]);
+                start = i + 1;
+            }
+        }
+        if (start <= str.Length)
+            lines.Add(str[start..]);
+        return lines;
+    }
+
+    private static bool TryGetNamedColor(ReadOnlySpan<char> name, out RgbColor color)
+    {
+        color = default;
+        var key = name.ToString();
+        if (CssNamedColors.TryGetValue(key, out color))
+            return true;
+        return false;
+    }
+
+    private static readonly Dictionary<string, RgbColor> CssNamedColors = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["aliceblue"] = new(240, 248, 255),
+        ["antiquewhite"] = new(250, 235, 215),
+        ["aqua"] = new(0, 255, 255),
+        ["aquamarine"] = new(127, 255, 212),
+        ["azure"] = new(240, 255, 255),
+        ["beige"] = new(245, 245, 220),
+        ["bisque"] = new(255, 228, 196),
+        ["black"] = new(0, 0, 0),
+        ["blanchedalmond"] = new(255, 235, 205),
+        ["blue"] = new(0, 0, 255),
+        ["blueviolet"] = new(138, 43, 226),
+        ["brown"] = new(165, 42, 42),
+        ["burlywood"] = new(222, 184, 135),
+        ["cadetblue"] = new(95, 158, 160),
+        ["chartreuse"] = new(127, 255, 0),
+        ["chocolate"] = new(210, 105, 30),
+        ["coral"] = new(255, 127, 80),
+        ["cornflowerblue"] = new(100, 149, 237),
+        ["cornsilk"] = new(255, 248, 220),
+        ["crimson"] = new(220, 20, 60),
+        ["cyan"] = new(0, 255, 255),
+        ["darkblue"] = new(0, 0, 139),
+        ["darkcyan"] = new(0, 139, 139),
+        ["darkgoldenrod"] = new(184, 134, 11),
+        ["darkgray"] = new(169, 169, 169),
+        ["darkgreen"] = new(0, 100, 0),
+        ["darkgrey"] = new(169, 169, 169),
+        ["darkkhaki"] = new(189, 183, 107),
+        ["darkmagenta"] = new(139, 0, 139),
+        ["darkolivegreen"] = new(85, 107, 47),
+        ["darkorange"] = new(255, 140, 0),
+        ["darkorchid"] = new(153, 50, 204),
+        ["darkred"] = new(139, 0, 0),
+        ["darksalmon"] = new(233, 150, 122),
+        ["darkseagreen"] = new(143, 188, 143),
+        ["darkslateblue"] = new(72, 61, 139),
+        ["darkslategray"] = new(47, 79, 79),
+        ["darkslategrey"] = new(47, 79, 79),
+        ["darkturquoise"] = new(0, 206, 209),
+        ["darkviolet"] = new(148, 0, 211),
+        ["deeppink"] = new(255, 20, 147),
+        ["deepskyblue"] = new(0, 191, 255),
+        ["dimgray"] = new(105, 105, 105),
+        ["dimgrey"] = new(105, 105, 105),
+        ["dodgerblue"] = new(30, 144, 255),
+        ["firebrick"] = new(178, 34, 34),
+        ["floralwhite"] = new(255, 250, 240),
+        ["forestgreen"] = new(34, 139, 34),
+        ["fuchsia"] = new(255, 0, 255),
+        ["gainsboro"] = new(220, 220, 220),
+        ["ghostwhite"] = new(248, 248, 255),
+        ["gold"] = new(255, 215, 0),
+        ["goldenrod"] = new(218, 165, 32),
+        ["gray"] = new(128, 128, 128),
+        ["green"] = new(0, 128, 0),
+        ["greenyellow"] = new(173, 255, 47),
+        ["grey"] = new(128, 128, 128),
+        ["honeydew"] = new(240, 255, 240),
+        ["hotpink"] = new(255, 105, 180),
+        ["indianred"] = new(205, 92, 92),
+        ["indigo"] = new(75, 0, 130),
+        ["ivory"] = new(255, 255, 240),
+        ["khaki"] = new(240, 230, 140),
+        ["lavender"] = new(230, 230, 250),
+        ["lavenderblush"] = new(255, 240, 245),
+        ["lawngreen"] = new(124, 252, 0),
+        ["lemonchiffon"] = new(255, 250, 205),
+        ["lightblue"] = new(173, 216, 230),
+        ["lightcoral"] = new(240, 128, 128),
+        ["lightcyan"] = new(224, 255, 255),
+        ["lightgoldenrodyellow"] = new(250, 250, 210),
+        ["lightgray"] = new(211, 211, 211),
+        ["lightgreen"] = new(144, 238, 144),
+        ["lightgrey"] = new(211, 211, 211),
+        ["lightpink"] = new(255, 182, 193),
+        ["lightsalmon"] = new(255, 160, 122),
+        ["lightseagreen"] = new(32, 178, 170),
+        ["lightskyblue"] = new(135, 206, 250),
+        ["lightslategray"] = new(119, 136, 153),
+        ["lightslategrey"] = new(119, 136, 153),
+        ["lightsteelblue"] = new(176, 196, 222),
+        ["lightyellow"] = new(255, 255, 224),
+        ["lime"] = new(0, 255, 0),
+        ["limegreen"] = new(50, 205, 50),
+        ["linen"] = new(250, 240, 230),
+        ["magenta"] = new(255, 0, 255),
+        ["maroon"] = new(128, 0, 0),
+        ["mediumaquamarine"] = new(102, 205, 170),
+        ["mediumblue"] = new(0, 0, 205),
+        ["mediumorchid"] = new(186, 85, 211),
+        ["mediumpurple"] = new(147, 111, 219),
+        ["mediumseagreen"] = new(60, 179, 113),
+        ["mediumslateblue"] = new(123, 104, 238),
+        ["mediumspringgreen"] = new(0, 250, 154),
+        ["mediumturquoise"] = new(72, 209, 204),
+        ["mediumvioletred"] = new(199, 21, 133),
+        ["midnightblue"] = new(25, 25, 112),
+        ["mintcream"] = new(245, 255, 250),
+        ["mistyrose"] = new(255, 228, 225),
+        ["moccasin"] = new(255, 228, 181),
+        ["navajowhite"] = new(255, 222, 173),
+        ["navy"] = new(0, 0, 128),
+        ["oldlace"] = new(253, 245, 230),
+        ["olive"] = new(128, 128, 0),
+        ["olivedrab"] = new(107, 142, 35),
+        ["orange"] = new(255, 165, 0),
+        ["orangered"] = new(255, 69, 0),
+        ["orchid"] = new(218, 112, 214),
+        ["palegoldenrod"] = new(238, 232, 170),
+        ["palegreen"] = new(152, 251, 152),
+        ["paleturquoise"] = new(175, 238, 238),
+        ["palevioletred"] = new(219, 112, 147),
+        ["papayawhip"] = new(255, 239, 213),
+        ["peachpuff"] = new(255, 218, 185),
+        ["peru"] = new(205, 133, 63),
+        ["pink"] = new(255, 192, 203),
+        ["plum"] = new(221, 160, 221),
+        ["powderblue"] = new(176, 224, 230),
+        ["purple"] = new(128, 0, 128),
+        ["rebeccapurple"] = new(102, 51, 153),
+        ["red"] = new(255, 0, 0),
+        ["rosybrown"] = new(188, 143, 143),
+        ["royalblue"] = new(65, 105, 225),
+        ["saddlebrown"] = new(139, 69, 19),
+        ["salmon"] = new(250, 128, 114),
+        ["sandybrown"] = new(244, 164, 96),
+        ["seagreen"] = new(46, 139, 87),
+        ["seashell"] = new(255, 245, 238),
+        ["sienna"] = new(160, 82, 45),
+        ["silver"] = new(192, 192, 192),
+        ["skyblue"] = new(135, 206, 235),
+        ["slateblue"] = new(106, 90, 205),
+        ["slategray"] = new(112, 128, 144),
+        ["slategrey"] = new(112, 128, 144),
+        ["snow"] = new(255, 250, 250),
+        ["springgreen"] = new(0, 255, 127),
+        ["steelblue"] = new(70, 130, 180),
+        ["tan"] = new(210, 180, 140),
+        ["teal"] = new(0, 128, 128),
+        ["thistle"] = new(216, 191, 216),
+        ["tomato"] = new(255, 99, 71),
+        ["turquoise"] = new(64, 224, 208),
+        ["violet"] = new(238, 130, 238),
+        ["wheat"] = new(245, 222, 179),
+        ["white"] = new(255, 255, 255),
+        ["whitesmoke"] = new(245, 245, 245),
+        ["yellow"] = new(255, 255, 0),
+        ["yellowgreen"] = new(154, 205, 50),
+    };
 }

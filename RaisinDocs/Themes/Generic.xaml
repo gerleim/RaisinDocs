@@ -188,6 +188,16 @@
                                       StrokeThickness="1.5"
                                       Data="M1,1 H15 V13 H1 Z M1,7 H15 M8,1 V13" />
                             </Button>
+                            <Button x:Name="PART_ColorText" Style="{StaticResource FormattingButton}"
+                                    ToolTip="Text color">
+                                <Grid Width="16" Height="16">
+                                    <TextBlock Text="A" FontWeight="Bold" FontSize="13"
+                                               HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,-1,0,0"
+                                               Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=local:DocsFormattingBar}}" />
+                                    <Border x:Name="PART_ColorBar" Height="3" VerticalAlignment="Bottom"
+                                            Background="Red" CornerRadius="1" />
+                                </Grid>
+                            </Button>
 
                             <Border Style="{StaticResource SeparatorLine}" />
 

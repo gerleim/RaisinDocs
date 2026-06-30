@@ -147,6 +147,9 @@ public class DocsFormattingBar : Control
     private Path? _imagePreviewIcon;
     private ToggleButton? _minimapButton;
     private Path? _minimapIcon;
+    private Button? _colorTextButton;
+    private Border? _colorBar;
+    private string _lastColorName = "red";
 
     public override void OnApplyTemplate()
     {
@@ -190,6 +193,13 @@ public class DocsFormattingBar : Control
                 Canvas?.InsertTable(3, 2);
                 Canvas?.Focus();
             };
+        }
+
+        _colorTextButton = GetTemplateChild("PART_ColorText") as Button;
+        _colorBar = GetTemplateChild("PART_ColorBar") as Border;
+        if (_colorTextButton != null)
+        {
+            _colorTextButton.Click += (_, _) => ShowColorMenu();
         }
 
         _editModeButton = GetTemplateChild("PART_EditMode") as ToggleButton;
@@ -414,5 +424,60 @@ public class DocsFormattingBar : Control
     {
         if (btn != null && btn.IsChecked != value)
             btn.IsChecked = value;
+    }
+
+    private static readonly (string Name, Color Color)[] ColorPalette =
+    [
+        ("red", Color.FromRgb(255, 0, 0)),
+        ("blue", Color.FromRgb(0, 0, 255)),
+        ("green", Color.FromRgb(0, 128, 0)),
+        ("orange", Color.FromRgb(255, 165, 0)),
+        ("purple", Color.FromRgb(128, 0, 128)),
+        ("crimson", Color.FromRgb(220, 20, 60)),
+        ("dodgerblue", Color.FromRgb(30, 144, 255)),
+        ("goldenrod", Color.FromRgb(218, 165, 32)),
+        ("teal", Color.FromRgb(0, 128, 128)),
+        ("coral", Color.FromRgb(255, 127, 80)),
+        ("darkviolet", Color.FromRgb(148, 0, 211)),
+        ("forestgreen", Color.FromRgb(34, 139, 34)),
+    ];
+
+    private void ShowColorMenu()
+    {
+        if (Canvas == null || _colorTextButton == null) return;
+
+        var menu = new ContextMenu();
+
+        foreach (var (name, color) in ColorPalette)
+        {
+            var swatch = new Border
+            {
+                Width = 14, Height = 14,
+                Background = new SolidColorBrush(color),
+                CornerRadius = new CornerRadius(2),
+                Margin = new Thickness(0, 0, 6, 0),
+            };
+            var label = new TextBlock { Text = name, VerticalAlignment = VerticalAlignment.Center };
+            var panel = new StackPanel { Orientation = Orientation.Horizontal };
+            panel.Children.Add(swatch);
+            panel.Children.Add(label);
+
+            var item = new MenuItem { Header = panel };
+            var capturedName = name;
+            var capturedColor = color;
+            item.Click += (_, _) =>
+            {
+                _lastColorName = capturedName;
+                if (_colorBar != null)
+                    _colorBar.Background = new SolidColorBrush(capturedColor);
+                Canvas?.InsertFgColor(capturedName);
+                Canvas?.Focus();
+            };
+            menu.Items.Add(item);
+        }
+
+        menu.PlacementTarget = _colorTextButton;
+        menu.Placement = PlacementMode.Bottom;
+        menu.IsOpen = true;
     }
 }

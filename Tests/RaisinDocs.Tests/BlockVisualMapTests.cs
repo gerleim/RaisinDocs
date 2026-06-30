@@ -738,4 +738,71 @@ public class BlockVisualMapTests
         map.IsHidden(6).Should().BeTrue();   // [
         map.IsHidden(7).Should().BeTrue();   // ]
     }
+
+    // --- Inline color tags ---
+
+    [Fact]
+    public void InlineColorTag_Hidden()
+    {
+        // "hello <!--@fg:red-->world<!--/@fg--> end"
+        var text = "hello <!--@fg:red-->world<!--/@fg--> end";
+        var map = ComputeMap(text);
+        // "<!--@fg:red-->" at 6..19 hidden
+        for (int i = 6; i < 20; i++)
+            map.IsHidden(i).Should().BeTrue($"index {i} should be hidden (opener tag)");
+        // "world" at 20..24 visible
+        for (int i = 20; i < 25; i++)
+            map.IsHidden(i).Should().BeFalse($"index {i} should be visible (content)");
+        // "<!--/@fg-->" at 25..35 hidden
+        for (int i = 25; i < 36; i++)
+            map.IsHidden(i).Should().BeTrue($"index {i} should be hidden (closer tag)");
+    }
+
+    [Fact]
+    public void InlineColorTag_DisplayString()
+    {
+        var text = "hello <!--@fg:red-->world<!--/@fg--> end";
+        var map = ComputeMap(text);
+        map.BuildDisplayString(text, 0, text.Length).Should().Be("hello world end");
+    }
+
+    [Fact]
+    public void InlineColorTag_RawToVisual()
+    {
+        var text = "A<!--@fg:red-->B<!--/@fg-->C";
+        var map = ComputeMap(text);
+        // A=0, tag=1..14 (hidden), B=15 -> vis 1, tag=16..25 (hidden), C=26 -> vis 2
+        map.RawToVisual(0).Should().Be(0);   // A
+        map.RawToVisual(15).Should().Be(1);  // B
+        map.RawToVisual(26).Should().Be(2);  // C
+    }
+
+    [Fact]
+    public void InlineColorTag_ColorSpansPassedThrough()
+    {
+        var text = "<!--@fg:red-->colored<!--/@fg-->";
+        var map = ComputeMap(text);
+        map.ColorSpans.Should().NotBeNull();
+        map.ColorSpans!.Count.Should().Be(1);
+        map.ColorSpans[0].Foreground.Should().Be(new RgbColor(255, 0, 0));
+    }
+
+    [Fact]
+    public void InlineColorTag_VisualSpanCoversCorrectRange()
+    {
+        var text = "asdasdasd <!--@fg:orange-->dgfhfzgjhfg fghfgh<!--/@fg-->";
+        var map = ComputeMap(text);
+        var display = map.BuildDisplayString(text, 0, text.Length);
+        display.Should().Be("asdasdasd dgfhfzgjhfg fghfgh");
+
+        map.ColorSpans.Should().NotBeNull();
+        var cs = map.ColorSpans![0];
+        cs.Foreground.Should().Be(new RgbColor(255, 165, 0));
+
+        int visStart = map.RawToVisual(cs.Start);
+        int visEnd = map.RawToVisual(cs.Start + cs.Length);
+        visStart.Should().Be(10);
+        visEnd.Should().Be(28);
+        display[visStart..visEnd].Should().Be("dgfhfzgjhfg fghfgh");
+    }
 }
