@@ -21,8 +21,7 @@ public partial class DocsCanvas : FrameworkElement
     private const double _padding = 10;
     private const double _paragraphGap = 8;
     private const double _listIndent = 20;
-    private const double ScrollBarWidth = 14;
-    private const double ScrollBarMinThumb = 20;
+
 
     public enum EditorTheme { Light, Dark, DarkBlue }
 
@@ -228,11 +227,7 @@ public partial class DocsCanvas : FrameworkElement
     private double _totalContentHeight;
     private double _layoutMaxWidth;
     private double _scrollOffset;
-    private bool _scrollbarVisible;
     private readonly SmoothScroller _smoother;
-    private bool _isDraggingThumb;
-    private double _dragStartY;
-    private double _dragStartScroll;
 
     private List<ParsedBlock>? _parsedBlocks;
     private List<BlockVisualMap>? _visualMaps;
@@ -266,6 +261,10 @@ public partial class DocsCanvas : FrameworkElement
         return null;
     }
 
+    internal event Action? ScrollStateChanged;
+    internal double ScrollOffset => _scrollOffset;
+    internal double TotalContentHeight => _totalContentHeight;
+
     internal int MinimapLayoutVersion => _layoutVersion;
     internal int MinimapLineCount => _visualLines.Count;
     internal double MinimapScrollOffset => _scrollOffset + _smoother.Offset;
@@ -273,7 +272,7 @@ public partial class DocsCanvas : FrameworkElement
     internal Color MinimapBackground => ((SolidColorBrush)_palette.Background).Color;
     internal Color MinimapForeground => ((SolidColorBrush)_palette.Foreground).Color;
     internal Color MinimapCodeBackground => ((SolidColorBrush)_palette.CodeBackground).Color;
-    internal double MinimapCanvasTextWidth => Math.Max(1, ActualWidth - _padding * 2 - ScrollBarWidth);
+    internal double MinimapCanvasTextWidth => Math.Max(1, ActualWidth - _padding * 2);
 
     internal BlockKind GetMinimapLineKind(int index)
     {
@@ -1433,13 +1432,7 @@ public partial class DocsCanvas : FrameworkElement
                 _visualMaps.Add(BlockVisualMap.Compute(_parsedBlocks[i], _doc.GetBlockText(i)));
         }
 
-        _scrollbarVisible = false;
         ComputeLayoutCore(ActualWidth - _padding * 2);
-        if (_totalContentHeight > ActualHeight)
-        {
-            _scrollbarVisible = true;
-            ComputeLayoutCore(ActualWidth - _padding * 2 - ScrollBarWidth);
-        }
     }
 
     private void BuildParagraphGroups()
@@ -2098,20 +2091,6 @@ public partial class DocsCanvas : FrameworkElement
         e.Handled = true;
     }
 
-    // --- Scrollbar helpers ---
-
-    private (double thumbY, double thumbH) GetScrollbarThumbRect()
-    {
-        double maxScroll = Math.Max(1, _totalContentHeight - ActualHeight);
-        double trackH = ActualHeight;
-        double thumbH = Math.Max(ScrollBarMinThumb, (ActualHeight / _totalContentHeight) * trackH);
-        double thumbY = (_scrollOffset / maxScroll) * (trackH - thumbH);
-        return (thumbY, thumbH);
-    }
-
-    private bool IsInScrollbarArea(Point pos) =>
-        _scrollbarVisible && pos.X >= ActualWidth - ScrollBarWidth;
-
     // --- Mouse ---
 
     protected override void OnMouseDown(MouseButtonEventArgs e)
@@ -2121,30 +2100,6 @@ public partial class DocsCanvas : FrameworkElement
         ComputeLayout();
 
         var pos = e.GetPosition(this);
-        if (IsInScrollbarArea(pos))
-        {
-            var (thumbY, thumbH) = GetScrollbarThumbRect();
-            if (pos.Y >= thumbY && pos.Y <= thumbY + thumbH)
-            {
-                _isDraggingThumb = true;
-                _dragStartY = pos.Y;
-                _dragStartScroll = _scrollOffset;
-                _smoother.Cancel();
-            }
-            else
-            {
-                _smoother.Cancel();
-                if (pos.Y < thumbY)
-                    _scrollOffset -= ActualHeight;
-                else
-                    _scrollOffset += ActualHeight;
-                ClampScroll();
-            }
-            CaptureMouse();
-            InvalidateVisual();
-            e.Handled = true;
-            return;
-        }
 
         if (IsVisual && TryToggleTaskListCheckbox(pos))
         {
@@ -2191,9 +2146,6 @@ public partial class DocsCanvas : FrameworkElement
         var pos = e.GetPosition(this);
         if (!IsMouseCaptured)
         {
-            if (IsInScrollbarArea(pos))
-                Cursor = Cursors.Arrow;
-            else
             {
                 ComputeLayout();
                 var hoverLink = GetLinkAtPosition(pos);
@@ -2229,21 +2181,6 @@ public partial class DocsCanvas : FrameworkElement
             return;
         }
 
-        if (_isDraggingThumb)
-        {
-            double maxScroll = Math.Max(1, _totalContentHeight - ActualHeight);
-            var (_, thumbH) = GetScrollbarThumbRect();
-            double trackRange = ActualHeight - thumbH;
-            if (trackRange > 0)
-            {
-                double delta = pos.Y - _dragStartY;
-                _scrollOffset = _dragStartScroll + (delta / trackRange) * maxScroll;
-                ClampScroll();
-                InvalidateVisual();
-            }
-            return;
-        }
-
         ComputeLayout();
         HitTestToPosition(pos, out int block, out int offset);
         _doc.CursorBlock = block;
@@ -2257,7 +2194,6 @@ public partial class DocsCanvas : FrameworkElement
     protected override void OnMouseUp(MouseButtonEventArgs e)
     {
         base.OnMouseUp(e);
-        _isDraggingThumb = false;
         if (IsMouseCaptured)
             ReleaseMouseCapture();
     }
@@ -3140,10 +3076,8 @@ public partial class DocsCanvas : FrameworkElement
         if (!IsVisual && _imagePreview == ImagePreviewMode.OnHover && _hoveredImage != null)
             DrawHoverImagePreview(dc);
 
-        if (_scrollbarVisible)
-            DrawScrollbar(dc);
-
         Minimap?.InvalidateVisual();
+        ScrollStateChanged?.Invoke();
     }
 
     private void DrawJoinedLine(DrawingContext dc, VisualLine vl,
@@ -3423,7 +3357,7 @@ public partial class DocsCanvas : FrameworkElement
     private void DrawCodeBlockBackgrounds(DrawingContext dc, double effectiveScroll,
         double viewTop, double viewBottom)
     {
-        double contentWidth = _scrollbarVisible ? ActualWidth - ScrollBarWidth : ActualWidth;
+        double contentWidth = ActualWidth;
 
         for (int i = 0; i < _visualLines.Count; i++)
         {
@@ -3444,7 +3378,7 @@ public partial class DocsCanvas : FrameworkElement
         double viewTop, double viewBottom)
     {
         if (_parsedBlocks == null) return;
-        double contentWidth = _scrollbarVisible ? ActualWidth - ScrollBarWidth : ActualWidth;
+        double contentWidth = ActualWidth;
 
         for (int i = 0; i < _visualLines.Count; i++)
         {
@@ -3607,17 +3541,6 @@ public partial class DocsCanvas : FrameworkElement
             total += MeasureCharWidth(text[i], blockKind, style);
         }
         return total;
-    }
-
-    private void DrawScrollbar(DrawingContext dc)
-    {
-        double trackX = ActualWidth - ScrollBarWidth;
-        dc.DrawRectangle(_palette.ScrollTrack, null,
-            new Rect(trackX, 0, ScrollBarWidth, ActualHeight));
-
-        var (thumbY, thumbH) = GetScrollbarThumbRect();
-        dc.DrawRectangle(_palette.ScrollThumb, null,
-            new Rect(trackX + 1, thumbY, ScrollBarWidth - 2, thumbH));
     }
 
     protected override void OnRenderSizeChanged(SizeChangedInfo sizeInfo)

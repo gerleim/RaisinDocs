@@ -14,12 +14,18 @@
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
             <local:DocsCanvas x:Name="PART_Canvas" Grid.Column="0"
                               Theme="{Binding Theme, RelativeSource={RelativeSource AncestorType=local:DocsEditor}, Mode=TwoWay}" />
             <local:MinimapScrollbar x:Name="PART_Minimap" Grid.Column="1"
-                                    Margin="2,0,0,0"
+                                    Margin="2,0,2,0"
                                     Visibility="{Binding ShowMinimap, RelativeSource={RelativeSource AncestorType=local:DocsEditor}, Converter={StaticResource BoolToVis}}" />
+            <ScrollBar x:Name="PART_ScrollBar" Grid.Column="2"
+                       Orientation="Vertical"
+                       Minimum="0"
+                       Visibility="Collapsed"
+                       ValueChanged="OnScrollBarValueChanged" />
         </Grid>
     </DockPanel>
 </UserControl>

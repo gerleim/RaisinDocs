@@ -143,17 +143,14 @@ public class MinimapScrollbar : FrameworkElement
         if (_bitmap != null)
             dc.DrawImage(_bitmap, new Rect(0, 0, w, h));
 
-        const double scrollBarW = 10;
-        double sbLeft = w - scrollBarW;
-
         if (_isHovering && !_isDragging)
         {
             double bandH = Math.Max(_vpHeight, CharHeight * 3);
-            double bandTop = _hoverY - bandH / 2;
-            dc.DrawRectangle(s_hoverBrush, null, new Rect(sbLeft, bandTop, scrollBarW, bandH));
+            double bandTop = Math.Clamp(_hoverY - bandH / 2, 0, h - bandH);
+            dc.DrawRectangle(s_hoverBrush, null, new Rect(0, bandTop, w, bandH));
         }
 
-        dc.DrawRectangle(s_viewportFill, s_viewportPen, new Rect(sbLeft, _vpTop, scrollBarW, _vpHeight));
+        dc.DrawRectangle(s_viewportFill, s_viewportPen, new Rect(0, _vpTop, w, _vpHeight));
     }
 
     private void RebuildBitmap(int w, int h, int firstLine, int lineCount,

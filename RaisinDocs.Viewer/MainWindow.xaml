@@ -1,0 +1,23 @@
+<Window x:Class="RaisinDocs.Viewer.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:docs="clr-namespace:RaisinDocs;assembly=RaisinDocs"
+        Title="RaisinDocs Viewer"
+        Width="1024" Height="768"
+        Background="#1E1E1E"
+        Foreground="#D4D4D4">
+    <DockPanel>
+        <Menu DockPanel.Dock="Top" Background="#2D2D2D" Foreground="#D4D4D4">
+            <MenuItem Header="_File">
+                <MenuItem Header="_Open..." Click="Open_Click" InputGestureText="Ctrl+O" />
+            </MenuItem>
+        </Menu>
+        <docs:DocsEditor x:Name="Viewer" ShowToolbar="False" ShowMinimap="True" Theme="DarkBlue" />
+    </DockPanel>
+    <Window.InputBindings>
+        <KeyBinding Key="O" Modifiers="Control" Command="{x:Static ApplicationCommands.Open}" />
+    </Window.InputBindings>
+    <Window.CommandBindings>
+        <CommandBinding Command="{x:Static ApplicationCommands.Open}" Executed="Open_Click" />
+    </Window.CommandBindings>
+</Window>

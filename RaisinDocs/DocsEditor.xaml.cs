@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 
 namespace RaisinDocs;
 
@@ -33,6 +34,8 @@ public partial class DocsEditor : UserControl
     public event EventHandler? EditModeChanged;
     public event EventHandler? FormattingChanged;
 
+    private bool _updatingScrollBar;
+
     public DocsEditor()
     {
         InitializeComponent();
@@ -52,6 +55,8 @@ public partial class DocsEditor : UserControl
         PART_Minimap.ScrollRequested += offset => PART_Canvas.SetScrollOffsetDirect(offset);
         PART_Minimap.SmoothScrollRequested += offset => PART_Canvas.SmoothScrollTo(offset);
 
+        PART_Canvas.ScrollStateChanged += UpdateScrollBar;
+
         SizeChanged += (_, _) => UpdateMinimapWidth();
     }
 
@@ -59,6 +64,37 @@ public partial class DocsEditor : UserControl
     {
         double w = Math.Clamp(ActualWidth * 0.10, 60, 200);
         PART_Minimap.Width = w;
+    }
+
+    private void UpdateScrollBar()
+    {
+        _updatingScrollBar = true;
+        double maxScroll = Math.Max(0, PART_Canvas.TotalContentHeight - PART_Canvas.ActualHeight);
+        if (maxScroll > 0)
+        {
+            PART_ScrollBar.Maximum = maxScroll;
+            PART_ScrollBar.ViewportSize = PART_Canvas.ActualHeight;
+            PART_ScrollBar.LargeChange = Math.Max(1, PART_Canvas.ActualHeight - 20);
+            PART_ScrollBar.SmallChange = 20;
+            PART_ScrollBar.Value = PART_Canvas.ScrollOffset;
+            PART_ScrollBar.Visibility = Visibility.Visible;
+        }
+        else
+        {
+            PART_ScrollBar.Visibility = Visibility.Collapsed;
+        }
+        _updatingScrollBar = false;
+    }
+
+    private void OnScrollBarValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (_updatingScrollBar) return;
+
+        bool isThumbDrag = PART_ScrollBar.Track?.Thumb?.IsDragging == true;
+        if (!isThumbDrag)
+            PART_Canvas.SmoothScrollTo(e.NewValue);
+        else
+            PART_Canvas.SetScrollOffsetDirect(e.NewValue);
     }
 
     public bool ShowToolbar
