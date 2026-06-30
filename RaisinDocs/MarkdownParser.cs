@@ -16,7 +16,7 @@ public readonly record struct StyledRun(int Start, int Length, InlineStyle Style
 
 public readonly record struct InlineImage(int Start, int Length, string AltText, string Url, string? Title);
 
-public readonly record struct InlineLink(int Start, int Length, string Text, string Url, string? Title);
+public readonly record struct InlineLink(int Start, int Length, string Text, string Url, string? Title, string? RefLabel = null);
 
 public enum BlockKind
 {
@@ -35,6 +35,7 @@ public enum BlockKind
     TableHeaderRow,
     TableSeparatorRow,
     TableDataRow,
+    LinkDefinition,
 }
 
 public enum ColumnAlignment { Left, Center, Right }
@@ -58,7 +59,7 @@ public class ParsedBlock
     public required IReadOnlyList<StyledRun> Runs { get; init; }
     public bool IsFenceDelimiter { get; init; }
     public bool IsTableSeparator { get; init; }
-    public bool IsSkippedInVisual => IsFenceDelimiter || IsTableSeparator;
+    public bool IsSkippedInVisual => IsFenceDelimiter || IsTableSeparator || Kind == BlockKind.LinkDefinition;
     public IReadOnlyList<InlineImage>? Images { get; init; }
     public IReadOnlyList<InlineLink>? Links { get; init; }
     public TableRowInfo? TableRow { get; init; }
@@ -69,6 +70,8 @@ public static class MarkdownParser
 {
     public static List<ParsedBlock> Parse(Func<int, string> getBlockText, int blockCount)
     {
+        var defs = CollectLinkDefinitions(getBlockText, blockCount);
+
         var result = new List<ParsedBlock>(blockCount);
         bool insideFence = false;
 
@@ -98,12 +101,22 @@ public static class MarkdownParser
                 continue;
             }
 
+            if (TryParseLinkDefinition(text, out _, out _, out _))
+            {
+                result.Add(new ParsedBlock
+                {
+                    Kind = BlockKind.LinkDefinition,
+                    Runs = [new StyledRun(0, text.Length, InlineStyle.Normal)],
+                });
+                continue;
+            }
+
             var kind = ClassifyBlock(text);
             List<InlineImage>? images = null;
             List<InlineLink>? links = null;
             var runs = kind == BlockKind.FencedCodeLine
                 ? [new StyledRun(0, text.Length, InlineStyle.Normal)]
-                : ParseInlines(text, out images, out links);
+                : ParseInlines(text, out images, out links, defs);
 
             result.Add(new ParsedBlock { Kind = kind, Runs = runs, Images = images, Links = links });
         }
@@ -111,6 +124,78 @@ public static class MarkdownParser
         DetectTables(result, getBlockText);
 
         return result;
+    }
+
+    private static Dictionary<string, (string Url, string? Title)>? CollectLinkDefinitions(
+        Func<int, string> getBlockText, int blockCount)
+    {
+        Dictionary<string, (string Url, string? Title)>? defs = null;
+        bool insideFence = false;
+        for (int i = 0; i < blockCount; i++)
+        {
+            string text = getBlockText(i);
+            if (IsFenceLine(text)) { insideFence = !insideFence; continue; }
+            if (insideFence) continue;
+
+            if (TryParseLinkDefinition(text, out string? label, out string? url, out string? title))
+            {
+                defs ??= new(StringComparer.OrdinalIgnoreCase);
+                defs.TryAdd(label!, (url!, title));
+            }
+        }
+        return defs;
+    }
+
+    internal static bool TryParseLinkDefinition(string text, out string? label, out string? url, out string? title)
+    {
+        label = null; url = null; title = null;
+
+        int i = 0;
+        while (i < text.Length && i < 3 && text[i] == ' ') i++;
+        if (i >= text.Length || text[i] != '[') return false;
+
+        int labelStart = i + 1;
+        int bracketClose = text.IndexOf(']', labelStart);
+        if (bracketClose < 0 || bracketClose == labelStart) return false;
+        if (bracketClose + 1 >= text.Length || text[bracketClose + 1] != ':') return false;
+
+        label = text[labelStart..bracketClose];
+        int afterColon = bracketClose + 2;
+
+        while (afterColon < text.Length && text[afterColon] == ' ') afterColon++;
+        if (afterColon >= text.Length) return false;
+
+        int urlStart;
+        if (text[afterColon] == '<')
+        {
+            urlStart = afterColon + 1;
+            int angleClose = text.IndexOf('>', urlStart);
+            if (angleClose < 0) return false;
+            url = text[urlStart..angleClose];
+            afterColon = angleClose + 1;
+        }
+        else
+        {
+            urlStart = afterColon;
+            while (afterColon < text.Length && text[afterColon] != ' ') afterColon++;
+            url = text[urlStart..afterColon];
+        }
+
+        if (string.IsNullOrEmpty(url)) return false;
+
+        while (afterColon < text.Length && text[afterColon] == ' ') afterColon++;
+        if (afterColon >= text.Length) return true;
+
+        char q = text[afterColon];
+        char qClose = q == '"' ? '"' : q == '\'' ? '\'' : q == '(' ? ')' : '\0';
+        if (qClose == '\0') return false;
+
+        int titleStart = afterColon + 1;
+        int titleEnd = text.IndexOf(qClose, titleStart);
+        if (titleEnd < 0) return false;
+        title = text[titleStart..titleEnd];
+
+        return true;
     }
 
     private static void DetectTables(List<ParsedBlock> blocks, Func<int, string> getBlockText)
@@ -356,7 +441,8 @@ public static class MarkdownParser
         return ParseInlines(text, out images, out _);
     }
 
-    internal static List<StyledRun> ParseInlines(string text, out List<InlineImage>? images, out List<InlineLink>? links)
+    internal static List<StyledRun> ParseInlines(string text, out List<InlineImage>? images, out List<InlineLink>? links,
+        Dictionary<string, (string Url, string? Title)>? defs = null)
     {
         images = null;
         links = null;
@@ -366,8 +452,8 @@ public static class MarkdownParser
         var styles = new InlineStyle[text.Length];
 
         MarkCodeSpans(text, styles);
-        images = MarkImages(text, styles);
-        links = MarkLinks(text, styles);
+        images = MarkImages(text, styles, defs);
+        links = MarkLinks(text, styles, defs);
         links = MarkAutolinks(text, styles, links);
         MarkStrikethrough(text, styles);
         MarkEmphasis(text, styles);
@@ -416,7 +502,8 @@ public static class MarkdownParser
         return -1;
     }
 
-    private static List<InlineImage>? MarkImages(string text, InlineStyle[] styles)
+    private static List<InlineImage>? MarkImages(string text, InlineStyle[] styles,
+        Dictionary<string, (string Url, string? Title)>? defs = null)
     {
         List<InlineImage>? images = null;
         int i = 0;
@@ -431,35 +518,44 @@ public static class MarkdownParser
 
             int altStart = i + 2;
             int bracketClose = FindMatchingBracket(text, altStart);
-            if (bracketClose < 0 || bracketClose + 1 >= text.Length || text[bracketClose + 1] != '(')
-            {
-                i++;
-                continue;
-            }
-
-            int parenOpen = bracketClose + 2;
-            int parenClose = ParseDestinationAndTitle(text, parenOpen, out string url, out string? title);
-            if (parenClose < 0)
+            if (bracketClose < 0 || bracketClose + 1 >= text.Length)
             {
                 i++;
                 continue;
             }
 
             string altText = text[altStart..bracketClose];
-            int totalLength = parenClose + 1 - i;
+            string url;
+            string? title;
+            int end;
 
+            if (text[bracketClose + 1] == '(')
+            {
+                int parenOpen = bracketClose + 2;
+                int parenClose = ParseDestinationAndTitle(text, parenOpen, out url, out title);
+                if (parenClose < 0) { i++; continue; }
+                end = parenClose + 1;
+            }
+            else if (TryResolveReference(text, bracketClose, altText, defs, out url!, out title, out end, out _))
+            {
+                // resolved reference image
+            }
+            else { i++; continue; }
+
+            int totalLength = end - i;
             images ??= [];
             images.Add(new InlineImage(i, totalLength, altText, url, title));
 
-            for (int j = i; j <= parenClose; j++)
+            for (int j = i; j < end; j++)
                 styles[j] = InlineStyle.Image;
 
-            i = parenClose + 1;
+            i = end;
         }
         return images;
     }
 
-    private static List<InlineLink>? MarkLinks(string text, InlineStyle[] styles)
+    private static List<InlineLink>? MarkLinks(string text, InlineStyle[] styles,
+        Dictionary<string, (string Url, string? Title)>? defs = null)
     {
         List<InlineLink>? links = null;
         int i = 0;
@@ -471,7 +567,6 @@ public static class MarkdownParser
                 continue;
             }
 
-            // skip if preceded by ! (that's an image, already consumed)
             if (i > 0 && text[i - 1] == '!' && styles[i - 1] == InlineStyle.Image)
             {
                 i++;
@@ -480,30 +575,39 @@ public static class MarkdownParser
 
             int textStart = i + 1;
             int bracketClose = FindMatchingBracket(text, textStart);
-            if (bracketClose < 0 || bracketClose + 1 >= text.Length || text[bracketClose + 1] != '(')
-            {
-                i++;
-                continue;
-            }
-
-            int parenOpen = bracketClose + 2;
-            int parenClose = ParseDestinationAndTitle(text, parenOpen, out string url, out string? title);
-            if (parenClose < 0)
+            if (bracketClose < 0 || bracketClose + 1 >= text.Length)
             {
                 i++;
                 continue;
             }
 
             string linkText = text[textStart..bracketClose];
-            int totalLength = parenClose + 1 - i;
+            string url;
+            string? title;
+            int end;
+            string? refLabel = null;
 
+            if (text[bracketClose + 1] == '(')
+            {
+                int parenOpen = bracketClose + 2;
+                int parenClose = ParseDestinationAndTitle(text, parenOpen, out url, out title);
+                if (parenClose < 0) { i++; continue; }
+                end = parenClose + 1;
+            }
+            else if (TryResolveReference(text, bracketClose, linkText, defs, out url!, out title, out end, out var resolvedLabel))
+            {
+                refLabel = resolvedLabel;
+            }
+            else { i++; continue; }
+
+            int totalLength = end - i;
             links ??= [];
-            links.Add(new InlineLink(i, totalLength, linkText, url, title));
+            links.Add(new InlineLink(i, totalLength, linkText, url, title, refLabel));
 
-            for (int j = i; j <= parenClose; j++)
+            for (int j = i; j < end; j++)
                 styles[j] = InlineStyle.Link;
 
-            i = parenClose + 1;
+            i = end;
         }
         return links;
     }
@@ -581,6 +685,36 @@ public static class MarkdownParser
             break;
         }
         return end;
+    }
+
+    private static bool TryResolveReference(string text, int bracketClose, string fallbackLabel,
+        Dictionary<string, (string Url, string? Title)>? defs, out string url, out string? title, out int end, out string refLabel)
+    {
+        url = ""; title = null; end = 0; refLabel = "";
+        if (defs == null || bracketClose + 1 >= text.Length || text[bracketClose + 1] != '[')
+            return false;
+
+        int refStart = bracketClose + 2;
+        string label;
+
+        if (refStart < text.Length && text[refStart] == ']')
+        {
+            label = fallbackLabel;
+            end = refStart + 1;
+        }
+        else
+        {
+            int refClose = text.IndexOf(']', refStart);
+            if (refClose < 0) return false;
+            label = text[refStart..refClose];
+            end = refClose + 1;
+        }
+
+        if (!defs.TryGetValue(label, out var def)) return false;
+        url = def.Url;
+        title = def.Title;
+        refLabel = label;
+        return true;
     }
 
     private static int FindMatchingBracket(string text, int from)

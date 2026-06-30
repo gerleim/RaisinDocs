@@ -238,8 +238,81 @@ public partial class DocsCanvas : FrameworkElement
     private List<BlockVisualMap>? _visualMaps;
     private Dictionary<int, ParagraphGroup>? _blockToGroup;
     private readonly ImageCache _imageCache = new();
+    private int _layoutVersion;
 
     public string? DocumentBasePath { get; set; }
+
+    // --- Minimap support ---
+
+    internal MinimapScrollbar? Minimap { get; set; }
+    internal bool IsMinimapVisible => Minimap?.Visibility == Visibility.Visible;
+
+    public void ToggleMinimap()
+    {
+        if (Minimap == null) return;
+        var editor = FindParentEditor();
+        if (editor != null)
+            editor.ShowMinimap = !editor.ShowMinimap;
+    }
+
+    private DocsEditor? FindParentEditor()
+    {
+        DependencyObject? current = this;
+        while (current != null)
+        {
+            if (current is DocsEditor editor) return editor;
+            current = VisualTreeHelper.GetParent(current);
+        }
+        return null;
+    }
+
+    internal int MinimapLayoutVersion => _layoutVersion;
+    internal int MinimapLineCount => _visualLines.Count;
+    internal double MinimapScrollOffset => _scrollOffset + _smoother.Offset;
+    internal double MinimapTotalHeight => _totalContentHeight;
+    internal Color MinimapBackground => ((SolidColorBrush)_palette.Background).Color;
+    internal Color MinimapForeground => ((SolidColorBrush)_palette.Foreground).Color;
+    internal Color MinimapCodeBackground => ((SolidColorBrush)_palette.CodeBackground).Color;
+    internal double MinimapCanvasTextWidth => Math.Max(1, ActualWidth - _padding * 2 - ScrollBarWidth);
+
+    internal BlockKind GetMinimapLineKind(int index)
+    {
+        if (_visualLines == null || index < 0 || index >= _visualLines.Count)
+            return BlockKind.Paragraph;
+        return _visualLines[index].BlockKind;
+    }
+
+    internal void GetMinimapLineInfo(int index, out string text, out BlockKind kind)
+    {
+        if (_visualLines == null || index < 0 || index >= _visualLines.Count)
+        {
+            text = ""; kind = BlockKind.Paragraph; return;
+        }
+        var vl = _visualLines[index];
+        kind = vl.BlockKind;
+        if (vl.Length <= 0) { text = ""; return; }
+        string source = vl.Group != null ? vl.Group.JoinedText : _doc.GetBlockText(vl.BlockIndex);
+        text = vl.StartOffset + vl.Length <= source.Length
+            ? source.Substring(vl.StartOffset, vl.Length)
+            : "";
+    }
+
+    internal void SetScrollOffsetDirect(double offset)
+    {
+        _scrollOffset = Math.Clamp(offset, 0, Math.Max(0, _totalContentHeight - ActualHeight));
+        _smoother.Offset = 0;
+        InvalidateVisual();
+    }
+
+    internal void SmoothScrollTo(double targetOffset)
+    {
+        double oldScroll = _scrollOffset;
+        _scrollOffset = Math.Clamp(targetOffset, 0, Math.Max(0, _totalContentHeight - ActualHeight));
+        double jump = _scrollOffset - oldScroll;
+        _smoother.Offset -= jump;
+        _smoother.Start();
+        InvalidateVisual();
+    }
 
     public enum EditMode { Source, Visual }
     private EditMode _editMode = EditMode.Source;
@@ -259,12 +332,15 @@ public partial class DocsCanvas : FrameworkElement
     private Popup? _linkPopup;
     private TextBox? _linkPopupText;
     private TextBox? _linkPopupUrl;
+    private TextBox? _linkPopupLabel;
+    private TextBlock? _linkPopupLabelHeader;
     private int _linkPopupBlock;
     private int _linkPopupStart;
     private int _linkPopupCurrentLength;
     private string _linkPopupOriginalText = "";
     private bool _linkPopupUpdating;
     private bool _linkPopupCancelling;
+    private bool _linkPopupReadOnly;
 
     public enum SoftBreakMode { Relaxed, Strict }
     public enum HardBreakStyle { Backslash, TrailingSpaces }
@@ -318,6 +394,7 @@ public partial class DocsCanvas : FrameworkElement
         }
 
         ApplyScrollAnchor(anchor);
+        Minimap?.InvalidateVisual();
         EditModeChanged?.Invoke(this, EventArgs.Empty);
     }
 
@@ -495,6 +572,14 @@ public partial class DocsCanvas : FrameworkElement
         var existingLink = GetLinkAtCursor();
         _linkPopupBlock = _doc.CursorBlock;
 
+        bool isRef = existingLink?.RefLabel != null;
+        _linkPopupReadOnly = isRef;
+
+        _linkPopupLabel!.Visibility = isRef ? Visibility.Visible : Visibility.Collapsed;
+        _linkPopupLabelHeader!.Visibility = isRef ? Visibility.Visible : Visibility.Collapsed;
+        _linkPopupText!.IsReadOnly = isRef;
+        _linkPopupUrl!.IsReadOnly = isRef;
+
         _doc.BeginUndoGroup();
         _linkPopupUpdating = true;
 
@@ -506,6 +591,7 @@ public partial class DocsCanvas : FrameworkElement
             _linkPopupOriginalText = _doc.GetBlockText(_linkPopupBlock).Substring(link.Start, link.Length);
             _linkPopupText!.Text = link.Text;
             _linkPopupUrl!.Text = link.Url;
+            _linkPopupLabel!.Text = isRef ? link.RefLabel : "";
         }
         else
         {
@@ -528,6 +614,7 @@ public partial class DocsCanvas : FrameworkElement
                 _linkPopupText!.Text = "";
             }
             _linkPopupUrl!.Text = "";
+            _linkPopupLabel!.Text = "";
         }
 
         _linkPopupUpdating = false;
@@ -545,14 +632,17 @@ public partial class DocsCanvas : FrameworkElement
         _linkPopup.VerticalOffset = lineY + lineH + 4;
         _linkPopup.IsOpen = true;
 
-        if (existingLink != null)
+        if (isRef)
+            _linkPopupText!.Focus();
+        else if (existingLink != null)
             _linkPopupUrl!.Focus();
         else if (!string.IsNullOrEmpty(_linkPopupText!.Text))
             _linkPopupUrl!.Focus();
         else
             _linkPopupText!.Focus();
 
-        _linkPopupUrl!.SelectAll();
+        if (!isRef)
+            _linkPopupUrl!.SelectAll();
     }
 
     private string? GetSelectedText()
@@ -565,7 +655,7 @@ public partial class DocsCanvas : FrameworkElement
 
     private void OnLinkPopupContentChanged(object? sender, TextChangedEventArgs e)
     {
-        if (_linkPopupUpdating || _linkPopup is not { IsOpen: true }) return;
+        if (_linkPopupUpdating || _linkPopupReadOnly || _linkPopup is not { IsOpen: true }) return;
 
         string text = _linkPopupText!.Text.Trim();
         string url = _linkPopupUrl!.Text.Trim();
@@ -599,13 +689,16 @@ public partial class DocsCanvas : FrameworkElement
     {
         if (_linkPopup is not { IsOpen: true }) return;
 
-        _doc.RemoveTextAt(_linkPopupBlock, _linkPopupStart, _linkPopupCurrentLength);
-        if (_linkPopupOriginalText.Length > 0)
-            _doc.InsertTextAt(_linkPopupBlock, _linkPopupStart, _linkPopupOriginalText);
-        _doc.CursorBlock = _linkPopupBlock;
-        _doc.CursorOffset = _linkPopupStart + _linkPopupOriginalText.Length;
-        _doc.AnchorBlock = _doc.CursorBlock;
-        _doc.AnchorOffset = _doc.CursorOffset;
+        if (!_linkPopupReadOnly)
+        {
+            _doc.RemoveTextAt(_linkPopupBlock, _linkPopupStart, _linkPopupCurrentLength);
+            if (_linkPopupOriginalText.Length > 0)
+                _doc.InsertTextAt(_linkPopupBlock, _linkPopupStart, _linkPopupOriginalText);
+            _doc.CursorBlock = _linkPopupBlock;
+            _doc.CursorOffset = _linkPopupStart + _linkPopupOriginalText.Length;
+            _doc.AnchorBlock = _doc.CursorBlock;
+            _doc.AnchorOffset = _doc.CursorOffset;
+        }
         _doc.SealUndoGroup();
         _linkPopupCancelling = true;
         _linkPopup.IsOpen = false;
@@ -637,8 +730,10 @@ public partial class DocsCanvas : FrameworkElement
 
     private void BuildLinkPopup()
     {
-        _linkPopupText = CreatePlainTextBox(180);
-        _linkPopupUrl = CreatePlainTextBox(220);
+        _linkPopupText = CreatePlainTextBox(160);
+        _linkPopupUrl = CreatePlainTextBox(200);
+        _linkPopupLabel = CreatePlainTextBox(80);
+        _linkPopupLabel.IsReadOnly = true;
 
         _linkPopupText.TextChanged += OnLinkPopupContentChanged;
         _linkPopupUrl.TextChanged += OnLinkPopupContentChanged;
@@ -647,11 +742,13 @@ public partial class DocsCanvas : FrameworkElement
         {
             if (e.Key == Key.K && Keyboard.Modifiers == ModifierKeys.Control) { CancelLinkPopup(); e.Handled = true; }
             else if (e.Key == Key.Escape) { CancelLinkPopup(); e.Handled = true; }
+            else if (_linkPopupReadOnly) { if (e.Key == Key.Enter) { CloseLinkPopup(); e.Handled = true; } }
             else if (e.Key == Key.Enter && s == _linkPopupText) { _linkPopupUrl!.Focus(); _linkPopupUrl.SelectAll(); e.Handled = true; }
             else if (e.Key == Key.Enter && s == _linkPopupUrl) { CloseLinkPopup(); e.Handled = true; }
         }
         _linkPopupText.KeyDown += HandleKey;
         _linkPopupUrl.KeyDown += HandleKey;
+        _linkPopupLabel.KeyDown += HandleKey;
 
         var panel = new StackPanel
         {
@@ -660,6 +757,9 @@ public partial class DocsCanvas : FrameworkElement
         };
         panel.Children.Add(new TextBlock { Text = "Text", Margin = new Thickness(0, 0, 4, 0), VerticalAlignment = VerticalAlignment.Center, FontSize = 12 });
         panel.Children.Add(_linkPopupText);
+        _linkPopupLabelHeader = new TextBlock { Text = "Ref", Margin = new Thickness(8, 0, 4, 0), VerticalAlignment = VerticalAlignment.Center, FontSize = 12 };
+        panel.Children.Add(_linkPopupLabelHeader);
+        panel.Children.Add(_linkPopupLabel);
         panel.Children.Add(new TextBlock { Text = "URL", Margin = new Thickness(8, 0, 4, 0), VerticalAlignment = VerticalAlignment.Center, FontSize = 12 });
         panel.Children.Add(_linkPopupUrl);
 
@@ -897,6 +997,8 @@ public partial class DocsCanvas : FrameworkElement
             case Key.Right: HandleRight(shift, ctrl); break;
             case Key.Up: HandleUp(shift); break;
             case Key.Down: HandleDown(shift); break;
+            case Key.PageUp: HandlePageUp(shift); break;
+            case Key.PageDown: HandlePageDown(shift); break;
             case Key.Home: HandleHome(shift, ctrl); break;
             case Key.End: HandleEnd(shift, ctrl); break;
         }
@@ -1466,6 +1568,7 @@ public partial class DocsCanvas : FrameworkElement
             y += lineH;
         }
         _totalContentHeight = y + _padding;
+        _layoutVersion++;
     }
 
     private void WrapSegment(int blockIndex, int startOffset, string segment, double maxWidth,
@@ -1971,7 +2074,7 @@ public partial class DocsCanvas : FrameworkElement
             return;
         }
 
-        if (IsVisual && Keyboard.Modifiers.HasFlag(ModifierKeys.Control) && TryOpenLinkAtClick(pos))
+        if (Keyboard.Modifiers.HasFlag(ModifierKeys.Control) && TryOpenLinkAtClick(pos))
         {
             e.Handled = true;
             return;
@@ -2012,7 +2115,7 @@ public partial class DocsCanvas : FrameworkElement
         {
             if (IsInScrollbarArea(pos))
                 Cursor = Cursors.Arrow;
-            else if (IsVisual)
+            else
             {
                 ComputeLayout();
                 var hoverLink = GetLinkAtPosition(pos);
@@ -2044,8 +2147,6 @@ public partial class DocsCanvas : FrameworkElement
                     }
                 }
             }
-            else
-                Cursor = Cursors.IBeam;
             UpdateHoverImage(pos);
             return;
         }
@@ -2367,6 +2468,44 @@ public partial class DocsCanvas : FrameworkElement
         if (!shift) _doc.CollapseSelection();
     }
 
+    private void HandlePageUp(bool shift)
+    {
+        SealAndStopTimer();
+        int vli = CursorToVisualLineIndex();
+        double x = CursorXInVisualLine(vli);
+        double cursorY = _lineYPositions[vli];
+        double relativeY = cursorY - _scrollOffset;
+        double lineH = GetEffectiveLineHeight(_visualLines[vli]);
+        double pageAmount = Math.Max(lineH, ActualHeight - 3 * lineH);
+
+        _scrollOffset -= pageAmount;
+        ClampScroll();
+
+        int targetVli = HitTestVisualLine(_scrollOffset + relativeY);
+        SetCursorFromVisualLine(targetVli, x);
+        if (IsVisual) HandleUpVisual();
+        if (!shift) _doc.CollapseSelection();
+    }
+
+    private void HandlePageDown(bool shift)
+    {
+        SealAndStopTimer();
+        int vli = CursorToVisualLineIndex();
+        double x = CursorXInVisualLine(vli);
+        double cursorY = _lineYPositions[vli];
+        double relativeY = cursorY - _scrollOffset;
+        double lineH = GetEffectiveLineHeight(_visualLines[vli]);
+        double pageAmount = Math.Max(lineH, ActualHeight - 3 * lineH);
+
+        _scrollOffset += pageAmount;
+        ClampScroll();
+
+        int targetVli = HitTestVisualLine(_scrollOffset + relativeY);
+        SetCursorFromVisualLine(targetVli, x);
+        if (IsVisual) HandleDownVisual();
+        if (!shift) _doc.CollapseSelection();
+    }
+
     private void SetCursorFromVisualLine(int vli, double x)
     {
         var vl = _visualLines[vli];
@@ -2644,6 +2783,14 @@ public partial class DocsCanvas : FrameworkElement
                 HandleDown(shift);
                 break;
 
+            case Key.PageUp:
+                HandlePageUp(shift);
+                break;
+
+            case Key.PageDown:
+                HandlePageDown(shift);
+                break;
+
             case Key.Home:
                 HandleHome(shift, ctrl);
                 break;
@@ -2913,6 +3060,8 @@ public partial class DocsCanvas : FrameworkElement
 
         if (_scrollbarVisible)
             DrawScrollbar(dc);
+
+        Minimap?.InvalidateVisual();
     }
 
     private void DrawJoinedLine(DrawingContext dc, VisualLine vl,
@@ -3027,6 +3176,9 @@ public partial class DocsCanvas : FrameworkElement
 
         if (parsed.Kind == BlockKind.Blockquote && vl.StartOffset == 0 && vl.Length >= 2)
             ft.SetForegroundBrush(_palette.Syntax, 0, 2);
+
+        if (parsed.Kind == BlockKind.LinkDefinition)
+            ft.SetForegroundBrush(_palette.Syntax, 0, vl.Length);
 
         if (parsed.Kind == BlockKind.TableSeparatorRow)
         {

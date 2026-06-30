@@ -10,7 +10,16 @@
         <local:DocsFormattingBar DockPanel.Dock="Top"
                                 Canvas="{Binding ElementName=PART_Canvas}"
                                 Visibility="{Binding ShowToolbar, RelativeSource={RelativeSource AncestorType=local:DocsEditor}, Converter={StaticResource BoolToVis}}" />
-        <local:DocsCanvas x:Name="PART_Canvas"
-                          Theme="{Binding Theme, RelativeSource={RelativeSource AncestorType=local:DocsEditor}, Mode=TwoWay}" />
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <local:DocsCanvas x:Name="PART_Canvas" Grid.Column="0"
+                              Theme="{Binding Theme, RelativeSource={RelativeSource AncestorType=local:DocsEditor}, Mode=TwoWay}" />
+            <local:MinimapScrollbar x:Name="PART_Minimap" Grid.Column="1"
+                                    Margin="2,0,0,0"
+                                    Visibility="{Binding ShowMinimap, RelativeSource={RelativeSource AncestorType=local:DocsEditor}, Converter={StaticResource BoolToVis}}" />
+        </Grid>
     </DockPanel>
 </UserControl>

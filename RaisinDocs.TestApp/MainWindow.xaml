@@ -15,7 +15,7 @@
                 <avalonDock:LayoutPanel Orientation="Horizontal">
                     <avalonDock:LayoutDocumentPane>
                         <avalonDock:LayoutDocument Title="Document 1" CanClose="False">
-                            <docs:DocsEditor x:Name="Editor">
+                            <docs:DocsEditor x:Name="Editor" ShowMinimap="True">
                                 <docs:DocsEditor.Resources>
                                     <Style TargetType="docs:DocsFormattingBar"
                                            BasedOn="{StaticResource {x:Type docs:DocsFormattingBar}}">

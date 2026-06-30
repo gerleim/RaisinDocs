@@ -698,4 +698,44 @@ public class BlockVisualMapTests
         map.RawToVisual(4).Should().Be(4);
         map.RawToVisual(23).Should().Be(23);
     }
+
+    // --- Reference Links ---
+
+    private static BlockVisualMap ComputeMapMultiBlock(string[] blocks, int blockIndex)
+    {
+        var parsed = MarkdownParser.Parse(i => blocks[i], blocks.Length);
+        return BlockVisualMap.Compute(parsed[blockIndex], blocks[blockIndex]);
+    }
+
+    [Fact]
+    public void RefLink_HiddenRanges_MatchInlinePattern()
+    {
+        // [text][ref] should hide [ and ][ref] — same as [text](url) hides [ and ](url)
+        var map = ComputeMapMultiBlock(["[text][ref]", "[ref]: https://example.com"], 0);
+        map.IsHidden(0).Should().BeTrue();   // [
+        map.IsHidden(1).Should().BeFalse();  // t
+        map.IsHidden(4).Should().BeFalse();  // t
+        map.IsHidden(5).Should().BeTrue();   // ]
+        map.IsHidden(6).Should().BeTrue();   // [
+        map.IsHidden(10).Should().BeTrue();  // ]
+    }
+
+    [Fact]
+    public void RefLink_DisplayString()
+    {
+        var map = ComputeMapMultiBlock(["[text][ref]", "[ref]: https://example.com"], 0);
+        map.BuildDisplayString("[text][ref]", 0, 11).Should().Be("text");
+    }
+
+    [Fact]
+    public void RefLink_Collapsed_HiddenRanges()
+    {
+        var map = ComputeMapMultiBlock(["[docs][]", "[docs]: https://example.com"], 0);
+        map.IsHidden(0).Should().BeTrue();   // [
+        map.IsHidden(1).Should().BeFalse();  // d
+        map.IsHidden(4).Should().BeFalse();  // s
+        map.IsHidden(5).Should().BeTrue();   // ]
+        map.IsHidden(6).Should().BeTrue();   // [
+        map.IsHidden(7).Should().BeTrue();   // ]
+    }
 }

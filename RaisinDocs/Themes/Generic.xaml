@@ -229,6 +229,15 @@
                                       Width="14" Height="14" Stretch="Uniform"
                                       Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=local:DocsFormattingBar}}" />
                             </ToggleButton>
+
+                            <Border Style="{StaticResource SeparatorLine}" />
+
+                            <ToggleButton x:Name="PART_Minimap" Style="{StaticResource FormattingToggle}"
+                                          ToolTip="Minimap">
+                                <Path x:Name="PART_MinimapIcon"
+                                      Width="14" Height="14" Stretch="Uniform"
+                                      Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=local:DocsFormattingBar}}" />
+                            </ToggleButton>
                         </StackPanel>
                     </Border>
                 </ControlTemplate>

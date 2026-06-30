@@ -58,6 +58,10 @@ public class DocsFormattingBar : Control
         "M2,9 C2,5.5 4,3 7,2 L7,3.5 C5,4.5 4.2,6 4,7.5 L6.5,7.5 V12 H2 Z " +
         "M9,9 C9,5.5 11,3 14,2 L14,3.5 C12,4.5 11.2,6 11,7.5 L13.5,7.5 V12 H9 Z");
 
+    // Minimap: small rectangle with horizontal lines (document overview)
+    private static readonly Geometry IconMinimap = Geometry.Parse(
+        "M1,1 H15 V15 H1 Z M2,2 H14 V14 H2 Z M3,4 H13 M3,6.5 H11 M3,9 H12 M3,11.5 H9");
+
     // Dropdown arrow: small chevron down
     private static readonly Geometry IconDropdownArrow = Geometry.Parse(
         "M3,5 L8,10 L13,5");
@@ -98,6 +102,7 @@ public class DocsFormattingBar : Control
         IconLink.Freeze();
         IconQuote.Freeze();
         IconDropdownArrow.Freeze();
+        IconMinimap.Freeze();
         IconSun.Freeze();
         IconMoon.Freeze();
         IconCrescent.Freeze();
@@ -140,6 +145,8 @@ public class DocsFormattingBar : Control
     private Button? _imagePreviewArrow;
     private Border? _imagePreviewBorder;
     private Path? _imagePreviewIcon;
+    private ToggleButton? _minimapButton;
+    private Path? _minimapIcon;
 
     public override void OnApplyTemplate()
     {
@@ -230,6 +237,20 @@ public class DocsFormattingBar : Control
             };
         }
         UpdateThemeButton();
+
+        _minimapButton = GetTemplateChild("PART_Minimap") as ToggleButton;
+        _minimapIcon = GetTemplateChild("PART_MinimapIcon") as Path;
+        if (_minimapIcon != null) _minimapIcon.Data = IconMinimap;
+        if (_minimapButton != null)
+        {
+            _minimapButton.Click += (_, _) =>
+            {
+                Canvas?.ToggleMinimap();
+                Canvas?.Focus();
+                UpdateMinimapButton();
+            };
+        }
+        UpdateMinimapButton();
     }
 
     private ToggleButton? WireToggle(string partName, Action action)
@@ -361,6 +382,12 @@ public class DocsFormattingBar : Control
         menu.PlacementTarget = _imagePreviewBorder;
         menu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
         menu.IsOpen = true;
+    }
+
+    private void UpdateMinimapButton()
+    {
+        if (_minimapButton == null || Canvas == null) return;
+        SetCheckedSilent(_minimapButton, Canvas.IsMinimapVisible);
     }
 
     private void UpdateButtonStates()

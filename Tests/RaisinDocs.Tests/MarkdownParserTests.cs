@@ -1088,6 +1088,122 @@ public class MarkdownParserTests
         result[0].Links![1].Text.Should().Be("https://b.com");
     }
 
+    // --- Reference Links and Images ---
+
+    [Fact]
+    public void RefLink_FullForm()
+    {
+        var result = ParseBlocks("[click here][docs]", "[docs]: https://example.com");
+        result[0].Links.Should().HaveCount(1);
+        var link = result[0].Links![0];
+        link.Text.Should().Be("click here");
+        link.Url.Should().Be("https://example.com");
+    }
+
+    [Fact]
+    public void RefLink_CollapsedForm()
+    {
+        var result = ParseBlocks("[docs][]", "[docs]: https://example.com");
+        result[0].Links.Should().HaveCount(1);
+        result[0].Links![0].Text.Should().Be("docs");
+        result[0].Links![0].Url.Should().Be("https://example.com");
+    }
+
+    [Fact]
+    public void RefLink_CaseInsensitive()
+    {
+        var result = ParseBlocks("[click][DOCS]", "[docs]: https://example.com");
+        result[0].Links.Should().HaveCount(1);
+        result[0].Links![0].Url.Should().Be("https://example.com");
+    }
+
+    [Fact]
+    public void RefLink_UndefinedLabel_NotLinked()
+    {
+        var result = ParseBlocks("[click][missing]");
+        result[0].Links.Should().BeNull();
+    }
+
+    [Fact]
+    public void RefLink_WithTitle()
+    {
+        var result = ParseBlocks("[click][docs]", "[docs]: https://example.com \"Example\"");
+        result[0].Links.Should().HaveCount(1);
+        result[0].Links![0].Title.Should().Be("Example");
+    }
+
+    [Fact]
+    public void RefImage_FullForm()
+    {
+        var result = ParseBlocks("![screenshot][img1]", "[img1]: ./image.png");
+        result[0].Images.Should().HaveCount(1);
+        result[0].Images![0].AltText.Should().Be("screenshot");
+        result[0].Images![0].Url.Should().Be("./image.png");
+    }
+
+    [Fact]
+    public void RefImage_CollapsedForm()
+    {
+        var result = ParseBlocks("![logo][]", "[logo]: ./logo.png");
+        result[0].Images.Should().HaveCount(1);
+        result[0].Images![0].AltText.Should().Be("logo");
+        result[0].Images![0].Url.Should().Be("./logo.png");
+    }
+
+    [Fact]
+    public void RefLink_MultipleDefinitions()
+    {
+        var result = ParseBlocks("[a][d1] and [b][d2]", "[d1]: https://a.com", "[d2]: https://b.com");
+        result[0].Links.Should().HaveCount(2);
+        result[0].Links![0].Url.Should().Be("https://a.com");
+        result[0].Links![1].Url.Should().Be("https://b.com");
+    }
+
+    [Fact]
+    public void RefLink_DefinitionInsideFencedCode_Ignored()
+    {
+        var result = ParseBlocks("[click][docs]", "```", "[docs]: https://example.com", "```");
+        result[0].Links.Should().BeNull();
+    }
+
+    [Fact]
+    public void RefLink_FirstDefinitionWins()
+    {
+        var result = ParseBlocks("[click][docs]", "[docs]: https://first.com", "[docs]: https://second.com");
+        result[0].Links.Should().HaveCount(1);
+        result[0].Links![0].Url.Should().Be("https://first.com");
+    }
+
+    [Fact]
+    public void LinkDefinition_BlockKind()
+    {
+        var result = ParseBlocks("[docs]: https://example.com");
+        result[0].Kind.Should().Be(BlockKind.LinkDefinition);
+    }
+
+    [Fact]
+    public void LinkDefinition_IsSkippedInVisual()
+    {
+        var result = ParseBlocks("[docs]: https://example.com");
+        result[0].IsSkippedInVisual.Should().BeTrue();
+    }
+
+    [Fact]
+    public void LinkDefinition_AngleBracketUrl()
+    {
+        var result = ParseBlocks("[click][docs]", "[docs]: <https://example.com>");
+        result[0].Links.Should().HaveCount(1);
+        result[0].Links![0].Url.Should().Be("https://example.com");
+    }
+
+    [Fact]
+    public void RefLink_StyleCoverage()
+    {
+        var result = ParseBlocks("[text][ref]", "[ref]: https://example.com");
+        result[0].Runs.Should().HaveCount(1);
+        result[0].Runs[0].Style.Should().Be(InlineStyle.Link);
+    }
+
     // --- IsTrailingHardBreak ---
 
     [Fact]

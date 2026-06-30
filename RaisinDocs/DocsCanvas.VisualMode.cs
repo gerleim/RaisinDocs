@@ -15,10 +15,21 @@ public partial class DocsCanvas
         textEnd = textStart + link.Text.Length;
     }
 
+    private bool IsLinkHit(InlineLink link, int offset)
+    {
+        if (IsVisual)
+        {
+            GetLinkTextRange(link, out int textStart, out int textEnd);
+            return offset >= textStart && offset < textEnd;
+        }
+        return offset >= link.Start && offset < link.Start + link.Length;
+    }
+
     private bool TryOpenLinkAtClick(Point pos)
     {
-        if (_parsedBlocks == null || _visualMaps == null) return false;
+        if (_parsedBlocks == null) return false;
 
+        ComputeLayout();
         HitTestToPosition(pos, out int block, out int offset);
         if (block >= _parsedBlocks.Count) return false;
 
@@ -27,8 +38,7 @@ public partial class DocsCanvas
 
         foreach (var link in parsed.Links)
         {
-            GetLinkTextRange(link, out int textStart, out int textEnd);
-            if (offset >= textStart && offset < textEnd)
+            if (IsLinkHit(link, offset))
             {
                 var url = link.Url;
                 if (url.StartsWith("http://") || url.StartsWith("https://") || url.StartsWith("file://"))
@@ -47,7 +57,7 @@ public partial class DocsCanvas
 
     private InlineLink? GetLinkAtPosition(Point pos)
     {
-        if (_parsedBlocks == null || _visualMaps == null) return null;
+        if (_parsedBlocks == null) return null;
 
         HitTestToPosition(pos, out int block, out int offset);
         if (block >= _parsedBlocks.Count) return null;
@@ -57,8 +67,7 @@ public partial class DocsCanvas
 
         foreach (var link in parsed.Links)
         {
-            GetLinkTextRange(link, out int textStart, out int textEnd);
-            if (offset >= textStart && offset < textEnd)
+            if (IsLinkHit(link, offset))
                 return link;
         }
         return null;

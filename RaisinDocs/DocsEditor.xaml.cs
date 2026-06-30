@@ -23,6 +23,10 @@ public partial class DocsEditor : UserControl
         DependencyProperty.Register(nameof(DocumentBasePath), typeof(string), typeof(DocsEditor),
             new PropertyMetadata(null, OnDocumentBasePathChanged));
 
+    public static readonly DependencyProperty ShowMinimapProperty =
+        DependencyProperty.Register(nameof(ShowMinimap), typeof(bool), typeof(DocsEditor),
+            new PropertyMetadata(false));
+
     public event EventHandler? ContentChanged;
     public event EventHandler? IsDirtyChanged;
     public event EventHandler? ThemeChanged;
@@ -42,6 +46,19 @@ public partial class DocsEditor : UserControl
             SetValue(IsDirtyPropertyKey, PART_Canvas.IsDirty);
             IsDirtyChanged?.Invoke(this, EventArgs.Empty);
         };
+
+        PART_Canvas.Minimap = PART_Minimap;
+        PART_Minimap.Canvas = PART_Canvas;
+        PART_Minimap.ScrollRequested += offset => PART_Canvas.SetScrollOffsetDirect(offset);
+        PART_Minimap.SmoothScrollRequested += offset => PART_Canvas.SmoothScrollTo(offset);
+
+        SizeChanged += (_, _) => UpdateMinimapWidth();
+    }
+
+    private void UpdateMinimapWidth()
+    {
+        double w = Math.Clamp(ActualWidth * 0.10, 60, 200);
+        PART_Minimap.Width = w;
     }
 
     public bool ShowToolbar
@@ -64,6 +81,12 @@ public partial class DocsEditor : UserControl
         set => SetValue(DocumentBasePathProperty, value);
     }
 
+    public bool ShowMinimap
+    {
+        get => (bool)GetValue(ShowMinimapProperty);
+        set => SetValue(ShowMinimapProperty, value);
+    }
+
     public DocsCanvas Canvas => PART_Canvas;
 
     public string GetText() => PART_Canvas.GetText();
@@ -79,6 +102,7 @@ public partial class DocsEditor : UserControl
         ImagePreview = PART_Canvas.CurrentImagePreview,
         SoftBreak = PART_Canvas.CurrentSoftBreak,
         HardBreak = PART_Canvas.CurrentHardBreak,
+        ShowMinimap = ShowMinimap,
     };
 
     public void ApplyState(DocsEditorState state)
@@ -88,6 +112,7 @@ public partial class DocsEditor : UserControl
         PART_Canvas.SetImagePreview(state.ImagePreview);
         PART_Canvas.SetSoftBreak(state.SoftBreak);
         PART_Canvas.SetHardBreak(state.HardBreak);
+        ShowMinimap = state.ShowMinimap;
     }
 
     private static void OnDocumentBasePathChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
