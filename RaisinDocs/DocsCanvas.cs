@@ -346,8 +346,10 @@ public partial class DocsCanvas : FrameworkElement
     public enum HardBreakStyle { Backslash, TrailingSpaces }
     private SoftBreakMode _softBreak = SoftBreakMode.Relaxed;
     private HardBreakStyle _hardBreak = HardBreakStyle.Backslash;
+    private bool _showWhitespace = true;
     public SoftBreakMode CurrentSoftBreak => _softBreak;
     public HardBreakStyle CurrentHardBreak => _hardBreak;
+    public bool ShowWhitespace => _showWhitespace;
 
     public event EventHandler? ContentChanged;
     public event EventHandler? FormattingChanged;
@@ -475,6 +477,19 @@ public partial class DocsCanvas : FrameworkElement
     {
         if (_hardBreak == style) return;
         _hardBreak = style;
+    }
+
+    public void ToggleShowWhitespace()
+    {
+        _showWhitespace = !_showWhitespace;
+        InvalidateVisual();
+    }
+
+    public void SetShowWhitespace(bool show)
+    {
+        if (_showWhitespace == show) return;
+        _showWhitespace = show;
+        InvalidateVisual();
     }
 
     // --- Public formatting API ---
@@ -3103,6 +3118,9 @@ public partial class DocsCanvas : FrameworkElement
                         ApplyInlineStyles(ft, vl, parsed);
                         dc.DrawText(ft, new Point(textX, lineY - effectiveScroll));
 
+                        if (_showWhitespace)
+                            DrawTrailingSpaceDots(dc, vl, blockText, parsed, textX, lineY - effectiveScroll);
+
                         if (_imagePreview == ImagePreviewMode.Inline && parsed.Images != null)
                             DrawSourceInlineImages(dc, vl, parsed.Images, lineY, effectiveScroll);
                     }
@@ -3360,6 +3378,37 @@ public partial class DocsCanvas : FrameworkElement
         int count = 0;
         while (start + count < text.Length && text[start + count] == '`') count++;
         return count;
+    }
+
+    private void DrawTrailingSpaceDots(DrawingContext dc, VisualLine vl,
+        string blockText, ParsedBlock parsed, double textX, double screenY)
+    {
+        if (parsed.Kind == BlockKind.FencedCodeLine) return;
+        if (vl.StartOffset + vl.Length < blockText.Length) return;
+
+        int trailStart = blockText.Length;
+        while (trailStart > 0 && blockText[trailStart - 1] == ' ') trailStart--;
+        int trailCount = blockText.Length - trailStart;
+        if (trailCount == 0) return;
+
+        double x = textX;
+        int runIdx = 0;
+        for (int i = vl.StartOffset; i < trailStart; i++)
+        {
+            var style = GetStyleAtOffset(parsed.Runs, i, ref runIdx);
+            x += MeasureCharWidth(blockText[i], parsed.Kind, style);
+        }
+
+        double spaceW = MeasureCharWidth(' ', parsed.Kind, InlineStyle.Normal);
+        double dotSize = Math.Max(2, spaceW * 0.25);
+        double lineH = GetLineHeight(parsed.Kind);
+        double cy = screenY + lineH / 2;
+
+        for (int i = 0; i < trailCount; i++)
+        {
+            double cx = x + spaceW * (i + 0.5);
+            dc.DrawEllipse(_palette.Syntax, null, new Point(cx, cy), dotSize / 2, dotSize / 2);
+        }
     }
 
     private void DimRange(FormattedText ft, VisualLine vl, int docStart, int length)
