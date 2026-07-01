@@ -165,11 +165,63 @@ A trailing `\` is a hard break only when:
 - Ctrl+Click, tooltip on hover, visual mode rendering all work via existing link infrastructure
 - 18 tests (15 parser + 3 visual map)
 
+### 13 — Ordered list items
+- See `design/Ordered Lists - Iteration 13.md` for detailed plan
+- CommonMark ordered list syntax: `1. item` or `1) item` (1–9 digits + `.` or `)` + space)
+- Parser detects numbered prefix, assigns `OrderedListItem` BlockKind
+- Source mode: dimmed number prefix
+- Visual mode: styled number with right-aligned indent matching bullet list alignment
+- Enter key auto-inserts next number; Enter on empty item exits the list
+- Toolbar button to insert/toggle ordered list
+
+### 14 — Thematic breaks
+- CommonMark thematic breaks (§4.1): `---`, `***`, `___` (three or more of the same character, optionally with spaces)
+- Parser detects thematic break lines, assigns `ThematicBreak` BlockKind
+- Source mode: dimmed marker text
+- Visual mode: render as a horizontal rule (thin line spanning content width, with vertical spacing above/below)
+- Must not conflict with setext heading underlines (setext headings take priority when preceded by a paragraph)
+
+### 15 — Setext headings
+- CommonMark setext headings (§4.3): a paragraph followed by `===...` (H1) or `---...` (H2) on the next line
+- Two-pass detection like tables/fenced code: parser looks at consecutive blocks to identify heading + underline pairs
+- Assigns existing `Heading1`/`Heading2` BlockKind to the text line; underline line marked as a new `SetextUnderline` BlockKind (skipped in visual mode like table separator rows)
+- Source mode: dimmed underline
+- Visual mode: heading text rendered as H1/H2, underline line hidden
+- Disambiguation: `---` under a paragraph is a setext H2, not a thematic break
+
+### 16 — Indented code blocks
+- CommonMark indented code blocks (§4.4): lines indented by 4+ spaces (not inside a list or other container)
+- Parser detects 4-space indent, assigns `IndentedCodeLine` BlockKind (or reuses `FencedCodeLine` with a flag)
+- Source mode: code font, subtle background (same as fenced code)
+- Visual mode: same rendering as fenced code blocks but without fence delimiters to hide
+- Lower priority: fenced code blocks are the dominant convention; indented code is legacy
+
+### 17 — Angle-bracket autolinks
+- CommonMark autolinks (§6.7): `<https://url>` and `<email@example.com>` wrapped in angle brackets
+- Currently only GFM extended autolinks (bare URLs) are implemented; the CommonMark `<url>` form is not
+- Add detection in `MarkAutolinks()` for `<` + scheme + `:` + url + `>` and `<` + email + `>` patterns
+- Render same as existing autolinks (blue, underline, Ctrl+Click to open)
+- Hide the angle brackets in visual mode
+
+### 18 — Tab indent / outdent
+- Tab and Shift+Tab insert/remove leading spaces for line indentation
+- Context-aware: table cell navigation (existing) takes priority; indent/outdent applies everywhere else
+- **Multi-line selection**: Tab indents all selected lines by 4 spaces; Shift+Tab removes up to 4 leading spaces from each line. Selection is preserved/adjusted after the operation.
+- **Single line, no selection**: Tab inserts 4 spaces at cursor position (not a tab character — markdown convention is spaces). Shift+Tab removes up to 4 leading spaces from the line start, adjusting cursor position.
+- Indent width: 4 spaces (matches CommonMark indented code threshold). Could be made configurable later.
+- Undo: entire multi-line indent/outdent is one undo unit
+- Useful across block types: indenting code inside fenced blocks, adjusting text alignment, preparing indented code blocks (iteration 16)
+
 ### GFM extensions roadmap
 - ~~Strikethrough (`~~text~~`)~~ — ✅ implemented in iteration 4
 - ~~Tables~~ — ✅ implemented in iteration 7
 - ~~Task list items~~ — ✅ implemented in iteration 8
 - ~~Extended autolinks~~ — ✅ implemented in iteration 10
+
+### CommonMark coverage gaps (low priority)
+- **HTML blocks** (§4.6): raw HTML blocks (`<div>`, `<table>`, etc.) rendered as-is. Low priority — RaisinDocs is a markdown-native editor, not an HTML renderer. Could render as dimmed literal text (like fenced code) rather than interpreting HTML.
+- **Inline raw HTML** (§6.6): inline tags like `<br>`, `<span>` passed through. Same approach — show as dimmed literal text.
+- **Character/entity references** (§2.5): `&amp;`, `&#123;`, `&#x7B;` → decoded characters. Could decode for display in visual mode while keeping raw text in source mode.
 
 ### Future
 - ~~Links (clickable in view mode, editable syntax in edit mode)~~ — ✅ implemented in iteration 9
