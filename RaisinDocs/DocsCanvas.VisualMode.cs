@@ -494,7 +494,7 @@ public partial class DocsCanvas
                 }
             }
         }
-        return true;
+        return false;
     }
 
     private void CrossToPreviousBlockIfHiddenStart()

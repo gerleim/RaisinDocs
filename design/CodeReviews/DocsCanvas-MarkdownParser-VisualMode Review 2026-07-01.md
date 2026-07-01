@@ -16,13 +16,13 @@
 - **What's wrong**: `Minimap?.InvalidateVisual()` and `ScrollStateChanged?.Invoke()` fire inside `OnRender`. The scroll-state subscriber (`DocsEditor.UpdateScrollBar`) sets scrollbar visibility synchronously, triggering a WPF layout pass *during* a render pass. This violates the `OnRender` contract: it must only draw, never mutate layout state or fire events that trigger layout.
 - **Fix applied**: Wrapped both calls in `Dispatcher.BeginInvoke()` so they execute after `OnRender` completes.
 
-### C2 — MoveOutOfTable returns true without moving cursor
+### ~~C2 — MoveOutOfTable returns true without moving cursor~~ FIXED
 
 - **Severity**: Critical
 - **Category**: Bug
-- **Location**: `DocsCanvas.VisualMode.cs:466-497`
-- **What's wrong**: `MoveOutOfTable` returns `true` on fallthrough when the table is at the document boundary. The caller thinks navigation succeeded and marks the key event handled. **The user is permanently stuck** in the last/first cell of a boundary table.
-- **What to do**: Change the fallthrough `return true` at line 497 to `return false`. Same fix for the backward branch.
+- **Location**: `DocsCanvas.VisualMode.cs:467-498`
+- **What's wrong**: `MoveOutOfTable` returns `true` on fallthrough when the table is at the document boundary. The caller thinks navigation succeeded and marks the key event handled. The keypress is silently swallowed when there's nowhere to move.
+- **Fix applied**: Changed the fallthrough `return true` at line 497 to `return false`.
 
 ---
 
