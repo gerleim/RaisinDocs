@@ -396,6 +396,40 @@ public class Document
         CursorOffset = pos;
     }
 
+    public void Reflow(int startBlock, int endBlock, Func<string, bool> isMergeableBlock)
+    {
+        for (int i = endBlock; i > startBlock; i--)
+        {
+            string curr = _blocks[i].ToString();
+            string prev = _blocks[i - 1].ToString();
+            if (curr.Length > 0 && prev.Length > 0
+                && isMergeableBlock(curr) && isMergeableBlock(prev))
+            {
+                _blocks[i - 1].Append(' ').Append(curr);
+                _blocks.RemoveAt(i);
+                if (CursorBlock == i)
+                {
+                    CursorBlock = i - 1;
+                    CursorOffset = prev.Length + 1 + CursorOffset;
+                }
+                else if (CursorBlock > i)
+                {
+                    CursorBlock--;
+                }
+                if (AnchorBlock == i)
+                {
+                    AnchorBlock = i - 1;
+                    AnchorOffset = prev.Length + 1 + AnchorOffset;
+                }
+                else if (AnchorBlock > i)
+                {
+                    AnchorBlock--;
+                }
+                endBlock--;
+            }
+        }
+    }
+
     public void Paste(string text)
     {
         text = text.Replace("\r\n", "\n").Replace("\r", "\n");

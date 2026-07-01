@@ -202,6 +202,16 @@ public class DocsFormattingBar : Control
             _colorTextButton.Click += (_, _) => ShowColorMenu();
         }
 
+        var reflowButton = GetTemplateChild("PART_Reflow") as Button;
+        if (reflowButton != null)
+        {
+            reflowButton.Click += (_, _) =>
+            {
+                Canvas?.Reflow();
+                Canvas?.Focus();
+            };
+        }
+
         _editModeButton = GetTemplateChild("PART_EditMode") as ToggleButton;
         _editModeIcon = GetTemplateChild("PART_EditModeIcon") as Path;
         if (_editModeButton != null)

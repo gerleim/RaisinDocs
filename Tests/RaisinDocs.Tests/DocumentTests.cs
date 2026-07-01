@@ -432,6 +432,73 @@ public class DocumentTests
         doc.GetBlockText(1).Should().Be("world");
     }
 
+    // --- Reflow ---
+
+    private static bool IsParagraph(string text) => true;
+
+    [Fact]
+    public void Reflow_MergesConsecutiveParagraphs()
+    {
+        var doc = new Document();
+        doc.SetText("a\nb\nc");
+        doc.Reflow(0, doc.BlockCount - 1, IsParagraph);
+        doc.BlockCount.Should().Be(1);
+        doc.GetBlockText(0).Should().Be("a b c");
+    }
+
+    [Fact]
+    public void Reflow_PreservesBlankLines()
+    {
+        var doc = new Document();
+        doc.SetText("a\nb\n\nc\nd");
+        doc.Reflow(0, doc.BlockCount - 1, IsParagraph);
+        doc.BlockCount.Should().Be(3);
+        doc.GetBlockText(0).Should().Be("a b");
+        doc.GetBlockText(1).Should().BeEmpty();
+        doc.GetBlockText(2).Should().Be("c d");
+    }
+
+    [Fact]
+    public void Reflow_SkipsNonMergeableBlocks()
+    {
+        var doc = new Document();
+        doc.SetText("a\nb\n# heading\nc\nd");
+        doc.Reflow(0, doc.BlockCount - 1, text => !text.StartsWith("# "));
+        doc.BlockCount.Should().Be(3);
+        doc.GetBlockText(0).Should().Be("a b");
+        doc.GetBlockText(1).Should().Be("# heading");
+        doc.GetBlockText(2).Should().Be("c d");
+    }
+
+    [Fact]
+    public void Reflow_SelectedRange()
+    {
+        var doc = new Document();
+        doc.SetText("a\nb\nc\nd\ne");
+        doc.Reflow(1, 3, IsParagraph);
+        doc.BlockCount.Should().Be(3);
+        doc.GetBlockText(0).Should().Be("a");
+        doc.GetBlockText(1).Should().Be("b c d");
+        doc.GetBlockText(2).Should().Be("e");
+    }
+
+    [Fact]
+    public void Reflow_Undoable()
+    {
+        var doc = new Document();
+        doc.SetText("a\nb\nc");
+        doc.BeginUndoGroup();
+        doc.Reflow(0, doc.BlockCount - 1, IsParagraph);
+        doc.SealUndoGroup();
+        doc.GetBlockText(0).Should().Be("a b c");
+
+        doc.Undo().Should().BeTrue();
+        doc.BlockCount.Should().Be(3);
+        doc.GetBlockText(0).Should().Be("a");
+        doc.GetBlockText(1).Should().Be("b");
+        doc.GetBlockText(2).Should().Be("c");
+    }
+
     // --- ComparePositions ---
 
     [Fact]

@@ -550,6 +550,30 @@ public partial class DocsCanvas : FrameworkElement
         ToggleBlockPrefixForSelection("> ");
     }
 
+    public void Reflow()
+    {
+        SealAndStopTimer();
+        int sb, eb;
+        if (_doc.HasSelection)
+        {
+            var sel = _doc.GetOrderedSelection();
+            sb = sel.startBlock;
+            eb = sel.endBlock;
+        }
+        else
+        {
+            sb = 0;
+            eb = _doc.BlockCount - 1;
+        }
+        _doc.BeginUndoGroup();
+        _doc.Reflow(sb, eb, text =>
+            text.Length > 0 && MarkdownParser.ClassifyBlock(text) == BlockKind.Paragraph);
+        _doc.SealUndoGroup();
+        InvalidateLayout();
+        EnsureCursorVisible();
+        RaiseFormattingChanged();
+    }
+
     public void InsertLink()
     {
         if (_linkPopup is { IsOpen: true })

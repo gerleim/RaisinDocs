@@ -199,6 +199,12 @@
                                 </Grid>
                             </Button>
 
+                            <Button x:Name="PART_Reflow" Style="{StaticResource FormattingButton}"
+                                    ToolTip="Reflow paragraphs">
+                                <TextBlock Text="¶" FontSize="14" FontWeight="Bold"
+                                           Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=local:DocsFormattingBar}}" />
+                            </Button>
+
                             <Border Style="{StaticResource SeparatorLine}" />
 
                             <ToggleButton x:Name="PART_EditMode" Style="{StaticResource FormattingToggle}"
