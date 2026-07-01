@@ -53,7 +53,19 @@ dotnet build RaisinDocs.slnx -p:UseProjectReferences=false
 - **Document** — Testable document model: `List<StringBuilder>` blocks, cursor/anchor positions, text mutations (insert, delete, paste), selection, undo/redo, and navigation. No UI dependencies — all tests target this class.
 - **MarkdownParser** — Static class that classifies blocks (`BlockKind`: paragraph, H1–H6, list item, task list items, fenced code, table rows) and parses inline styles (`StyledRun`: bold, italic, bold-italic, code, link). DocsCanvas calls this to drive styled rendering; Document knows nothing about markdown.
 - **BlockVisualMap** — Computes hidden ranges for visual mode (markdown syntax characters hidden from display). Used for cursor skip logic and display string building.
-- **DocsEditor** — `UserControl` wrapping `DocsCanvas` + `DocsFormattingBar` into a single drop-in control. Exposes `ShowToolbar`, `Theme`, `IsDirty`, `DocumentBasePath` dependency properties, state persistence via `GetState`/`ApplyState` with `DocsEditorState`.
+- **DocsEditor** — `UserControl` wrapping `DocsCanvas` + `DocsFormattingBar` into a single drop-in control. Exposes `ShowToolbar`, `Theme`, `IsDirty`, `DocumentBasePath`, `ShowMinimap` dependency properties, state persistence via `GetState`/`ApplyState` with `DocsEditorState`.
+- **IDocsLogger** — Logging interface for host apps. Implement and assign to `DocsCanvas.Logger` to receive warnings/errors (e.g. clipboard retry failures). Keeps the library free of logging dependencies — each host app routes to its own logging infrastructure.
+- **RetryHelper** — Generic retry utility (`internal`). Configurable retries, delay, and per-retry callback. Used by `ClipboardHelper` for transient OS failures.
+- **ClipboardHelper** — Wraps `Clipboard.SetText`/`GetText` with retry-on-`ExternalException` and `IDocsLogger` integration (`internal`).
+
+### Host integration
+
+Host apps configure the editor through `DocsEditor` (preferred) or `DocsCanvas` directly:
+
+- **Settings** — `Theme` (`Light`/`Dark`/`DarkBlue`), `EditMode` (`Source`/`Visual`), `ImagePreview` (`Off`/`Inline`/`OnHover`), `SoftBreak` (`Relaxed`/`Strict`), `HardBreak` (`Backslash`/`TrailingSpaces`), `ShowWhitespace`, `ShowToolbar`, `ShowMinimap`, `DocumentBasePath`
+- **State persistence** — `DocsEditor.GetState()` / `ApplyState(DocsEditorState)` serializes all settings above for save/restore
+- **Logging** — Set `DocsCanvas.Logger` to an `IDocsLogger` implementation to receive library warnings/errors
+- **Events** — `ContentChanged`, `IsDirtyChanged`, `ThemeChanged`, `EditModeChanged`, `FormattingChanged`
 
 ### Key dependencies
 
