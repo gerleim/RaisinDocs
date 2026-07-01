@@ -15,6 +15,13 @@ public partial class MainWindow : Window
         InitializeComponent();
         Editor.IsDirtyChanged += (_, _) => UpdateTitle();
         UpdateTitle();
+
+        Loaded += (_, _) =>
+        {
+            var args = Environment.GetCommandLineArgs();
+            if (args.Length > 1 && File.Exists(args[1]))
+                OpenFile(args[1]);
+        };
     }
 
     protected override void OnSourceInitialized(EventArgs e)
