@@ -531,10 +531,27 @@ public static class MarkdownParser
             return BlockKind.UnorderedListItem;
         }
 
+        if (GetOrderedListPrefixLength(text) > 0)
+            return BlockKind.OrderedListItem;
+
         if (text.StartsWith("> ") || text == ">")
             return BlockKind.Blockquote;
 
         return BlockKind.Paragraph;
+    }
+
+    internal static int GetOrderedListPrefixLength(string text)
+    {
+        int i = 0;
+        while (i < text.Length && i < 9 && text[i] >= '0' && text[i] <= '9')
+            i++;
+        if (i == 0 || i > 9) return 0;
+        if (i < text.Length && text[i] is '.' or ')')
+        {
+            if (i + 1 < text.Length && text[i + 1] == ' ')
+                return i + 2;
+        }
+        return 0;
     }
 
     public static bool IsTrailingHardBreak(ParsedBlock parsed, string blockText)

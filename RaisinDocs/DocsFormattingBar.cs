@@ -39,6 +39,15 @@ public class DocsFormattingBar : Control
         "M2,7.5 A1.5,1.5,0,1,1,1.99,7.5 Z M5.5,6.5 H14 V8.5 H5.5 Z " +
         "M2,12 A1.5,1.5,0,1,1,1.99,12 Z M5.5,11 H14 V13 H5.5 Z");
 
+    // Ordered list: three lines with numbers
+    private static readonly Geometry IconOrderedList = Geometry.Parse(
+        "M1.5,1.5 L2.5,1 V5 M1,5 H4 " +
+        "M5.5,2 H14 V4 H5.5 Z " +
+        "M1,7 Q1,6 2.5,6 Q4,6 4,7 Q4,8 2.5,8 L4,10 H1 " +
+        "M5.5,6.5 H14 V8.5 H5.5 Z " +
+        "M1,11 H3.5 L2,12.5 Q4,12.5 4,13.5 Q4,15 2,15 Q1,15 1,14 " +
+        "M5.5,11.5 H14 V13.5 H5.5 Z");
+
     // Task list: three lines with checkboxes
     private static readonly Geometry IconTaskList = Geometry.Parse(
         "M1,2 H4 V5 H1 Z M2,3.8 L2.8,4.6 L4,2.4 " +
@@ -98,6 +107,7 @@ public class DocsFormattingBar : Control
         IconSource.Freeze();
         IconVisual.Freeze();
         IconBullet.Freeze();
+        IconOrderedList.Freeze();
         IconTaskList.Freeze();
         IconLink.Freeze();
         IconQuote.Freeze();
@@ -131,6 +141,7 @@ public class DocsFormattingBar : Control
     private ToggleButton? _h2Button;
     private ToggleButton? _h3Button;
     private ToggleButton? _bulletButton;
+    private ToggleButton? _orderedListButton;
     private ToggleButton? _taskListButton;
     private ToggleButton? _quoteButton;
     private ToggleButton? _themeButton;
@@ -138,6 +149,7 @@ public class DocsFormattingBar : Control
     private Path? _editModeIcon;
     private Path? _themeIcon;
     private Path? _bulletIcon;
+    private Path? _orderedListIcon;
     private Path? _taskListIcon;
     private Path? _quoteIcon;
     private Path? _linkIcon;
@@ -148,6 +160,7 @@ public class DocsFormattingBar : Control
     private ToggleButton? _minimapButton;
     private Path? _minimapIcon;
     private Button? _colorTextButton;
+    private Button? _reflowButton;
     private Border? _colorBar;
     private string _lastColorName = "red";
 
@@ -166,6 +179,9 @@ public class DocsFormattingBar : Control
         _bulletButton = WireToggle("PART_Bullet", () => Canvas?.ToggleBulletList());
         _bulletIcon = GetTemplateChild("PART_BulletIcon") as Path;
         if (_bulletIcon != null) _bulletIcon.Data = IconBullet;
+        _orderedListButton = WireToggle("PART_OrderedList", () => Canvas?.ToggleOrderedList());
+        _orderedListIcon = GetTemplateChild("PART_OrderedListIcon") as Path;
+        if (_orderedListIcon != null) _orderedListIcon.Data = IconOrderedList;
         _taskListButton = WireToggle("PART_TaskList", () => Canvas?.ToggleTaskList());
         _taskListIcon = GetTemplateChild("PART_TaskListIcon") as Path;
         if (_taskListIcon != null) _taskListIcon.Data = IconTaskList;
@@ -202,10 +218,10 @@ public class DocsFormattingBar : Control
             _colorTextButton.Click += (_, _) => ShowColorMenu();
         }
 
-        var reflowButton = GetTemplateChild("PART_Reflow") as Button;
-        if (reflowButton != null)
+        _reflowButton = GetTemplateChild("PART_Reflow") as Button;
+        if (_reflowButton != null)
         {
-            reflowButton.Click += (_, _) =>
+            _reflowButton.Click += (_, _) =>
             {
                 Canvas?.Reflow();
                 Canvas?.Focus();
@@ -426,8 +442,12 @@ public class DocsFormattingBar : Control
         SetCheckedSilent(_h2Button, kind == BlockKind.Heading2);
         SetCheckedSilent(_h3Button, kind == BlockKind.Heading3);
         SetCheckedSilent(_bulletButton, kind == BlockKind.UnorderedListItem);
+        SetCheckedSilent(_orderedListButton, kind == BlockKind.OrderedListItem);
         SetCheckedSilent(_taskListButton, kind is BlockKind.TaskListItemUnchecked or BlockKind.TaskListItemChecked);
         SetCheckedSilent(_quoteButton, kind == BlockKind.Blockquote);
+
+        if (_reflowButton != null)
+            _reflowButton.IsEnabled = canvas.CanReformat;
     }
 
     private static void SetCheckedSilent(ToggleButton? btn, bool value)

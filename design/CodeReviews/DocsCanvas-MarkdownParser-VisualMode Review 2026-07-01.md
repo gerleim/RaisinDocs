@@ -8,13 +8,13 @@
 
 ## CRITICAL (2)
 
-### C1 — Layout mutation inside OnRender
+### ~~C1 — Layout mutation inside OnRender~~ FIXED
 
 - **Severity**: Critical
 - **Category**: Bug / Risk
-- **Location**: `DocsCanvas.cs:3103-3104`
+- **Location**: `DocsCanvas.cs:3129-3130`
 - **What's wrong**: `Minimap?.InvalidateVisual()` and `ScrollStateChanged?.Invoke()` fire inside `OnRender`. The scroll-state subscriber (`DocsEditor.UpdateScrollBar`) sets scrollbar visibility synchronously, triggering a WPF layout pass *during* a render pass. This violates the `OnRender` contract: it must only draw, never mutate layout state or fire events that trigger layout.
-- **What to do**: Post these via `Dispatcher.BeginInvoke(DispatcherPriority.Normal, ...)`, or fire `ScrollStateChanged` from every method that changes `_scrollOffset`/`_totalContentHeight` instead of from `OnRender`.
+- **Fix applied**: Wrapped both calls in `Dispatcher.BeginInvoke()` so they execute after `OnRender` completes.
 
 ### C2 — MoveOutOfTable returns true without moving cursor
 

@@ -103,6 +103,82 @@ public class MarkdownParserTests
         result[0].Kind.Should().Be(BlockKind.Paragraph);
     }
 
+    // --- Ordered list items ---
+
+    [Fact]
+    public void OrderedList_DotDelimiter()
+    {
+        var result = ParseBlocks("1. item");
+        result[0].Kind.Should().Be(BlockKind.OrderedListItem);
+    }
+
+    [Fact]
+    public void OrderedList_ParenDelimiter()
+    {
+        var result = ParseBlocks("1) item");
+        result[0].Kind.Should().Be(BlockKind.OrderedListItem);
+    }
+
+    [Fact]
+    public void OrderedList_MultiDigit()
+    {
+        var result = ParseBlocks("123. item");
+        result[0].Kind.Should().Be(BlockKind.OrderedListItem);
+    }
+
+    [Fact]
+    public void OrderedList_NineDigits_Valid()
+    {
+        var result = ParseBlocks("999999999. item");
+        result[0].Kind.Should().Be(BlockKind.OrderedListItem);
+    }
+
+    [Fact]
+    public void OrderedList_TenDigits_IsParagraph()
+    {
+        var result = ParseBlocks("1234567890. item");
+        result[0].Kind.Should().Be(BlockKind.Paragraph);
+    }
+
+    [Fact]
+    public void OrderedList_ZeroStart()
+    {
+        var result = ParseBlocks("0. item");
+        result[0].Kind.Should().Be(BlockKind.OrderedListItem);
+    }
+
+    [Fact]
+    public void OrderedList_NoSpace_IsParagraph()
+    {
+        var result = ParseBlocks("1.item");
+        result[0].Kind.Should().Be(BlockKind.Paragraph);
+    }
+
+    [Fact]
+    public void OrderedList_NoContent_Valid()
+    {
+        var result = ParseBlocks("1. ");
+        result[0].Kind.Should().Be(BlockKind.OrderedListItem);
+    }
+
+    [Fact]
+    public void OrderedList_PrefixLength_SingleDigitDot()
+    {
+        MarkdownParser.GetOrderedListPrefixLength("1. item").Should().Be(3);
+    }
+
+    [Fact]
+    public void OrderedList_PrefixLength_MultiDigitParen()
+    {
+        MarkdownParser.GetOrderedListPrefixLength("12) item").Should().Be(4);
+    }
+
+    [Fact]
+    public void OrderedList_PrefixLength_NotOrdered()
+    {
+        MarkdownParser.GetOrderedListPrefixLength("not a list").Should().Be(0);
+    }
+
     // --- Task list items ---
 
     [Fact]

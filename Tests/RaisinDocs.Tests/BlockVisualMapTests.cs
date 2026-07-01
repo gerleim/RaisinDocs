@@ -379,6 +379,69 @@ public class BlockVisualMapTests
         map.Images.Should().BeNull();
     }
 
+    // --- Ordered list items ---
+
+    [Fact]
+    public void OrderedList_PrefixHidden()
+    {
+        var map = ComputeMap("1. Item");
+        map.IsHidden(0).Should().BeTrue();
+        map.IsHidden(1).Should().BeTrue();
+        map.IsHidden(2).Should().BeTrue();
+        map.IsHidden(3).Should().BeFalse();
+    }
+
+    [Fact]
+    public void OrderedList_MultiDigit_PrefixHidden()
+    {
+        var map = ComputeMap("12. Item");
+        for (int i = 0; i < 4; i++)
+            map.IsHidden(i).Should().BeTrue($"offset {i} should be hidden");
+        map.IsHidden(4).Should().BeFalse();
+    }
+
+    [Fact]
+    public void OrderedList_ParenDelimiter_PrefixHidden()
+    {
+        var map = ComputeMap("1) Item");
+        map.IsHidden(0).Should().BeTrue();
+        map.IsHidden(1).Should().BeTrue();
+        map.IsHidden(2).Should().BeTrue();
+        map.IsHidden(3).Should().BeFalse();
+    }
+
+    [Fact]
+    public void OrderedList_ReplacementPrefix()
+    {
+        var map = ComputeMap("1. Item");
+        map.ReplacementPrefix.Should().Be("  1. ");
+    }
+
+    [Fact]
+    public void OrderedList_MultiDigit_ReplacementPrefix()
+    {
+        var map = ComputeMap("42) Item");
+        map.ReplacementPrefix.Should().Be("  42) ");
+    }
+
+    [Fact]
+    public void OrderedList_RawToVisual()
+    {
+        var map = ComputeMap("1. Item");
+        int prefixLen = map.ReplacementPrefix!.Length;
+        map.RawToVisual(3).Should().Be(prefixLen);
+        map.RawToVisual(4).Should().Be(prefixLen + 1);
+    }
+
+    [Fact]
+    public void OrderedList_VisualToRaw()
+    {
+        var map = ComputeMap("1. Item");
+        int prefixLen = map.ReplacementPrefix!.Length;
+        map.VisualToRaw(prefixLen).Should().Be(3);
+        map.VisualToRaw(prefixLen + 1).Should().Be(4);
+    }
+
     // --- Task list items ---
 
     [Fact]

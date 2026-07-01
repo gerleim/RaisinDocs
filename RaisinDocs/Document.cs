@@ -333,6 +333,8 @@ public class Document
             return text.Substring(0, 6);
         if (text.StartsWith("- ")) return "- ";
         if (text.StartsWith("* ")) return "* ";
+        int olLen = MarkdownParser.GetOrderedListPrefixLength(text);
+        if (olLen > 0) return text.Substring(0, olLen);
         if (text.StartsWith("> ")) return "> ";
         return null;
     }
@@ -495,8 +497,9 @@ public class Document
         return false;
     }
 
-    public void Reflow(int startBlock, int endBlock, Func<string, bool> isMergeableBlock)
+    public bool Reflow(int startBlock, int endBlock, Func<string, bool> isMergeableBlock)
     {
+        int countBefore = _blocks.Count;
         endBlock = ReflowBoxTable(startBlock, endBlock);
 
         for (int i = endBlock; i > startBlock; i--)
@@ -529,6 +532,38 @@ public class Document
                 endBlock--;
             }
         }
+
+        return _blocks.Count != countBefore;
+    }
+
+    public bool TrimWhitespace(int startBlock, int endBlock)
+    {
+        bool changed = false;
+        for (int i = startBlock; i <= endBlock; i++)
+        {
+            string text = _blocks[i].ToString();
+
+            string result = text.TrimStart();
+            int leadingRemoved = text.Length - result.Length;
+
+            string trimmedEnd = result.TrimEnd();
+            int trailingCount = result.Length - trimmedEnd.Length;
+            if (trailingCount == 2)
+                result = trimmedEnd + "  ";
+            else
+                result = trimmedEnd;
+
+            if (result == text) continue;
+
+            _blocks[i] = new StringBuilder(result);
+            changed = true;
+
+            if (CursorBlock == i)
+                CursorOffset = Math.Max(0, Math.Min(CursorOffset - leadingRemoved, result.Length));
+            if (AnchorBlock == i)
+                AnchorOffset = Math.Max(0, Math.Min(AnchorOffset - leadingRemoved, result.Length));
+        }
+        return changed;
     }
 
     public void Paste(string text)

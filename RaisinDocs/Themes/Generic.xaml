@@ -62,6 +62,9 @@
                         <Trigger Property="IsMouseOver" Value="True">
                             <Setter TargetName="Bd" Property="Background" Value="#20000000" />
                         </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter TargetName="Bd" Property="Opacity" Value="0.35" />
+                        </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
             </Setter.Value>
@@ -95,6 +98,9 @@
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
                             <Setter TargetName="Bd" Property="Background" Value="#20000000" />
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter TargetName="Bd" Property="Opacity" Value="0.35" />
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -162,6 +168,12 @@
                                       Width="14" Height="14" Stretch="Uniform"
                                       Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=local:DocsFormattingBar}}" />
                             </ToggleButton>
+                            <ToggleButton x:Name="PART_OrderedList" Style="{StaticResource FormattingToggle}"
+                                          ToolTip="Ordered list">
+                                <Path x:Name="PART_OrderedListIcon"
+                                      Width="14" Height="14" Stretch="Uniform"
+                                      Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=local:DocsFormattingBar}}" />
+                            </ToggleButton>
                             <ToggleButton x:Name="PART_TaskList" Style="{StaticResource FormattingToggle}"
                                           ToolTip="Task list">
                                 <Path x:Name="PART_TaskListIcon"
@@ -200,9 +212,11 @@
                             </Button>
 
                             <Button x:Name="PART_Reflow" Style="{StaticResource FormattingButton}"
-                                    ToolTip="Reflow paragraphs">
-                                <TextBlock Text="¶" FontSize="14" FontWeight="Bold"
-                                           Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=local:DocsFormattingBar}}" />
+                                    ToolTip="Reformat">
+                                <Path Width="14" Height="14" Stretch="Uniform"
+                                      Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=local:DocsFormattingBar}}"
+                                      StrokeThickness="1.5" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                                      Data="M1,3 H7 M1,7 H11 M1,11 H5 M10,4 L13,7 L10,10" />
                             </Button>
 
                             <Border Style="{StaticResource SeparatorLine}" />

@@ -350,6 +350,8 @@ public partial class DocsCanvas : FrameworkElement
     public HardBreakStyle CurrentHardBreak => _hardBreak;
     public bool ShowWhitespace => _showWhitespace;
 
+    public IDocsLogger? Logger { get; set; }
+
     public event EventHandler? ContentChanged;
     public event EventHandler? FormattingChanged;
     public event EventHandler? EditModeChanged;
@@ -540,6 +542,11 @@ public partial class DocsCanvas : FrameworkElement
         ToggleBlockPrefixForSelection("- ");
     }
 
+    public void ToggleOrderedList()
+    {
+        ToggleBlockPrefixForSelection("1. ");
+    }
+
     public void ToggleTaskList()
     {
         ToggleBlockPrefixForSelection("- [ ] ");
@@ -566,13 +573,37 @@ public partial class DocsCanvas : FrameworkElement
             eb = _doc.BlockCount - 1;
         }
         _doc.BeginUndoGroup();
-        _doc.Reflow(sb, eb, text =>
+        bool changed = _doc.Reflow(sb, eb, text =>
             text.Length > 0 && MarkdownParser.ClassifyBlock(text) == BlockKind.Paragraph
             && !text.StartsWith('|'));
+        if (!changed)
+            _doc.TrimWhitespace(sb, eb);
         _doc.SealUndoGroup();
         InvalidateLayout();
         EnsureCursorVisible();
         RaiseFormattingChanged();
+    }
+
+    public bool CanReformat
+    {
+        get
+        {
+            int sb, eb;
+            if (_doc.HasSelection)
+            {
+                var sel = _doc.GetOrderedSelection();
+                sb = sel.startBlock;
+                eb = sel.endBlock;
+            }
+            else
+            {
+                sb = 0;
+                eb = _doc.BlockCount - 1;
+            }
+            return _doc.HasReformattableContent(sb, eb, text =>
+                text.Length > 0 && MarkdownParser.ClassifyBlock(text) == BlockKind.Paragraph
+                && !text.StartsWith('|'));
+        }
     }
 
     public void InsertLink()
@@ -2618,11 +2649,33 @@ public partial class DocsCanvas : FrameworkElement
             bool isStandalone = (blockKind >= BlockKind.Heading1 && blockKind <= BlockKind.Heading6)
                              || MarkdownParser.IsFenceLine(blockText);
             StripTrailingHardBreak();
-            _doc.InsertParagraphBreak();
-            if (!isStandalone
-                && (_doc.GetBlockLength(_doc.CursorBlock) > 0
-                    || _doc.CursorBlock == _doc.BlockCount - 1))
+
+            if (blockKind == BlockKind.OrderedListItem)
+            {
+                int prefixLen = MarkdownParser.GetOrderedListPrefixLength(blockText);
+                string content = blockText.Substring(prefixLen);
+                if (content.Length == 0)
+                {
+                    _doc.RemoveTextAt(_doc.CursorBlock, 0, prefixLen);
+                    _doc.CursorOffset = 0;
+                }
+                else
+                {
+                    _doc.InsertParagraphBreak();
+                    string number = blockText.Substring(0, prefixLen - 2);
+                    char delim = blockText[prefixLen - 2];
+                    if (int.TryParse(number, out int n))
+                        _doc.Paste((n + 1).ToString() + delim + " ");
+                }
+            }
+            else
+            {
                 _doc.InsertParagraphBreak();
+                if (!isStandalone
+                    && (_doc.GetBlockLength(_doc.CursorBlock) > 0
+                        || _doc.CursorBlock == _doc.BlockCount - 1))
+                    _doc.InsertParagraphBreak();
+            }
         }
         _doc.CollapseSelection();
         _doc.SealUndoGroup();
@@ -2854,8 +2907,7 @@ public partial class DocsCanvas : FrameworkElement
                     string copyText = rectC != null
                         ? GetTableRectSelectedText(rectC.Value)
                         : _doc.GetSelectedText();
-                    try { Clipboard.SetText(copyText); }
-                    catch { }
+                    ClipboardHelper.SetText(copyText, Logger);
                 }
                 else handled = false;
                 break;
@@ -2868,8 +2920,7 @@ public partial class DocsCanvas : FrameworkElement
                     string cutText = rectX != null
                         ? GetTableRectSelectedText(rectX.Value)
                         : _doc.GetSelectedText();
-                    try { Clipboard.SetText(cutText); }
-                    catch { }
+                    ClipboardHelper.SetText(cutText, Logger);
                     _doc.BeginUndoGroup();
                     if (rectX != null)
                         ClearTableRectCells(rectX.Value);
@@ -2885,19 +2936,15 @@ public partial class DocsCanvas : FrameworkElement
                 if (ctrl)
                 {
                     SealAndStopTimer();
-                    try
+                    string? text = ClipboardHelper.GetText(Logger);
+                    if (!string.IsNullOrEmpty(text))
                     {
-                        string text = Clipboard.GetText();
-                        if (!string.IsNullOrEmpty(text))
-                        {
-                            _doc.BeginUndoGroup();
-                            if (_doc.HasSelection) _doc.DeleteSelection();
-                            _doc.Paste(text);
-                            _doc.SealUndoGroup();
-                            textChanged = true;
-                        }
+                        _doc.BeginUndoGroup();
+                        if (_doc.HasSelection) _doc.DeleteSelection();
+                        _doc.Paste(text);
+                        _doc.SealUndoGroup();
+                        textChanged = true;
                     }
-                    catch { }
                 }
                 else handled = false;
                 break;
@@ -3101,8 +3148,11 @@ public partial class DocsCanvas : FrameworkElement
         if (!IsVisual && _imagePreview == ImagePreviewMode.OnHover && _hoveredImage != null)
             DrawHoverImagePreview(dc);
 
-        Minimap?.InvalidateVisual();
-        ScrollStateChanged?.Invoke();
+        Dispatcher.BeginInvoke(() =>
+        {
+            Minimap?.InvalidateVisual();
+            ScrollStateChanged?.Invoke();
+        });
     }
 
     private void DrawJoinedLine(DrawingContext dc, VisualLine vl,
@@ -3248,6 +3298,12 @@ public partial class DocsCanvas : FrameworkElement
             string vlText = blockText.Substring(vl.StartOffset, Math.Min(vl.Length, 2));
             if (vlText is "- " or "* ")
                 ft.SetForegroundBrush(_palette.Syntax, 0, 2);
+        }
+        else if (parsed.Kind == BlockKind.OrderedListItem && vl.StartOffset == 0)
+        {
+            int prefixLen = MarkdownParser.GetOrderedListPrefixLength(blockText);
+            if (prefixLen > 0 && vl.Length >= prefixLen)
+                ft.SetForegroundBrush(_palette.Syntax, 0, prefixLen);
         }
 
         if (parsed.Kind == BlockKind.Blockquote && vl.StartOffset == 0 && vl.Length >= 2)

@@ -118,6 +118,17 @@ public class BlockVisualMap
                 replacementPrefix = "  • ";
             }
         }
+        else if (parsed.Kind == BlockKind.OrderedListItem)
+        {
+            int prefixLen = MarkdownParser.GetOrderedListPrefixLength(blockText);
+            if (prefixLen > 0)
+            {
+                ranges.Add(new HiddenRange(0, prefixLen));
+                string number = blockText.Substring(0, prefixLen - 2);
+                char delim = blockText[prefixLen - 2];
+                replacementPrefix = "  " + number + delim + " ";
+            }
+        }
 
         if (parsed.Kind is BlockKind.TableHeaderRow or BlockKind.TableDataRow && parsed.TableRow != null)
         {
