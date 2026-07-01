@@ -396,8 +396,109 @@ public class Document
         CursorOffset = pos;
     }
 
+    public int ReflowBoxTable(int startBlock, int endBlock)
+    {
+        int i = endBlock;
+        while (i >= startBlock)
+        {
+            if (!IsBoxDrawingLine(_blocks[i].ToString()))
+            {
+                i--;
+                continue;
+            }
+
+            int tableEnd = i;
+            while (i >= startBlock && IsBoxDrawingLine(_blocks[i].ToString()))
+                i--;
+            int tableStart = i + 1;
+
+            var dataRows = new List<string[]>();
+            for (int j = tableStart; j <= tableEnd; j++)
+            {
+                string line = _blocks[j].ToString();
+                char sep = line.Contains('│') ? '│' : line.Contains('║') ? '║' : '\0';
+                if (sep == '\0') continue;
+
+                var parts = line.Split(sep);
+                var cells = new List<string>();
+                for (int k = 1; k < parts.Length - 1; k++)
+                    cells.Add(parts[k].Trim());
+                if (cells.Count > 0)
+                    dataRows.Add(cells.ToArray());
+            }
+
+            if (dataRows.Count == 0) continue;
+
+            int maxCols = 0;
+            foreach (var row in dataRows)
+                if (row.Length > maxCols) maxCols = row.Length;
+
+            for (int j = 0; j < dataRows.Count; j++)
+            {
+                if (dataRows[j].Length < maxCols)
+                {
+                    var padded = new string[maxCols];
+                    Array.Copy(dataRows[j], padded, dataRows[j].Length);
+                    for (int k = dataRows[j].Length; k < maxCols; k++)
+                        padded[k] = "";
+                    dataRows[j] = padded;
+                }
+            }
+
+            var mdLines = new List<string>();
+            mdLines.Add("| " + string.Join(" | ", dataRows[0]) + " |");
+            var seps = new string[maxCols];
+            for (int j = 0; j < maxCols; j++) seps[j] = "---";
+            mdLines.Add("| " + string.Join(" | ", seps) + " |");
+            for (int j = 1; j < dataRows.Count; j++)
+                mdLines.Add("| " + string.Join(" | ", dataRows[j]) + " |");
+
+            int oldCount = tableEnd - tableStart + 1;
+            int newCount = mdLines.Count;
+            int delta = newCount - oldCount;
+
+            _blocks.RemoveRange(tableStart, oldCount);
+            for (int j = 0; j < newCount; j++)
+                _blocks.Insert(tableStart + j, new StringBuilder(mdLines[j]));
+
+            if (CursorBlock >= tableStart && CursorBlock <= tableEnd)
+            {
+                CursorBlock = tableStart;
+                CursorOffset = 0;
+            }
+            else if (CursorBlock > tableEnd)
+            {
+                CursorBlock += delta;
+            }
+
+            if (AnchorBlock >= tableStart && AnchorBlock <= tableEnd)
+            {
+                AnchorBlock = tableStart;
+                AnchorOffset = 0;
+            }
+            else if (AnchorBlock > tableEnd)
+            {
+                AnchorBlock += delta;
+            }
+
+            endBlock += delta;
+        }
+
+        return endBlock;
+    }
+
+    private static bool IsBoxDrawingLine(string line)
+    {
+        foreach (char c in line)
+            if (c >= '─' && c <= '╿')
+                return true;
+        return false;
+    }
+
     public void Reflow(int startBlock, int endBlock, Func<string, bool> isMergeableBlock)
     {
+        endBlock = ReflowBoxTable(startBlock, endBlock);
+
         for (int i = endBlock; i > startBlock; i--)
         {
             string curr = _blocks[i].ToString();

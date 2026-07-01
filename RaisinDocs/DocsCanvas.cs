@@ -567,7 +567,8 @@ public partial class DocsCanvas : FrameworkElement
         }
         _doc.BeginUndoGroup();
         _doc.Reflow(sb, eb, text =>
-            text.Length > 0 && MarkdownParser.ClassifyBlock(text) == BlockKind.Paragraph);
+            text.Length > 0 && MarkdownParser.ClassifyBlock(text) == BlockKind.Paragraph
+            && !text.StartsWith('|'));
         _doc.SealUndoGroup();
         InvalidateLayout();
         EnsureCursorVisible();

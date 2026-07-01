@@ -37,6 +37,7 @@ public enum BlockKind
     Heading5,
     Heading6,
     UnorderedListItem,
+    OrderedListItem,
     TaskListItemUnchecked,
     TaskListItemChecked,
     FencedCodeLine,

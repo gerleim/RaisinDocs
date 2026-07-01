@@ -499,6 +499,106 @@ public class DocumentTests
         doc.GetBlockText(2).Should().Be("c");
     }
 
+    // --- ReflowBoxTable ---
+
+    [Fact]
+    public void ReflowBoxTable_ConvertsSimpleTable()
+    {
+        var doc = new Document();
+        doc.SetText(
+            "┌───┬───┐\n" +
+            "│ A │ B │\n" +
+            "├───┼───┤\n" +
+            "│ 1 │ 2 │\n" +
+            "└───┴───┘");
+        doc.ReflowBoxTable(0, doc.BlockCount - 1);
+        doc.BlockCount.Should().Be(3);
+        doc.GetBlockText(0).Should().Be("| A | B |");
+        doc.GetBlockText(1).Should().Be("| --- | --- |");
+        doc.GetBlockText(2).Should().Be("| 1 | 2 |");
+    }
+
+    [Fact]
+    public void ReflowBoxTable_ConvertsMultiRowTable()
+    {
+        var doc = new Document();
+        doc.SetText(
+            "┌─────┬──────┬───────┐\n" +
+            "│  #  │ File │ Lines │\n" +
+            "├─────┼──────┼───────┤\n" +
+            "│ 1   │ a.cs │ 10    │\n" +
+            "├─────┼──────┼───────┤\n" +
+            "│ 2   │ b.cs │ 20    │\n" +
+            "└─────┴──────┴───────┘");
+        doc.ReflowBoxTable(0, doc.BlockCount - 1);
+        doc.BlockCount.Should().Be(4);
+        doc.GetBlockText(0).Should().Be("| # | File | Lines |");
+        doc.GetBlockText(1).Should().Be("| --- | --- | --- |");
+        doc.GetBlockText(2).Should().Be("| 1 | a.cs | 10 |");
+        doc.GetBlockText(3).Should().Be("| 2 | b.cs | 20 |");
+    }
+
+    [Fact]
+    public void ReflowBoxTable_PreservesSurroundingBlocks()
+    {
+        var doc = new Document();
+        doc.SetText(
+            "before\n" +
+            "┌───┬───┐\n" +
+            "│ A │ B │\n" +
+            "└───┴───┘\n" +
+            "after");
+        doc.ReflowBoxTable(0, doc.BlockCount - 1);
+        doc.BlockCount.Should().Be(4);
+        doc.GetBlockText(0).Should().Be("before");
+        doc.GetBlockText(1).Should().Be("| A | B |");
+        doc.GetBlockText(2).Should().Be("| --- | --- |");
+        doc.GetBlockText(3).Should().Be("after");
+    }
+
+    [Fact]
+    public void ReflowBoxTable_ReturnsUpdatedEndBlock()
+    {
+        var doc = new Document();
+        doc.SetText(
+            "┌───┬───┐\n" +
+            "│ A │ B │\n" +
+            "├───┼───┤\n" +
+            "│ 1 │ 2 │\n" +
+            "└───┴───┘");
+        int newEnd = doc.ReflowBoxTable(0, doc.BlockCount - 1);
+        newEnd.Should().Be(2);
+    }
+
+    [Fact]
+    public void ReflowBoxTable_LeavesNonBoxLinesAlone()
+    {
+        var doc = new Document();
+        doc.SetText("hello\nworld");
+        doc.ReflowBoxTable(0, doc.BlockCount - 1);
+        doc.BlockCount.Should().Be(2);
+        doc.GetBlockText(0).Should().Be("hello");
+        doc.GetBlockText(1).Should().Be("world");
+    }
+
+    [Fact]
+    public void ReflowBoxTable_AdjustsCursorAfterTable()
+    {
+        var doc = new Document();
+        doc.SetText(
+            "┌───┬───┐\n" +
+            "│ A │ B │\n" +
+            "├───┼───┤\n" +
+            "│ 1 │ 2 │\n" +
+            "└───┴───┘\n" +
+            "after");
+        doc.CursorBlock = 5;
+        doc.CursorOffset = 2;
+        doc.ReflowBoxTable(0, doc.BlockCount - 1);
+        doc.CursorBlock.Should().Be(3);
+        doc.CursorOffset.Should().Be(2);
+    }
+
     // --- ComparePositions ---
 
     [Fact]
