@@ -16,8 +16,8 @@ public partial class MainWindow : Window
             Viewer.Canvas.SetEditMode(DocsCanvas.EditMode.Visual);
 
             var args = Environment.GetCommandLineArgs();
-            if (args.Length > 1 && File.Exists(args[1]))
-                OpenFile(args[1]);
+            if (args.Length > 1)
+                TryOpenFileFromPath(args[1]);
         };
     }
 
@@ -32,6 +32,26 @@ public partial class MainWindow : Window
         var dlg = new OpenFileDialog { Filter = "Markdown files|*.md|All files|*.*" };
         if (dlg.ShowDialog(this) != true) return;
         OpenFile(dlg.FileName);
+    }
+
+    private void TryOpenFileFromPath(string path)
+    {
+        var fullPath = Path.GetFullPath(path);
+        if (!File.Exists(fullPath))
+        {
+            MessageBox.Show(this, $"File not found:\n{fullPath}", "RaisinDocs Viewer",
+                MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+        try
+        {
+            OpenFile(fullPath);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            MessageBox.Show(this, $"Could not open file:\n{ex.Message}", "RaisinDocs Viewer",
+                MessageBoxButton.OK, MessageBoxImage.Error);
+        }
     }
 
     private void OpenFile(string path)

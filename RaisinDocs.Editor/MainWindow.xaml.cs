@@ -19,8 +19,8 @@ public partial class MainWindow : Window
         Loaded += (_, _) =>
         {
             var args = Environment.GetCommandLineArgs();
-            if (args.Length > 1 && File.Exists(args[1]))
-                OpenFile(args[1]);
+            if (args.Length > 1)
+                TryOpenFileFromPath(args[1]);
         };
     }
 
@@ -72,6 +72,26 @@ public partial class MainWindow : Window
         }
         if (dlg.ShowDialog(this) != true) return;
         SaveToFile(dlg.FileName);
+    }
+
+    private void TryOpenFileFromPath(string path)
+    {
+        var fullPath = Path.GetFullPath(path);
+        if (!File.Exists(fullPath))
+        {
+            MessageBox.Show(this, $"File not found:\n{fullPath}", "RaisinDocs Editor",
+                MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+        try
+        {
+            OpenFile(fullPath);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            MessageBox.Show(this, $"Could not open file:\n{ex.Message}", "RaisinDocs Editor",
+                MessageBoxButton.OK, MessageBoxImage.Error);
+        }
     }
 
     private void OpenFile(string path)
