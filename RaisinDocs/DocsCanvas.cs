@@ -3057,6 +3057,7 @@ public partial class DocsCanvas : FrameworkElement
 
         DrawCodeBlockBackgrounds(dc, effectiveScroll, viewTop, viewBottom);
         DrawColorBlockBackgrounds(dc, effectiveScroll, viewTop, viewBottom);
+        DrawInlineColorBackgrounds(dc, effectiveScroll, viewTop, viewBottom);
         if (IsVisual)
             DrawTableBackgrounds(dc, effectiveScroll, viewTop, viewBottom);
 
@@ -3498,6 +3499,80 @@ public partial class DocsCanvas : FrameworkElement
             brush.Freeze();
             dc.DrawRectangle(brush, null,
                 new Rect(0, lineY - effectiveScroll, contentWidth, lineH));
+        }
+    }
+
+    private void DrawInlineColorBackgrounds(DrawingContext dc, double effectiveScroll,
+        double viewTop, double viewBottom)
+    {
+        if (_parsedBlocks == null) return;
+
+        for (int i = 0; i < _visualLines.Count; i++)
+        {
+            var vl = _visualLines[i];
+            double lineH = GetEffectiveLineHeight(vl);
+            double lineY = _lineYPositions[i];
+            if (lineY + lineH < viewTop) continue;
+            if (lineY > viewBottom) break;
+
+            string blockText;
+            ParsedBlock parsed;
+            BlockVisualMap? map;
+            IReadOnlyList<ColorSpan>? colorSpans;
+
+            if (vl.Group != null)
+            {
+                var group = vl.Group;
+                blockText = group.JoinedText;
+                parsed = group.JoinedParsed;
+                map = group.JoinedMap;
+                colorSpans = map.ColorSpans;
+            }
+            else
+            {
+                if (vl.BlockIndex >= _parsedBlocks.Count) continue;
+                parsed = _parsedBlocks[vl.BlockIndex];
+                if (parsed.Kind == BlockKind.FencedCodeLine) continue;
+                blockText = _doc.GetBlockText(vl.BlockIndex);
+                map = IsVisual ? _visualMaps?[vl.BlockIndex] : null;
+                colorSpans = IsVisual ? map?.ColorSpans : parsed.ColorSpans;
+            }
+
+            if (colorSpans == null) continue;
+            if (IsVisual && parsed.Table != null && parsed.TableRow != null) continue;
+
+            int vlEnd = vl.StartOffset + vl.Length;
+
+            foreach (var cs in colorSpans)
+            {
+                if (cs.Background == null) continue;
+                int csEnd = cs.Start + cs.Length;
+                if (csEnd <= vl.StartOffset || cs.Start >= vlEnd) continue;
+
+                int rangeStart = Math.Max(cs.Start, vl.StartOffset);
+                int rangeEnd = Math.Min(csEnd, vlEnd);
+
+                double x1 = MeasureRangeWidth(blockText, vl.StartOffset, rangeStart - vl.StartOffset,
+                    parsed.Runs, parsed.Kind, map);
+                double x2 = MeasureRangeWidth(blockText, vl.StartOffset, rangeEnd - vl.StartOffset,
+                    parsed.Runs, parsed.Kind, map);
+
+                if (map?.ReplacementPrefix != null && vl.StartOffset == 0)
+                {
+                    double prefixW = MeasureReplacementPrefix(map.ReplacementPrefix!, parsed.Kind);
+                    x1 += prefixW;
+                    x2 += prefixW;
+                }
+
+                double w = x2 - x1;
+                if (w <= 0) continue;
+
+                var bg = cs.Background.Value;
+                var brush = new SolidColorBrush(Color.FromArgb(40, bg.R, bg.G, bg.B));
+                brush.Freeze();
+                dc.DrawRectangle(brush, null,
+                    new Rect(_padding + x1, lineY - effectiveScroll, w, lineH));
+            }
         }
     }
 
