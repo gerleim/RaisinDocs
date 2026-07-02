@@ -574,11 +574,9 @@ public partial class DocsCanvas : FrameworkElement
             eb = _doc.BlockCount - 1;
         }
         _doc.BeginUndoGroup();
-        bool changed = _doc.Reflow(sb, eb, text =>
-            text.Length > 0 && MarkdownParser.ClassifyBlock(text) == BlockKind.Paragraph
-            && !text.StartsWith('|'));
+        bool changed = _doc.Reflow(sb, eb, IsMergeableParagraph, MarkdownParser.IsFenceLine);
         if (!changed)
-            _doc.TrimWhitespace(sb, eb);
+            _doc.TrimWhitespace(sb, eb, MarkdownParser.IsFenceLine);
         _doc.SealUndoGroup();
         InvalidateLayout();
         EnsureCursorVisible();
@@ -601,11 +599,20 @@ public partial class DocsCanvas : FrameworkElement
                 sb = 0;
                 eb = _doc.BlockCount - 1;
             }
-            return _doc.HasReformattableContent(sb, eb, text =>
-                text.Length > 0 && MarkdownParser.ClassifyBlock(text) == BlockKind.Paragraph
-                && !text.StartsWith('|'));
+            return _doc.HasReformattableContent(sb, eb, IsMergeableParagraph, MarkdownParser.IsFenceLine);
         }
     }
+
+    private static bool IsMergeableParagraph(string text) =>
+        text.Length > 0
+        && MarkdownParser.ClassifyBlock(text) == BlockKind.Paragraph
+        && !text.StartsWith('|')
+        && !text.EndsWith('\\')
+        && !text.EndsWith("  ")
+        && !MarkdownParser.IsColorDivOpen(text)
+        && !MarkdownParser.IsColorDivClose(text)
+        && !MarkdownParser.IsThemeBlock(text)
+        && !MarkdownParser.TryParseLinkDefinition(text, out _, out _, out _);
 
     public void InsertLink()
     {
@@ -2673,9 +2680,7 @@ public partial class DocsCanvas : FrameworkElement
             else
             {
                 _doc.InsertParagraphBreak();
-                if (!isStandalone
-                    && (_doc.GetBlockLength(_doc.CursorBlock) > 0
-                        || _doc.CursorBlock == _doc.BlockCount - 1))
+                if (!isStandalone)
                     _doc.InsertParagraphBreak();
             }
         }

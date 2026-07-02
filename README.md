@@ -83,6 +83,7 @@ Editor.ApplyState(JsonSerializer.Deserialize<DocsEditorState>(json));
 | Ctrl+Z | Undo |
 | Ctrl+Y | Redo |
 | Ctrl+K | Insert link |
+| Enter | Paragraph break (blank line between blocks) |
 | Shift+Enter | Hard line break (visible `\` marker) |
 | Ctrl+Enter | Soft break (single newline, no marker) |
 | Ctrl+X / C / V | Cut / Copy / Paste |
