@@ -3225,11 +3225,12 @@ public partial class DocsCanvas : FrameworkElement
             _palette.Foreground, _dpiScale);
         ApplyInlineStylesVisual(ft, vl, group.JoinedParsed, group.JoinedMap);
 
+        var softBreaks = new HashSet<int>(group.SoftBreakOffsets);
         int visPos = 0;
         for (int i = vl.StartOffset; i < vl.StartOffset + vl.Length; i++)
         {
             if (group.JoinedMap.IsHidden(i)) continue;
-            if (Array.IndexOf(group.SoftBreakOffsets, i) >= 0 && visPos < displayText.Length)
+            if (softBreaks.Contains(i) && visPos < displayText.Length)
                 ft.SetForegroundBrush(_palette.Syntax, visPos, 1);
             visPos++;
         }

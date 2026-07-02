@@ -80,13 +80,13 @@
 - **What's wrong**: `OnRender` calls `ComputeLayout()`, which mutates `_visualLines`, `_lineYPositions`, `_tableColumnWidths` during a render pass. Layout should happen in `MeasureOverride`/`ArrangeOverride`.
 - **Resolution**: Added explanatory comment. Stable in practice because ComputeLayout is idempotent and completes before drawing. Moving to the layout phase would be a large refactor with regression risk for no functional gain.
 
-### M2 — O(n²) lookup in DrawJoinedLine
+### ~~M2 — O(n²) lookup in DrawJoinedLine~~ FIXED
 
 - **Severity**: Medium
 - **Category**: Performance
 - **Location**: `DocsCanvas.cs:3131-3138`
 - **What's wrong**: `Array.IndexOf(group.SoftBreakOffsets, i)` inside a per-character loop in `DrawJoinedLine` → O(n²) for reflowed paragraphs.
-- **What to do**: Convert `SoftBreakOffsets` to `HashSet<int>`.
+- **Fix applied**: Build a local `HashSet<int>` from `SoftBreakOffsets` before the loop for O(1) lookups.
 
 ### M3 — SelectionHasStyle returns true for empty selection
 
