@@ -2102,15 +2102,7 @@ public partial class DocsCanvas : FrameworkElement
         ComputeLayout();
 
         int markerLen = marker.Length;
-        int styleMarkerLen = targetStyle switch
-        {
-            InlineStyle.Bold => 2,
-            InlineStyle.Italic => 1,
-            InlineStyle.BoldItalic => 3,
-            InlineStyle.Code => 1,
-            InlineStyle.Strikethrough => 2,
-            _ => 0,
-        };
+        int styleMarkerLen = MarkdownParser.GetMarkerLength(targetStyle);
 
         bool allStyled = true;
         for (int b = sb; b <= eb; b++)
@@ -3558,15 +3550,9 @@ public partial class DocsCanvas : FrameworkElement
             int runEnd = run.Start + run.Length;
             if (runEnd <= vl.StartOffset || run.Start >= vlEnd) continue;
 
-            int markerLen = run.Style switch
-            {
-                InlineStyle.BoldItalic => 3,
-                InlineStyle.Bold => 2,
-                InlineStyle.Italic => 1,
-                InlineStyle.Code => CountBackticks(blockText, run.Start),
-                InlineStyle.Strikethrough => 2,
-                _ => 0,
-            };
+            int markerLen = run.Style == InlineStyle.Code
+                ? CountBackticks(blockText, run.Start)
+                : MarkdownParser.GetMarkerLength(run.Style);
             if (markerLen == 0) continue;
 
             DimRange(ft, vl, run.Start, markerLen);

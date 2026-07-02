@@ -128,13 +128,13 @@
 - **What's wrong**: `ParsedBlock` is manually cloned field-by-field in multiple places. Already caused M6 above. Adding new fields requires updating every copy site.
 - **What to do**: Convert to `record class` so `with` expressions work.
 
-### M8 — Strikethrough delimiters not hidden in visual mode
+### ~~M8 — Strikethrough delimiters not hidden in visual mode~~ FIXED
 
 - **Severity**: Medium
 - **Category**: Bug
 - **Location**: `BlockVisualMap.cs:146-153`
 - **What's wrong**: `Strikethrough` falls to the `_ => 0` default — `~~` delimiters are never hidden in visual mode. Displays as `~~struck~~` with both tildes AND strikethrough formatting.
-- **What to do**: Add `InlineStyle.Strikethrough => 2` to the switch.
+- **Fix applied**: Replaced per-site marker-length switches with shared `MarkdownParser.GetMarkerLength()`, which includes Strikethrough → 2.
 
 ### M9 — ImageCache thread safety
 

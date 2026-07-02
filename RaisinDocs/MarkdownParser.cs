@@ -963,17 +963,13 @@ public static class MarkdownParser
             int openStart = i;
             i += 2;
 
-            for (int j = i; j <= text.Length - 2; j++)
+            int closeStart = FindClosingDelimiter(text, styles, i, 2, '~');
+            if (closeStart >= 0)
             {
-                if (styles[j] == InlineStyle.Normal && text[j] == '~' && text[j + 1] == '~')
-                {
-                    for (int k = openStart; k < j + 2; k++)
-                        styles[k] = InlineStyle.Strikethrough;
-                    i = j + 2;
-                    goto next;
-                }
+                for (int k = openStart; k < closeStart + 2; k++)
+                    styles[k] = InlineStyle.Strikethrough;
+                i = closeStart + 2;
             }
-            next:;
         }
     }
 
@@ -1000,7 +996,7 @@ public static class MarkdownParser
 
             if (starCount >= 3)
             {
-                int closeStart = FindClosingStars(text, styles, searchFrom, 3);
+                int closeStart = FindClosingDelimiter(text, styles, searchFrom, 3, '*');
                 if (closeStart >= 0)
                 {
                     for (int j = openStart; j < closeStart + 3; j++)
@@ -1013,7 +1009,7 @@ public static class MarkdownParser
 
             if (starCount >= 2)
             {
-                int closeStart = FindClosingStars(text, styles, searchFrom, 2);
+                int closeStart = FindClosingDelimiter(text, styles, searchFrom, 2, '*');
                 if (closeStart >= 0)
                 {
                     for (int j = openStart; j < closeStart + 2; j++)
@@ -1026,7 +1022,7 @@ public static class MarkdownParser
 
             if (starCount >= 1)
             {
-                int closeStart = FindClosingStars(text, styles, searchFrom, 1);
+                int closeStart = FindClosingDelimiter(text, styles, searchFrom, 1, '*');
                 if (closeStart >= 0)
                 {
                     for (int j = openStart; j < closeStart + 1; j++)
@@ -1039,16 +1035,25 @@ public static class MarkdownParser
         }
     }
 
-    private static int FindClosingStars(string text, InlineStyle[] styles, int searchFrom, int count)
+    public static int GetMarkerLength(InlineStyle style) => style switch
+    {
+        InlineStyle.Bold => 2,
+        InlineStyle.Italic => 1,
+        InlineStyle.BoldItalic => 3,
+        InlineStyle.Strikethrough => 2,
+        _ => 0,
+    };
+
+    private static int FindClosingDelimiter(string text, InlineStyle[] styles, int searchFrom, int count, char delimiter)
     {
         for (int i = searchFrom; i <= text.Length - count; i++)
         {
             if (styles[i] != InlineStyle.Normal) continue;
-            if (text[i] != '*') continue;
+            if (text[i] != delimiter) continue;
 
             int run = 0;
             int start = i;
-            while (i < text.Length && text[i] == '*' && styles[i] == InlineStyle.Normal)
+            while (i < text.Length && text[i] == delimiter && styles[i] == InlineStyle.Normal)
             {
                 run++;
                 i++;

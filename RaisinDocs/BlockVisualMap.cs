@@ -154,14 +154,9 @@ public class BlockVisualMap
 
             if (run.Style is InlineStyle.Image or InlineStyle.Link) continue;
 
-            int markerLen = run.Style switch
-            {
-                InlineStyle.BoldItalic => 3,
-                InlineStyle.Bold => 2,
-                InlineStyle.Italic => 1,
-                InlineStyle.Code => CountBackticks(blockText, run.Start),
-                _ => 0,
-            };
+            int markerLen = run.Style == InlineStyle.Code
+                ? CountBackticks(blockText, run.Start)
+                : MarkdownParser.GetMarkerLength(run.Style);
             if (markerLen == 0) continue;
 
             int runEnd = run.Start + run.Length;
