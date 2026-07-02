@@ -152,6 +152,19 @@ public partial class DocsCanvas
         _doc.CursorOffset = offset;
     }
 
+    private void ClampCursorBeforeTrailingHidden()
+    {
+        if (_visualMaps == null) return;
+        if (_doc.CursorBlock >= _visualMaps.Count) return;
+        var map = _visualMaps[_doc.CursorBlock];
+        int blockLen = _doc.GetBlockLength(_doc.CursorBlock);
+        if (blockLen == 0 || !map.IsHidden(blockLen - 1)) return;
+        int offset = _doc.CursorOffset;
+        while (offset > 0 && map.IsHidden(offset - 1))
+            offset--;
+        _doc.CursorOffset = offset;
+    }
+
     private void SkipBackspacePastHiddenVisual()
     {
         if (_visualMaps == null) return;

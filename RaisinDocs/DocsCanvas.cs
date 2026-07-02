@@ -428,6 +428,7 @@ public partial class DocsCanvas : FrameworkElement
             ComputeLayout();
             EnsureCursorOnVisibleBlock();
             SkipCursorToVisible(forward: true);
+            ClampCursorBeforeTrailingHidden();
         }
         else
         {
