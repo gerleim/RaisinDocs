@@ -194,6 +194,7 @@ A trailing `\` is a hard break only when:
 - Parser detects 4-space indent, assigns `IndentedCodeLine` BlockKind (or reuses `FencedCodeLine` with a flag)
 - Source mode: code font, subtle background (same as fenced code)
 - Visual mode: same rendering as fenced code blocks but without fence delimiters to hide
+- Interacts with iteration 19 (indentation awareness): inside a list item with content column C, indented code requires C+4 spaces total
 - Lower priority: fenced code blocks are the dominant convention; indented code is legacy
 
 ### 17 — Angle-bracket autolinks
@@ -205,12 +206,27 @@ A trailing `\` is a hard break only when:
 
 ### 18 — Tab indent / outdent
 - Tab and Shift+Tab insert/remove leading spaces for line indentation
-- Context-aware: table cell navigation (existing) takes priority; indent/outdent applies everywhere else
+- Context-aware priority: table cell navigation (existing) > list nesting > general indent
+- **List items**: Tab on a list item nests it (adds spaces equal to the content column width of the parent), matching VS Code/Obsidian/Typora behavior. Shift+Tab un-nests. This is the dominant UX across all markdown editors.
 - **Multi-line selection**: Tab indents all selected lines by 4 spaces; Shift+Tab removes up to 4 leading spaces from each line. Selection is preserved/adjusted after the operation.
-- **Single line, no selection**: Tab inserts 4 spaces at cursor position (not a tab character — markdown convention is spaces). Shift+Tab removes up to 4 leading spaces from the line start, adjusting cursor position.
-- Indent width: 4 spaces (matches CommonMark indented code threshold). Could be made configurable later.
+- **Single line, no selection, not a list**: Tab inserts 4 spaces at cursor position (not a tab character — markdown convention is spaces). Shift+Tab removes up to 4 leading spaces from the line start, adjusting cursor position.
+- **Tab character handling**: documents may contain literal tab characters (pasted or loaded). Per CommonMark §2.2, tabs advance to the next tab stop of 4 columns for block structure purposes but are preserved as-is inside code blocks. The parser should interpret tabs as equivalent spaces for classification; the stored text keeps the literal tab.
+- Indent width: 4 spaces (matches CommonMark indented code threshold and the default across VS Code, Obsidian, Typora, MarkText). Could be made configurable later.
+- Never inserts literal tab characters — always spaces (universal convention across markdown editors)
 - Undo: entire multi-line indent/outdent is one undo unit
-- Useful across block types: indenting code inside fenced blocks, adjusting text alignment, preparing indented code blocks (iteration 16)
+- Useful across block types: indenting code inside fenced blocks, nesting list items, adjusting text alignment, preparing indented code blocks (iteration 16)
+
+### 19 — Indentation awareness
+- See `design/Indentation Awareness - Iteration 19.md` for detailed plan
+- CommonMark indentation is load-bearing: it determines list continuation, code blocks, nesting, and block recognition
+- **Content column**: each list item / blockquote has a content column (marker width + spaces). Continuation lines indented to this column remain part of the same item.
+- **Lazy continuation**: paragraph text immediately following a list item (no blank line) continues the item without indentation
+- **Indented continuation**: after a blank line, content indented to the content column resumes the item (multi-paragraph items)
+- **0–3 space prefix tolerance**: block markers (headings, fences, list markers, blockquote markers) preceded by up to 3 spaces are still recognized; 4+ spaces triggers indented code
+- **Tab character interpretation**: per CommonMark §2.2, tabs in block structure contexts are treated as advancing to the next 4-column tab stop (not as a fixed number of spaces). Tabs inside code blocks are preserved as literal characters. The parser must handle both cases.
+- Two-pass detection (like tables): `DetectContinuations()` scans for continuation patterns after initial classification
+- Visual mode: continuation lines rendered with matching indent, correct paragraph spacing (tight vs loose lists)
+- Scope: single-level continuation for lists and blockquotes. Nested containers (lists in lists) deferred to a follow-up iteration.
 
 ### GFM extensions roadmap
 - ~~Strikethrough (`~~text~~`)~~ — ✅ implemented in iteration 4
