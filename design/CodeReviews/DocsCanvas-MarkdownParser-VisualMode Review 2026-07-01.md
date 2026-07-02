@@ -28,13 +28,13 @@
 
 ## HIGH (5)
 
-### H1 — InsertColorWrapper cursor placement in multi-block case
+### ~~H1 — InsertColorWrapper cursor placement in multi-block case~~ FIXED
 
 - **Severity**: High
 - **Category**: Bug
 - **Location**: `DocsCanvas.cs:622`
 - **What's wrong**: The multi-block (`sb != eb`) branch sets the cursor to `eo + (sb == eb ? opener.Length : 0)`, which always evaluates to `eo + 0`. The cursor ends up trapped inside the closing `<!--/@fg-->` tag. The single-block branch at line 613 correctly uses `eo + opener.Length`.
-- **What to do**: Change to `_doc.CursorOffset = eo + closer.Length`.
+- **Fix applied**: Changed `CursorBlock = eb + 2` to `eb + 1` so the cursor lands on the last content block (shifted down by 1 from the opening div insertion) instead of inside the `<!--/@div-->` closing tag.
 
 ### H2 — HitTestVisualLine crash on empty _visualLines
 
