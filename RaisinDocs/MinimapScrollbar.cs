@@ -170,6 +170,10 @@ public class MinimapScrollbar : FrameworkElement
         }
 
         byte bB = bg.B, bG = bg.G, bR = bg.R;
+        double codeAlpha = codeBg.A / 255.0;
+        byte cbB = (byte)(codeBg.B * codeAlpha + bg.B * (1 - codeAlpha));
+        byte cbG = (byte)(codeBg.G * codeAlpha + bg.G * (1 - codeAlpha));
+        byte cbR = (byte)(codeBg.R * codeAlpha + bg.R * (1 - codeAlpha));
         for (int i = 0; i < _pixelBuf.Length; i += 4)
         {
             _pixelBuf[i] = bB;
@@ -208,9 +212,9 @@ public class MinimapScrollbar : FrameworkElement
                     for (int px = 0; px < w; px++)
                     {
                         int off = (py * w + px) * 4;
-                        _pixelBuf[off] = codeBg.B;
-                        _pixelBuf[off + 1] = codeBg.G;
-                        _pixelBuf[off + 2] = codeBg.R;
+                        _pixelBuf[off] = cbB;
+                        _pixelBuf[off + 1] = cbG;
+                        _pixelBuf[off + 2] = cbR;
                     }
             }
 
