@@ -2094,6 +2094,7 @@ public partial class DocsCanvas : FrameworkElement
 
     private int HitTestVisualLine(double y)
     {
+        if (_visualLines.Count == 0) return 0;
         for (int i = 0; i < _visualLines.Count; i++)
         {
             double lineH = GetEffectiveLineHeight(_visualLines[i]);
@@ -2105,6 +2106,7 @@ public partial class DocsCanvas : FrameworkElement
 
     private void HitTestToPosition(Point pos, out int blockIndex, out int charOffset)
     {
+        if (_visualLines.Count == 0) { blockIndex = 0; charOffset = 0; return; }
         double effectiveScroll = _scrollOffset + _smoother.Offset;
         int vli = HitTestVisualLine(pos.Y + effectiveScroll);
         var vl = _visualLines[vli];
@@ -2134,6 +2136,7 @@ public partial class DocsCanvas : FrameworkElement
     {
         _smoother.Cancel();
         ComputeLayout();
+        if (_visualLines.Count == 0) return;
         int vli = CursorToVisualLineIndex();
         double cursorY = _lineYPositions[vli];
         double lineH = GetEffectiveLineHeight(_visualLines[vli]);
@@ -2675,11 +2678,14 @@ public partial class DocsCanvas : FrameworkElement
                 }
                 else
                 {
-                    _doc.InsertParagraphBreak();
                     string number = blockText.Substring(0, prefixLen - 2);
                     char delim = blockText[prefixLen - 2];
+                    _doc.InsertParagraphBreak();
                     if (int.TryParse(number, out int n))
+                    {
                         _doc.Paste((n + 1).ToString() + delim + " ");
+                        RenumberOrderedList(_doc.CursorBlock + 1, n + 2, delim);
+                    }
                 }
             }
             else
@@ -2706,6 +2712,20 @@ public partial class DocsCanvas : FrameworkElement
             _doc.CursorOffset = text.Length;
             _doc.Backspace();
             _doc.Backspace();
+        }
+    }
+
+    private void RenumberOrderedList(int startBlock, int nextNumber, char delim)
+    {
+        for (int i = startBlock; i < _doc.BlockCount; i++)
+        {
+            string text = _doc.GetBlockText(i);
+            int oldPl = MarkdownParser.GetOrderedListPrefixLength(text);
+            if (oldPl == 0) break;
+            string newPrefix = nextNumber.ToString() + delim + " ";
+            _doc.RemoveTextAt(i, 0, oldPl);
+            _doc.InsertTextAt(i, 0, newPrefix);
+            nextNumber++;
         }
     }
 

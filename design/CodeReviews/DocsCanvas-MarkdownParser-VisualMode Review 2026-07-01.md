@@ -36,13 +36,13 @@
 - **What's wrong**: The multi-block (`sb != eb`) branch sets the cursor to `eo + (sb == eb ? opener.Length : 0)`, which always evaluates to `eo + 0`. The cursor ends up trapped inside the closing `<!--/@fg-->` tag. The single-block branch at line 613 correctly uses `eo + opener.Length`.
 - **Fix applied**: Changed `CursorBlock = eb + 2` to `eb + 1` so the cursor lands on the last content block (shifted down by 1 from the opening div insertion) instead of inside the `<!--/@div-->` closing tag.
 
-### H2 — HitTestVisualLine crash on empty _visualLines
+### ~~H2 — HitTestVisualLine crash on empty _visualLines~~ FIXED
 
 - **Severity**: High
 - **Category**: Risk / Crash
 - **Location**: `DocsCanvas.cs:2049-2057`
 - **What's wrong**: `HitTestVisualLine` returns `_visualLines.Count - 1` when `y` is past all lines. If `_visualLines` is empty (all blocks skipped in visual mode), this returns `-1`. All callers index `_visualLines` without checking → `IndexOutOfRangeException`.
-- **What to do**: Add `if (_visualLines.Count == 0) return 0;` guard. Add empty-checks in `CursorToVisualLineIndex` and `EnsureCursorVisible` too.
+- **Fix applied**: Added `_visualLines.Count == 0` guards in `HitTestVisualLine`, `HitTestToPosition`, and `EnsureCursorVisible`.
 
 ### H3 — ToggleInlineStyle cannot remove Bold/Italic from BoldItalic spans
 
