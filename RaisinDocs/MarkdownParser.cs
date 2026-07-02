@@ -1054,7 +1054,7 @@ public static class MarkdownParser
                 i++;
             }
 
-            if (run == count) return start;
+            if (run >= count) return start;
             i = start;
         }
         return -1;
