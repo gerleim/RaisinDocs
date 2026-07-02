@@ -796,8 +796,12 @@ public partial class DocsCanvas
                 for (int c = 0; c < Math.Min(p.TableRow.Cells.Count, colCount); c++)
                 {
                     var cell = p.TableRow.Cells[c];
-                    string cellText = text.Substring(cell.Start, cell.Length).Trim();
-                    double w = MeasureStringWidth(cellText, p.Kind, p.Runs, cell.Start);
+                    int s = cell.Start;
+                    int e = s + cell.Length;
+                    while (s < e && text[s] == ' ') s++;
+                    while (e > s && text[e - 1] == ' ') e--;
+                    string cellText = text.Substring(s, e - s);
+                    double w = MeasureStringWidth(cellText, p.Kind, p.Runs, s);
                     if (w > widths[c]) widths[c] = w;
                 }
             }

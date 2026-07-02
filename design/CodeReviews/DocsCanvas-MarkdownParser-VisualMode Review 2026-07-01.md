@@ -52,13 +52,13 @@
 - **What's wrong**: The removal loop at line 2018 does `if (run.Style != targetStyle) continue`, which skips `BoldItalic` runs because `BoldItalic != Bold`. Bold/Italic cannot be individually removed from `***bold-italic***` spans — silent no-op.
 - **Fix applied**: Both the detection and removal loops now match `BoldItalic` runs when targeting `Bold` or `Italic`. Removing Bold from `***text***` strips 2 stars per side → `*text*`; removing Italic strips 1 → `**text**`.
 
-### H4 — Table column width measurement off by leading whitespace
+### ~~H4 — Table column width measurement off by leading whitespace~~ FIXED
 
 - **Severity**: High
 - **Category**: Bug
 - **Location**: `DocsCanvas.VisualMode.cs:800`
 - **What's wrong**: `ComputeAllTableColumnWidths` passes `cell.Start` as `blockOffset` to `MeasureStringWidth`, but the measured string is already trimmed of leading spaces. The style lookup is off by `leadingTrim` characters → incorrect column widths for styled cell content.
-- **What to do**: Pass `cell.Start + leadingTrim` as `blockOffset`.
+- **Fix applied**: Replaced `.Trim()` with explicit whitespace trimming to track the actual start offset, then pass the trimmed start position as `blockOffset`.
 
 ### H5 — FindClosingStars skips position start+1
 
