@@ -195,6 +195,8 @@ public class Document
     public string GetSelectedText()
     {
         var (sb, so, eb, eo) = GetOrderedSelection();
+        so = Math.Min(so, _blocks[sb].Length);
+        eo = Math.Min(eo, _blocks[eb].Length);
         var result = new StringBuilder();
         for (int i = sb; i <= eb; i++)
         {
@@ -212,6 +214,8 @@ public class Document
     {
         if (!HasSelection) return;
         var (sb, so, eb, eo) = GetOrderedSelection();
+        so = Math.Min(so, _blocks[sb].Length);
+        eo = Math.Min(eo, _blocks[eb].Length);
         if (sb == eb)
         {
             _blocks[sb].Remove(so, eo - so);
@@ -497,38 +501,40 @@ public class Document
         return false;
     }
 
-    public bool Reflow(int startBlock, int endBlock, Func<string, bool> isMergeableBlock)
+    public bool Reflow(int startBlock, int endBlock, Func<string, bool> isMergeableBlock, Func<string, bool>? isFenceLine = null)
     {
         int countBefore = _blocks.Count;
         endBlock = ReflowBoxTable(startBlock, endBlock);
 
+        var insideFence = BuildFenceMap(startBlock, endBlock, isFenceLine);
+
+        if (HasSelection)
+        {
+            for (int i = endBlock; i >= startBlock; i--)
+            {
+                if (insideFence != null && insideFence.Contains(i))
+                    continue;
+                if (_blocks[i].Length == 0)
+                {
+                    RemoveBlockForReflow(i, 0);
+                    endBlock--;
+                }
+            }
+            insideFence = BuildFenceMap(startBlock, endBlock, isFenceLine);
+        }
+
         for (int i = endBlock; i > startBlock; i--)
         {
+            if (insideFence != null && (insideFence.Contains(i) || insideFence.Contains(i - 1)))
+                continue;
+
             string curr = _blocks[i].ToString();
-            string prev = _blocks[i - 1].ToString();
-            if (curr.Length > 0 && prev.Length > 0
-                && isMergeableBlock(curr) && isMergeableBlock(prev))
+            int prevLen = _blocks[i - 1].Length;
+            if (curr.Length > 0 && prevLen > 0
+                && isMergeableBlock(curr) && isMergeableBlock(_blocks[i - 1].ToString()))
             {
                 _blocks[i - 1].Append(' ').Append(curr);
-                _blocks.RemoveAt(i);
-                if (CursorBlock == i)
-                {
-                    CursorBlock = i - 1;
-                    CursorOffset = prev.Length + 1 + CursorOffset;
-                }
-                else if (CursorBlock > i)
-                {
-                    CursorBlock--;
-                }
-                if (AnchorBlock == i)
-                {
-                    AnchorBlock = i - 1;
-                    AnchorOffset = prev.Length + 1 + AnchorOffset;
-                }
-                else if (AnchorBlock > i)
-                {
-                    AnchorBlock--;
-                }
+                RemoveBlockForReflow(i, prevLen);
                 endBlock--;
             }
         }
@@ -536,11 +542,59 @@ public class Document
         return _blocks.Count != countBefore;
     }
 
-    public bool TrimWhitespace(int startBlock, int endBlock)
+    private void RemoveBlockForReflow(int i, int prevLenBeforeMerge)
     {
+        _blocks.RemoveAt(i);
+        if (CursorBlock == i)
+        {
+            CursorBlock = Math.Max(0, i - 1);
+            CursorOffset = prevLenBeforeMerge > 0 ? prevLenBeforeMerge + 1 + CursorOffset : 0;
+        }
+        else if (CursorBlock > i)
+        {
+            CursorBlock--;
+        }
+        if (AnchorBlock == i)
+        {
+            AnchorBlock = Math.Max(0, i - 1);
+            AnchorOffset = prevLenBeforeMerge > 0 ? prevLenBeforeMerge + 1 + AnchorOffset : 0;
+        }
+        else if (AnchorBlock > i)
+        {
+            AnchorBlock--;
+        }
+    }
+
+    private HashSet<int>? BuildFenceMap(int startBlock, int endBlock, Func<string, bool>? isFenceLine)
+    {
+        if (isFenceLine == null) return null;
+
+        var fenced = new HashSet<int>();
+        bool inside = false;
+        for (int i = 0; i <= endBlock && i < _blocks.Count; i++)
+        {
+            string text = _blocks[i].ToString();
+            if (isFenceLine(text))
+            {
+                if (i >= startBlock) fenced.Add(i);
+                inside = !inside;
+            }
+            else if (inside && i >= startBlock)
+            {
+                fenced.Add(i);
+            }
+        }
+        return fenced.Count > 0 ? fenced : null;
+    }
+
+    public bool TrimWhitespace(int startBlock, int endBlock, Func<string, bool>? isFenceLine = null)
+    {
+        var insideFence = BuildFenceMap(startBlock, endBlock, isFenceLine);
         bool changed = false;
         for (int i = startBlock; i <= endBlock; i++)
         {
+            if (insideFence != null && insideFence.Contains(i))
+                continue;
             string text = _blocks[i].ToString();
 
             string result = text.TrimStart();
@@ -548,7 +602,7 @@ public class Document
 
             string trimmedEnd = result.TrimEnd();
             int trailingCount = result.Length - trimmedEnd.Length;
-            if (trailingCount == 2)
+            if (trailingCount >= 2)
                 result = trimmedEnd + "  ";
             else
                 result = trimmedEnd;
@@ -564,6 +618,56 @@ public class Document
                 AnchorOffset = Math.Max(0, Math.Min(AnchorOffset - leadingRemoved, result.Length));
         }
         return changed;
+    }
+
+    public bool HasReformattableContent(int startBlock, int endBlock, Func<string, bool> isMergeableBlock, Func<string, bool>? isFenceLine = null)
+    {
+        for (int i = startBlock; i <= endBlock; i++)
+        {
+            if (IsBoxDrawingLine(_blocks[i].ToString()))
+                return true;
+        }
+
+        var insideFence = BuildFenceMap(startBlock, endBlock, isFenceLine);
+
+        for (int i = endBlock; i > startBlock; i--)
+        {
+            if (insideFence != null && (insideFence.Contains(i) || insideFence.Contains(i - 1)))
+                continue;
+
+            string curr = _blocks[i].ToString();
+            string prev = _blocks[i - 1].ToString();
+            if (curr.Length > 0 && prev.Length > 0
+                && isMergeableBlock(curr) && isMergeableBlock(prev))
+                return true;
+        }
+
+        if (HasSelection)
+        {
+            for (int i = startBlock; i <= endBlock; i++)
+            {
+                if (insideFence != null && insideFence.Contains(i))
+                    continue;
+                if (_blocks[i].Length == 0)
+                    return true;
+            }
+        }
+
+        for (int i = startBlock; i <= endBlock; i++)
+        {
+            string text = _blocks[i].ToString();
+            if (text.Length > 0 && (text[0] == ' ' || text[0] == '\t'))
+                return true;
+            if (text.Length > 0 && text[^1] == ' ')
+            {
+                string trimmedEnd = text.TrimEnd();
+                int trailing = text.Length - trimmedEnd.Length;
+                if (trailing != 2)
+                    return true;
+            }
+        }
+
+        return false;
     }
 
     public void Paste(string text)

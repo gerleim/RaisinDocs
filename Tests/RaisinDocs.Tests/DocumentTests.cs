@@ -379,6 +379,23 @@ public class DocumentTests
         doc.GetBlockText(0).Should().Be("abc");
     }
 
+    [Fact]
+    public void DeleteSelection_CrossBlock_OffsetBeyondBlockLength_DoesNotThrow()
+    {
+        var doc = CreateDoc("hello", "world");
+        doc.AnchorBlock = 0;
+        doc.AnchorOffset = 3;
+        doc.CursorBlock = 1;
+        doc.CursorOffset = 99;
+
+        doc.DeleteSelection();
+
+        doc.BlockCount.Should().Be(1);
+        doc.GetBlockText(0).Should().Be("hel");
+        doc.CursorBlock.Should().Be(0);
+        doc.CursorOffset.Should().Be(3);
+    }
+
     // --- SelectAll ---
 
     [Fact]
@@ -459,6 +476,32 @@ public class DocumentTests
     }
 
     [Fact]
+    public void Reflow_WithSelection_MergesAcrossBlankLines()
+    {
+        var doc = new Document();
+        doc.SetText("qwe\n\n\nasd");
+        doc.AnchorBlock = 0;
+        doc.AnchorOffset = 0;
+        doc.CursorBlock = doc.BlockCount - 1;
+        doc.CursorOffset = 3;
+        doc.Reflow(0, doc.BlockCount - 1, IsParagraph);
+        doc.BlockCount.Should().Be(1);
+        doc.GetBlockText(0).Should().Be("qwe asd");
+    }
+
+    [Fact]
+    public void Reflow_WithoutSelection_PreservesBlankLines()
+    {
+        var doc = new Document();
+        doc.SetText("qwe\n\n\nasd");
+        doc.CollapseSelection();
+        doc.Reflow(0, doc.BlockCount - 1, IsParagraph);
+        doc.BlockCount.Should().Be(4);
+        doc.GetBlockText(0).Should().Be("qwe");
+        doc.GetBlockText(3).Should().Be("asd");
+    }
+
+    [Fact]
     public void Reflow_SkipsNonMergeableBlocks()
     {
         var doc = new Document();
@@ -497,6 +540,38 @@ public class DocumentTests
         doc.GetBlockText(0).Should().Be("a");
         doc.GetBlockText(1).Should().Be("b");
         doc.GetBlockText(2).Should().Be("c");
+    }
+
+    private static bool IsFence(string text) => text.TrimStart().StartsWith("```");
+
+    [Fact]
+    public void Reflow_PreservesFencedCodeBlock()
+    {
+        var doc = new Document();
+        doc.SetText("before\n```\nline1\nline2\n```\nafter");
+        doc.Reflow(0, doc.BlockCount - 1, IsParagraph, IsFence);
+        doc.BlockCount.Should().Be(6);
+        doc.GetBlockText(0).Should().Be("before");
+        doc.GetBlockText(1).Should().Be("```");
+        doc.GetBlockText(2).Should().Be("line1");
+        doc.GetBlockText(3).Should().Be("line2");
+        doc.GetBlockText(4).Should().Be("```");
+        doc.GetBlockText(5).Should().Be("after");
+    }
+
+    [Fact]
+    public void Reflow_MergesOutsideFenceButNotInside()
+    {
+        var doc = new Document();
+        doc.SetText("a\nb\n```\nx\ny\n```\nc\nd");
+        doc.Reflow(0, doc.BlockCount - 1, IsParagraph, IsFence);
+        doc.GetBlockText(0).Should().Be("a b");
+        doc.GetBlockText(1).Should().Be("```");
+        doc.GetBlockText(2).Should().Be("x");
+        doc.GetBlockText(3).Should().Be("y");
+        doc.GetBlockText(4).Should().Be("```");
+        doc.GetBlockText(5).Should().Be("c d");
+        doc.BlockCount.Should().Be(6);
     }
 
     // --- ReflowBoxTable ---
@@ -597,6 +672,76 @@ public class DocumentTests
         doc.ReflowBoxTable(0, doc.BlockCount - 1);
         doc.CursorBlock.Should().Be(3);
         doc.CursorOffset.Should().Be(2);
+    }
+
+    // --- TrimWhitespace ---
+
+    [Fact]
+    public void TrimWhitespace_TrimsLeadingSpaces()
+    {
+        var doc = new Document();
+        doc.SetText("  hello\n    world");
+        doc.TrimWhitespace(0, doc.BlockCount - 1);
+        doc.GetBlockText(0).Should().Be("hello");
+        doc.GetBlockText(1).Should().Be("world");
+    }
+
+    [Fact]
+    public void TrimWhitespace_TrimsOneTrailingSpace()
+    {
+        var doc = new Document();
+        doc.SetText("hello \nworld ");
+        doc.TrimWhitespace(0, doc.BlockCount - 1);
+        doc.GetBlockText(0).Should().Be("hello");
+        doc.GetBlockText(1).Should().Be("world");
+    }
+
+    [Fact]
+    public void TrimWhitespace_PreservesMarkdownLineBreak()
+    {
+        var doc = new Document();
+        doc.SetText("hello  \nworld");
+        doc.TrimWhitespace(0, doc.BlockCount - 1);
+        doc.GetBlockText(0).Should().Be("hello  ");
+        doc.GetBlockText(1).Should().Be("world");
+    }
+
+    [Fact]
+    public void TrimWhitespace_AdjustsCursorForLeadingTrim()
+    {
+        var doc = new Document();
+        doc.SetText("   hello");
+        doc.CursorBlock = 0;
+        doc.CursorOffset = 5;
+        doc.TrimWhitespace(0, doc.BlockCount - 1);
+        doc.GetBlockText(0).Should().Be("hello");
+        doc.CursorOffset.Should().Be(2);
+    }
+
+    [Fact]
+    public void TrimWhitespace_ReturnsFalseWhenNothingToTrim()
+    {
+        var doc = new Document();
+        doc.SetText("hello\nworld");
+        doc.TrimWhitespace(0, doc.BlockCount - 1).Should().BeFalse();
+    }
+
+    [Fact]
+    public void TrimWhitespace_ReturnsTrueWhenTrimmed()
+    {
+        var doc = new Document();
+        doc.SetText("  hello");
+        doc.TrimWhitespace(0, doc.BlockCount - 1).Should().BeTrue();
+    }
+
+    [Fact]
+    public void TrimWhitespace_NormalizesExcessiveTrailingSpacesToTwo()
+    {
+        var doc = new Document();
+        doc.SetText("hello     \nworld");
+        doc.TrimWhitespace(0, doc.BlockCount - 1);
+        doc.GetBlockText(0).Should().Be("hello  ");
+        doc.GetBlockText(1).Should().Be("world");
     }
 
     // --- ComparePositions ---

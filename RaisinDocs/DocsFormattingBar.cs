@@ -159,6 +159,8 @@ public class DocsFormattingBar : Control
     private Path? _imagePreviewIcon;
     private ToggleButton? _minimapButton;
     private Path? _minimapIcon;
+    private Button? _linkButton;
+    private Button? _insertTableButton;
     private Button? _colorTextButton;
     private Button? _reflowButton;
     private Border? _colorBar;
@@ -189,22 +191,22 @@ public class DocsFormattingBar : Control
         _quoteIcon = GetTemplateChild("PART_QuoteIcon") as Path;
         if (_quoteIcon != null) _quoteIcon.Data = IconQuote;
 
-        var linkButton = GetTemplateChild("PART_Link") as Button;
+        _linkButton = GetTemplateChild("PART_Link") as Button;
         _linkIcon = GetTemplateChild("PART_LinkIcon") as Path;
         if (_linkIcon != null) _linkIcon.Data = IconLink;
-        if (linkButton != null)
+        if (_linkButton != null)
         {
-            linkButton.Click += (_, _) =>
+            _linkButton.Click += (_, _) =>
             {
                 Canvas?.InsertLink();
                 Canvas?.Focus();
             };
         }
 
-        var insertTableButton = GetTemplateChild("PART_InsertTable") as Button;
-        if (insertTableButton != null)
+        _insertTableButton = GetTemplateChild("PART_InsertTable") as Button;
+        if (_insertTableButton != null)
         {
-            insertTableButton.Click += (_, _) =>
+            _insertTableButton.Click += (_, _) =>
             {
                 Canvas?.InsertTable(3, 2);
                 Canvas?.Focus();
@@ -287,6 +289,7 @@ public class DocsFormattingBar : Control
             };
         }
         UpdateMinimapButton();
+        UpdateButtonStates();
     }
 
     private ToggleButton? WireToggle(string partName, Action action)
