@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.IO;
 using System.Net.Http;
 using System.Windows.Media.Imaging;
@@ -8,9 +9,9 @@ public class ImageCache
 {
     private record CacheEntry(BitmapImage Image, double PixelWidth, double PixelHeight);
 
-    private readonly Dictionary<string, CacheEntry> _cache = new();
-    private readonly Dictionary<string, Task<CacheEntry?>> _pending = new();
-    private static readonly HttpClient _http = new();
+    private readonly ConcurrentDictionary<string, CacheEntry> _cache = new();
+    private readonly ConcurrentDictionary<string, Task<CacheEntry?>> _pending = new();
+    private static readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(15) };
 
     public (BitmapImage Image, double Width, double Height)? Get(string url, string? basePath, double maxWidth)
     {
@@ -34,14 +35,14 @@ public class ImageCache
 
         var dispatcher = System.Windows.Threading.Dispatcher.FromThread(System.Threading.Thread.CurrentThread);
         var task = Task.Run(() => LoadEntry(key, url, basePath));
-        _pending[key] = task;
+        _pending.TryAdd(key, task);
         task.ContinueWith(t =>
         {
             if (dispatcher != null)
             {
                 dispatcher.BeginInvoke(() =>
                 {
-                    _pending.Remove(key);
+                    _pending.TryRemove(key, out _);
                     if (t.Result != null)
                     {
                         _cache[key] = t.Result;
@@ -51,7 +52,7 @@ public class ImageCache
             }
             else
             {
-                _pending.Remove(key);
+                _pending.TryRemove(key, out _);
                 if (t.Result != null)
                     _cache[key] = t.Result;
             }

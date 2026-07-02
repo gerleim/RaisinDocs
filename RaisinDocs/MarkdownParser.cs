@@ -66,7 +66,7 @@ public class TableInfo
     public required IReadOnlyList<ColumnAlignment> Alignments { get; init; }
 }
 
-public class ParsedBlock
+public record class ParsedBlock
 {
     public required BlockKind Kind { get; init; }
     public required IReadOnlyList<StyledRun> Runs { get; init; }
@@ -251,21 +251,7 @@ public static class MarkdownParser
             if (divStack.Count > 0 && block.Kind != BlockKind.ThemeDefinition)
             {
                 var merged = MergeBlockColors(divStack);
-                blocks[i] = new ParsedBlock
-                {
-                    Kind = block.Kind,
-                    Runs = block.Runs,
-                    IsFenceDelimiter = block.IsFenceDelimiter,
-                    IsTableSeparator = block.IsTableSeparator,
-                    Images = block.Images,
-                    Links = block.Links,
-                    ColorSpans = block.ColorSpans,
-                    BlockColor = merged,
-                    DivOpenColor = block.DivOpenColor,
-                    HasDivClose = block.HasDivClose,
-                    TableRow = block.TableRow,
-                    Table = block.Table,
-                };
+                blocks[i] = block with { BlockColor = merged };
             }
 
             if (block.HasDivClose && divStack.Count > 0)
@@ -385,27 +371,18 @@ public static class MarkdownParser
             var tableInfo = new TableInfo { ColumnCount = alignments.Count, Alignments = alignments };
             var headerRow = new TableRowInfo { Cells = headerCells };
 
-            blocks[i] = new ParsedBlock
+            blocks[i] = blocks[i] with
             {
                 Kind = BlockKind.TableHeaderRow,
-                Runs = blocks[i].Runs,
-                Images = blocks[i].Images,
-                Links = blocks[i].Links,
-                ColorSpans = blocks[i].ColorSpans,
-                DivOpenColor = blocks[i].DivOpenColor,
-                HasDivClose = blocks[i].HasDivClose,
                 TableRow = headerRow,
                 Table = tableInfo,
             };
 
             var sepCells = ParseTableCells(sepText);
-            blocks[i + 1] = new ParsedBlock
+            blocks[i + 1] = blocks[i + 1] with
             {
                 Kind = BlockKind.TableSeparatorRow,
-                Runs = blocks[i + 1].Runs,
                 IsTableSeparator = true,
-                DivOpenColor = blocks[i + 1].DivOpenColor,
-                HasDivClose = blocks[i + 1].HasDivClose,
                 TableRow = new TableRowInfo { Cells = sepCells },
                 Table = tableInfo,
             };
@@ -415,15 +392,9 @@ public static class MarkdownParser
                    && ContainsUnescapedPipe(getBlockText(j)))
             {
                 var dataCells = ParseTableCells(getBlockText(j));
-                blocks[j] = new ParsedBlock
+                blocks[j] = blocks[j] with
                 {
                     Kind = BlockKind.TableDataRow,
-                    Runs = blocks[j].Runs,
-                    Images = blocks[j].Images,
-                    Links = blocks[j].Links,
-                    ColorSpans = blocks[j].ColorSpans,
-                    DivOpenColor = blocks[j].DivOpenColor,
-                    HasDivClose = blocks[j].HasDivClose,
                     TableRow = new TableRowInfo { Cells = dataCells },
                     Table = tableInfo,
                 };

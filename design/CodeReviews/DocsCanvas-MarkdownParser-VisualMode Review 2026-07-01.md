@@ -118,15 +118,15 @@
 - **Category**: Bug
 - **Location**: `MarkdownParser.cs:356-390`
 - **What's wrong**: `DetectTables` replaces blocks with new `ParsedBlock` instances but doesn't copy `ColorSpans` or `BlockColor`. Inline color tags inside table cells are silently lost.
-- **Fix applied**: Added `ColorSpans` to header and data row replacement blocks. `BlockColor` is not affected (set by `ApplyBlockDivColors` which runs after `DetectTables`).
+- **Fix applied**: Added `ColorSpans` to header and data row replacement blocks. `BlockColor` is not affected (set by `ApplyBlockDivColors` which runs after `DetectTables`). Additionally, visual-mode table rendering (`DrawTableRow`, `ComputeAllTableColumnWidths`, `CursorXInTableRow`, `HitTestInTableRow`) now uses `BlockVisualMap` to strip color tags and style markers for display text, measurement, and hit-testing.
 
-### M7 — ParsedBlock fragile clone-all-fields pattern
+### ~~M7 — ParsedBlock fragile clone-all-fields pattern~~ FIXED
 
 - **Severity**: Medium
 - **Category**: Maintainability
 - **Location**: `MarkdownParser.cs:204-240, 356-390`
 - **What's wrong**: `ParsedBlock` is manually cloned field-by-field in multiple places. Already caused M6 above. Adding new fields requires updating every copy site.
-- **What to do**: Convert to `record class` so `with` expressions work.
+- **Fix applied**: Converted `ParsedBlock` from `class` to `record class`. All 4 clone sites replaced with `with` expressions that only specify changed fields.
 
 ### ~~M8 — Strikethrough delimiters not hidden in visual mode~~ FIXED
 
@@ -136,21 +136,21 @@
 - **What's wrong**: `Strikethrough` falls to the `_ => 0` default — `~~` delimiters are never hidden in visual mode. Displays as `~~struck~~` with both tildes AND strikethrough formatting.
 - **Fix applied**: Replaced per-site marker-length switches with shared `MarkdownParser.GetMarkerLength()`, which includes Strikethrough → 2.
 
-### M9 — ImageCache thread safety
+### ~~M9 — ImageCache thread safety~~ FIXED
 
 - **Severity**: Medium
 - **Category**: Risk / Thread Safety
 - **Location**: `ImageCache.cs:12-58`
 - **What's wrong**: `_cache` and `_pending` are plain `Dictionary` accessed from both UI and threadpool threads. The `else` branch (dispatcher null) at lines 52-57 mutates both dictionaries on a threadpool thread without synchronization.
-- **What to do**: Use `ConcurrentDictionary`, or ensure all mutations marshal to the dispatcher.
+- **Fix applied**: Changed both dictionaries to `ConcurrentDictionary`. Mutations use `TryAdd`/`TryRemove` for thread-safe access.
 
-### M10 — HttpClient has no timeout
+### ~~M10 — HttpClient has no timeout~~ FIXED
 
 - **Severity**: Medium
 - **Category**: Risk
 - **Location**: `ImageCache.cs:13`
 - **What's wrong**: Static `HttpClient` has no timeout. Slow servers block threadpool threads indefinitely.
-- **What to do**: Set `_http.Timeout = TimeSpan.FromSeconds(15)`.
+- **Fix applied**: Set `_http.Timeout = TimeSpan.FromSeconds(15)`.
 
 ### M11 — Brush allocations every render frame
 
