@@ -60,13 +60,13 @@
 - **What's wrong**: `ComputeAllTableColumnWidths` passes `cell.Start` as `blockOffset` to `MeasureStringWidth`, but the measured string is already trimmed of leading spaces. The style lookup is off by `leadingTrim` characters → incorrect column widths for styled cell content.
 - **Fix applied**: Replaced `.Trim()` with explicit whitespace trimming to track the actual start offset, then pass the trimmed start position as `blockOffset`.
 
-### H5 — FindClosingStars skips position start+1
+### ~~H5 — FindClosingStars skips position start+1~~ FIXED
 
 - **Severity**: High
 - **Category**: Bug
 - **Location**: `MarkdownParser.cs:1024-1044`
 - **What's wrong**: `FindClosingStars` double-increments `i` when skipping a too-long star run: `i = start; i++` inside the loop body, then the `for` loop does another `i++`. Position `start+1` is always skipped. A valid exact-length match starting there is missed.
-- **What to do**: Replace `i = start; i++;` with `i--` to cancel the for-loop increment.
+- **Fix applied**: Removed the redundant `i++` after `i = start`, letting the for-loop increment handle advancing to `start+1`.
 
 ---
 
