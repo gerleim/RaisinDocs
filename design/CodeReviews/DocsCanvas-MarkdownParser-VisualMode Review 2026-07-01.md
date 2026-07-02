@@ -96,13 +96,13 @@
 - **What's wrong**: `SelectionHasStyle` returns `true` for an empty selection / collapsed cursor in an empty block. Formatting bar shows all styles active on empty content.
 - **What to do**: Track `anyRunChecked`; return `false` when no runs were inspected.
 
-### M4 — Duplicate MeasureStringWidth overloads
+### ~~M4 — Duplicate MeasureStringWidth overloads~~ FIXED
 
 - **Severity**: Medium
 - **Category**: Duplication
 - **Location**: `DocsCanvas.cs:1368-1379` vs `DocsCanvas.cs:1774-1784`
 - **What's wrong**: Two `MeasureStringWidth` overloads with subtly different signatures doing the same work. Changes must be replicated in both.
-- **What to do**: Unify into one method with default parameters.
+- **Fix applied**: Deleted the unused overload (start/length variant had zero callers).
 
 ### M5 — goto skipGap in ComputeLayoutCore
 

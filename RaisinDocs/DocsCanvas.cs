@@ -1493,19 +1493,6 @@ public partial class DocsCanvas : FrameworkElement
         return runs[runHint].Style;
     }
 
-    private double MeasureStringWidth(string text, int start, int length,
-        IReadOnlyList<StyledRun> runs, BlockKind blockKind)
-    {
-        double total = 0;
-        int runIdx = 0;
-        for (int i = start; i < start + length; i++)
-        {
-            var style = GetStyleAtOffset(runs, i, ref runIdx);
-            total += MeasureCharWidth(text[i], blockKind, style);
-        }
-        return total;
-    }
-
     private double MeasureReplacementPrefix(string prefix, BlockKind blockKind)
     {
         if (blockKind is BlockKind.TaskListItemUnchecked or BlockKind.TaskListItemChecked)
@@ -3082,7 +3069,11 @@ public partial class DocsCanvas : FrameworkElement
                     string copyText = rectC != null
                         ? GetTableRectSelectedText(rectC.Value)
                         : _doc.GetSelectedText();
-                    ClipboardHelper.SetText(copyText, Logger);
+                    var cfHtml = HtmlColorParser.ConvertToHtmlClipboard(copyText);
+                    if (cfHtml != null)
+                        ClipboardHelper.SetTextAndHtml(copyText, cfHtml, Logger);
+                    else
+                        ClipboardHelper.SetText(copyText, Logger);
                 }
                 else handled = false;
                 break;
