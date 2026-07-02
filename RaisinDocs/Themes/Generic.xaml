@@ -222,6 +222,14 @@
                                       Data="M1,3 H7 M1,7 H11 M1,11 H5 M10,4 L13,7 L10,10" />
                             </Button>
 
+                            <Button x:Name="PART_HardBreaks" Style="{StaticResource FormattingButton}"
+                                    ToolTip="Convert soft breaks to hard breaks">
+                                <Path Width="14" Height="14" Stretch="Uniform"
+                                      Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=local:DocsFormattingBar}}"
+                                      StrokeThickness="1.5" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                                      Data="M1,4 H10 M1,10 H10 M12,1 V7 M10.5,2.5 L12,1 L13.5,2.5" />
+                            </Button>
+
                             <Border Style="{StaticResource SeparatorLine}" />
 
                             <ToggleButton x:Name="PART_EditMode" Style="{StaticResource FormattingToggle}"

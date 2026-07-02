@@ -163,6 +163,7 @@ public class DocsFormattingBar : Control
     private Button? _insertTableButton;
     private Button? _colorTextButton;
     private Button? _reflowButton;
+    private Button? _hardBreaksButton;
     private Border? _colorBar;
     private string _lastColorName = "red";
 
@@ -226,6 +227,16 @@ public class DocsFormattingBar : Control
             _reflowButton.Click += (_, _) =>
             {
                 Canvas?.Reflow();
+                Canvas?.Focus();
+            };
+        }
+
+        _hardBreaksButton = GetTemplateChild("PART_HardBreaks") as Button;
+        if (_hardBreaksButton != null)
+        {
+            _hardBreaksButton.Click += (_, _) =>
+            {
+                Canvas?.ConvertToHardBreaks();
                 Canvas?.Focus();
             };
         }
@@ -468,6 +479,8 @@ public class DocsFormattingBar : Control
 
         if (_reflowButton != null)
             _reflowButton.IsEnabled = canvas.CanReformat;
+        if (_hardBreaksButton != null)
+            _hardBreaksButton.IsEnabled = canvas.CanConvertToHardBreaks;
     }
 
     private static void SetCheckedSilent(ToggleButton? btn, bool value)

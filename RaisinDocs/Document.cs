@@ -742,6 +742,46 @@ public class Document
         return false;
     }
 
+    public bool AddHardBreaks(int startBlock, int endBlock, string marker,
+        Func<string, bool>? isFenceLine = null)
+    {
+        var insideFence = BuildFenceMap(startBlock, endBlock, isFenceLine);
+        bool changed = false;
+        for (int i = startBlock; i < endBlock; i++)
+        {
+            if (insideFence != null && insideFence.Contains(i))
+                continue;
+            string text = _blocks[i].ToString();
+            if (text.Length == 0) continue;
+            string next = _blocks[i + 1].ToString();
+            if (next.Length == 0) continue;
+            if (text.EndsWith('\\') || text.EndsWith("  "))
+                continue;
+            _blocks[i].Append(marker);
+            changed = true;
+        }
+        return changed;
+    }
+
+    public bool HasSoftBreaks(int startBlock, int endBlock,
+        Func<string, bool>? isFenceLine = null)
+    {
+        var insideFence = BuildFenceMap(startBlock, endBlock, isFenceLine);
+        for (int i = startBlock; i < endBlock; i++)
+        {
+            if (insideFence != null && insideFence.Contains(i))
+                continue;
+            string text = _blocks[i].ToString();
+            if (text.Length == 0) continue;
+            string next = _blocks[i + 1].ToString();
+            if (next.Length == 0) continue;
+            if (text.EndsWith('\\') || text.EndsWith("  "))
+                continue;
+            return true;
+        }
+        return false;
+    }
+
     public void Paste(string text)
     {
         text = text.Replace("\r\n", "\n").Replace("\r", "\n");
