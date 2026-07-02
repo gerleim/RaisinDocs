@@ -574,7 +574,12 @@ public partial class DocsCanvas : FrameworkElement
             eb = _doc.BlockCount - 1;
         }
         _doc.BeginUndoGroup();
-        bool changed = _doc.Reflow(sb, eb, IsMergeableParagraph, MarkdownParser.IsFenceLine);
+        bool changed = _doc.SplitInlineColorDivs(sb, eb,
+            MarkdownParser.FindInlineColorOpenEnd,
+            MarkdownParser.FindInlineColorCloseStart,
+            MarkdownParser.InlineOpenToDivOpen);
+        eb = Math.Min(eb, _doc.BlockCount - 1);
+        changed |= _doc.Reflow(sb, eb, IsMergeableParagraph, MarkdownParser.IsFenceLine);
         if (!changed)
             _doc.TrimWhitespace(sb, eb, MarkdownParser.IsFenceLine);
         _doc.SealUndoGroup();

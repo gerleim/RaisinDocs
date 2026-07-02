@@ -574,6 +574,48 @@ public class DocumentTests
         doc.BlockCount.Should().Be(6);
     }
 
+    // --- SplitInlineColorDivs ---
+
+    private static int FindOpenEnd(string t) => MarkdownParser.FindInlineColorOpenEnd(t);
+    private static int FindCloseStart(string t) => MarkdownParser.FindInlineColorCloseStart(t);
+    private static string OpenToDiv(string t) => MarkdownParser.InlineOpenToDivOpen(t);
+
+    [Fact]
+    public void SplitInlineColorDivs_ConvertsToBlockDiv()
+    {
+        var doc = new Document();
+        doc.SetText("<!--@fg:blue-->asdsd\n\nffsdf<!--/@fg-->");
+        doc.SplitInlineColorDivs(0, doc.BlockCount - 1, FindOpenEnd, FindCloseStart, OpenToDiv);
+        doc.GetBlockText(0).Should().Be("<!--@div fg:blue-->");
+        doc.GetBlockText(1).Should().Be("asdsd");
+        doc.GetBlockText(2).Should().BeEmpty();
+        doc.GetBlockText(3).Should().Be("ffsdf");
+        doc.GetBlockText(4).Should().Be("<!--/@div-->");
+        doc.BlockCount.Should().Be(5);
+    }
+
+    [Fact]
+    public void SplitInlineColorDivs_LeavesProperDivsAlone()
+    {
+        var doc = new Document();
+        doc.SetText("<!--@div fg:blue-->\nhello\n<!--/@div-->");
+        doc.SplitInlineColorDivs(0, doc.BlockCount - 1, FindOpenEnd, FindCloseStart, OpenToDiv);
+        doc.BlockCount.Should().Be(3);
+        doc.GetBlockText(0).Should().Be("<!--@div fg:blue-->");
+        doc.GetBlockText(1).Should().Be("hello");
+        doc.GetBlockText(2).Should().Be("<!--/@div-->");
+    }
+
+    [Fact]
+    public void SplitInlineColorDivs_LeavesSameLineInlineAlone()
+    {
+        var doc = new Document();
+        doc.SetText("hello <!--@fg:blue-->world<!--/@fg--> end");
+        doc.SplitInlineColorDivs(0, doc.BlockCount - 1, FindOpenEnd, FindCloseStart, OpenToDiv);
+        doc.BlockCount.Should().Be(1);
+        doc.GetBlockText(0).Should().Be("hello <!--@fg:blue-->world<!--/@fg--> end");
+    }
+
     // --- ReflowBoxTable ---
 
     [Fact]

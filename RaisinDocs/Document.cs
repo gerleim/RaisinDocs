@@ -501,6 +501,78 @@ public class Document
         return false;
     }
 
+    public bool SplitInlineColorDivs(int startBlock, int endBlock,
+        Func<string, int> findOpenEnd, Func<string, int> findCloseStart,
+        Func<string, string> openToDiv)
+    {
+        bool changed = false;
+        for (int i = startBlock; i <= endBlock; i++)
+        {
+            string text = _blocks[i].ToString();
+            int openEnd = findOpenEnd(text);
+            if (openEnd < 0 || openEnd >= text.Length) continue;
+
+            string tag = text[..openEnd];
+            string after = text[openEnd..];
+
+            int closeBlock = -1;
+            int closeStart = -1;
+            for (int j = i; j <= endBlock; j++)
+            {
+                int cs = findCloseStart(_blocks[j].ToString());
+                if (cs >= 0)
+                {
+                    closeBlock = j;
+                    closeStart = cs;
+                    break;
+                }
+            }
+
+            if (closeBlock < 0) continue;
+            if (closeBlock == i && closeStart == openEnd) continue;
+
+            string closeText = _blocks[closeBlock].ToString();
+            string beforeClose = closeText[..closeStart];
+            _blocks[closeBlock] = new StringBuilder(beforeClose);
+            if (beforeClose.Length == 0)
+            {
+                _blocks.RemoveAt(closeBlock);
+                AdjustPositionAfterRemove(closeBlock);
+                endBlock--;
+            }
+
+            string divOpen = openToDiv(tag);
+            _blocks[i] = new StringBuilder(after);
+            _blocks.Insert(i, new StringBuilder(divOpen));
+            AdjustPositionAfterInsert(i);
+            endBlock++;
+            if (closeBlock >= i) closeBlock++;
+            i++;
+
+            int divCloseIdx = closeBlock + 1;
+            _blocks.Insert(divCloseIdx, new StringBuilder("<!--/@div-->"));
+            AdjustPositionAfterInsert(divCloseIdx);
+            endBlock++;
+
+            changed = true;
+        }
+        return changed;
+    }
+
+    private void AdjustPositionAfterInsert(int index)
+    {
+        if (CursorBlock >= index) CursorBlock++;
+        if (AnchorBlock >= index) AnchorBlock++;
+    }
+
+    private void AdjustPositionAfterRemove(int index)
+    {
+        if (CursorBlock > index) CursorBlock--;
+        else if (CursorBlock == index) { CursorBlock = Math.Max(0, index - 1); CursorOffset = _blocks[CursorBlock].Length; }
+        if (AnchorBlock > index) AnchorBlock--;
+        else if (AnchorBlock == index) { AnchorBlock = Math.Max(0, index - 1); AnchorOffset = _blocks[AnchorBlock].Length; }
+    }
+
     public bool Reflow(int startBlock, int endBlock, Func<string, bool> isMergeableBlock, Func<string, bool>? isFenceLine = null)
     {
         int countBefore = _blocks.Count;

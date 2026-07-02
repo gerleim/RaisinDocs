@@ -1111,6 +1111,33 @@ public static class MarkdownParser
         return text.AsSpan().Trim().Equals(DivClose.AsSpan(), StringComparison.OrdinalIgnoreCase);
     }
 
+    internal static int FindInlineColorOpenEnd(string text)
+    {
+        if (!text.StartsWith("<!--@", StringComparison.Ordinal))
+            return -1;
+        if (text.Length > 5 && text[5] == '/')
+            return -1;
+        int close = text.IndexOf("-->", 5, StringComparison.Ordinal);
+        if (close < 0) return -1;
+        return close + 3;
+    }
+
+    internal static int FindInlineColorCloseStart(string text)
+    {
+        int idx = text.LastIndexOf("<!--/@", StringComparison.Ordinal);
+        if (idx < 0) return -1;
+        int close = text.IndexOf("-->", idx + 6, StringComparison.Ordinal);
+        if (close < 0) return -1;
+        if (close + 3 != text.Length) return -1;
+        return idx;
+    }
+
+    internal static string InlineOpenToDivOpen(string tag)
+    {
+        var body = tag.AsSpan()[5..^3].Trim();
+        return $"{DivOpen}{body}{CommentClose}";
+    }
+
     internal static Dictionary<string, RgbColor> ParseThemeBlock(string text)
     {
         var result = new Dictionary<string, RgbColor>(StringComparer.OrdinalIgnoreCase);
