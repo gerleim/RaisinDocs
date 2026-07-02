@@ -1,6 +1,7 @@
 namespace RaisinDocs;
 
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.Windows;
 using System.Windows.Input;
@@ -206,6 +207,10 @@ public class MinimapScrollbar : FrameworkElement
             int py0 = Math.Max(0, (int)lineY);
             int pyEnd = Math.Min(h, (int)(lineY + lineH));
 
+            byte lineFgB = fg.B, lineFgG = fg.G, lineFgR = fg.R;
+            IReadOnlyList<ColorSpan>? colorSpans = null;
+            int spanBaseOffset = 0;
+
             if (isCode)
             {
                 for (int py = py0; py < pyEnd; py++)
@@ -216,6 +221,76 @@ public class MinimapScrollbar : FrameworkElement
                         _pixelBuf[off + 1] = cbG;
                         _pixelBuf[off + 2] = cbR;
                     }
+            }
+            else
+            {
+                Canvas!.GetMinimapLineColorInfo(lineIdx, out var blockFg, out var blockBg,
+                    out colorSpans, out spanBaseOffset);
+
+                if (blockFg != null)
+                {
+                    lineFgB = blockFg.Value.B;
+                    lineFgG = blockFg.Value.G;
+                    lineFgR = blockFg.Value.R;
+                }
+
+                if (blockBg != null)
+                {
+                    var bgc = blockBg.Value;
+                    const double ba = 40.0 / 255.0;
+                    for (int py = py0; py < pyEnd; py++)
+                        for (int px = 0; px < w; px++)
+                        {
+                            int off = (py * w + px) * 4;
+                            _pixelBuf[off] = (byte)(bgc.B * ba + _pixelBuf[off] * (1 - ba));
+                            _pixelBuf[off + 1] = (byte)(bgc.G * ba + _pixelBuf[off + 1] * (1 - ba));
+                            _pixelBuf[off + 2] = (byte)(bgc.R * ba + _pixelBuf[off + 2] * (1 - ba));
+                        }
+                }
+
+                if (colorSpans != null)
+                {
+                    double bgX = 1;
+                    for (int ci = 0; ci < text.Length; ci++)
+                    {
+                        int ch2 = text[ci];
+                        if (ch2 > LastPrintable) ch2 = FoldToAscii(ch2);
+
+                        double charAdv;
+                        if (ch2 < FirstPrintable)
+                            charAdv = baseAdvance;
+                        else
+                        {
+                            ref var g = ref glyphs[ch2 - FirstPrintable];
+                            charAdv = g.Width * baseAdvance / 2.0;
+                        }
+
+                        int rawIdx = spanBaseOffset + ci;
+                        foreach (var cs in colorSpans)
+                        {
+                            if (cs.Background != null
+                                && rawIdx >= cs.Start && rawIdx < cs.Start + cs.Length)
+                            {
+                                var bgc = cs.Background.Value;
+                                const double ba = 40.0 / 255.0;
+                                int pxS = Math.Max(0, (int)bgX);
+                                int pxE = Math.Min(w, (int)(bgX + charAdv));
+                                for (int py = py0; py < pyEnd; py++)
+                                    for (int px = pxS; px < pxE; px++)
+                                    {
+                                        int off = (py * w + px) * 4;
+                                        _pixelBuf[off] = (byte)(bgc.B * ba + _pixelBuf[off] * (1 - ba));
+                                        _pixelBuf[off + 1] = (byte)(bgc.G * ba + _pixelBuf[off + 1] * (1 - ba));
+                                        _pixelBuf[off + 2] = (byte)(bgc.R * ba + _pixelBuf[off + 2] * (1 - ba));
+                                    }
+                                break;
+                            }
+                        }
+
+                        bgX += charAdv;
+                        if (bgX >= w) break;
+                    }
+                }
             }
 
             double x = 1;
@@ -234,6 +309,23 @@ public class MinimapScrollbar : FrameworkElement
                 ref var glyph = ref glyphs[ch - FirstPrintable];
                 int gw = glyph.Width;
                 double advance = gw * baseAdvance / 2.0;
+
+                byte cB = lineFgB, cG = lineFgG, cR = lineFgR;
+                if (colorSpans != null)
+                {
+                    int rawIdx = spanBaseOffset + ci;
+                    foreach (var cs in colorSpans)
+                    {
+                        if (cs.Foreground != null
+                            && rawIdx >= cs.Start && rawIdx < cs.Start + cs.Length)
+                        {
+                            cB = cs.Foreground.Value.B;
+                            cG = cs.Foreground.Value.G;
+                            cR = cs.Foreground.Value.R;
+                            break;
+                        }
+                    }
+                }
 
                 if (glyph.Alphas != null)
                 {
@@ -256,9 +348,9 @@ public class MinimapScrollbar : FrameworkElement
                                 {
                                     if (pxR < 0 || pxR >= w) continue;
                                     int off = (pyR * w + pxR) * 4;
-                                    _pixelBuf[off] = (byte)(fg.B * a + _pixelBuf[off] * (1 - a));
-                                    _pixelBuf[off + 1] = (byte)(fg.G * a + _pixelBuf[off + 1] * (1 - a));
-                                    _pixelBuf[off + 2] = (byte)(fg.R * a + _pixelBuf[off + 2] * (1 - a));
+                                    _pixelBuf[off] = (byte)(cB * a + _pixelBuf[off] * (1 - a));
+                                    _pixelBuf[off + 1] = (byte)(cG * a + _pixelBuf[off + 1] * (1 - a));
+                                    _pixelBuf[off + 2] = (byte)(cR * a + _pixelBuf[off + 2] * (1 - a));
                                 }
                             }
                         }
