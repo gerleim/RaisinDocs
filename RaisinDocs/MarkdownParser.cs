@@ -1435,7 +1435,23 @@ public static class MarkdownParser
         return lines;
     }
 
-    private static bool TryGetNamedColor(ReadOnlySpan<char> name, out RgbColor color)
+    internal static string? TryGetColorName(RgbColor color)
+    {
+        RgbToName ??= BuildRgbToName();
+        return RgbToName.GetValueOrDefault(color);
+    }
+
+    private static Dictionary<RgbColor, string>? RgbToName;
+
+    private static Dictionary<RgbColor, string> BuildRgbToName()
+    {
+        var map = new Dictionary<RgbColor, string>();
+        foreach (var (name, rgb) in CssNamedColors)
+            map.TryAdd(rgb, name);
+        return map;
+    }
+
+    internal static bool TryGetNamedColor(ReadOnlySpan<char> name, out RgbColor color)
     {
         color = default;
         var key = name.ToString();

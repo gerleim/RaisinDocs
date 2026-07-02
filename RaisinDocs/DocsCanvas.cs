@@ -297,6 +297,33 @@ public partial class DocsCanvas : FrameworkElement
             : "";
     }
 
+    internal void GetMinimapLineColorInfo(int index, out RgbColor? blockBg,
+        out IReadOnlyList<ColorSpan>? colorSpans, out int spanBaseOffset)
+    {
+        blockBg = null;
+        colorSpans = null;
+        spanBaseOffset = 0;
+
+        if (_visualLines == null || _parsedBlocks == null || index < 0 || index >= _visualLines.Count)
+            return;
+
+        var vl = _visualLines[index];
+        spanBaseOffset = vl.StartOffset;
+
+        if (vl.Group != null)
+        {
+            blockBg = vl.Group.JoinedParsed.BlockColor?.Background;
+            colorSpans = vl.Group.JoinedParsed.ColorSpans;
+            return;
+        }
+
+        if (vl.BlockIndex >= _parsedBlocks.Count) return;
+        var parsed = _parsedBlocks[vl.BlockIndex];
+        if (parsed.Kind == BlockKind.FencedCodeLine) return;
+        blockBg = parsed.BlockColor?.Background;
+        colorSpans = parsed.ColorSpans;
+    }
+
     internal void SetScrollOffsetDirect(double offset)
     {
         _scrollOffset = Math.Clamp(offset, 0, Math.Max(0, _totalContentHeight - ActualHeight));
@@ -310,6 +337,7 @@ public partial class DocsCanvas : FrameworkElement
         _scrollOffset = Math.Clamp(targetOffset, 0, Math.Max(0, _totalContentHeight - ActualHeight));
         double jump = _scrollOffset - oldScroll;
         _smoother.Offset -= jump;
+        _smoother.DeferDamping(0);
         _smoother.Start();
         InvalidateVisual();
     }
@@ -618,6 +646,50 @@ public partial class DocsCanvas : FrameworkElement
         && !MarkdownParser.IsColorDivClose(text)
         && !MarkdownParser.IsThemeBlock(text)
         && !MarkdownParser.TryParseLinkDefinition(text, out _, out _, out _);
+
+    public void ConvertToHardBreaks()
+    {
+        SealAndStopTimer();
+        int sb, eb;
+        if (_doc.HasSelection)
+        {
+            var sel = _doc.GetOrderedSelection();
+            sb = sel.startBlock;
+            eb = sel.endBlock;
+        }
+        else
+        {
+            sb = 0;
+            eb = _doc.BlockCount - 1;
+        }
+        string marker = _hardBreak == HardBreakStyle.Backslash ? "\\" : "  ";
+        _doc.BeginUndoGroup();
+        _doc.AddHardBreaks(sb, eb, marker, MarkdownParser.IsFenceLine);
+        _doc.SealUndoGroup();
+        InvalidateLayout();
+        EnsureCursorVisible();
+        RaiseFormattingChanged();
+    }
+
+    public bool CanConvertToHardBreaks
+    {
+        get
+        {
+            int sb, eb;
+            if (_doc.HasSelection)
+            {
+                var sel = _doc.GetOrderedSelection();
+                sb = sel.startBlock;
+                eb = sel.endBlock;
+            }
+            else
+            {
+                sb = 0;
+                eb = _doc.BlockCount - 1;
+            }
+            return _doc.HasSoftBreaks(sb, eb, MarkdownParser.IsFenceLine);
+        }
+    }
 
     public void InsertLink()
     {
@@ -2000,7 +2072,18 @@ public partial class DocsCanvas : FrameworkElement
 
     private void ToggleInlineStyle(string marker, InlineStyle targetStyle)
     {
-        if (!_doc.HasSelection) return;
+        if (!_doc.HasSelection)
+        {
+            int block = _doc.CursorBlock;
+            int offset = _doc.CursorOffset;
+            _doc.BeginUndoGroup();
+            _doc.InsertTextAt(block, offset, marker + marker);
+            _doc.CursorOffset = offset + marker.Length;
+            _doc.AnchorBlock = block;
+            _doc.AnchorOffset = _doc.CursorOffset;
+            _doc.SealUndoGroup();
+            return;
+        }
 
         var (sb, so, eb, eo) = _doc.GetOrderedSelection();
         so = Math.Min(so, _doc.GetBlockLength(sb));
@@ -2165,6 +2248,7 @@ public partial class DocsCanvas : FrameworkElement
         if (jump != 0)
         {
             _smoother.Offset -= jump;
+            _smoother.DeferDamping(0.06);
             _smoother.Start();
         }
         e.Handled = true;
@@ -2975,9 +3059,12 @@ public partial class DocsCanvas : FrameworkElement
                 {
                     SealAndStopTimer();
                     string? pasteText = null;
-                    string? html = ClipboardHelper.GetHtml(Logger);
-                    if (html != null)
-                        pasteText = HtmlColorParser.ConvertToColoredMarkdown(html);
+                    if (!shift)
+                    {
+                        string? html = ClipboardHelper.GetHtml(Logger);
+                        if (html != null)
+                            pasteText = HtmlColorParser.ConvertToColoredMarkdown(html);
+                    }
                     pasteText ??= ClipboardHelper.GetText(Logger);
                     if (!string.IsNullOrEmpty(pasteText))
                     {

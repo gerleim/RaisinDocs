@@ -56,7 +56,7 @@ public class HtmlColorParserTests
 
         var result = HtmlColorParser.ConvertToColoredMarkdown(cfHtml);
 
-        result.Should().Be("<!--@fg:#FF0000-->error<!--/@fg-->");
+        result.Should().Be("<!--@fg:red-->error<!--/@fg-->");
     }
 
     [Fact]
@@ -67,7 +67,7 @@ public class HtmlColorParserTests
 
         var result = HtmlColorParser.ConvertToColoredMarkdown(cfHtml);
 
-        result.Should().Be("<!--@bg:#00FF00-->highlight<!--/@bg-->");
+        result.Should().Be("<!--@bg:lime-->highlight<!--/@bg-->");
     }
 
     [Fact]
@@ -78,7 +78,7 @@ public class HtmlColorParserTests
 
         var result = HtmlColorParser.ConvertToColoredMarkdown(cfHtml);
 
-        result.Should().Be("<!--@fg:#FF0000 bg:#0000FF-->alert<!--/@-->");
+        result.Should().Be("<!--@fg:red bg:blue-->alert<!--/@-->");
     }
 
     // --- Mixed colors on one line ---
@@ -91,7 +91,7 @@ public class HtmlColorParserTests
 
         var result = HtmlColorParser.ConvertToColoredMarkdown(cfHtml);
 
-        result.Should().Be("<!--@fg:#FF0000-->error<!--/@fg-->: file not found");
+        result.Should().Be("<!--@fg:red-->error<!--/@fg-->: file not found");
     }
 
     [Fact]
@@ -102,7 +102,7 @@ public class HtmlColorParserTests
 
         var result = HtmlColorParser.ConvertToColoredMarkdown(cfHtml);
 
-        result.Should().Be("<!--@fg:#FF0000-->red<!--/@fg--> and <!--@fg:#00FF00-->green<!--/@fg-->");
+        result.Should().Be("<!--@fg:red-->red<!--/@fg--> and <!--@fg:lime-->green<!--/@fg-->");
     }
 
     // --- Multiple lines, same color -> div ---
@@ -115,7 +115,7 @@ public class HtmlColorParserTests
 
         var result = HtmlColorParser.ConvertToColoredMarkdown(cfHtml);
 
-        result.Should().Be("<!--@div fg:#00FF00-->\nline one\nline two\n<!--/@div-->");
+        result.Should().Be("<!--@div fg:lime-->\nline one\nline two\n<!--/@div-->");
     }
 
     [Fact]
@@ -129,7 +129,7 @@ public class HtmlColorParserTests
 
         var result = HtmlColorParser.ConvertToColoredMarkdown(cfHtml);
 
-        result.Should().Be("<!--@div fg:#0000FF-->\none\ntwo\nthree\n<!--/@div-->");
+        result.Should().Be("<!--@div fg:blue-->\none\ntwo\nthree\n<!--/@div-->");
     }
 
     // --- Mixed: some lines div, some inline ---
@@ -146,8 +146,8 @@ public class HtmlColorParserTests
         var result = HtmlColorParser.ConvertToColoredMarkdown(cfHtml);
 
         result.Should().Be(
-            "<!--@fg:#FF0000-->error<!--/@fg-->: bad\n" +
-            "<!--@div fg:#00FF00-->\n" +
+            "<!--@fg:red-->error<!--/@fg-->: bad\n" +
+            "<!--@div fg:lime-->\n" +
             "ok one\n" +
             "ok two\n" +
             "<!--/@div-->");
@@ -164,7 +164,7 @@ public class HtmlColorParserTests
         var result = HtmlColorParser.ConvertToColoredMarkdown(cfHtml);
 
         result.Should().NotContain("div");
-        result.Should().Be("<!--@fg:#FF0000-->all red<!--/@fg-->");
+        result.Should().Be("<!--@fg:red-->all red<!--/@fg-->");
     }
 
     // --- HTML entity decoding ---
@@ -177,7 +177,7 @@ public class HtmlColorParserTests
 
         var result = HtmlColorParser.ConvertToColoredMarkdown(cfHtml);
 
-        result.Should().Be("<!--@fg:#FF0000--><tag> & \"text\"<!--/@fg-->");
+        result.Should().Be("<!--@fg:red--><tag> & \"text\"<!--/@fg-->");
     }
 
     // --- Empty lines preserved ---
@@ -203,10 +203,10 @@ public class HtmlColorParserTests
 
         var result = HtmlColorParser.ConvertToColoredMarkdown(cfHtml);
 
-        result.Should().Be("<!--@fg:#FF0000-->hello world<!--/@fg-->");
+        result.Should().Be("<!--@fg:red-->hello world<!--/@fg-->");
     }
 
-    // --- Div with bg ---
+    // --- Div with bg (no CSS name for #333333) ---
 
     [Fact]
     public void TwoLines_SameBg_DivWrapper()
@@ -247,7 +247,20 @@ public class HtmlColorParserTests
 
         var result = HtmlColorParser.ConvertToColoredMarkdown(cfHtml);
 
-        result.Should().Be("<!--@fg:#FF0000-->red<!--/@fg-->");
+        result.Should().Be("<!--@fg:red-->red<!--/@fg-->");
+    }
+
+    // --- Non-named color stays as hex ---
+
+    [Fact]
+    public void NonNamedColor_StaysHex()
+    {
+        var html = PreWrap("<span style=\"color:#F8F8F2;\">text</span>");
+        var cfHtml = WrapCfHtml(html);
+
+        var result = HtmlColorParser.ConvertToColoredMarkdown(cfHtml);
+
+        result.Should().Be("<!--@fg:#F8F8F2-->text<!--/@fg-->");
     }
 
     // --- Default text mixed with colored ---
@@ -260,6 +273,203 @@ public class HtmlColorParserTests
 
         var result = HtmlColorParser.ConvertToColoredMarkdown(cfHtml);
 
-        result.Should().Be("prefix <!--@fg:#00FF00-->green<!--/@fg--> suffix");
+        result.Should().Be("prefix <!--@fg:lime-->green<!--/@fg--> suffix");
+    }
+
+    // --- Bold ---
+
+    [Fact]
+    public void BoldOnly_WrapsInMarkdown()
+    {
+        var html = PreWrap("<span style=\"font-weight:bold;\">important</span>");
+        var cfHtml = WrapCfHtml(html);
+
+        var result = HtmlColorParser.ConvertToColoredMarkdown(cfHtml);
+
+        result.Should().Be("**important**");
+    }
+
+    [Fact]
+    public void BoldWithColor_MarkdownInsideColorTag()
+    {
+        var html = PreWrap("<span style=\"color:#FF0000;font-weight:bold;\">error</span>");
+        var cfHtml = WrapCfHtml(html);
+
+        var result = HtmlColorParser.ConvertToColoredMarkdown(cfHtml);
+
+        result.Should().Be("<!--@fg:red-->**error**<!--/@fg-->");
+    }
+
+    // --- Italic ---
+
+    [Fact]
+    public void ItalicOnly_WrapsInMarkdown()
+    {
+        var html = PreWrap("<span style=\"font-style:italic;\">note</span>");
+        var cfHtml = WrapCfHtml(html);
+
+        var result = HtmlColorParser.ConvertToColoredMarkdown(cfHtml);
+
+        result.Should().Be("*note*");
+    }
+
+    [Fact]
+    public void ItalicWithColor_MarkdownInsideColorTag()
+    {
+        var html = PreWrap("<span style=\"color:#00FF00;font-style:italic;\">hint</span>");
+        var cfHtml = WrapCfHtml(html);
+
+        var result = HtmlColorParser.ConvertToColoredMarkdown(cfHtml);
+
+        result.Should().Be("<!--@fg:lime-->*hint*<!--/@fg-->");
+    }
+
+    // --- Bold + Italic ---
+
+    [Fact]
+    public void BoldItalic_TripleAsterisks()
+    {
+        var html = PreWrap("<span style=\"font-weight:bold;font-style:italic;\">wow</span>");
+        var cfHtml = WrapCfHtml(html);
+
+        var result = HtmlColorParser.ConvertToColoredMarkdown(cfHtml);
+
+        result.Should().Be("***wow***");
+    }
+
+    [Fact]
+    public void BoldItalicWithColor()
+    {
+        var html = PreWrap("<span style=\"color:#FF0000;font-weight:bold;font-style:italic;\">alert</span>");
+        var cfHtml = WrapCfHtml(html);
+
+        var result = HtmlColorParser.ConvertToColoredMarkdown(cfHtml);
+
+        result.Should().Be("<!--@fg:red-->***alert***<!--/@fg-->");
+    }
+
+    // --- Bold inside div ---
+
+    [Fact]
+    public void BoldInsideDiv_StylePreserved()
+    {
+        var html = PreWrap(
+            "<span style=\"color:#00FF00;font-weight:bold;\">line one</span>\n" +
+            "<span style=\"color:#00FF00;font-weight:bold;\">line two</span>");
+        var cfHtml = WrapCfHtml(html);
+
+        var result = HtmlColorParser.ConvertToColoredMarkdown(cfHtml);
+
+        result.Should().Be("<!--@div fg:lime-->\n**line one**\n**line two**\n<!--/@div-->");
+    }
+
+    // --- Mixed bold and non-bold on same line ---
+
+    [Fact]
+    public void MixedBoldAndNormal_SameColor()
+    {
+        var html = PreWrap(
+            "<span style=\"color:#FF0000;font-weight:bold;\">error</span>" +
+            "<span style=\"color:#FF0000;\">: details</span>");
+        var cfHtml = WrapCfHtml(html);
+
+        var result = HtmlColorParser.ConvertToColoredMarkdown(cfHtml);
+
+        result.Should().Be("<!--@fg:red-->**error**<!--/@fg--><!--@fg:red-->: details<!--/@fg-->");
+    }
+
+    // --- Non-pre HTML (Word-style <p> elements) ---
+
+    [Fact]
+    public void WordStyle_ParagraphsWithColorSpans()
+    {
+        var html =
+            "<p><span style='color:#B1B9F9'>first = true</span></p>" +
+            "<p><span style='color:#4EBA65'>ok</span></p>";
+        var cfHtml = WrapCfHtml(html);
+
+        var result = HtmlColorParser.ConvertToColoredMarkdown(cfHtml);
+
+        result.Should().Be(
+            "<!--@fg:#B1B9F9-->first = true<!--/@fg-->\n" +
+            "<!--@fg:#4EBA65-->ok<!--/@fg-->");
+    }
+
+    [Fact]
+    public void WordStyle_NestedSpans_InnerColorWins()
+    {
+        var html =
+            "<p><span style='font-size:10pt'>text <span style='color:#B1B9F9'>colored</span> more</span></p>";
+        var cfHtml = WrapCfHtml(html);
+
+        var result = HtmlColorParser.ConvertToColoredMarkdown(cfHtml);
+
+        result.Should().Be("text <!--@fg:#B1B9F9-->colored<!--/@fg--> more");
+    }
+
+    [Fact]
+    public void WordStyle_BoldTag()
+    {
+        var html =
+            "<p><b><span style='font-size:10pt'>Update</span></b></p>";
+        var cfHtml = WrapCfHtml(html);
+
+        var result = HtmlColorParser.ConvertToColoredMarkdown(cfHtml);
+
+        result.Should().Be("**Update**");
+    }
+
+    [Fact]
+    public void WordStyle_SingleQuotedStyle()
+    {
+        var html = "<p><span style='color:#FF0000'>error</span></p>";
+        var cfHtml = WrapCfHtml(html);
+
+        var result = HtmlColorParser.ConvertToColoredMarkdown(cfHtml);
+
+        result.Should().Be("<!--@fg:red-->error<!--/@fg-->");
+    }
+
+    [Fact]
+    public void WordStyle_NamedCssColor()
+    {
+        var html = "<p><span style='color:white'>text</span></p>";
+        var cfHtml = WrapCfHtml(html);
+
+        var result = HtmlColorParser.ConvertToColoredMarkdown(cfHtml);
+
+        result.Should().Be("<!--@fg:white-->text<!--/@fg-->");
+    }
+
+    [Fact]
+    public void WordStyle_NbspEntity_DecodedAsSpace()
+    {
+        var html = PreWrap("<span style=\"color:#FF0000;\">a&nbsp;b</span>");
+        var cfHtml = WrapCfHtml(html);
+
+        var result = HtmlColorParser.ConvertToColoredMarkdown(cfHtml);
+
+        result.Should().Be("<!--@fg:red-->a b<!--/@fg-->");
+    }
+
+    [Fact]
+    public void WordStyle_NoParagraphsNoColors_ReturnsNull()
+    {
+        var cfHtml = WrapCfHtml("<div>hello</div>");
+        HtmlColorParser.ConvertToColoredMarkdown(cfHtml).Should().BeNull();
+    }
+
+    [Fact]
+    public void WordStyle_BoldWithColoredSpan()
+    {
+        var html =
+            "<p><span style='color:#4EBA65'>● </span>" +
+            "<b><span style='font-size:10pt'>Update</span></b>" +
+            "<span style='font-size:10pt'>(file.cs)</span></p>";
+        var cfHtml = WrapCfHtml(html);
+
+        var result = HtmlColorParser.ConvertToColoredMarkdown(cfHtml);
+
+        result.Should().Be("<!--@fg:#4EBA65-->● <!--/@fg-->**Update**(file.cs)");
     }
 }
