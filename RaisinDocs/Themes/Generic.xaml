@@ -168,19 +168,19 @@
                             <ToggleButton x:Name="PART_Bullet" Style="{StaticResource FormattingToggle}"
                                           ToolTip="Bullet list">
                                 <Path x:Name="PART_BulletIcon"
-                                      Width="14" Height="14" Stretch="Uniform"
+                                      Width="14" Height="14" Stretch="Uniform" UseLayoutRounding="True"
                                       Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=local:DocsFormattingBar}}" />
                             </ToggleButton>
                             <ToggleButton x:Name="PART_OrderedList" Style="{StaticResource FormattingToggle}"
                                           ToolTip="Ordered list">
                                 <Path x:Name="PART_OrderedListIcon"
-                                      Width="14" Height="14" Stretch="Uniform"
+                                      Width="14" Height="14" Stretch="Uniform" UseLayoutRounding="True"
                                       Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=local:DocsFormattingBar}}" />
                             </ToggleButton>
                             <ToggleButton x:Name="PART_TaskList" Style="{StaticResource FormattingToggle}"
                                           ToolTip="Task list">
                                 <Path x:Name="PART_TaskListIcon"
-                                      Width="14" Height="14" Stretch="Uniform"
+                                      Width="14" Height="14" Stretch="Uniform" UseLayoutRounding="True"
                                       Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=local:DocsFormattingBar}}" />
                             </ToggleButton>
                             <ToggleButton x:Name="PART_Quote" Style="{StaticResource FormattingToggle}"

@@ -33,29 +33,29 @@ public class DocsFormattingBar : Control
         "M1,7 C3.5,2 12.5,2 15,7 C12.5,12 3.5,12 1,7 Z " +
         "M8,5 A2,2,0,1,1,7.99,5");
 
-    // Bullet list: three horizontal lines with dots
+    // Bullet list: three horizontal lines with dots (arc starts at top of circle, so y = line_center - radius)
     private static readonly Geometry IconBullet = Geometry.Parse(
-        "M2,3 A1.5,1.5,0,1,1,1.99,3 Z M5.5,2 H14 V4 H5.5 Z " +
-        "M2,7.5 A1.5,1.5,0,1,1,1.99,7.5 Z M5.5,6.5 H14 V8.5 H5.5 Z " +
-        "M2,12 A1.5,1.5,0,1,1,1.99,12 Z M5.5,11 H14 V13 H5.5 Z");
+        "M3,2 A1,1,0,1,1,2.99,2 Z M5,2 H14 V4 H5 Z " +
+        "M3,6.5 A1,1,0,1,1,2.99,6.5 Z M5,6.5 H14 V8.5 H5 Z " +
+        "M3,11 A1,1,0,1,1,2.99,11 Z M5,11 H14 V13 H5 Z");
 
-    // Ordered list: three lines with numbers
+    // Ordered list: lines match bullet icon, digits centered on each row
     private static readonly Geometry IconOrderedList = Geometry.Parse(
-        "M1.5,1.5 L2.5,1 V5 M1,5 H4 " +
-        "M5.5,2 H14 V4 H5.5 Z " +
-        "M1,7 Q1,6 2.5,6 Q4,6 4,7 Q4,8 2.5,8 L4,10 H1 " +
-        "M5.5,6.5 H14 V8.5 H5.5 Z " +
-        "M1,11 H3.5 L2,12.5 Q4,12.5 4,13.5 Q4,15 2,15 Q1,15 1,14 " +
-        "M5.5,11.5 H14 V13.5 H5.5 Z");
+        "M1.5,2 L3,1 V4.5 H2 V2.5 Z M1,4.5 H4 V5 H1 Z " +
+        "M5,2 H14 V4 H5 Z " +
+        "M1,5.5 H4 V6.3 L2,8.7 H4 V9.5 H1 V8.7 L3,6.3 H1 Z " +
+        "M5,6.5 H14 V8.5 H5 Z " +
+        "M1,10 H4 V10.8 H1 Z M3,10.8 H4 V11.6 H3 Z M1,11.6 H4 V12.4 H1 Z M3,12.4 H4 V13.2 H3 Z M1,13.2 H4 V14 H1 Z " +
+        "M5,11 H14 V13 H5 Z");
 
-    // Task list: three lines with checkboxes
+    // Task list: lines match bullet icon, 4x4 checkboxes centered on each row
     private static readonly Geometry IconTaskList = Geometry.Parse(
-        "M1,2 H4 V5 H1 Z M2,3.8 L2.8,4.6 L4,2.4 " +
-        "M5.5,2.5 H14 V4.5 H5.5 Z " +
-        "M1,6.5 H4 V9.5 H1 Z " +
-        "M5.5,7 H14 V9 H5.5 Z " +
-        "M1,11 H4 V14 H1 Z M2,12.8 L2.8,13.6 L4,11.4 " +
-        "M5.5,11.5 H14 V13.5 H5.5 Z");
+        "M0.5,1 H4.5 V5 H0.5 Z M1,3 L2.2,4.3 L4,1.5 L3.3,2 L2.2,3.3 L1.8,2.5 Z " +
+        "M5,2 H14 V4 H5 Z " +
+        "M0.5,5.5 H4.5 V9.5 H0.5 Z M1.5,6.5 H3.5 V8.5 H1.5 Z " +
+        "M5,6.5 H14 V8.5 H5 Z " +
+        "M0.5,10 H4.5 V14 H0.5 Z M1,12 L2.2,13.3 L4,10.5 L3.3,11 L2.2,12.3 L1.8,11.5 Z " +
+        "M5,11 H14 V13 H5 Z");
 
     // Link: chain link icon
     private static readonly Geometry IconLink = Geometry.Parse(
