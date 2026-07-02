@@ -34,6 +34,9 @@
                             <Setter TargetName="Bd" Property="Background" Value="#30000000" />
                             <Setter TargetName="Bd" Property="BorderBrush" Value="#999" />
                         </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Opacity" Value="0.35" />
+                        </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
             </Setter.Value>
