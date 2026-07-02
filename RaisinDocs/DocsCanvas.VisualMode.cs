@@ -1062,9 +1062,7 @@ public partial class DocsCanvas
 
         if (parsed.BlockColor?.Foreground is { } blockFg)
         {
-            var brush = new SolidColorBrush(Color.FromRgb(blockFg.R, blockFg.G, blockFg.B));
-            brush.Freeze();
-            if (ftLen > 0) ft.SetForegroundBrush(brush, 0, ftLen);
+            if (ftLen > 0) ft.SetForegroundBrush(GetCachedBrush(blockFg.R, blockFg.G, blockFg.B), 0, ftLen);
         }
 
         if (map.ColorSpans != null)
@@ -1084,9 +1082,7 @@ public partial class DocsCanvas
 
                 if (cs.Foreground is { } fg)
                 {
-                    var brush = new SolidColorBrush(Color.FromRgb(fg.R, fg.G, fg.B));
-                    brush.Freeze();
-                    ft.SetForegroundBrush(brush, visStart, count);
+                    ft.SetForegroundBrush(GetCachedBrush(fg.R, fg.G, fg.B), visStart, count);
                 }
             }
         }
@@ -1207,11 +1203,9 @@ public partial class DocsCanvas
 
         if (parsed.BlockColor?.Foreground is { } blockFg)
         {
-            var brush = new SolidColorBrush(Color.FromRgb(blockFg.R, blockFg.G, blockFg.B));
-            brush.Freeze();
             int vlVisLen = Math.Min(ftLen, map.RawToVisual(vl.StartOffset + vl.Length) - map.RawToVisual(vl.StartOffset));
             if (vlVisLen > 0)
-                ft.SetForegroundBrush(brush, 0, vlVisLen);
+                ft.SetForegroundBrush(GetCachedBrush(blockFg.R, blockFg.G, blockFg.B), 0, vlVisLen);
         }
 
         var colorSpans = map.ColorSpans;
@@ -1235,9 +1229,7 @@ public partial class DocsCanvas
 
             if (cs.Foreground is { } fg)
             {
-                var brush = new SolidColorBrush(Color.FromRgb(fg.R, fg.G, fg.B));
-                brush.Freeze();
-                ft.SetForegroundBrush(brush, visStart, count);
+                ft.SetForegroundBrush(GetCachedBrush(fg.R, fg.G, fg.B), visStart, count);
             }
         }
     }

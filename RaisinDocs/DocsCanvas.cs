@@ -167,6 +167,7 @@ public partial class DocsCanvas : FrameworkElement
     private GlyphTypeface? _boldItalicGlyph;
     private GlyphTypeface? _monoGlyph;
     private readonly Dictionary<(char, int), double> _charWidthCache = new();
+    private readonly Dictionary<Color, SolidColorBrush> _brushCache = new();
 
     private readonly Dictionary<BlockKind, double> _lineHeights = new();
 
@@ -598,19 +599,12 @@ public partial class DocsCanvas : FrameworkElement
 
     public void Reflow()
     {
+        if (!_doc.HasSelection)
+            return;
         SealAndStopTimer();
-        int sb, eb;
-        if (_doc.HasSelection)
-        {
-            var sel = _doc.GetOrderedSelection();
-            sb = sel.startBlock;
-            eb = sel.endBlock;
-        }
-        else
-        {
-            sb = 0;
-            eb = _doc.BlockCount - 1;
-        }
+        var sel = _doc.GetOrderedSelection();
+        int sb = sel.startBlock;
+        int eb = sel.endBlock;
         _doc.BeginUndoGroup();
         bool changed = _doc.SplitInlineColorDivs(sb, eb,
             MarkdownParser.FindInlineColorOpenEnd,
@@ -630,19 +624,10 @@ public partial class DocsCanvas : FrameworkElement
     {
         get
         {
-            int sb, eb;
-            if (_doc.HasSelection)
-            {
-                var sel = _doc.GetOrderedSelection();
-                sb = sel.startBlock;
-                eb = sel.endBlock;
-            }
-            else
-            {
-                sb = 0;
-                eb = _doc.BlockCount - 1;
-            }
-            return _doc.HasReformattableContent(sb, eb, IsMergeableParagraph, MarkdownParser.IsFenceLine);
+            if (!_doc.HasSelection)
+                return false;
+            var sel = _doc.GetOrderedSelection();
+            return _doc.HasReformattableContent(sel.startBlock, sel.endBlock, IsMergeableParagraph, MarkdownParser.IsFenceLine);
         }
     }
 
@@ -652,8 +637,8 @@ public partial class DocsCanvas : FrameworkElement
         && !text.StartsWith('|')
         && !text.EndsWith('\\')
         && !text.EndsWith("  ")
-        && !MarkdownParser.IsColorDivOpen(text)
-        && !MarkdownParser.IsColorDivClose(text)
+        && !MarkdownParser.TryExtractDivOpen(text, out _)
+        && !MarkdownParser.TryExtractDivClose(text, out _)
         && !MarkdownParser.IsThemeBlock(text)
         && !MarkdownParser.TryParseLinkDefinition(text, out _, out _, out _);
 
@@ -1301,7 +1286,12 @@ public partial class DocsCanvas : FrameworkElement
 
         _doc.ContentChanged += () => { IsDirty = true; ContentChanged?.Invoke(this, EventArgs.Empty); };
 
-        Loaded += (_, _) => { EnsureMeasured(); Focus(); };
+        Loaded += (_, _) =>
+        {
+            EnsureMeasured();
+            try { Focus(); }
+            catch (NullReferenceException) { }
+        };
         IsVisibleChanged += (_, e) =>
         {
             if ((bool)e.NewValue) _blinkTimer.Start();
@@ -3426,9 +3416,7 @@ public partial class DocsCanvas : FrameworkElement
 
         if (parsed.BlockColor?.Foreground is { } blockFg)
         {
-            var brush = new SolidColorBrush(Color.FromRgb(blockFg.R, blockFg.G, blockFg.B));
-            brush.Freeze();
-            ft.SetForegroundBrush(brush, 0, vl.Length);
+            ft.SetForegroundBrush(GetCachedBrush(blockFg.R, blockFg.G, blockFg.B), 0, vl.Length);
         }
 
         if (parsed.ColorSpans != null)
@@ -3446,12 +3434,22 @@ public partial class DocsCanvas : FrameworkElement
 
                 if (cs.Foreground is { } fg)
                 {
-                    var brush = new SolidColorBrush(Color.FromRgb(fg.R, fg.G, fg.B));
-                    brush.Freeze();
-                    ft.SetForegroundBrush(brush, localStart, count);
+                    ft.SetForegroundBrush(GetCachedBrush(fg.R, fg.G, fg.B), localStart, count);
                 }
             }
         }
+    }
+
+    private SolidColorBrush GetCachedBrush(byte r, byte g, byte b)
+    {
+        var color = Color.FromRgb(r, g, b);
+        if (!_brushCache.TryGetValue(color, out var brush))
+        {
+            brush = new SolidColorBrush(color);
+            brush.Freeze();
+            _brushCache[color] = brush;
+        }
+        return brush;
     }
 
     private void ApplySyntaxDimming(FormattedText ft, VisualLine vl, ParsedBlock parsed)

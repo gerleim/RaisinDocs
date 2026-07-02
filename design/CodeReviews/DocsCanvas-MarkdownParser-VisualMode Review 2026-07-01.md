@@ -152,13 +152,13 @@
 - **What's wrong**: Static `HttpClient` has no timeout. Slow servers block threadpool threads indefinitely.
 - **Fix applied**: Set `_http.Timeout = TimeSpan.FromSeconds(15)`.
 
-### M11 — Brush allocations every render frame
+### ~~M11 — Brush allocations every render frame~~ FIXED
 
 - **Severity**: Medium
 - **Category**: Performance
 - **Location**: `DocsCanvas.cs:3198-3419`
 - **What's wrong**: New `SolidColorBrush` objects created and frozen every render frame for color spans. Dozens per frame at 60fps = significant GC pressure.
-- **What to do**: Cache brushes by `Color` in a `Dictionary<Color, Brush>`.
+- **Fix applied**: Added `_brushCache` dictionary and `GetCachedBrush` helper. All 6 color-span brush allocation sites (2 in DocsCanvas.cs, 4 in VisualMode.cs) now reuse frozen brushes by Color key.
 
 ### M12 — Redundant GetBlockText allocations in render path
 
