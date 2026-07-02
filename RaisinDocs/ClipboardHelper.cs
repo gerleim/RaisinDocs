@@ -12,6 +12,20 @@ internal static class ClipboardHelper
                 logger?.Log(DocsLogLevel.Warning, $"Clipboard.SetText failed (attempt {attempt}): {ex.Message}"));
     }
 
+    internal static bool SetTextAndHtml(string text, string cfHtml, IDocsLogger? logger = null)
+    {
+        return RetryHelper.Execute(
+            () =>
+            {
+                var data = new DataObject();
+                data.SetData(DataFormats.UnicodeText, text);
+                data.SetData(DataFormats.Html, cfHtml);
+                Clipboard.SetDataObject(data, true);
+            },
+            onRetry: (ex, attempt) =>
+                logger?.Log(DocsLogLevel.Warning, $"Clipboard.SetTextAndHtml failed (attempt {attempt}): {ex.Message}"));
+    }
+
     internal static string? GetText(IDocsLogger? logger = null)
     {
         return RetryHelper.Execute(

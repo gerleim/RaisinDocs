@@ -472,4 +472,236 @@ public class HtmlColorParserTests
 
         result.Should().Be("<!--@fg:#4EBA65-->● <!--/@fg-->**Update**(file.cs)");
     }
+
+    // === Copy-out tests (markdown → HTML clipboard) ===
+
+    [Fact]
+    public void CopyOut_PlainText_ReturnsNull()
+    {
+        HtmlColorParser.ConvertToHtmlClipboard("hello world").Should().BeNull();
+    }
+
+    [Fact]
+    public void CopyOut_InlineFgColor_ProducesHtmlSpan()
+    {
+        var result = HtmlColorParser.ConvertToHtmlClipboard("<!--@fg:red-->error<!--/@fg-->");
+
+        result.Should().NotBeNull();
+        var fragment = HtmlColorParser.ExtractFragment(result!);
+        fragment.Should().Contain("<span style=\"color:#FF0000;\">error</span>");
+    }
+
+    [Fact]
+    public void CopyOut_InlineBgColor_ProducesHtmlSpan()
+    {
+        var result = HtmlColorParser.ConvertToHtmlClipboard("<!--@bg:lime-->highlight<!--/@bg-->");
+
+        result.Should().NotBeNull();
+        var fragment = HtmlColorParser.ExtractFragment(result!);
+        fragment.Should().Contain("<span style=\"background-color:#00FF00;\">highlight</span>");
+    }
+
+    [Fact]
+    public void CopyOut_FgAndBg_ProducesHtmlSpan()
+    {
+        var result = HtmlColorParser.ConvertToHtmlClipboard("<!--@fg:red bg:blue-->alert<!--/@-->");
+
+        result.Should().NotBeNull();
+        var fragment = HtmlColorParser.ExtractFragment(result!);
+        fragment.Should().Contain("color:#FF0000;");
+        fragment.Should().Contain("background-color:#0000FF;");
+        fragment.Should().Contain("alert");
+    }
+
+    [Fact]
+    public void CopyOut_MixedColorAndPlain_OneLine()
+    {
+        var result = HtmlColorParser.ConvertToHtmlClipboard("<!--@fg:red-->error<!--/@fg-->: ok");
+
+        result.Should().NotBeNull();
+        var fragment = HtmlColorParser.ExtractFragment(result!);
+        fragment.Should().Contain("<span style=\"color:#FF0000;\">error</span>: ok");
+    }
+
+    [Fact]
+    public void CopyOut_Bold_ProducesBoldSpan()
+    {
+        var result = HtmlColorParser.ConvertToHtmlClipboard("**important**");
+
+        result.Should().NotBeNull();
+        var fragment = HtmlColorParser.ExtractFragment(result!);
+        fragment.Should().Contain("<span style=\"font-weight:bold;\">important</span>");
+    }
+
+    [Fact]
+    public void CopyOut_Italic_ProducesItalicSpan()
+    {
+        var result = HtmlColorParser.ConvertToHtmlClipboard("*note*");
+
+        result.Should().NotBeNull();
+        var fragment = HtmlColorParser.ExtractFragment(result!);
+        fragment.Should().Contain("<span style=\"font-style:italic;\">note</span>");
+    }
+
+    [Fact]
+    public void CopyOut_BoldItalic_ProducesCombinedSpan()
+    {
+        var result = HtmlColorParser.ConvertToHtmlClipboard("***wow***");
+
+        result.Should().NotBeNull();
+        var fragment = HtmlColorParser.ExtractFragment(result!);
+        fragment.Should().Contain("font-weight:bold;");
+        fragment.Should().Contain("font-style:italic;");
+        fragment.Should().Contain("wow");
+    }
+
+    [Fact]
+    public void CopyOut_BoldWithColor()
+    {
+        var result = HtmlColorParser.ConvertToHtmlClipboard("<!--@fg:red-->**error**<!--/@fg-->");
+
+        result.Should().NotBeNull();
+        var fragment = HtmlColorParser.ExtractFragment(result!);
+        fragment.Should().Contain("color:#FF0000;");
+        fragment.Should().Contain("font-weight:bold;");
+        fragment.Should().Contain("error");
+    }
+
+    [Fact]
+    public void CopyOut_DivColor_AppliesColorToLines()
+    {
+        var markdown = "<!--@div fg:lime-->\nline one\nline two\n<!--/@div-->";
+        var result = HtmlColorParser.ConvertToHtmlClipboard(markdown);
+
+        result.Should().NotBeNull();
+        var fragment = HtmlColorParser.ExtractFragment(result!);
+        fragment.Should().Contain("<span style=\"color:#00FF00;\">line one</span>");
+        fragment.Should().Contain("<span style=\"color:#00FF00;\">line two</span>");
+        fragment.Should().NotContain("div");
+    }
+
+    [Fact]
+    public void CopyOut_DivWithBg()
+    {
+        var markdown = "<!--@div bg:#333333-->\ntext\n<!--/@div-->";
+        var result = HtmlColorParser.ConvertToHtmlClipboard(markdown);
+
+        result.Should().NotBeNull();
+        var fragment = HtmlColorParser.ExtractFragment(result!);
+        fragment.Should().Contain("background-color:#333333;");
+        fragment.Should().Contain("text");
+    }
+
+    [Fact]
+    public void CopyOut_HexColor_PreservedExactly()
+    {
+        var result = HtmlColorParser.ConvertToHtmlClipboard("<!--@fg:#F8F8F2-->text<!--/@fg-->");
+
+        result.Should().NotBeNull();
+        var fragment = HtmlColorParser.ExtractFragment(result!);
+        fragment.Should().Contain("color:#F8F8F2;");
+    }
+
+    [Fact]
+    public void CopyOut_SpecialChars_HtmlEncoded()
+    {
+        var result = HtmlColorParser.ConvertToHtmlClipboard("<!--@fg:red--><tag> & \"x\"<!--/@fg-->");
+
+        result.Should().NotBeNull();
+        var fragment = HtmlColorParser.ExtractFragment(result!);
+        fragment.Should().Contain("&lt;tag&gt; &amp; &quot;x&quot;");
+    }
+
+    [Fact]
+    public void CopyOut_MultiLine_PreservesLines()
+    {
+        var markdown = "<!--@fg:red-->error<!--/@fg-->\nok";
+        var result = HtmlColorParser.ConvertToHtmlClipboard(markdown);
+
+        result.Should().NotBeNull();
+        var fragment = HtmlColorParser.ExtractFragment(result!);
+        fragment.Should().Contain("error</span>\nok");
+    }
+
+    [Fact]
+    public void CopyOut_HasCfHtmlHeaders()
+    {
+        var result = HtmlColorParser.ConvertToHtmlClipboard("<!--@fg:red-->error<!--/@fg-->");
+
+        result.Should().NotBeNull();
+        result.Should().StartWith("Version:0.9");
+        result.Should().Contain("StartHTML:");
+        result.Should().Contain("EndHTML:");
+        result.Should().Contain("StartFragment:");
+        result.Should().Contain("EndFragment:");
+        result.Should().Contain("<!--StartFragment-->");
+        result.Should().Contain("<!--EndFragment-->");
+    }
+
+    [Fact]
+    public void CopyOut_HasPreWrapper()
+    {
+        var result = HtmlColorParser.ConvertToHtmlClipboard("**bold**");
+
+        result.Should().NotBeNull();
+        var fragment = HtmlColorParser.ExtractFragment(result!);
+        fragment.Should().StartWith("<pre ");
+        fragment.Should().EndWith("</pre>");
+    }
+
+    [Fact]
+    public void CopyOut_ListItemAsterisk_NotTreatedAsItalic()
+    {
+        var result = HtmlColorParser.ConvertToHtmlClipboard("* list item");
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public void CopyOut_RoundTrip_ColorSurvives()
+    {
+        var markdown = "<!--@fg:red-->error<!--/@fg-->: ok";
+        var cfHtml = HtmlColorParser.ConvertToHtmlClipboard(markdown)!;
+
+        var roundTripped = HtmlColorParser.ConvertToColoredMarkdown(cfHtml);
+
+        roundTripped.Should().NotBeNull();
+        roundTripped.Should().Contain("red");
+        roundTripped.Should().Contain("error");
+    }
+
+    [Fact]
+    public void CopyOut_RoundTrip_BoldSurvives()
+    {
+        var markdown = "<!--@fg:red-->**error**<!--/@fg-->";
+        var cfHtml = HtmlColorParser.ConvertToHtmlClipboard(markdown)!;
+
+        var roundTripped = HtmlColorParser.ConvertToColoredMarkdown(cfHtml);
+
+        roundTripped.Should().Be("<!--@fg:red-->**error**<!--/@fg-->");
+    }
+
+    [Fact]
+    public void CopyOut_InlineColorInsideDiv_OverridesDiv()
+    {
+        var markdown = "<!--@div fg:lime-->\nplain\n<!--@fg:red-->error<!--/@fg-->\n<!--/@div-->";
+        var result = HtmlColorParser.ConvertToHtmlClipboard(markdown);
+
+        result.Should().NotBeNull();
+        var fragment = HtmlColorParser.ExtractFragment(result!);
+        fragment.Should().Contain("<span style=\"color:#00FF00;\">plain</span>");
+        fragment.Should().Contain("color:#FF0000;");
+        fragment.Should().Contain("error");
+    }
+
+    [Fact]
+    public void CopyOut_CrLfLineEndings_Handled()
+    {
+        var markdown = "<!--@fg:red-->error<!--/@fg-->\r\nok";
+        var result = HtmlColorParser.ConvertToHtmlClipboard(markdown);
+
+        result.Should().NotBeNull();
+        var fragment = HtmlColorParser.ExtractFragment(result!);
+        fragment.Should().Contain("error</span>\nok");
+    }
 }
