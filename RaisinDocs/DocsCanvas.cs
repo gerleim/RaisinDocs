@@ -127,6 +127,7 @@ public partial class DocsCanvas : FrameworkElement
         };
         if (canvas._linkPopup is { IsOpen: true })
             canvas.ApplyLinkPopupTheme();
+        canvas.Minimap?.InvalidateVisual();
         canvas.ThemeChanged?.Invoke(canvas, EventArgs.Empty);
     }
 

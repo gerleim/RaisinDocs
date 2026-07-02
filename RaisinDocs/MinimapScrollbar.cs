@@ -46,6 +46,7 @@ public class MinimapScrollbar : FrameworkElement
     private int _cachedVersion;
     private int _cachedFirstLine;
     private int _cachedVisibleCount;
+    private Color _cachedBg, _cachedFg, _cachedCodeBg;
     private double[]? _lineYPos;
     private double _totalMinimapH;
     private int _heightTableVersion = -1;
@@ -132,12 +133,16 @@ public class MinimapScrollbar : FrameworkElement
             || _bitmap.PixelWidth != (int)w || _bitmap.PixelHeight != (int)h
             || version != _cachedVersion
             || firstLine != _cachedFirstLine
-            || visibleCount != _cachedVisibleCount)
+            || visibleCount != _cachedVisibleCount
+            || bg != _cachedBg || fg != _cachedFg || codeBg != _cachedCodeBg)
         {
             RebuildBitmap((int)w, (int)h, firstLine, visibleCount, subPixelOff, bg, fg, codeBg, canvasTextWidth);
             _cachedVersion = version;
             _cachedFirstLine = firstLine;
             _cachedVisibleCount = visibleCount;
+            _cachedBg = bg;
+            _cachedFg = fg;
+            _cachedCodeBg = codeBg;
         }
 
         if (_bitmap != null)
