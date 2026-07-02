@@ -659,7 +659,7 @@ public partial class DocsCanvas : FrameworkElement
                 string divOpen = $"<!--@div {divProperty}-->";
                 _doc.InsertBlockAt(eb + 1, "<!--/@div-->");
                 _doc.InsertBlockAt(sb, divOpen);
-                _doc.CursorBlock = eb + 2;
+                _doc.CursorBlock = eb + 1;
                 _doc.CursorOffset = eo;
                 _doc.AnchorBlock = _doc.CursorBlock;
                 _doc.AnchorOffset = _doc.CursorOffset;
@@ -2943,12 +2943,16 @@ public partial class DocsCanvas : FrameworkElement
                 if (ctrl)
                 {
                     SealAndStopTimer();
-                    string? text = ClipboardHelper.GetText(Logger);
-                    if (!string.IsNullOrEmpty(text))
+                    string? pasteText = null;
+                    string? html = ClipboardHelper.GetHtml(Logger);
+                    if (html != null)
+                        pasteText = HtmlColorParser.ConvertToColoredMarkdown(html);
+                    pasteText ??= ClipboardHelper.GetText(Logger);
+                    if (!string.IsNullOrEmpty(pasteText))
                     {
                         _doc.BeginUndoGroup();
                         if (_doc.HasSelection) _doc.DeleteSelection();
-                        _doc.Paste(text);
+                        _doc.Paste(pasteText);
                         _doc.SealUndoGroup();
                         textChanged = true;
                     }

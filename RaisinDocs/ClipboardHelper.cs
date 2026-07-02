@@ -19,4 +19,14 @@ internal static class ClipboardHelper
             onRetry: (ex, attempt) =>
                 logger?.Log(DocsLogLevel.Warning, $"Clipboard.GetText failed (attempt {attempt}): {ex.Message}"));
     }
+
+    internal static string? GetHtml(IDocsLogger? logger = null)
+    {
+        return RetryHelper.Execute(
+            () => (Clipboard.ContainsData(DataFormats.Html)
+                ? Clipboard.GetData(DataFormats.Html) as string
+                : null)!,
+            onRetry: (ex, attempt) =>
+                logger?.Log(DocsLogLevel.Warning, $"Clipboard.GetHtml failed (attempt {attempt}): {ex.Message}"));
+    }
 }
