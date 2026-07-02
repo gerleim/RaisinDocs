@@ -1758,19 +1758,20 @@ public partial class DocsCanvas : FrameworkElement
             {
                 var curGroup = _visualLines[i].Group;
                 var prevGroup = _visualLines[i - 1].Group;
-                if (curGroup != null && prevGroup == curGroup)
-                    goto skipGap;
+                bool sameGroup = curGroup != null && prevGroup == curGroup;
 
-                bool paragraphBreak = false;
-                for (int prev = _visualLines[i - 1].BlockIndex; prev < bi && !paragraphBreak; prev++)
+                if (!sameGroup)
                 {
-                    if (_doc.GetBlockLength(prev) == 0)
-                        paragraphBreak = true;
+                    bool paragraphBreak = false;
+                    for (int prev = _visualLines[i - 1].BlockIndex; prev < bi && !paragraphBreak; prev++)
+                    {
+                        if (_doc.GetBlockLength(prev) == 0)
+                            paragraphBreak = true;
+                    }
+                    if (paragraphBreak && _doc.GetBlockLength(_visualLines[i - 1].BlockIndex) > 0)
+                        y += _paragraphGap;
                 }
-                if (paragraphBreak && _doc.GetBlockLength(_visualLines[i - 1].BlockIndex) > 0)
-                    y += _paragraphGap;
             }
-            skipGap:
             _lineYPositions.Add(y);
             var lineVl = _visualLines[i];
             double lineH = GetLineHeight(lineVl.BlockKind);

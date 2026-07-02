@@ -104,13 +104,13 @@
 - **What's wrong**: Two `MeasureStringWidth` overloads with subtly different signatures doing the same work. Changes must be replicated in both.
 - **Fix applied**: Deleted the unused overload (start/length variant had zero callers).
 
-### M5 — goto skipGap in ComputeLayoutCore
+### ~~M5 — goto skipGap in ComputeLayoutCore~~ FIXED
 
 - **Severity**: Medium
 - **Category**: Code Smell
 - **Location**: `DocsCanvas.cs:1647-1658`
 - **What's wrong**: `goto skipGap` used to skip inter-block gap calculation.
-- **What to do**: Replace with a `bool addGap` flag.
+- **Fix applied**: Replaced with a `bool sameGroup` flag and nested `if` block.
 
 ### M6 — DetectTables drops ColorSpans and BlockColor
 
