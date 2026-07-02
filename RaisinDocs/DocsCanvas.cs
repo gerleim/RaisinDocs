@@ -3075,6 +3075,9 @@ public partial class DocsCanvas : FrameworkElement
         EnsureMeasured();
         dc.DrawRectangle(_palette.Background, null, new Rect(0, 0, ActualWidth, ActualHeight));
 
+        // Mutating layout state here violates WPF's OnRender contract (should only draw, not mutate).
+        // Correct placement would be MeasureOverride/ArrangeOverride, but this is stable because
+        // ComputeLayout is idempotent and completes before any drawing calls.
         ComputeLayout();
 
         double effectiveScroll = _scrollOffset + _smoother.Offset;

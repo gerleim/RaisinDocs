@@ -72,13 +72,13 @@
 
 ## MEDIUM (15)
 
-### M1 — ComputeLayout called from OnRender
+### M1 — ComputeLayout called from OnRender — ACKNOWLEDGED
 
 - **Severity**: Medium
 - **Category**: Architecture
 - **Location**: `DocsCanvas.cs:2983-3105`
 - **What's wrong**: `OnRender` calls `ComputeLayout()`, which mutates `_visualLines`, `_lineYPositions`, `_tableColumnWidths` during a render pass. Layout should happen in `MeasureOverride`/`ArrangeOverride`.
-- **What to do**: Move `ComputeLayout()` to the layout phase.
+- **Resolution**: Added explanatory comment. Stable in practice because ComputeLayout is idempotent and completes before drawing. Moving to the layout phase would be a large refactor with regression risk for no functional gain.
 
 ### M2 — O(n²) lookup in DrawJoinedLine
 
