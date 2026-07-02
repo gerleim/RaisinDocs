@@ -78,6 +78,8 @@ public class ParsedBlock
     public IReadOnlyList<InlineLink>? Links { get; init; }
     public IReadOnlyList<ColorSpan>? ColorSpans { get; init; }
     public BlockColor? BlockColor { get; init; }
+    public BlockColor? DivOpenColor { get; init; }
+    public bool HasDivClose { get; init; }
     public TableRowInfo? TableRow { get; init; }
     public TableInfo? Table { get; init; }
 }
@@ -128,26 +130,43 @@ public static class MarkdownParser
                 continue;
             }
 
-            if (IsColorDivOpen(text))
+            bool hasDivOpen = TryExtractDivOpen(text, out int divOpenTagEnd);
+            bool hasDivClose = TryExtractDivClose(text, out int divCloseTagStart);
+
+            if (hasDivOpen || hasDivClose)
             {
-                result.Add(new ParsedBlock
+                int contentStart = hasDivOpen ? divOpenTagEnd : 0;
+                int contentEnd = hasDivClose ? divCloseTagStart : text.Length;
+                bool hasContent = contentEnd > contentStart
+                                  && text.AsSpan()[contentStart..contentEnd].Trim().Length > 0;
+
+                if (!hasContent)
                 {
-                    Kind = BlockKind.ColorDivOpen,
-                    Runs = [new StyledRun(0, text.Length, InlineStyle.Normal)],
-                    BlockColor = ParseDivProperties(text, theme),
-                });
-                continue;
+                    if (hasDivOpen && !hasDivClose)
+                    {
+                        result.Add(new ParsedBlock
+                        {
+                            Kind = BlockKind.ColorDivOpen,
+                            Runs = [new StyledRun(0, text.Length, InlineStyle.Normal)],
+                            BlockColor = ParseDivProperties(text, theme),
+                        });
+                        continue;
+                    }
+
+                    if (hasDivClose && !hasDivOpen)
+                    {
+                        result.Add(new ParsedBlock
+                        {
+                            Kind = BlockKind.ColorDivClose,
+                            Runs = [new StyledRun(0, text.Length, InlineStyle.Normal)],
+                        });
+                        continue;
+                    }
+                }
             }
 
-            if (IsColorDivClose(text))
-            {
-                result.Add(new ParsedBlock
-                {
-                    Kind = BlockKind.ColorDivClose,
-                    Runs = [new StyledRun(0, text.Length, InlineStyle.Normal)],
-                });
-                continue;
-            }
+            BlockColor? divOpenColor = hasDivOpen ? ParseDivProperties(text[..divOpenTagEnd], theme) : null;
+            bool blockHasDivClose = hasDivClose;
 
             if (TryParseLinkDefinition(text, out _, out _, out _))
             {
@@ -168,7 +187,11 @@ public static class MarkdownParser
 
             var colorSpans = (kind == BlockKind.FencedCodeLine) ? null : ParseInlineColorTags(text, theme);
 
-            result.Add(new ParsedBlock { Kind = kind, Runs = runs, Images = images, Links = links, ColorSpans = colorSpans });
+            result.Add(new ParsedBlock
+            {
+                Kind = kind, Runs = runs, Images = images, Links = links, ColorSpans = colorSpans,
+                DivOpenColor = divOpenColor, HasDivClose = blockHasDivClose,
+            });
         }
 
         DetectTables(result, getBlockText);
@@ -222,6 +245,9 @@ public static class MarkdownParser
                 continue;
             }
 
+            if (block.DivOpenColor != null)
+                divStack.Push(block.DivOpenColor.Value);
+
             if (divStack.Count > 0 && block.Kind != BlockKind.ThemeDefinition)
             {
                 var merged = MergeBlockColors(divStack);
@@ -235,10 +261,15 @@ public static class MarkdownParser
                     Links = block.Links,
                     ColorSpans = block.ColorSpans,
                     BlockColor = merged,
+                    DivOpenColor = block.DivOpenColor,
+                    HasDivClose = block.HasDivClose,
                     TableRow = block.TableRow,
                     Table = block.Table,
                 };
             }
+
+            if (block.HasDivClose && divStack.Count > 0)
+                divStack.Pop();
         }
     }
 
@@ -360,6 +391,9 @@ public static class MarkdownParser
                 Runs = blocks[i].Runs,
                 Images = blocks[i].Images,
                 Links = blocks[i].Links,
+                ColorSpans = blocks[i].ColorSpans,
+                DivOpenColor = blocks[i].DivOpenColor,
+                HasDivClose = blocks[i].HasDivClose,
                 TableRow = headerRow,
                 Table = tableInfo,
             };
@@ -370,6 +404,8 @@ public static class MarkdownParser
                 Kind = BlockKind.TableSeparatorRow,
                 Runs = blocks[i + 1].Runs,
                 IsTableSeparator = true,
+                DivOpenColor = blocks[i + 1].DivOpenColor,
+                HasDivClose = blocks[i + 1].HasDivClose,
                 TableRow = new TableRowInfo { Cells = sepCells },
                 Table = tableInfo,
             };
@@ -385,6 +421,9 @@ public static class MarkdownParser
                     Runs = blocks[j].Runs,
                     Images = blocks[j].Images,
                     Links = blocks[j].Links,
+                    ColorSpans = blocks[j].ColorSpans,
+                    DivOpenColor = blocks[j].DivOpenColor,
+                    HasDivClose = blocks[j].HasDivClose,
                     TableRow = new TableRowInfo { Cells = dataCells },
                     Table = tableInfo,
                 };
@@ -1103,16 +1142,33 @@ public static class MarkdownParser
                && trimmed.EndsWith(CommentClose.AsSpan(), StringComparison.Ordinal);
     }
 
-    internal static bool IsColorDivOpen(string text)
+    internal static bool IsColorDivOpen(string text) => TryExtractDivOpen(text, out _);
+
+    internal static bool IsColorDivClose(string text) => TryExtractDivClose(text, out _);
+
+    internal static bool TryExtractDivOpen(string text, out int tagEnd)
     {
-        var trimmed = text.AsSpan().Trim();
-        return trimmed.StartsWith(DivOpen.AsSpan(), StringComparison.OrdinalIgnoreCase)
-               && trimmed.EndsWith(CommentClose.AsSpan(), StringComparison.Ordinal);
+        tagEnd = 0;
+        var span = text.AsSpan();
+        int leading = span.Length - span.TrimStart().Length;
+        var after = span[leading..];
+        if (!after.StartsWith(DivOpen.AsSpan(), StringComparison.OrdinalIgnoreCase))
+            return false;
+        int closeIdx = text.IndexOf(CommentClose, leading + DivOpen.Length, StringComparison.Ordinal);
+        if (closeIdx < 0) return false;
+        tagEnd = closeIdx + CommentClose.Length;
+        return true;
     }
 
-    internal static bool IsColorDivClose(string text)
+    internal static bool TryExtractDivClose(string text, out int tagStart)
     {
-        return text.AsSpan().Trim().Equals(DivClose.AsSpan(), StringComparison.OrdinalIgnoreCase);
+        tagStart = 0;
+        var span = text.AsSpan();
+        var trimmedEnd = span.TrimEnd();
+        if (!trimmedEnd.EndsWith(DivClose.AsSpan(), StringComparison.OrdinalIgnoreCase))
+            return false;
+        tagStart = trimmedEnd.Length - DivClose.Length;
+        return true;
     }
 
     internal static int FindInlineColorOpenEnd(string text)

@@ -112,13 +112,13 @@
 - **What's wrong**: `goto skipGap` used to skip inter-block gap calculation.
 - **Fix applied**: Replaced with a `bool sameGroup` flag and nested `if` block.
 
-### M6 — DetectTables drops ColorSpans and BlockColor
+### ~~M6 — DetectTables drops ColorSpans and BlockColor~~ FIXED
 
 - **Severity**: Medium
 - **Category**: Bug
 - **Location**: `MarkdownParser.cs:356-390`
 - **What's wrong**: `DetectTables` replaces blocks with new `ParsedBlock` instances but doesn't copy `ColorSpans` or `BlockColor`. Inline color tags inside table cells are silently lost.
-- **What to do**: Copy `ColorSpans`/`BlockColor` to the new blocks. Better: convert `ParsedBlock` to a record for safe `with` expressions.
+- **Fix applied**: Added `ColorSpans` to header and data row replacement blocks. `BlockColor` is not affected (set by `ApplyBlockDivColors` which runs after `DetectTables`).
 
 ### M7 — ParsedBlock fragile clone-all-fields pattern
 
