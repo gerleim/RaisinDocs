@@ -229,6 +229,10 @@ public partial class DocsCanvas : FrameworkElement
     private double _layoutMaxWidth;
     private double _scrollOffset;
     private readonly SmoothScroller _smoother;
+    private double _wheelVelocity;
+    private bool _wheelCoasting;
+    private TimeSpan _lastWheelFrameTime;
+    private const double WheelDamping = 10.0;
 
     private List<ParsedBlock>? _parsedBlocks;
     private List<BlockVisualMap>? _visualMaps;
@@ -297,9 +301,10 @@ public partial class DocsCanvas : FrameworkElement
             : "";
     }
 
-    internal void GetMinimapLineColorInfo(int index, out RgbColor? blockBg,
+    internal void GetMinimapLineColorInfo(int index, out RgbColor? blockFg, out RgbColor? blockBg,
         out IReadOnlyList<ColorSpan>? colorSpans, out int spanBaseOffset)
     {
+        blockFg = null;
         blockBg = null;
         colorSpans = null;
         spanBaseOffset = 0;
@@ -312,6 +317,7 @@ public partial class DocsCanvas : FrameworkElement
 
         if (vl.Group != null)
         {
+            blockFg = vl.Group.JoinedParsed.BlockColor?.Foreground;
             blockBg = vl.Group.JoinedParsed.BlockColor?.Background;
             colorSpans = vl.Group.JoinedParsed.ColorSpans;
             return;
@@ -320,12 +326,14 @@ public partial class DocsCanvas : FrameworkElement
         if (vl.BlockIndex >= _parsedBlocks.Count) return;
         var parsed = _parsedBlocks[vl.BlockIndex];
         if (parsed.Kind == BlockKind.FencedCodeLine) return;
+        blockFg = parsed.BlockColor?.Foreground;
         blockBg = parsed.BlockColor?.Background;
         colorSpans = parsed.ColorSpans;
     }
 
     internal void SetScrollOffsetDirect(double offset)
     {
+        StopWheelCoast();
         _scrollOffset = Math.Clamp(offset, 0, Math.Max(0, _totalContentHeight - ActualHeight));
         _smoother.Offset = 0;
         InvalidateVisual();
@@ -333,11 +341,11 @@ public partial class DocsCanvas : FrameworkElement
 
     internal void SmoothScrollTo(double targetOffset)
     {
+        StopWheelCoast();
         double oldScroll = _scrollOffset;
         _scrollOffset = Math.Clamp(targetOffset, 0, Math.Max(0, _totalContentHeight - ActualHeight));
         double jump = _scrollOffset - oldScroll;
         _smoother.Offset -= jump;
-        _smoother.DeferDamping(0);
         _smoother.Start();
         InvalidateVisual();
     }
@@ -408,6 +416,7 @@ public partial class DocsCanvas : FrameworkElement
     {
         if (_editMode == mode) return;
         SealAndStopTimer();
+        StopWheelCoast();
         _smoother.Cancel();
 
         var anchor = ComputeScrollAnchor();
@@ -2223,6 +2232,7 @@ public partial class DocsCanvas : FrameworkElement
 
     private void EnsureCursorVisible()
     {
+        StopWheelCoast();
         _smoother.Cancel();
         ComputeLayout();
         if (_visualLines.Count == 0) return;
@@ -2241,17 +2251,67 @@ public partial class DocsCanvas : FrameworkElement
     {
         base.OnMouseWheel(e);
         ComputeLayout();
-        double oldScroll = _scrollOffset;
-        _scrollOffset -= e.Delta;
-        ClampScroll();
-        double jump = _scrollOffset - oldScroll;
-        if (jump != 0)
+
+        if (_smoother.IsAnimating)
         {
-            _smoother.Offset -= jump;
-            _smoother.DeferDamping(0.06);
-            _smoother.Start();
+            _scrollOffset += _smoother.Offset;
+            _smoother.Cancel();
+            ClampScroll();
+        }
+
+        _wheelVelocity -= e.Delta * WheelDamping;
+
+        if (!_wheelCoasting)
+        {
+            _wheelCoasting = true;
+            _lastWheelFrameTime = TimeSpan.Zero;
+            CompositionTarget.Rendering += OnWheelFrame;
+            InvalidateVisual();
         }
         e.Handled = true;
+    }
+
+    private void OnWheelFrame(object? sender, EventArgs e)
+    {
+        if (e is not RenderingEventArgs args) return;
+
+        double dt;
+        if (_lastWheelFrameTime == TimeSpan.Zero)
+        {
+            _lastWheelFrameTime = args.RenderingTime;
+            dt = 1.0 / 60;
+        }
+        else
+        {
+            dt = (args.RenderingTime - _lastWheelFrameTime).TotalSeconds;
+            _lastWheelFrameTime = args.RenderingTime;
+            if (dt <= 0 || dt >= 0.5) return;
+        }
+
+        double before = _scrollOffset;
+        _scrollOffset += _wheelVelocity * dt;
+        ClampScroll();
+        if (_scrollOffset != before + _wheelVelocity * dt)
+            _wheelVelocity = 0;
+
+        _wheelVelocity *= Math.Exp(-dt * WheelDamping);
+
+        if (Math.Abs(_wheelVelocity) < 0.5)
+        {
+            _wheelVelocity = 0;
+            _wheelCoasting = false;
+            CompositionTarget.Rendering -= OnWheelFrame;
+        }
+
+        InvalidateVisual();
+    }
+
+    private void StopWheelCoast()
+    {
+        if (!_wheelCoasting) return;
+        _wheelVelocity = 0;
+        _wheelCoasting = false;
+        CompositionTarget.Rendering -= OnWheelFrame;
     }
 
     // --- Mouse ---
