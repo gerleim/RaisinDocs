@@ -160,13 +160,13 @@
 - **What's wrong**: New `SolidColorBrush` objects created and frozen every render frame for color spans. Dozens per frame at 60fps = significant GC pressure.
 - **Fix applied**: Added `_brushCache` dictionary and `GetCachedBrush` helper. All 6 color-span brush allocation sites (2 in DocsCanvas.cs, 4 in VisualMode.cs) now reuse frozen brushes by Color key.
 
-### M12 — Redundant GetBlockText allocations in render path
+### ~~M12 — Redundant GetBlockText allocations in render path~~ FIXED
 
 - **Severity**: Medium
 - **Category**: Performance
 - **Location**: `DocsCanvas.cs:3228`
 - **What's wrong**: `ApplySyntaxDimming` calls `_doc.GetBlockText()` (new string allocation) redundantly — caller already has `blockText`. Same for `DrawTrailingSpaceDots`.
-- **What to do**: Pass `blockText` as a parameter.
+- **Fix applied**: Added `blockText` parameter to `ApplySyntaxDimming` (and `ApplyInlineStyles` which calls it), removing the redundant allocation. `DrawTrailingSpaceDots` already accepted `blockText`.
 
 ### M13 — _parsedBlocks accessed without bounds check
 

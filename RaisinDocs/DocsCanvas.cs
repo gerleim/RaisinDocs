@@ -1943,7 +1943,7 @@ public partial class DocsCanvas : FrameworkElement
             var ft = new FormattedText(lineText, CultureInfo.InvariantCulture,
                 FlowDirection.LeftToRight, GetBlockBaseTypeface(vl.BlockKind),
                 GetBlockFontSize(vl.BlockKind), _palette.Foreground, _dpiScale);
-            ApplyInlineStyles(ft, vl, parsed);
+            ApplyInlineStyles(ft, vl, parsed, blockText);
             var geom = ft.BuildHighlightGeometry(new Point(0, 0), 0, localOff);
             return x + (geom != null ? geom.Bounds.Right : ft.WidthIncludingTrailingWhitespace);
         }
@@ -3291,7 +3291,7 @@ public partial class DocsCanvas : FrameworkElement
                         var ft = new FormattedText(text, CultureInfo.InvariantCulture,
                             FlowDirection.LeftToRight, baseTypeface, fontSize,
                             _palette.Foreground, _dpiScale);
-                        ApplyInlineStyles(ft, vl, parsed);
+                        ApplyInlineStyles(ft, vl, parsed, blockText);
                         dc.DrawText(ft, new Point(textX, lineY - effectiveScroll));
 
                         if (_showWhitespace)
@@ -3365,7 +3365,7 @@ public partial class DocsCanvas : FrameworkElement
         return group.JoinedMap.BuildDisplayString(group.JoinedText, start, length);
     }
 
-    private void ApplyInlineStyles(FormattedText ft, VisualLine vl, ParsedBlock parsed)
+    private void ApplyInlineStyles(FormattedText ft, VisualLine vl, ParsedBlock parsed, string blockText)
     {
         foreach (var run in parsed.Runs)
         {
@@ -3406,7 +3406,7 @@ public partial class DocsCanvas : FrameworkElement
         }
 
         ApplyColorSpans(ft, vl, parsed);
-        ApplySyntaxDimming(ft, vl, parsed);
+        ApplySyntaxDimming(ft, vl, parsed, blockText);
     }
 
     private void ApplyColorSpans(FormattedText ft, VisualLine vl, ParsedBlock parsed)
@@ -3452,9 +3452,8 @@ public partial class DocsCanvas : FrameworkElement
         return brush;
     }
 
-    private void ApplySyntaxDimming(FormattedText ft, VisualLine vl, ParsedBlock parsed)
+    private void ApplySyntaxDimming(FormattedText ft, VisualLine vl, ParsedBlock parsed, string blockText)
     {
-        string blockText = _doc.GetBlockText(vl.BlockIndex);
         int vlEnd = vl.StartOffset + vl.Length;
 
         if (parsed.Kind >= BlockKind.Heading1 && parsed.Kind <= BlockKind.Heading6)
