@@ -189,14 +189,15 @@ public partial class DocsCanvas
 
     private void EnsureCursorOnVisibleBlock(bool? preferForward = null)
     {
-        if (_parsedBlocks == null) return;
+        if (_parsedBlocks == null || _doc.CursorBlock >= _parsedBlocks.Count) return;
         if (!_parsedBlocks[_doc.CursorBlock].IsSkippedInVisual) return;
 
         bool forward = preferForward ?? true;
+        int limit = Math.Min(_doc.BlockCount, _parsedBlocks.Count);
 
         if (forward)
         {
-            for (int i = _doc.CursorBlock + 1; i < _doc.BlockCount; i++)
+            for (int i = _doc.CursorBlock + 1; i < limit; i++)
             {
                 if (!_parsedBlocks[i].IsSkippedInVisual)
                 {
@@ -235,7 +236,7 @@ public partial class DocsCanvas
         }
         else
         {
-            for (int i = _doc.CursorBlock + 1; i < _doc.BlockCount; i++)
+            for (int i = _doc.CursorBlock + 1; i < limit; i++)
             {
                 if (!_parsedBlocks[i].IsSkippedInVisual)
                 {

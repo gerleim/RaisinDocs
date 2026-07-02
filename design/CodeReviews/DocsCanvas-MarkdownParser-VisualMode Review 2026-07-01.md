@@ -168,13 +168,13 @@
 - **What's wrong**: `ApplySyntaxDimming` calls `_doc.GetBlockText()` (new string allocation) redundantly — caller already has `blockText`. Same for `DrawTrailingSpaceDots`.
 - **Fix applied**: Added `blockText` parameter to `ApplySyntaxDimming` (and `ApplyInlineStyles` which calls it), removing the redundant allocation. `DrawTrailingSpaceDots` already accepted `blockText`.
 
-### M13 — _parsedBlocks accessed without bounds check
+### ~~M13 — _parsedBlocks accessed without bounds check~~ FIXED
 
 - **Severity**: Medium
 - **Category**: Risk
 - **Location**: `DocsCanvas.VisualMode.cs:231-237`
 - **What's wrong**: `_parsedBlocks[_doc.CursorBlock - 1]` accessed without bounds-checking against `_parsedBlocks.Count`. Stale list → `ArgumentOutOfRangeException`.
-- **What to do**: Add `if (_doc.CursorBlock >= _parsedBlocks.Count) return;` guard.
+- **Fix applied**: Added bounds guard at entry and clamped forward-loop bounds to `Math.Min(_doc.BlockCount, _parsedBlocks.Count)`.
 
 ### M14 — HandleTableArrow fallthrough returns true
 
