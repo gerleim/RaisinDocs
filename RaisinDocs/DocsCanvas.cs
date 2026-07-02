@@ -2036,7 +2036,10 @@ public partial class DocsCanvas : FrameworkElement
                 int contentEnd = runEnd - styleMarkerLen;
                 int overlapStart = Math.Max(bStart, contentStart);
                 int overlapEnd = Math.Min(bEnd, contentEnd);
-                if (overlapStart < overlapEnd && run.Style == targetStyle) continue;
+                bool hasTargetStyle = run.Style == targetStyle
+                    || (run.Style == InlineStyle.BoldItalic
+                        && (targetStyle == InlineStyle.Bold || targetStyle == InlineStyle.Italic));
+                if (overlapStart < overlapEnd && hasTargetStyle) continue;
 
                 allStyled = false;
                 break;
@@ -2061,7 +2064,10 @@ public partial class DocsCanvas : FrameworkElement
                 {
                     int runEnd = run.Start + run.Length;
                     if (runEnd <= bStart || run.Start >= bEnd) continue;
-                    if (run.Style != targetStyle) continue;
+                    if (run.Style != targetStyle
+                        && !(run.Style == InlineStyle.BoldItalic
+                            && (targetStyle == InlineStyle.Bold || targetStyle == InlineStyle.Italic)))
+                        continue;
 
                     _doc.RemoveTextAt(b, runEnd - markerLen, markerLen);
                     _doc.RemoveTextAt(b, run.Start, markerLen);

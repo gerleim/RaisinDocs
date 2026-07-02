@@ -44,13 +44,13 @@
 - **What's wrong**: `HitTestVisualLine` returns `_visualLines.Count - 1` when `y` is past all lines. If `_visualLines` is empty (all blocks skipped in visual mode), this returns `-1`. All callers index `_visualLines` without checking → `IndexOutOfRangeException`.
 - **Fix applied**: Added `_visualLines.Count == 0` guards in `HitTestVisualLine`, `HitTestToPosition`, and `EnsureCursorVisible`.
 
-### H3 — ToggleInlineStyle cannot remove Bold/Italic from BoldItalic spans
+### ~~H3 — ToggleInlineStyle cannot remove Bold/Italic from BoldItalic spans~~ FIXED
 
 - **Severity**: High
 - **Category**: Bug
 - **Location**: `DocsCanvas.cs:1955-2018`
 - **What's wrong**: The removal loop at line 2018 does `if (run.Style != targetStyle) continue`, which skips `BoldItalic` runs because `BoldItalic != Bold`. Bold/Italic cannot be individually removed from `***bold-italic***` spans — silent no-op.
-- **What to do**: Handle `BoldItalic` in the removal branch: removing Bold from `***` should convert markers to `*` (leaving italic), and vice versa.
+- **Fix applied**: Both the detection and removal loops now match `BoldItalic` runs when targeting `Bold` or `Italic`. Removing Bold from `***text***` strips 2 stars per side → `*text*`; removing Italic strips 1 → `**text**`.
 
 ### H4 — Table column width measurement off by leading whitespace
 
