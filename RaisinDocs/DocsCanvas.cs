@@ -622,15 +622,15 @@ public partial class DocsCanvas : FrameworkElement
 
     public void InsertFgColor(string colorName)
     {
-        InsertColorWrapper($"<!--@fg:{colorName}-->", "<!--/@fg-->");
+        InsertColorWrapper($"<!--@fg:{colorName}-->", "<!--/@fg-->", $"fg:{colorName}");
     }
 
     public void InsertBgColor(string colorName)
     {
-        InsertColorWrapper($"<!--@bg:{colorName}-->", "<!--/@bg-->");
+        InsertColorWrapper($"<!--@bg:{colorName}-->", "<!--/@bg-->", $"bg:{colorName}");
     }
 
-    private void InsertColorWrapper(string opener, string closer)
+    private void InsertColorWrapper(string opener, string closer, string divProperty)
     {
         SealAndStopTimer();
         _doc.BeginUndoGroup();
@@ -649,10 +649,11 @@ public partial class DocsCanvas : FrameworkElement
             }
             else
             {
-                _doc.InsertTextAt(eb, eo, closer);
-                _doc.InsertTextAt(sb, so, opener);
-                _doc.CursorBlock = eb;
-                _doc.CursorOffset = eo + (sb == eb ? opener.Length : 0);
+                string divOpen = $"<!--@div {divProperty}-->";
+                _doc.InsertBlockAt(eb + 1, "<!--/@div-->");
+                _doc.InsertBlockAt(sb, divOpen);
+                _doc.CursorBlock = eb + 2;
+                _doc.CursorOffset = eo;
                 _doc.AnchorBlock = _doc.CursorBlock;
                 _doc.AnchorOffset = _doc.CursorOffset;
             }
@@ -3244,6 +3245,7 @@ public partial class DocsCanvas : FrameworkElement
     private void ApplyColorSpans(FormattedText ft, VisualLine vl, ParsedBlock parsed)
     {
         if (parsed.ColorSpans == null && parsed.BlockColor == null) return;
+        if (parsed.Kind == BlockKind.FencedCodeLine) return;
 
         if (parsed.BlockColor?.Foreground is { } blockFg)
         {
@@ -3381,11 +3383,14 @@ public partial class DocsCanvas : FrameworkElement
         if (MarkdownParser.IsTrailingHardBreak(parsed, blockText))
             DimRange(ft, vl, blockText.Length - 1, 1);
 
-        var tagRanges = MarkdownParser.FindInlineColorTagRanges(blockText);
-        if (tagRanges != null)
+        if (parsed.Kind != BlockKind.FencedCodeLine)
         {
-            foreach (var tag in tagRanges)
-                DimRange(ft, vl, tag.Start, tag.Length);
+            var tagRanges = MarkdownParser.FindInlineColorTagRanges(blockText);
+            if (tagRanges != null)
+            {
+                foreach (var tag in tagRanges)
+                    DimRange(ft, vl, tag.Start, tag.Length);
+            }
         }
     }
 
@@ -3467,6 +3472,7 @@ public partial class DocsCanvas : FrameworkElement
             var vl = _visualLines[i];
             if (vl.BlockIndex >= _parsedBlocks.Count) continue;
             var parsed = _parsedBlocks[vl.BlockIndex];
+            if (parsed.Kind == BlockKind.FencedCodeLine) continue;
             if (parsed.BlockColor?.Background is not { } bg) continue;
 
             double lineH = GetEffectiveLineHeight(vl);

@@ -1041,6 +1041,7 @@ public partial class DocsCanvas
     private void ApplyColorSpansVisual(FormattedText ft, VisualLine vl,
         ParsedBlock parsed, BlockVisualMap map)
     {
+        if (parsed.Kind == BlockKind.FencedCodeLine) return;
         int ftLen = ft.Text.Length;
 
         if (parsed.BlockColor?.Foreground is { } blockFg)
