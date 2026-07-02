@@ -434,13 +434,15 @@ public class DocsFormattingBar : Control
         var canvas = Canvas;
         if (canvas == null) return;
 
+        var kind = canvas.CurrentBlockKind;
+        bool inCodeBlock = kind == BlockKind.FencedCodeLine;
+
         SetCheckedSilent(_boldButton, canvas.SelectionIsBold);
         SetCheckedSilent(_italicButton, canvas.SelectionIsItalic);
         SetCheckedSilent(_strikethroughButton, canvas.SelectionIsStrikethrough);
         SetCheckedSilent(_codeButton, canvas.SelectionIsCode);
-        SetCheckedSilent(_codeBlockButton, canvas.CurrentBlockKind == BlockKind.FencedCodeLine);
+        SetCheckedSilent(_codeBlockButton, inCodeBlock);
 
-        var kind = canvas.CurrentBlockKind;
         SetCheckedSilent(_h1Button, kind == BlockKind.Heading1);
         SetCheckedSilent(_h2Button, kind == BlockKind.Heading2);
         SetCheckedSilent(_h3Button, kind == BlockKind.Heading3);
@@ -448,6 +450,21 @@ public class DocsFormattingBar : Control
         SetCheckedSilent(_orderedListButton, kind == BlockKind.OrderedListItem);
         SetCheckedSilent(_taskListButton, kind is BlockKind.TaskListItemUnchecked or BlockKind.TaskListItemChecked);
         SetCheckedSilent(_quoteButton, kind == BlockKind.Blockquote);
+
+        if (_boldButton != null) _boldButton.IsEnabled = !inCodeBlock;
+        if (_italicButton != null) _italicButton.IsEnabled = !inCodeBlock;
+        if (_strikethroughButton != null) _strikethroughButton.IsEnabled = !inCodeBlock;
+        if (_codeButton != null) _codeButton.IsEnabled = !inCodeBlock;
+        if (_h1Button != null) _h1Button.IsEnabled = !inCodeBlock;
+        if (_h2Button != null) _h2Button.IsEnabled = !inCodeBlock;
+        if (_h3Button != null) _h3Button.IsEnabled = !inCodeBlock;
+        if (_bulletButton != null) _bulletButton.IsEnabled = !inCodeBlock;
+        if (_orderedListButton != null) _orderedListButton.IsEnabled = !inCodeBlock;
+        if (_taskListButton != null) _taskListButton.IsEnabled = !inCodeBlock;
+        if (_quoteButton != null) _quoteButton.IsEnabled = !inCodeBlock;
+        if (_linkButton != null) _linkButton.IsEnabled = !inCodeBlock;
+        if (_insertTableButton != null) _insertTableButton.IsEnabled = !inCodeBlock;
+        if (_colorTextButton != null) _colorTextButton.IsEnabled = !inCodeBlock;
 
         if (_reflowButton != null)
             _reflowButton.IsEnabled = canvas.CanReformat;
