@@ -3571,6 +3571,25 @@ public partial class DocsCanvas : FrameworkElement
 
             DimRange(ft, vl, run.Start, markerLen);
             DimRange(ft, vl, runEnd - markerLen, markerLen);
+
+            if (run.Style is InlineStyle.Bold or InlineStyle.Italic or InlineStyle.BoldItalic or InlineStyle.Strikethrough)
+            {
+                char mc = run.Style == InlineStyle.Strikethrough ? '~' : '*';
+                int dbl = markerLen * 2;
+                int innerStart = run.Start + markerLen;
+                int innerEnd = runEnd - markerLen;
+                for (int pos = innerStart; pos <= innerEnd - dbl; pos++)
+                {
+                    if (blockText[pos] != mc) continue;
+                    int mLen = 0;
+                    while (pos + mLen < innerEnd && blockText[pos + mLen] == mc) mLen++;
+                    if (mLen >= dbl)
+                    {
+                        DimRange(ft, vl, pos, mLen);
+                        pos += mLen - 1;
+                    }
+                }
+            }
         }
 
         if (MarkdownParser.IsTrailingHardBreak(parsed, blockText))
