@@ -716,6 +716,7 @@ public partial class DocsCanvas
     {
         var cells = parsed.TableRow!.Cells;
         string blockText = _doc.GetBlockText(blockIndex);
+        BlockVisualMap? map = (_visualMaps != null && blockIndex < _visualMaps.Count) ? _visualMaps[blockIndex] : null;
 
         double x = 0;
         for (int c = 0; c < cells.Count && c < colWidths.Length; c++)
@@ -724,23 +725,41 @@ public partial class DocsCanvas
             int cellEnd = cell.Start + cell.Length;
             if (cursorOffset >= cell.Start && cursorOffset <= cellEnd)
             {
-                string cellContent = blockText.Substring(cell.Start, cell.Length).Trim();
-                int leadTrim = 0;
-                while (cell.Start + leadTrim < cellEnd && blockText[cell.Start + leadTrim] == ' ')
-                    leadTrim++;
+                int trimStart = cell.Start;
+                while (trimStart < cellEnd && blockText[trimStart] == ' ') trimStart++;
+                int trimEnd = cellEnd;
+                while (trimEnd > trimStart && blockText[trimEnd - 1] == ' ') trimEnd--;
 
-                int offsetInContent = Math.Clamp(cursorOffset - cell.Start - leadTrim, 0, cellContent.Length);
-                int runIdx = 0;
                 double textW = 0;
-                for (int i = 0; i < offsetInContent; i++)
+                double fullTextW = 0;
+
+                if (map != null)
                 {
-                    var style = GetStyleAtOffset(parsed.Runs, cell.Start + leadTrim + i, ref runIdx);
-                    textW += MeasureCharWidth(cellContent[i], parsed.Kind, style);
+                    int ri = 0;
+                    for (int rawI = trimStart; rawI < trimEnd; rawI++)
+                    {
+                        if (map.IsHidden(rawI)) continue;
+                        var style = GetStyleAtOffset(parsed.Runs, rawI, ref ri);
+                        double cw = MeasureCharWidth(blockText[rawI], parsed.Kind, style);
+                        fullTextW += cw;
+                        if (rawI < cursorOffset) textW += cw;
+                    }
+                }
+                else
+                {
+                    string cellContent = blockText.Substring(trimStart, trimEnd - trimStart);
+                    int offsetInContent = Math.Clamp(cursorOffset - trimStart, 0, cellContent.Length);
+                    int ri = 0;
+                    for (int i = 0; i < offsetInContent; i++)
+                    {
+                        var style = GetStyleAtOffset(parsed.Runs, trimStart + i, ref ri);
+                        textW += MeasureCharWidth(cellContent[i], parsed.Kind, style);
+                    }
+                    fullTextW = MeasureStringWidth(cellContent, parsed.Kind, parsed.Runs, trimStart);
                 }
 
                 var align = parsed.Table!.Alignments[c];
                 double cellContentWidth = colWidths[c] - _tableCellPadding * 2;
-                double fullTextW = MeasureStringWidth(cellContent, parsed.Kind, parsed.Runs, cell.Start + leadTrim);
                 double alignOffset = align switch
                 {
                     ColumnAlignment.Center => Math.Max(0, (cellContentWidth - fullTextW) / 2),
@@ -758,6 +777,7 @@ public partial class DocsCanvas
     {
         var cells = parsed.TableRow!.Cells;
         string blockText = _doc.GetBlockText(vl.BlockIndex);
+        BlockVisualMap? map = (_visualMaps != null && vl.BlockIndex < _visualMaps.Count) ? _visualMaps[vl.BlockIndex] : null;
         double cx = 0;
 
         for (int c = 0; c < cells.Count && c < colWidths.Length; c++)
@@ -765,14 +785,31 @@ public partial class DocsCanvas
             if (x < cx + colWidths[c] || c == cells.Count - 1 || c == colWidths.Length - 1)
             {
                 var cell = cells[c];
-                string cellContent = blockText.Substring(cell.Start, cell.Length).Trim();
-                int leadTrim = 0;
-                while (cell.Start + leadTrim < cell.Start + cell.Length && blockText[cell.Start + leadTrim] == ' ')
-                    leadTrim++;
+                int trimStart = cell.Start;
+                int trimEnd = cell.Start + cell.Length;
+                while (trimStart < trimEnd && blockText[trimStart] == ' ') trimStart++;
+                while (trimEnd > trimStart && blockText[trimEnd - 1] == ' ') trimEnd--;
+
+                double fullTextW;
+                if (map != null)
+                {
+                    fullTextW = 0;
+                    int ri = 0;
+                    for (int rawI = trimStart; rawI < trimEnd; rawI++)
+                    {
+                        if (map.IsHidden(rawI)) continue;
+                        var style = GetStyleAtOffset(parsed.Runs, rawI, ref ri);
+                        fullTextW += MeasureCharWidth(blockText[rawI], parsed.Kind, style);
+                    }
+                }
+                else
+                {
+                    string cellContent = blockText.Substring(trimStart, trimEnd - trimStart);
+                    fullTextW = MeasureStringWidth(cellContent, parsed.Kind, parsed.Runs, trimStart);
+                }
 
                 var align = parsed.Table!.Alignments[c];
                 double cellContentWidth = colWidths[c] - _tableCellPadding * 2;
-                double fullTextW = MeasureStringWidth(cellContent, parsed.Kind, parsed.Runs, cell.Start + leadTrim);
                 double alignOffset = align switch
                 {
                     ColumnAlignment.Center => Math.Max(0, (cellContentWidth - fullTextW) / 2),
@@ -783,15 +820,33 @@ public partial class DocsCanvas
                 double localX = x - cx - _tableCellPadding - alignOffset;
                 double accum = 0;
                 int runIdx = 0;
-                for (int i = 0; i < cellContent.Length; i++)
+
+                if (map != null)
                 {
-                    var style = GetStyleAtOffset(parsed.Runs, cell.Start + leadTrim + i, ref runIdx);
-                    double charW = MeasureCharWidth(cellContent[i], parsed.Kind, style);
-                    if (localX < accum + charW / 2)
-                        return cell.Start + leadTrim + i;
-                    accum += charW;
+                    for (int rawI = trimStart; rawI < trimEnd; rawI++)
+                    {
+                        if (map.IsHidden(rawI)) continue;
+                        var style = GetStyleAtOffset(parsed.Runs, rawI, ref runIdx);
+                        double charW = MeasureCharWidth(blockText[rawI], parsed.Kind, style);
+                        if (localX < accum + charW / 2)
+                            return rawI;
+                        accum += charW;
+                    }
+                    return trimEnd;
                 }
-                return cell.Start + leadTrim + cellContent.Length;
+                else
+                {
+                    string cellContent = blockText.Substring(trimStart, trimEnd - trimStart);
+                    for (int i = 0; i < cellContent.Length; i++)
+                    {
+                        var style = GetStyleAtOffset(parsed.Runs, trimStart + i, ref runIdx);
+                        double charW = MeasureCharWidth(cellContent[i], parsed.Kind, style);
+                        if (localX < accum + charW / 2)
+                            return trimStart + i;
+                        accum += charW;
+                    }
+                    return trimEnd;
+                }
             }
             cx += colWidths[c];
         }
@@ -817,6 +872,7 @@ public partial class DocsCanvas
                 if (p.IsTableSeparator || p.TableRow == null) continue;
 
                 string text = _doc.GetBlockText(bj);
+                BlockVisualMap? map = (_visualMaps != null && bj < _visualMaps.Count) ? _visualMaps[bj] : null;
                 for (int c = 0; c < Math.Min(p.TableRow.Cells.Count, colCount); c++)
                 {
                     var cell = p.TableRow.Cells[c];
@@ -824,7 +880,9 @@ public partial class DocsCanvas
                     int e = s + cell.Length;
                     while (s < e && text[s] == ' ') s++;
                     while (e > s && text[e - 1] == ' ') e--;
-                    string cellText = text.Substring(s, e - s);
+                    string cellText = map != null
+                        ? map.BuildDisplayString(text, s, e - s)
+                        : text.Substring(s, e - s);
                     double w = MeasureStringWidth(cellText, p.Kind, p.Runs, s);
                     if (w > widths[c]) widths[c] = w;
                 }
@@ -913,6 +971,10 @@ public partial class DocsCanvas
         if (parsed.TableRow == null || parsed.Table == null) return;
         if (!_tableColumnWidths.TryGetValue(parsed.Table, out var colWidths)) return;
 
+        BlockVisualMap? map = null;
+        if (_visualMaps != null && vl.BlockIndex < _visualMaps.Count)
+            map = _visualMaps[vl.BlockIndex];
+
         double x = _padding;
         double y = lineY - effectiveScroll;
         double lineH = GetLineHeight(vl.BlockKind);
@@ -921,7 +983,14 @@ public partial class DocsCanvas
         for (int c = 0; c < Math.Min(parsed.TableRow.Cells.Count, colWidths.Length); c++)
         {
             var cell = parsed.TableRow.Cells[c];
-            string cellText = blockText.Substring(cell.Start, cell.Length).Trim();
+            int s = cell.Start;
+            int e = s + cell.Length;
+            while (s < e && blockText[s] == ' ') s++;
+            while (e > s && blockText[e - 1] == ' ') e--;
+
+            string cellText = map != null
+                ? map.BuildDisplayString(blockText, s, e - s)
+                : blockText.Substring(s, e - s);
             if (cellText.Length == 0) { x += colWidths[c]; continue; }
 
             var cellTypeface = isHeader ? _boldTypeface : baseTypeface;
@@ -929,7 +998,10 @@ public partial class DocsCanvas
                 FlowDirection.LeftToRight, cellTypeface, fontSize,
                 _palette.Foreground, _dpiScale);
 
-            ApplyInlineStylesForCell(ft, cellText, parsed, cell, blockText);
+            if (map != null)
+                ApplyInlineStylesForCell(ft, parsed, map, s, e);
+            else
+                ApplyInlineStylesForCellRaw(ft, cellText, parsed, s, e);
 
             var align = parsed.Table.Alignments[c];
             double cellContentWidth = colWidths[c] - _tableCellPadding * 2;
@@ -950,26 +1022,87 @@ public partial class DocsCanvas
         }
     }
 
-    private static void ApplyInlineStylesForCell(FormattedText ft, string cellText,
-        ParsedBlock parsed, TableCellInfo cell, string blockText)
+    private void ApplyInlineStylesForCell(FormattedText ft, ParsedBlock parsed,
+        BlockVisualMap map, int cellStart, int cellEnd)
     {
-        if (parsed.Runs.Count <= 1) return;
-
-        int rawStart = cell.Start;
-        int rawEnd = cell.Start + cell.Length;
-        int leadingTrim = 0;
-        while (rawStart + leadingTrim < rawEnd && blockText[rawStart + leadingTrim] == ' ')
-            leadingTrim++;
-        int contentStart = rawStart + leadingTrim;
+        int visBase = map.RawToVisual(cellStart);
+        int ftLen = ft.Text.Length;
 
         foreach (var run in parsed.Runs)
         {
-            if (run.Style == InlineStyle.Normal || run.Style == InlineStyle.Image) continue;
+            if (run.Style is InlineStyle.Normal or InlineStyle.Image) continue;
             int runEnd = run.Start + run.Length;
-            if (runEnd <= contentStart || run.Start >= rawEnd) continue;
+            if (runEnd <= cellStart || run.Start >= cellEnd) continue;
 
-            int overlapStart = Math.Max(run.Start, contentStart) - contentStart;
-            int overlapEnd = Math.Min(runEnd, rawEnd) - contentStart;
+            int rawStart = Math.Max(run.Start, cellStart);
+            int rawEnd = Math.Min(runEnd, cellEnd);
+            int visStart = map.RawToVisual(rawStart) - visBase;
+            int visEnd = map.RawToVisual(rawEnd) - visBase;
+            int count = Math.Min(visEnd - visStart, ftLen - visStart);
+            if (count <= 0 || visStart < 0 || visStart >= ftLen) continue;
+
+            switch (run.Style)
+            {
+                case InlineStyle.Bold or InlineStyle.BoldItalic:
+                    ft.SetFontWeight(FontWeights.Bold, visStart, count);
+                    break;
+            }
+            if (run.Style is InlineStyle.Italic or InlineStyle.BoldItalic)
+                ft.SetFontStyle(FontStyles.Italic, visStart, count);
+            if (run.Style == InlineStyle.Code)
+                ft.SetFontFamily(_monoTypeface.FontFamily, visStart, count);
+            if (run.Style == InlineStyle.Strikethrough)
+                ft.SetTextDecorations(TextDecorations.Strikethrough, visStart, count);
+            if (run.Style == InlineStyle.Link)
+            {
+                ft.SetForegroundBrush(_checkboxCheckedBrush, visStart, count);
+                ft.SetTextDecorations(TextDecorations.Underline, visStart, count);
+            }
+        }
+
+        if (parsed.BlockColor?.Foreground is { } blockFg)
+        {
+            var brush = new SolidColorBrush(Color.FromRgb(blockFg.R, blockFg.G, blockFg.B));
+            brush.Freeze();
+            if (ftLen > 0) ft.SetForegroundBrush(brush, 0, ftLen);
+        }
+
+        if (map.ColorSpans != null)
+        {
+            foreach (var cs in map.ColorSpans)
+            {
+                int csEnd = cs.Start + cs.Length;
+                if (csEnd <= cellStart || cs.Start >= cellEnd) continue;
+
+                int rawStart = Math.Max(cs.Start, cellStart);
+                int rawEnd = Math.Min(csEnd, cellEnd);
+                int visStart = map.RawToVisual(rawStart) - visBase;
+                int visEnd = map.RawToVisual(rawEnd) - visBase;
+                visEnd = Math.Min(visEnd, ftLen);
+                int count = visEnd - visStart;
+                if (count <= 0 || visStart < 0 || visStart >= ftLen) continue;
+
+                if (cs.Foreground is { } fg)
+                {
+                    var brush = new SolidColorBrush(Color.FromRgb(fg.R, fg.G, fg.B));
+                    brush.Freeze();
+                    ft.SetForegroundBrush(brush, visStart, count);
+                }
+            }
+        }
+    }
+
+    private static void ApplyInlineStylesForCellRaw(FormattedText ft, string cellText,
+        ParsedBlock parsed, int cellStart, int cellEnd)
+    {
+        foreach (var run in parsed.Runs)
+        {
+            if (run.Style is InlineStyle.Normal or InlineStyle.Image) continue;
+            int runEnd = run.Start + run.Length;
+            if (runEnd <= cellStart || run.Start >= cellEnd) continue;
+
+            int overlapStart = Math.Max(run.Start, cellStart) - cellStart;
+            int overlapEnd = Math.Min(runEnd, cellEnd) - cellStart;
             int len = Math.Min(overlapEnd - overlapStart, cellText.Length - overlapStart);
             if (len <= 0 || overlapStart >= cellText.Length) continue;
 
