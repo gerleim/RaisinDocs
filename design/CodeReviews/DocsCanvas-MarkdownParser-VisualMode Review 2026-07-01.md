@@ -176,13 +176,13 @@
 - **What's wrong**: `_parsedBlocks[_doc.CursorBlock - 1]` accessed without bounds-checking against `_parsedBlocks.Count`. Stale list → `ArgumentOutOfRangeException`.
 - **Fix applied**: Added bounds guard at entry and clamped forward-loop bounds to `Math.Min(_doc.BlockCount, _parsedBlocks.Count)`.
 
-### M14 — HandleTableArrow fallthrough returns true
+### ~~M14 — HandleTableArrow fallthrough returns true~~ FIXED
 
 - **Severity**: Medium
 - **Category**: Bug
 - **Location**: `DocsCanvas.VisualMode.cs:347-419`
 - **What's wrong**: `HandleTableArrow` returns `true` on fallthrough when cursor is in trailing whitespace/pipes past all cells. Cursor stuck, event marked handled.
-- **What to do**: Clamp to nearest cell boundary, or return `false`.
+- **Fix applied**: Fallthrough paths now clamp cursor to nearest cell boundary (end of last cell for forward, start of first cell for backward) before returning `true`.
 
 ### M15 — Null-forgiving access on map.Images
 

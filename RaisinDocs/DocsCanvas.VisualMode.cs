@@ -413,6 +413,9 @@ public partial class DocsCanvas
                     return MoveOutOfTable(parsed, forward: true);
                 }
             }
+            // cursor is past all cells — clamp to end of last cell
+            if (cellRanges.Count > 0)
+                _doc.CursorOffset = cellRanges[^1].End;
             return true;
         }
         else
@@ -440,6 +443,9 @@ public partial class DocsCanvas
                     return MoveOutOfTable(parsed, forward: false);
                 }
             }
+            // cursor is before all cells — clamp to start of first cell
+            if (cellRanges.Count > 0)
+                _doc.CursorOffset = cellRanges[0].Start;
             return true;
         }
     }
