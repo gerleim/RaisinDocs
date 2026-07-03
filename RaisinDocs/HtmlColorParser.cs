@@ -515,25 +515,42 @@ internal static class HtmlColorParser
 
         foreach (var line in lines)
         {
-            if (line.StartsWith("<!--@div ") && line.TrimEnd().EndsWith("-->"))
+            bool hasDivOpen = MarkdownParser.TryExtractDivOpen(line, out int divOpenTagEnd);
+            bool hasDivClose = MarkdownParser.TryExtractDivClose(line, out int divCloseTagStart);
+
+            if (hasDivOpen)
             {
-                var trimmed = line.TrimEnd();
-                var props = trimmed.AsSpan(9, trimmed.Length - 12);
+                var tagText = line[..divOpenTagEnd].TrimEnd();
+                var props = tagText.AsSpan().Trim();
+                props = props[9..^3]; // strip <!--@div  and -->
                 ParseColorProps(props, out divFg, out divBg);
                 anyFormatting = true;
-                continue;
             }
 
-            if (line.TrimEnd() is "<!--/@div-->" or "<!--/@-->")
+            bool hasContent;
+            if (hasDivOpen || hasDivClose)
+            {
+                int cs = hasDivOpen ? divOpenTagEnd : 0;
+                int ce = hasDivClose ? divCloseTagStart : line.Length;
+                hasContent = ce > cs && line.AsSpan()[cs..ce].Trim().Length > 0;
+            }
+            else
+            {
+                hasContent = true;
+            }
+
+            if (hasContent || (!hasDivOpen && !hasDivClose))
+            {
+                var (html, hadFormatting) = ConvertLineToHtml(line, divFg, divBg);
+                if (hadFormatting) anyFormatting = true;
+                htmlLines.Add(html);
+            }
+
+            if (hasDivClose)
             {
                 divFg = null;
                 divBg = null;
-                continue;
             }
-
-            var (html, hadFormatting) = ConvertLineToHtml(line, divFg, divBg);
-            if (hadFormatting) anyFormatting = true;
-            htmlLines.Add(html);
         }
 
         if (!anyFormatting) return null;

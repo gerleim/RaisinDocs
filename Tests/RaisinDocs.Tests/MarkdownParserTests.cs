@@ -1620,4 +1620,119 @@ public class MarkdownParserTests
         var blocks = ParseBlocks("```", "<!--@div fg:red-->", "```");
         blocks[1].Kind.Should().Be(BlockKind.FencedCodeLine);
     }
+
+    // --- Mixed-content div (open at line start, close at line end) ---
+
+    [Fact]
+    public void ColorDiv_MixedOpen_ClassifiedAsParagraph()
+    {
+        var blocks = ParseBlocks("<!--@div bg:red-->Hello world");
+        blocks[0].Kind.Should().Be(BlockKind.Paragraph);
+        blocks[0].IsSkippedInVisual.Should().BeFalse();
+        blocks[0].DivOpenColor.Should().NotBeNull();
+        blocks[0].DivOpenColor!.Value.Background.Should().Be(new RgbColor(255, 0, 0));
+    }
+
+    [Fact]
+    public void ColorDiv_MixedOpen_AppliesBlockColor()
+    {
+        var blocks = ParseBlocks(
+            "<!--@div bg:red-->First line",
+            "Second line",
+            "<!--/@div-->");
+        blocks[0].BlockColor!.Value.Background.Should().Be(new RgbColor(255, 0, 0));
+        blocks[1].BlockColor!.Value.Background.Should().Be(new RgbColor(255, 0, 0));
+    }
+
+    [Fact]
+    public void ColorDiv_MixedClose_AppliesBlockColor()
+    {
+        var blocks = ParseBlocks(
+            "<!--@div bg:red-->",
+            "Last line<!--/@div-->");
+        blocks[1].Kind.Should().Be(BlockKind.Paragraph);
+        blocks[1].HasDivClose.Should().BeTrue();
+        blocks[1].BlockColor!.Value.Background.Should().Be(new RgbColor(255, 0, 0));
+    }
+
+    [Fact]
+    public void ColorDiv_MixedClose_DoesNotAffectNextBlock()
+    {
+        var blocks = ParseBlocks(
+            "<!--@div bg:red-->",
+            "Last line<!--/@div-->",
+            "after");
+        blocks[2].BlockColor.Should().BeNull();
+    }
+
+    [Fact]
+    public void ColorDiv_BothOnSameLine()
+    {
+        var blocks = ParseBlocks("<!--@div bg:red-->colored text<!--/@div-->");
+        blocks[0].Kind.Should().Be(BlockKind.Paragraph);
+        blocks[0].DivOpenColor.Should().NotBeNull();
+        blocks[0].HasDivClose.Should().BeTrue();
+        blocks[0].BlockColor!.Value.Background.Should().Be(new RgbColor(255, 0, 0));
+    }
+
+    [Fact]
+    public void ColorDiv_BothOnSameLine_DoesNotAffectNextBlock()
+    {
+        var blocks = ParseBlocks(
+            "<!--@div bg:red-->colored text<!--/@div-->",
+            "after");
+        blocks[1].BlockColor.Should().BeNull();
+    }
+
+    [Fact]
+    public void ColorDiv_MixedOpen_NestedInOuter()
+    {
+        var blocks = ParseBlocks(
+            "<!--@div bg:red-->",
+            "<!--@div fg:blue-->Hello",
+            "<!--/@div-->",
+            "still red",
+            "<!--/@div-->");
+        blocks[1].BlockColor!.Value.Foreground.Should().Be(new RgbColor(0, 0, 255));
+        blocks[1].BlockColor!.Value.Background.Should().Be(new RgbColor(255, 0, 0));
+        blocks[3].BlockColor!.Value.Foreground.Should().BeNull();
+        blocks[3].BlockColor!.Value.Background.Should().Be(new RgbColor(255, 0, 0));
+    }
+
+    [Fact]
+    public void ColorDiv_MixedOpen_TagHiddenInVisualMode()
+    {
+        var ranges = MarkdownParser.FindInlineColorTagRanges("<!--@div bg:red-->Hello");
+        ranges.Should().NotBeNull();
+        ranges.Should().ContainSingle();
+        ranges![0].Start.Should().Be(0);
+        ranges![0].Length.Should().Be("<!--@div bg:red-->".Length);
+    }
+
+    [Fact]
+    public void ColorDiv_MixedClose_TagHiddenInVisualMode()
+    {
+        var ranges = MarkdownParser.FindInlineColorTagRanges("Goodbye<!--/@div-->");
+        ranges.Should().NotBeNull();
+        ranges.Should().ContainSingle();
+        ranges![0].Start.Should().Be("Goodbye".Length);
+        ranges![0].Length.Should().Be("<!--/@div-->".Length);
+    }
+
+    [Fact]
+    public void ColorDiv_StandaloneOpen_StillWorks()
+    {
+        var blocks = ParseBlocks("<!--@div fg:red-->");
+        blocks[0].Kind.Should().Be(BlockKind.ColorDivOpen);
+        blocks[0].IsSkippedInVisual.Should().BeTrue();
+    }
+
+    [Fact]
+    public void ColorDiv_StandaloneClose_StillWorks()
+    {
+        var blocks = ParseBlocks("<!--/@div-->");
+        blocks[0].Kind.Should().Be(BlockKind.ColorDivClose);
+        blocks[0].IsSkippedInVisual.Should().BeTrue();
+    }
+
 }

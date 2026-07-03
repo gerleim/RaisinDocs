@@ -58,6 +58,37 @@ dotnet build RaisinDocs.slnx -p:UseProjectReferences=false
 - **RetryHelper** — Generic retry utility (`internal`). Configurable retries, delay, and per-retry callback. Used by `ClipboardHelper` for transient OS failures.
 - **ClipboardHelper** — Wraps `Clipboard.SetText`/`GetText` with retry-on-`ExternalException` and `IDocsLogger` integration (`internal`).
 
+### Data flow and rendering pipeline
+
+The render pipeline is: **Document → MarkdownParser → BlockVisualMap → DocsCanvas.OnRender**.
+
+1. **Document** stores raw text as `List<StringBuilder>` blocks (one per line). It knows nothing about markdown — only text, cursor, and undo.
+2. **MarkdownParser.Parse()** is called during `ComputeLayout()`. It classifies each block into a `BlockKind` and produces `StyledRun` lists (bold, italic, code, etc.), `InlineImage`/`InlineLink` lists, and `ColorSpan` lists. A post-pass (`DetectTables`) groups adjacent pipe-delimited blocks into table structures with `TableInfo`/`TableRowInfo`.
+3. **BlockVisualMap.Compute()** (visual mode only) builds hidden ranges from the parsed block — style markers (`**`, `~~`), heading prefixes, color tags, image syntax, link URL portions. It provides `BuildDisplayString` (strips hidden chars), `RawToVisual`/`VisualToRaw` (offset mapping), and `IsHidden`/`SkipHidden` (cursor navigation).
+4. **DocsCanvas.OnRender** draws visible lines using `FormattedText`. In source mode it renders raw text with syntax dimming; in visual mode it uses the display string from `BlockVisualMap`. Tables, images, and selection are drawn as separate passes.
+
+Key invariant: `Document` never depends on `MarkdownParser` or `BlockVisualMap`. All markdown awareness flows one way — from parser output into the rendering/navigation layer.
+
+### DocsCanvas functional areas (~5400 lines across 3 partials)
+
+The partial class split is by edit mode, not by concern. All three files share the same fields. The major functional areas within DocsCanvas are:
+
+- **Layout** (`ComputeLayout`, `ComputeLayoutCore`, `WrapSegment`, `FitLine`, `BuildParagraphGroups`) — word wrapping, visual line computation, paragraph group joining for soft breaks
+- **Rendering** (`OnRender`, `DrawJoinedLine`, `ApplyInlineStyles`, `ApplyColorSpans`, `ApplySyntaxDimming`, `DrawSelection`, background drawing methods) — all drawing happens here
+- **Text measurement** (`MeasureCharWidth`, `MeasureStringWidth`, `MeasureRangeWidth`, `GetLineHeight`, glyph/typeface management, `_charWidthCache`)
+- **Input handling** (`OnKeyDown`, `OnTextInput`, `OnMouseDown/Move/Up`, `Handle*` key dispatch methods)
+- **Cursor/navigation mapping** (`CursorToVisualLineIndex`, `CursorXInVisualLine`, `HitTestVisualLine`, `HitTestToPosition`, `SetCursorFromVisualLine`)
+- **Formatting API** (`ToggleBold/Italic/Code/Strikethrough`, `ToggleInlineStyle`, `ToggleHeading`, `ToggleBlockPrefixForSelection`, `ToggleFencedCode`, `InsertLink`, `InsertTable`)
+- **Link popup** (`ShowLinkPopup`, `BuildLinkPopup`, `CloseLinkPopup`, link popup fields)
+- **Table rendering/navigation** (in VisualMode.cs: `DrawTableRow`, `ComputeAllTableColumnWidths`, `CursorXInTableRow`, `HitTestInTableRow`, `HandleTableArrow`, rectangular selection)
+- **Visual-mode cursor skipping** (in VisualMode.cs: `SkipCursorOverHiddenRanges`, `EnsureCursorOnVisibleBlock`, `ClampCursorBeforeTrailingHidden`)
+- **Scrolling** (`ClampScroll`, `EnsureCursorVisible`, `OnMouseWheel`, smooth scroll via `SmoothScroller`)
+- **Test hooks** (`internal` Test* methods/properties for UI tests)
+
+### ParsedBlock (record class)
+
+`ParsedBlock` is a `record class` with `init`-only properties. Use `with` expressions to create modified copies — never clone field-by-field. This prevents bugs when new properties are added.
+
 ### Host integration
 
 Host apps configure the editor through `DocsEditor` (preferred) or `DocsCanvas` directly:
@@ -66,6 +97,21 @@ Host apps configure the editor through `DocsEditor` (preferred) or `DocsCanvas` 
 - **State persistence** — `DocsEditor.GetState()` / `ApplyState(DocsEditorState)` serializes all settings above for save/restore
 - **Logging** — Set `DocsCanvas.Logger` to an `IDocsLogger` implementation to receive library warnings/errors
 - **Events** — `ContentChanged`, `IsDirtyChanged`, `ThemeChanged`, `EditModeChanged`, `FormattingChanged`
+
+### Inline color tags
+
+The editor supports custom color tags embedded as HTML comments (invisible in standard markdown renderers):
+
+- **Inline**: `<!--@fg:red-->text<!--/@fg-->` — colors a span of text
+- **Block div**: `<!--@div fg:red-->` / `<!--/@div-->` — colors all blocks between the tags
+
+`MarkdownParser.ParseInlineColorTags` produces `ColorSpan` lists (stored on `ParsedBlock`). `BlockVisualMap` hides the tag syntax in visual mode. `ApplyColorSpans`/`ApplyColorSpansVisual` apply `SolidColorBrush` to `FormattedText` ranges. `HtmlColorParser` handles the HTML comment parsing and color name resolution.
+
+### Test architecture
+
+- **RaisinDocs.Tests** — Pure model tests. Target `Document` and `MarkdownParser` directly. No UI thread needed. Fast.
+- **RaisinDocs.Tests.UI** — Test `DocsCanvas` via `internal` test hooks (`TestSetCursor`, `TestInsert`, `TestNavigate`, `TestComputeLayout`). These need a WPF dispatcher — xUnit runs them on an STA thread.
+- Add new parser/document logic tests to `RaisinDocs.Tests`. Only use `RaisinDocs.Tests.UI` when testing cursor behavior, rendering, or navigation that depends on layout.
 
 ### Key dependencies
 
