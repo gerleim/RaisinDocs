@@ -88,13 +88,13 @@
 - **What's wrong**: `Array.IndexOf(group.SoftBreakOffsets, i)` inside a per-character loop in `DrawJoinedLine` → O(n²) for reflowed paragraphs.
 - **Fix applied**: Build a local `HashSet<int>` from `SoftBreakOffsets` before the loop for O(1) lookups.
 
-### M3 — SelectionHasStyle returns true for empty selection
+### ~~M3 — SelectionHasStyle returns true for empty selection~~ FIXED
 
 - **Severity**: Medium
 - **Category**: Bug
 - **Location**: `DocsCanvas.cs:1018-1045`
 - **What's wrong**: `SelectionHasStyle` returns `true` for an empty selection / collapsed cursor in an empty block. Formatting bar shows all styles active on empty content.
-- **What to do**: Track `anyRunChecked`; return `false` when no runs were inspected.
+- **Fix applied**: Track `anyRunChecked`; return `false` when no runs overlap the selection.
 
 ### ~~M4 — Duplicate MeasureStringWidth overloads~~ FIXED
 

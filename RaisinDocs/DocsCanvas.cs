@@ -1137,6 +1137,7 @@ public partial class DocsCanvas : FrameworkElement
 
         ComputeLayout();
 
+        bool anyRunChecked = false;
         for (int b = sb; b <= eb; b++)
         {
             int blockSelStart = (b == sb) ? so : 0;
@@ -1148,6 +1149,7 @@ public partial class DocsCanvas : FrameworkElement
             {
                 int runEnd = run.Start + run.Length;
                 if (runEnd <= blockSelStart || run.Start >= blockSelEnd) continue;
+                anyRunChecked = true;
                 if (run.Style != targetStyle && run.Style != InlineStyle.BoldItalic)
                     return false;
                 if (run.Style == InlineStyle.BoldItalic &&
@@ -1155,7 +1157,7 @@ public partial class DocsCanvas : FrameworkElement
                     return false;
             }
         }
-        return true;
+        return anyRunChecked;
     }
 
     private void RaiseFormattingChanged()
