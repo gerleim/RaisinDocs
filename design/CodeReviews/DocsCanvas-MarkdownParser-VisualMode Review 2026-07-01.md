@@ -184,13 +184,13 @@
 - **What's wrong**: `HandleTableArrow` returns `true` on fallthrough when cursor is in trailing whitespace/pipes past all cells. Cursor stuck, event marked handled.
 - **Fix applied**: Fallthrough paths now clamp cursor to nearest cell boundary (end of last cell for forward, start of first cell for backward) before returning `true`.
 
-### M15 — Null-forgiving access on map.Images
+### ~~M15 — Null-forgiving access on map.Images~~ FIXED
 
 - **Severity**: Medium
 - **Category**: Risk
 - **Location**: `DocsCanvas.VisualMode.cs:1124`
 - **What's wrong**: `map.Images!` null-forgiving access in `DrawVisualLineWithImages`. NRE if called without `HasImagesOnLine` gate.
-- **What to do**: Add `if (map.Images == null) return;` guard.
+- **Fix applied**: Added `if (map.Images == null) return;` guard at method entry and removed the null-forgiving operator.
 
 ---
 

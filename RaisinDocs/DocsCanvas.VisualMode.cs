@@ -1257,6 +1257,8 @@ public partial class DocsCanvas
         string blockText, ParsedBlock parsed, BlockVisualMap map,
         double lineY, double effectiveScroll, double fontSize, Typeface baseTypeface)
     {
+        if (map.Images == null) return;
+
         double x = _padding;
         double screenY = lineY - effectiveScroll;
         double textLineH = GetLineHeight(vl.BlockKind);
@@ -1282,7 +1284,7 @@ public partial class DocsCanvas
         int vlEnd = vl.StartOffset + vl.Length;
         int segStart = vl.StartOffset;
 
-        foreach (var img in map.Images!)
+        foreach (var img in map.Images)
         {
             if (img.Start >= vlEnd) break;
             if (img.Start + img.Length <= vl.StartOffset) continue;
