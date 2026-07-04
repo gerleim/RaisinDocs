@@ -125,8 +125,8 @@ public partial class DocsCanvas : FrameworkElement
             EditorTheme.DarkBlue => _darkBluePalette,
             _ => _lightPalette,
         };
-        if (canvas._linkPopup is { IsOpen: true })
-            canvas.ApplyLinkPopupTheme();
+        if (canvas._linkPopup.IsOpen)
+            canvas._linkPopup.ApplyTheme(canvas._palette.Background, canvas._palette.Foreground, canvas._palette.Syntax, canvas._palette.CodeBackground);
         canvas.Minimap?.InvalidateVisual();
         canvas.ThemeChanged?.Invoke(canvas, EventArgs.Empty);
     }
@@ -366,18 +366,7 @@ public partial class DocsCanvas : FrameworkElement
         Placement = PlacementMode.Relative,
     };
 
-    private Popup? _linkPopup;
-    private TextBox? _linkPopupText;
-    private TextBox? _linkPopupUrl;
-    private TextBox? _linkPopupLabel;
-    private TextBlock? _linkPopupLabelHeader;
-    private int _linkPopupBlock;
-    private int _linkPopupStart;
-    private int _linkPopupCurrentLength;
-    private string _linkPopupOriginalText = "";
-    private bool _linkPopupUpdating;
-    private bool _linkPopupCancelling;
-    private bool _linkPopupReadOnly;
+    private readonly LinkPopupController _linkPopup;
 
     public enum SoftBreakMode { Relaxed, Strict }
     public enum HardBreakStyle { Backslash, TrailingSpaces }
@@ -688,15 +677,37 @@ public partial class DocsCanvas : FrameworkElement
 
     public void InsertLink()
     {
-        if (_linkPopup is { IsOpen: true })
+        if (_linkPopup.IsOpen)
         {
-            CancelLinkPopup();
+            _linkPopup.Cancel();
             return;
         }
 
         SealAndStopTimer();
         ComputeLayout();
-        ShowLinkPopup();
+
+        var existingLink = GetLinkAtCursor();
+        string? selText = null;
+        int selStart = 0, selEnd = 0;
+        if (existingLink == null && _doc.HasSelection)
+        {
+            selText = GetSelectedText();
+            if (selText != null)
+            {
+                var (_, so, _, eo) = _doc.GetOrderedSelection();
+                selStart = so;
+                selEnd = eo;
+            }
+        }
+
+        _linkPopup.Show(existingLink, selText, selStart, selEnd);
+        _linkPopup.ApplyTheme(_palette.Background, _palette.Foreground, _palette.Syntax, _palette.CodeBackground);
+
+        int vli = CursorToVisualLineIndex();
+        double effectiveScroll = _scrollOffset + _smoother.Offset;
+        double lineY = _lineYPositions[vli] - effectiveScroll;
+        double lineH = GetEffectiveLineHeight(_visualLines[vli]);
+        _linkPopup.SetPopupPosition(_padding, lineY + lineH + 4);
     }
 
     public void InsertFgColor(string colorName)
@@ -768,87 +779,6 @@ public partial class DocsCanvas : FrameworkElement
         return null;
     }
 
-    private void ShowLinkPopup()
-    {
-        if (_linkPopup == null)
-            BuildLinkPopup();
-
-        var existingLink = GetLinkAtCursor();
-        _linkPopupBlock = _doc.CursorBlock;
-
-        bool isRef = existingLink?.RefLabel != null;
-        _linkPopupReadOnly = isRef;
-
-        _linkPopupLabel!.Visibility = isRef ? Visibility.Visible : Visibility.Collapsed;
-        _linkPopupLabelHeader!.Visibility = isRef ? Visibility.Visible : Visibility.Collapsed;
-        _linkPopupText!.IsReadOnly = isRef;
-        _linkPopupUrl!.IsReadOnly = isRef;
-
-        _doc.BeginUndoGroup();
-        _linkPopupUpdating = true;
-
-        if (existingLink != null)
-        {
-            var link = existingLink.Value;
-            _linkPopupStart = link.Start;
-            _linkPopupCurrentLength = link.Length;
-            _linkPopupOriginalText = _doc.GetBlockText(_linkPopupBlock).Substring(link.Start, link.Length);
-            _linkPopupText!.Text = link.Text;
-            _linkPopupUrl!.Text = link.Url;
-            _linkPopupLabel!.Text = isRef ? link.RefLabel : "";
-        }
-        else
-        {
-            string? selText = _doc.HasSelection ? GetSelectedText() : null;
-            if (selText != null)
-            {
-                var (_, so, _, eo) = _doc.GetOrderedSelection();
-                _linkPopupStart = so;
-                _linkPopupCurrentLength = eo - so;
-                _linkPopupOriginalText = selText;
-                _doc.AnchorBlock = _doc.CursorBlock;
-                _doc.AnchorOffset = _doc.CursorOffset;
-                _linkPopupText!.Text = selText;
-            }
-            else
-            {
-                _linkPopupStart = _doc.CursorOffset;
-                _linkPopupCurrentLength = 0;
-                _linkPopupOriginalText = "";
-                _linkPopupText!.Text = "";
-            }
-            _linkPopupUrl!.Text = "";
-            _linkPopupLabel!.Text = "";
-        }
-
-        _linkPopupUpdating = false;
-
-        ApplyLinkPopupTheme();
-
-        int vli = CursorToVisualLineIndex();
-        double effectiveScroll = _scrollOffset + _smoother.Offset;
-        double lineY = _lineYPositions[vli] - effectiveScroll;
-        double lineH = GetEffectiveLineHeight(_visualLines[vli]);
-
-        _linkPopup!.PlacementTarget = this;
-        _linkPopup.Placement = PlacementMode.Relative;
-        _linkPopup.HorizontalOffset = _padding;
-        _linkPopup.VerticalOffset = lineY + lineH + 4;
-        _linkPopup.IsOpen = true;
-
-        if (isRef)
-            _linkPopupText!.Focus();
-        else if (existingLink != null)
-            _linkPopupUrl!.Focus();
-        else if (!string.IsNullOrEmpty(_linkPopupText!.Text))
-            _linkPopupUrl!.Focus();
-        else
-            _linkPopupText!.Focus();
-
-        if (!isRef)
-            _linkPopupUrl!.SelectAll();
-    }
-
     private string? GetSelectedText()
     {
         if (!_doc.HasSelection) return null;
@@ -857,168 +787,7 @@ public partial class DocsCanvas : FrameworkElement
         return _doc.GetBlockText(sb).Substring(so, eo - so);
     }
 
-    private void OnLinkPopupContentChanged(object? sender, TextChangedEventArgs e)
-    {
-        if (_linkPopupUpdating || _linkPopupReadOnly || _linkPopup is not { IsOpen: true }) return;
 
-        string text = _linkPopupText!.Text.Trim();
-        string url = _linkPopupUrl!.Text.Trim();
-
-        string newContent;
-        if (!string.IsNullOrEmpty(url))
-        {
-            if (string.IsNullOrEmpty(text)) text = url;
-            newContent = $"[{text}]({url})";
-        }
-        else
-        {
-            newContent = text;
-        }
-
-        _doc.RemoveTextAt(_linkPopupBlock, _linkPopupStart, _linkPopupCurrentLength);
-        if (newContent.Length > 0)
-            _doc.InsertTextAt(_linkPopupBlock, _linkPopupStart, newContent);
-        _linkPopupCurrentLength = newContent.Length;
-
-        InvalidateLayout();
-    }
-
-    private void CloseLinkPopup()
-    {
-        if (_linkPopup is { IsOpen: true })
-            _linkPopup.IsOpen = false;
-    }
-
-    private void CancelLinkPopup()
-    {
-        if (_linkPopup is not { IsOpen: true }) return;
-
-        if (!_linkPopupReadOnly)
-        {
-            _doc.RemoveTextAt(_linkPopupBlock, _linkPopupStart, _linkPopupCurrentLength);
-            if (_linkPopupOriginalText.Length > 0)
-                _doc.InsertTextAt(_linkPopupBlock, _linkPopupStart, _linkPopupOriginalText);
-            _doc.CursorBlock = _linkPopupBlock;
-            _doc.CursorOffset = _linkPopupStart + _linkPopupOriginalText.Length;
-            _doc.AnchorBlock = _doc.CursorBlock;
-            _doc.AnchorOffset = _doc.CursorOffset;
-        }
-        _doc.SealUndoGroup();
-        _linkPopupCancelling = true;
-        _linkPopup.IsOpen = false;
-    }
-
-    private static TextBox CreatePlainTextBox(double minWidth)
-    {
-        var tb = new TextBox
-        {
-            MinWidth = minWidth,
-            Padding = new Thickness(3, 1, 3, 1),
-            BorderThickness = new Thickness(1),
-            VerticalContentAlignment = VerticalAlignment.Center,
-        };
-
-        var factory = new FrameworkElementFactory(typeof(Border), "Bd");
-        factory.SetValue(Border.BackgroundProperty, new TemplateBindingExtension(Control.BackgroundProperty));
-        factory.SetValue(Border.BorderBrushProperty, new TemplateBindingExtension(Control.BorderBrushProperty));
-        factory.SetValue(Border.BorderThicknessProperty, new TemplateBindingExtension(Control.BorderThicknessProperty));
-
-        var contentHost = new FrameworkElementFactory(typeof(ScrollViewer), "PART_ContentHost");
-        factory.AppendChild(contentHost);
-
-        var template = new ControlTemplate(typeof(TextBox)) { VisualTree = factory };
-        tb.Template = template;
-
-        return tb;
-    }
-
-    private void BuildLinkPopup()
-    {
-        _linkPopupText = CreatePlainTextBox(160);
-        _linkPopupUrl = CreatePlainTextBox(200);
-        _linkPopupLabel = CreatePlainTextBox(80);
-        _linkPopupLabel.IsReadOnly = true;
-
-        _linkPopupText.TextChanged += OnLinkPopupContentChanged;
-        _linkPopupUrl.TextChanged += OnLinkPopupContentChanged;
-
-        void HandleKey(object? s, KeyEventArgs e)
-        {
-            if (e.Key == Key.K && Keyboard.Modifiers == ModifierKeys.Control) { CancelLinkPopup(); e.Handled = true; }
-            else if (e.Key == Key.Escape) { CancelLinkPopup(); e.Handled = true; }
-            else if (_linkPopupReadOnly) { if (e.Key == Key.Enter) { CloseLinkPopup(); e.Handled = true; } }
-            else if (e.Key == Key.Enter && s == _linkPopupText) { _linkPopupUrl!.Focus(); _linkPopupUrl.SelectAll(); e.Handled = true; }
-            else if (e.Key == Key.Enter && s == _linkPopupUrl) { CloseLinkPopup(); e.Handled = true; }
-        }
-        _linkPopupText.KeyDown += HandleKey;
-        _linkPopupUrl.KeyDown += HandleKey;
-        _linkPopupLabel.KeyDown += HandleKey;
-
-        var panel = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Margin = new Thickness(6, 4, 6, 4),
-        };
-        panel.Children.Add(new TextBlock { Text = "Text", Margin = new Thickness(0, 0, 4, 0), VerticalAlignment = VerticalAlignment.Center, FontSize = 12 });
-        panel.Children.Add(_linkPopupText);
-        _linkPopupLabelHeader = new TextBlock { Text = "Ref", Margin = new Thickness(8, 0, 4, 0), VerticalAlignment = VerticalAlignment.Center, FontSize = 12 };
-        panel.Children.Add(_linkPopupLabelHeader);
-        panel.Children.Add(_linkPopupLabel);
-        panel.Children.Add(new TextBlock { Text = "URL", Margin = new Thickness(8, 0, 4, 0), VerticalAlignment = VerticalAlignment.Center, FontSize = 12 });
-        panel.Children.Add(_linkPopupUrl);
-
-        var border = new Border
-        {
-            Child = panel,
-            BorderThickness = new Thickness(1),
-        };
-
-        _linkPopup = new Popup
-        {
-            Child = border,
-            StaysOpen = false,
-        };
-        _linkPopup.Closed += (_, _) =>
-        {
-            if (!_linkPopupCancelling)
-            {
-                _doc.CursorBlock = _linkPopupBlock;
-                _doc.CursorOffset = _linkPopupStart + _linkPopupCurrentLength;
-                _doc.AnchorBlock = _doc.CursorBlock;
-                _doc.AnchorOffset = _doc.CursorOffset;
-                _doc.SealUndoGroup();
-            }
-            _linkPopupCancelling = false;
-            _linkPopupUpdating = false;
-            Focus();
-            InvalidateLayout();
-            EnsureCursorVisible();
-            RaiseFormattingChanged();
-        };
-    }
-
-    private void ApplyLinkPopupTheme()
-    {
-        if (_linkPopup?.Child is not Border border) return;
-
-        border.Background = _palette.Background;
-        border.BorderBrush = _palette.Syntax;
-
-        foreach (var child in ((StackPanel)border.Child).Children)
-        {
-            if (child is TextBox tb)
-            {
-                tb.Background = _palette.CodeBackground;
-                tb.Foreground = _palette.Foreground;
-                tb.BorderBrush = _palette.Syntax;
-                tb.CaretBrush = _palette.Foreground;
-            }
-            else if (child is TextBlock lbl)
-            {
-                lbl.Foreground = _palette.Foreground;
-            }
-        }
-    }
 
     public void ToggleFencedCode()
     {
@@ -1160,7 +929,7 @@ public partial class DocsCanvas : FrameworkElement
         return anyRunChecked;
     }
 
-    private void RaiseFormattingChanged()
+    internal void RaiseFormattingChanged()
     {
         FormattingChanged?.Invoke(this, EventArgs.Empty);
     }
@@ -1264,6 +1033,7 @@ public partial class DocsCanvas : FrameworkElement
     public DocsCanvas()
     {
         _smoother = new SmoothScroller(InvalidateVisual);
+        _linkPopup = new LinkPopupController(_doc, this);
         Focusable = true;
         FocusVisualStyle = null;
         SnapsToDevicePixels = true;
@@ -1427,7 +1197,7 @@ public partial class DocsCanvas : FrameworkElement
         _blinkTimer.Start();
     }
 
-    private void InvalidateLayout()
+    internal void InvalidateLayout()
     {
         _layoutDirty = true;
         _parsedBlocks = null;
@@ -2203,7 +1973,7 @@ public partial class DocsCanvas : FrameworkElement
         _scrollOffset = Math.Clamp(_scrollOffset, 0, maxScroll);
     }
 
-    private void EnsureCursorVisible()
+    internal void EnsureCursorVisible()
     {
         StopWheelCoast();
         _smoother.Cancel();
