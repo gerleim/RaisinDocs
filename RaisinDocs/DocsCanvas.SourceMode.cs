@@ -9,7 +9,7 @@ public partial class DocsCanvas
     private void DrawSourceInlineImages(DrawingContext dc, VisualLine vl,
         IReadOnlyList<InlineImage> images, double lineY, double effectiveScroll)
     {
-        double textLineH = GetLineHeight(vl.BlockKind);
+        double textLineH = _measure.GetLineHeight(vl.BlockKind);
         double imgY = lineY - effectiveScroll + textLineH;
         int vlEnd = vl.StartOffset + vl.Length;
 
@@ -33,7 +33,7 @@ public partial class DocsCanvas
                 {
                     var altFt = new FormattedText(img.AltText,
                         CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
-                        _normalTypeface, 11, _palette.Syntax, _dpiScale);
+                        TextMeasurer.NormalTypeface, 11, _palette.Syntax, _measure.DpiScale);
                     altFt.MaxTextWidth = Math.Max(1, imgW);
                     altFt.MaxTextHeight = Math.Max(1, imgH);
                     dc.DrawText(altFt, new Point(_padding + 2, imgY + 2));
@@ -77,7 +77,7 @@ public partial class DocsCanvas
             {
                 var altFt = new FormattedText(img.AltText,
                     CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
-                    _normalTypeface, 11, _palette.Syntax, _dpiScale);
+                    TextMeasurer.NormalTypeface, 11, _palette.Syntax, _measure.DpiScale);
                 altFt.MaxTextWidth = Math.Max(1, imgW);
                 altFt.MaxTextHeight = Math.Max(1, imgH);
                 dc.DrawText(altFt, new Point(popupX + 2, popupY + 2));

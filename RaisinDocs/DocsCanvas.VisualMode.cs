@@ -86,7 +86,7 @@ public partial class DocsCanvas
         if (parsed.Kind is not (BlockKind.TaskListItemUnchecked or BlockKind.TaskListItemChecked))
             return false;
 
-        if (pos.X > _padding + _listIndent)
+        if (pos.X > _padding + TextMeasurer.ListIndent)
             return false;
 
         SealAndStopTimer();
@@ -746,8 +746,8 @@ public partial class DocsCanvas
                     for (int rawI = trimStart; rawI < trimEnd; rawI++)
                     {
                         if (map.IsHidden(rawI)) continue;
-                        var style = GetStyleAtOffset(parsed.Runs, rawI, ref ri);
-                        double cw = MeasureCharWidth(blockText[rawI], parsed.Kind, style);
+                        var style = TextMeasurer.GetStyleAtOffset(parsed.Runs, rawI, ref ri);
+                        double cw = _measure.MeasureCharWidth(blockText[rawI], parsed.Kind, style);
                         fullTextW += cw;
                         if (rawI < cursorOffset) textW += cw;
                     }
@@ -759,10 +759,10 @@ public partial class DocsCanvas
                     int ri = 0;
                     for (int i = 0; i < offsetInContent; i++)
                     {
-                        var style = GetStyleAtOffset(parsed.Runs, trimStart + i, ref ri);
-                        textW += MeasureCharWidth(cellContent[i], parsed.Kind, style);
+                        var style = TextMeasurer.GetStyleAtOffset(parsed.Runs, trimStart + i, ref ri);
+                        textW += _measure.MeasureCharWidth(cellContent[i], parsed.Kind, style);
                     }
-                    fullTextW = MeasureStringWidth(cellContent, parsed.Kind, parsed.Runs, trimStart);
+                    fullTextW = _measure.MeasureStringWidth(cellContent, parsed.Kind, parsed.Runs, trimStart);
                 }
 
                 var align = parsed.Table!.Alignments[c];
@@ -805,14 +805,14 @@ public partial class DocsCanvas
                     for (int rawI = trimStart; rawI < trimEnd; rawI++)
                     {
                         if (map.IsHidden(rawI)) continue;
-                        var style = GetStyleAtOffset(parsed.Runs, rawI, ref ri);
-                        fullTextW += MeasureCharWidth(blockText[rawI], parsed.Kind, style);
+                        var style = TextMeasurer.GetStyleAtOffset(parsed.Runs, rawI, ref ri);
+                        fullTextW += _measure.MeasureCharWidth(blockText[rawI], parsed.Kind, style);
                     }
                 }
                 else
                 {
                     string cellContent = blockText.Substring(trimStart, trimEnd - trimStart);
-                    fullTextW = MeasureStringWidth(cellContent, parsed.Kind, parsed.Runs, trimStart);
+                    fullTextW = _measure.MeasureStringWidth(cellContent, parsed.Kind, parsed.Runs, trimStart);
                 }
 
                 var align = parsed.Table!.Alignments[c];
@@ -833,8 +833,8 @@ public partial class DocsCanvas
                     for (int rawI = trimStart; rawI < trimEnd; rawI++)
                     {
                         if (map.IsHidden(rawI)) continue;
-                        var style = GetStyleAtOffset(parsed.Runs, rawI, ref runIdx);
-                        double charW = MeasureCharWidth(blockText[rawI], parsed.Kind, style);
+                        var style = TextMeasurer.GetStyleAtOffset(parsed.Runs, rawI, ref runIdx);
+                        double charW = _measure.MeasureCharWidth(blockText[rawI], parsed.Kind, style);
                         if (localX < accum + charW / 2)
                             return rawI;
                         accum += charW;
@@ -846,8 +846,8 @@ public partial class DocsCanvas
                     string cellContent = blockText.Substring(trimStart, trimEnd - trimStart);
                     for (int i = 0; i < cellContent.Length; i++)
                     {
-                        var style = GetStyleAtOffset(parsed.Runs, trimStart + i, ref runIdx);
-                        double charW = MeasureCharWidth(cellContent[i], parsed.Kind, style);
+                        var style = TextMeasurer.GetStyleAtOffset(parsed.Runs, trimStart + i, ref runIdx);
+                        double charW = _measure.MeasureCharWidth(cellContent[i], parsed.Kind, style);
                         if (localX < accum + charW / 2)
                             return trimStart + i;
                         accum += charW;
@@ -890,7 +890,7 @@ public partial class DocsCanvas
                     string cellText = map != null
                         ? map.BuildDisplayString(text, s, e - s)
                         : text.Substring(s, e - s);
-                    double w = MeasureStringWidth(cellText, p.Kind, p.Runs, s);
+                    double w = _measure.MeasureStringWidth(cellText, p.Kind, p.Runs, s);
                     if (w > widths[c]) widths[c] = w;
                 }
             }
@@ -943,7 +943,7 @@ public partial class DocsCanvas
                 dc.DrawRectangle(_palette.TableBackground, null,
                     new Rect(tableX, yTop, tableWidth, tableH));
 
-                double headerH = GetLineHeight(_visualLines[tableStart].BlockKind);
+                double headerH = _measure.GetLineHeight(_visualLines[tableStart].BlockKind);
                 dc.DrawRectangle(_palette.TableHeaderBackground, null,
                     new Rect(tableX, yTop, tableWidth, headerH));
 
@@ -984,7 +984,7 @@ public partial class DocsCanvas
 
         double x = _padding;
         double y = lineY - effectiveScroll;
-        double lineH = GetLineHeight(vl.BlockKind);
+        double lineH = _measure.GetLineHeight(vl.BlockKind);
         bool isHeader = parsed.Kind == BlockKind.TableHeaderRow;
 
         for (int c = 0; c < Math.Min(parsed.TableRow.Cells.Count, colWidths.Length); c++)
@@ -1000,10 +1000,10 @@ public partial class DocsCanvas
                 : blockText.Substring(s, e - s);
             if (cellText.Length == 0) { x += colWidths[c]; continue; }
 
-            var cellTypeface = isHeader ? _boldTypeface : baseTypeface;
+            var cellTypeface = isHeader ? TextMeasurer.BoldTypeface : baseTypeface;
             var ft = new FormattedText(cellText, CultureInfo.InvariantCulture,
                 FlowDirection.LeftToRight, cellTypeface, fontSize,
-                _palette.Foreground, _dpiScale);
+                _palette.Foreground, _measure.DpiScale);
 
             if (map != null)
                 ApplyInlineStylesForCell(ft, parsed, map, s, e);
@@ -1079,7 +1079,7 @@ public partial class DocsCanvas
             if (run.Style is InlineStyle.Italic or InlineStyle.BoldItalic)
                 ft.SetFontStyle(FontStyles.Italic, visStart, count);
             if (run.Style == InlineStyle.Code)
-                ft.SetFontFamily(_monoTypeface.FontFamily, visStart, count);
+                ft.SetFontFamily(TextMeasurer.MonoTypeface.FontFamily, visStart, count);
             if (run.Style == InlineStyle.Strikethrough)
                 ft.SetTextDecorations(TextDecorations.Strikethrough, visStart, count);
             if (run.Style == InlineStyle.Link)
@@ -1209,7 +1209,7 @@ public partial class DocsCanvas
                     ft.SetFontStyle(FontStyles.Italic, visStart, count);
                     break;
                 case InlineStyle.Code:
-                    ft.SetFontFamily(_monoTypeface.FontFamily, visStart, count);
+                    ft.SetFontFamily(TextMeasurer.MonoTypeface.FontFamily, visStart, count);
                     break;
                 case InlineStyle.Strikethrough:
                     ft.SetTextDecorations(TextDecorations.Strikethrough, visStart, count);
@@ -1283,7 +1283,7 @@ public partial class DocsCanvas
 
         double x = _padding;
         double screenY = lineY - effectiveScroll;
-        double textLineH = GetLineHeight(vl.BlockKind);
+        double textLineH = _measure.GetLineHeight(vl.BlockKind);
         double totalLineH = vl.OverrideHeight > textLineH ? vl.OverrideHeight : textLineH;
 
         if (map.ReplacementPrefix != null && vl.StartOffset == 0)
@@ -1297,9 +1297,9 @@ public partial class DocsCanvas
             {
                 var prefixFt = new FormattedText(map.ReplacementPrefix,
                     CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
-                    _normalTypeface, fontSize, _palette.Syntax, _dpiScale);
+                    TextMeasurer.NormalTypeface, fontSize, _palette.Syntax, _measure.DpiScale);
                 dc.DrawText(prefixFt, new Point(_padding, screenY));
-                x += MeasureReplacementPrefix(map.ReplacementPrefix, parsed.Kind);
+                x += _measure.MeasureReplacementPrefix(map.ReplacementPrefix, parsed.Kind);
             }
         }
 
@@ -1331,7 +1331,7 @@ public partial class DocsCanvas
                 {
                     var altFt = new FormattedText(img.AltText,
                         CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
-                        _normalTypeface, 11, _palette.Syntax, _dpiScale);
+                        TextMeasurer.NormalTypeface, 11, _palette.Syntax, _measure.DpiScale);
                     altFt.MaxTextWidth = Math.Max(1, imgW);
                     altFt.MaxTextHeight = Math.Max(1, imgH);
                     dc.DrawText(altFt, new Point(x + 2, imgY + 2));
@@ -1348,10 +1348,10 @@ public partial class DocsCanvas
 
     private double DrawTaskListCheckbox(DrawingContext dc, bool isChecked, double x, double screenY, BlockKind blockKind)
     {
-        double lineH = GetLineHeight(blockKind);
+        double lineH = _measure.GetLineHeight(blockKind);
         double boxSize = Math.Round(lineH * 0.65);
         double yOffset = Math.Round((lineH - boxSize) / 2);
-        double checkboxX = x + _listIndent - boxSize - 4;
+        double checkboxX = x + TextMeasurer.ListIndent - boxSize - 4;
         double checkboxY = screenY + yOffset;
         var rect = new Rect(checkboxX, checkboxY, boxSize, boxSize);
         double radius = 2.5;
@@ -1376,7 +1376,7 @@ public partial class DocsCanvas
             dc.DrawRoundedRectangle(null, pen, rect, radius, radius);
         }
 
-        return _listIndent;
+        return TextMeasurer.ListIndent;
     }
 
     private double DrawTextSegment(DrawingContext dc, string blockText,
@@ -1388,14 +1388,14 @@ public partial class DocsCanvas
 
         var ft = new FormattedText(displayText, CultureInfo.InvariantCulture,
             FlowDirection.LeftToRight, baseTypeface, fontSize,
-            _palette.Foreground, _dpiScale);
+            _palette.Foreground, _measure.DpiScale);
 
         int visBase = 0;
         int runIdx = 0;
         for (int r = rawStart; r < rawEnd; r++)
         {
             if (map.IsHidden(r)) continue;
-            var style = GetStyleAtOffset(parsed.Runs, r, ref runIdx);
+            var style = TextMeasurer.GetStyleAtOffset(parsed.Runs, r, ref runIdx);
             if (style != InlineStyle.Normal && style != InlineStyle.Image && visBase < displayText.Length)
             {
                 switch (style)
@@ -1411,7 +1411,7 @@ public partial class DocsCanvas
                         ft.SetFontStyle(FontStyles.Italic, visBase, 1);
                         break;
                     case InlineStyle.Code:
-                        ft.SetFontFamily(_monoTypeface.FontFamily, visBase, 1);
+                        ft.SetFontFamily(TextMeasurer.MonoTypeface.FontFamily, visBase, 1);
                         break;
                     case InlineStyle.Strikethrough:
                         ft.SetTextDecorations(TextDecorations.Strikethrough, visBase, 1);

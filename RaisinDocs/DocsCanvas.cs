@@ -11,16 +11,8 @@ namespace RaisinDocs;
 
 public partial class DocsCanvas : FrameworkElement
 {
-    private static readonly Typeface _normalTypeface = new("Segoe UI");
-    private static readonly Typeface _boldTypeface = new(new FontFamily("Segoe UI"), FontStyles.Normal, FontWeights.Bold, FontStretches.Normal);
-    private static readonly Typeface _italicTypeface = new(new FontFamily("Segoe UI"), FontStyles.Italic, FontWeights.Normal, FontStretches.Normal);
-    private static readonly Typeface _boldItalicTypeface = new(new FontFamily("Segoe UI"), FontStyles.Italic, FontWeights.Bold, FontStretches.Normal);
-    private static readonly Typeface _monoTypeface = new("Cascadia Mono");
-    private const double _baseFontSize = 16;
-    private const double _codeFontSize = 14;
     private const double _padding = 10;
     private const double _paragraphGap = 8;
-    private const double _listIndent = 20;
 
 
     public enum EditorTheme { Light, Dark, DarkBlue }
@@ -37,7 +29,7 @@ public partial class DocsCanvas : FrameworkElement
     private ThemePalette _palette = _lightPalette!;
 
     private static readonly Brush _checkboxCheckedBrush;
-    private static readonly double[] _headingFontSizes = [32, 26, 22, 18, 16, 14];
+    private readonly TextMeasurer _measure = new();
 
     static DocsCanvas()
     {
@@ -157,19 +149,8 @@ public partial class DocsCanvas : FrameworkElement
     private readonly Document _doc = new();
 
     private bool _cursorVisible = true;
-    private double _dpiScale = 1.0;
-    private bool _measured;
     private readonly DispatcherTimer _blinkTimer;
-
-    private GlyphTypeface? _normalGlyph;
-    private GlyphTypeface? _boldGlyph;
-    private GlyphTypeface? _italicGlyph;
-    private GlyphTypeface? _boldItalicGlyph;
-    private GlyphTypeface? _monoGlyph;
-    private readonly Dictionary<(char, int), double> _charWidthCache = new();
     private readonly Dictionary<Color, SolidColorBrush> _brushCache = new();
-
-    private readonly Dictionary<BlockKind, double> _lineHeights = new();
 
     private readonly record struct JoinSegment(int BlockIndex, int OffsetInJoined, int Length);
 
@@ -886,7 +867,7 @@ public partial class DocsCanvas : FrameworkElement
     {
         get
         {
-            if (!_measured) return BlockKind.Paragraph;
+            if (!_measure.IsMeasured) return BlockKind.Paragraph;
             ComputeLayout();
             return _parsedBlocks![_doc.CursorBlock].Kind;
         }
@@ -899,7 +880,7 @@ public partial class DocsCanvas : FrameworkElement
 
     private bool SelectionHasStyle(InlineStyle targetStyle)
     {
-        if (!_measured || !_doc.HasSelection) return false;
+        if (!_measure.IsMeasured || !_doc.HasSelection) return false;
         var (sb, so, eb, eo) = _doc.GetOrderedSelection();
         so = Math.Min(so, _doc.GetBlockLength(sb));
         eo = Math.Min(eo, _doc.GetBlockLength(eb));
@@ -1060,7 +1041,7 @@ public partial class DocsCanvas : FrameworkElement
 
         Loaded += (_, _) =>
         {
-            EnsureMeasured();
+            _measure.EnsureMeasured(this);
             try { Focus(); }
             catch (NullReferenceException) { }
         };
@@ -1086,107 +1067,9 @@ public partial class DocsCanvas : FrameworkElement
         _lastAction = LastActionKind.None;
     }
 
-    private void EnsureMeasured()
-    {
-        if (_measured) return;
-        try { _dpiScale = VisualTreeHelper.GetDpi(this).PixelsPerDip; }
-        catch { }
-
-        _normalTypeface.TryGetGlyphTypeface(out _normalGlyph);
-        _boldTypeface.TryGetGlyphTypeface(out _boldGlyph);
-        _italicTypeface.TryGetGlyphTypeface(out _italicGlyph);
-        _boldItalicTypeface.TryGetGlyphTypeface(out _boldItalicGlyph);
-        _monoTypeface.TryGetGlyphTypeface(out _monoGlyph);
-
-        foreach (BlockKind kind in Enum.GetValues<BlockKind>())
-        {
-            double fontSize = GetBlockFontSize(kind);
-            var ft = new FormattedText("M", CultureInfo.InvariantCulture,
-                FlowDirection.LeftToRight, GetBlockBaseTypeface(kind), fontSize,
-                _palette.Foreground, _dpiScale);
-            _lineHeights[kind] = ft.Height;
-        }
-
-        _measured = true;
-    }
-
-    private static double GetBlockFontSize(BlockKind kind) => kind switch
-    {
-        BlockKind.Heading1 => _headingFontSizes[0],
-        BlockKind.Heading2 => _headingFontSizes[1],
-        BlockKind.Heading3 => _headingFontSizes[2],
-        BlockKind.Heading4 => _headingFontSizes[3],
-        BlockKind.Heading5 => _headingFontSizes[4],
-        BlockKind.Heading6 => _headingFontSizes[5],
-        BlockKind.FencedCodeLine => _codeFontSize,
-        _ => _baseFontSize,
-    };
-
-    private static Typeface GetBlockBaseTypeface(BlockKind kind) => kind switch
-    {
-        BlockKind.FencedCodeLine => _monoTypeface,
-        _ => _normalTypeface,
-    };
-
-    private static Typeface GetInlineTypeface(BlockKind blockKind, InlineStyle style) => blockKind switch
-    {
-        BlockKind.FencedCodeLine => _monoTypeface,
-        BlockKind.TableHeaderRow => style switch
-        {
-            InlineStyle.Italic or InlineStyle.BoldItalic => _boldItalicTypeface,
-            InlineStyle.Code => _monoTypeface,
-            _ => _boldTypeface,
-        },
-        _ => style switch
-        {
-            InlineStyle.Bold => _boldTypeface,
-            InlineStyle.Italic => _italicTypeface,
-            InlineStyle.BoldItalic => _boldItalicTypeface,
-            InlineStyle.Code => _monoTypeface,
-            _ => _normalTypeface,
-        },
-    };
-
-    private GlyphTypeface? GetInlineGlyph(BlockKind blockKind, InlineStyle style) => blockKind switch
-    {
-        BlockKind.FencedCodeLine => _monoGlyph,
-        BlockKind.TableHeaderRow => style switch
-        {
-            InlineStyle.Italic or InlineStyle.BoldItalic => _boldItalicGlyph,
-            InlineStyle.Code => _monoGlyph,
-            _ => _boldGlyph,
-        },
-        _ => style switch
-        {
-            InlineStyle.Bold => _boldGlyph,
-            InlineStyle.Italic => _italicGlyph,
-            InlineStyle.BoldItalic => _boldItalicGlyph,
-            InlineStyle.Code => _monoGlyph,
-            _ => _normalGlyph,
-        },
-    };
-
-    private static int GetStyleKey(BlockKind blockKind, InlineStyle style)
-    {
-        int fontId = blockKind == BlockKind.FencedCodeLine || style == InlineStyle.Code ? 1 : 0;
-        if (style == InlineStyle.Bold) fontId = 2;
-        else if (style == InlineStyle.Italic) fontId = 3;
-        else if (style == InlineStyle.BoldItalic) fontId = 4;
-        if (blockKind == BlockKind.FencedCodeLine) fontId = 1;
-        if (blockKind == BlockKind.TableHeaderRow && fontId == 0) fontId = 2;
-        else if (blockKind == BlockKind.TableHeaderRow && fontId == 3) fontId = 4;
-        int sizeKey = (int)GetBlockFontSize(blockKind);
-        return fontId * 100 + sizeKey;
-    }
-
-    private double GetLineHeight(BlockKind kind)
-    {
-        return _lineHeights.TryGetValue(kind, out double h) ? h : _lineHeights[BlockKind.Paragraph];
-    }
-
     private double GetEffectiveLineHeight(VisualLine vl)
     {
-        double h = GetLineHeight(vl.BlockKind);
+        double h = _measure.GetLineHeight(vl.BlockKind);
         return vl.OverrideHeight > h ? vl.OverrideHeight : h;
     }
 
@@ -1220,49 +1103,6 @@ public partial class DocsCanvas : FrameworkElement
         _blinkTimer.Stop();
         _cursorVisible = false;
         InvalidateVisual();
-    }
-
-    // --- Text measurement ---
-
-    private double MeasureCharWidth(char ch, BlockKind blockKind, InlineStyle style)
-    {
-        int key = GetStyleKey(blockKind, style);
-        if (!_charWidthCache.TryGetValue((ch, key), out double w))
-        {
-            double fontSize = GetBlockFontSize(blockKind);
-            var glyph = GetInlineGlyph(blockKind, style);
-            if (glyph != null && glyph.CharacterToGlyphMap.TryGetValue(ch, out ushort glyphIndex))
-            {
-                w = glyph.AdvanceWidths[glyphIndex] * fontSize;
-            }
-            else
-            {
-                var typeface = GetInlineTypeface(blockKind, style);
-                var ft = new FormattedText(ch.ToString(), CultureInfo.InvariantCulture,
-                    FlowDirection.LeftToRight, typeface, fontSize,
-                    _palette.Foreground, _dpiScale);
-                w = ft.WidthIncludingTrailingWhitespace;
-            }
-            _charWidthCache[(ch, key)] = w;
-        }
-        return w;
-    }
-
-    private InlineStyle GetStyleAtOffset(IReadOnlyList<StyledRun> runs, int offset, ref int runHint)
-    {
-        while (runHint < runs.Count - 1 && offset >= runs[runHint].Start + runs[runHint].Length)
-            runHint++;
-        return runs[runHint].Style;
-    }
-
-    private double MeasureReplacementPrefix(string prefix, BlockKind blockKind)
-    {
-        if (blockKind is BlockKind.TaskListItemUnchecked or BlockKind.TaskListItemChecked)
-            return _listIndent;
-        double total = 0;
-        for (int i = 0; i < prefix.Length; i++)
-            total += MeasureCharWidth(prefix[i], blockKind, InlineStyle.Normal);
-        return total;
     }
 
     private (double Width, double Height) GetImageSize(InlineImage img, double maxWidth)
@@ -1322,7 +1162,7 @@ public partial class DocsCanvas : FrameworkElement
     {
         if (!_layoutDirty) return;
         _layoutDirty = false;
-        EnsureMeasured();
+        _measure.EnsureMeasured(this);
 
         _parsedBlocks ??= MarkdownParser.Parse(i => _doc.GetBlockText(i), _doc.BlockCount);
 
@@ -1536,7 +1376,7 @@ public partial class DocsCanvas : FrameworkElement
             }
             _lineYPositions.Add(y);
             var lineVl = _visualLines[i];
-            double lineH = GetLineHeight(lineVl.BlockKind);
+            double lineH = _measure.GetLineHeight(lineVl.BlockKind);
             if (lineVl.OverrideHeight > lineH) lineH = lineVl.OverrideHeight;
             y += lineH;
         }
@@ -1555,7 +1395,7 @@ public partial class DocsCanvas : FrameworkElement
 
         double prefixWidth = 0;
         if (map?.ReplacementPrefix != null)
-            prefixWidth = MeasureReplacementPrefix(map.ReplacementPrefix, parsed.Kind);
+            prefixWidth = _measure.MeasureReplacementPrefix(map.ReplacementPrefix, parsed.Kind);
 
         int pos = 0;
         while (pos < segment.Length)
@@ -1572,7 +1412,7 @@ public partial class DocsCanvas : FrameworkElement
             {
                 double imgH = GetSourceInlineImageHeight(vl, parsed.Images);
                 if (imgH > 0)
-                    vl = vl with { OverrideHeight = GetLineHeight(parsed.Kind) + imgH };
+                    vl = vl with { OverrideHeight = _measure.GetLineHeight(parsed.Kind) + imgH };
             }
             _visualLines.Add(vl);
             pos += lineLen;
@@ -1634,8 +1474,8 @@ public partial class DocsCanvas : FrameworkElement
                 continue;
             }
             if (text[i] is ' ' or '¶') lastSpace = i;
-            var style = GetStyleAtOffset(parsed.Runs, rawOffset, ref runIdx);
-            width += MeasureCharWidth(text[i], parsed.Kind, style);
+            var style = TextMeasurer.GetStyleAtOffset(parsed.Runs, rawOffset, ref runIdx);
+            width += _measure.MeasureCharWidth(text[i], parsed.Kind, style);
             anyVisible = true;
             if (width > maxWidth && anyVisible && i > start)
             {
@@ -1648,18 +1488,6 @@ public partial class DocsCanvas : FrameworkElement
     }
 
     private const double _tableCellPadding = 8;
-
-    private double MeasureStringWidth(string text, BlockKind kind, IReadOnlyList<StyledRun> runs, int blockOffset)
-    {
-        double w = 0;
-        int runIdx = 0;
-        for (int i = 0; i < text.Length; i++)
-        {
-            var style = GetStyleAtOffset(runs, blockOffset + i, ref runIdx);
-            w += MeasureCharWidth(text[i], kind, style);
-        }
-        return w;
-    }
 
     // --- Cursor ↔ visual line mapping ---
 
@@ -1705,7 +1533,7 @@ public partial class DocsCanvas : FrameworkElement
         string blockText = _doc.GetBlockText(vl.BlockIndex);
         double x = 0;
         if (map != null && map.ReplacementPrefix != null && vl.StartOffset == 0)
-            x += MeasureReplacementPrefix(map.ReplacementPrefix!, vl.BlockKind);
+            x += _measure.MeasureReplacementPrefix(map.ReplacementPrefix!, vl.BlockKind);
 
         if (localOff == 0) return x;
 
@@ -1713,8 +1541,8 @@ public partial class DocsCanvas : FrameworkElement
         {
             string lineText = blockText.Substring(vl.StartOffset, vl.Length);
             var ft = new FormattedText(lineText, CultureInfo.InvariantCulture,
-                FlowDirection.LeftToRight, GetBlockBaseTypeface(vl.BlockKind),
-                GetBlockFontSize(vl.BlockKind), _palette.Foreground, _dpiScale);
+                FlowDirection.LeftToRight, TextMeasurer.GetBlockBaseTypeface(vl.BlockKind),
+                TextMeasurer.GetBlockFontSize(vl.BlockKind), _palette.Foreground, _measure.DpiScale);
             ApplyInlineStyles(ft, vl, parsed, blockText);
             var geom = ft.BuildHighlightGeometry(new Point(0, 0), 0, localOff);
             return x + (geom != null ? geom.Bounds.Right : ft.WidthIncludingTrailingWhitespace);
@@ -1734,8 +1562,8 @@ public partial class DocsCanvas : FrameworkElement
                 }
                 continue;
             }
-            var style = GetStyleAtOffset(parsed.Runs, i, ref runIdx);
-            x += MeasureCharWidth(blockText[i], parsed.Kind, style);
+            var style = TextMeasurer.GetStyleAtOffset(parsed.Runs, i, ref runIdx);
+            x += _measure.MeasureCharWidth(blockText[i], parsed.Kind, style);
         }
         return x;
     }
@@ -1768,7 +1596,7 @@ public partial class DocsCanvas : FrameworkElement
 
         if (map != null && map.ReplacementPrefix != null && vl.StartOffset == 0)
         {
-            double prefixW = MeasureReplacementPrefix(map.ReplacementPrefix!, vl.BlockKind);
+            double prefixW = _measure.MeasureReplacementPrefix(map.ReplacementPrefix!, vl.BlockKind);
             if (x < prefixW) return vl.StartOffset;
             accum = prefixW;
         }
@@ -1790,8 +1618,8 @@ public partial class DocsCanvas : FrameworkElement
                 }
                 continue;
             }
-            var style = GetStyleAtOffset(parsed.Runs, offset, ref runIdx);
-            double charW = MeasureCharWidth(blockText[offset], parsed.Kind, style);
+            var style = TextMeasurer.GetStyleAtOffset(parsed.Runs, offset, ref runIdx);
+            double charW = _measure.MeasureCharWidth(blockText[offset], parsed.Kind, style);
             if (x < accum + charW / 2)
                 return offset;
             accum += charW;
@@ -1821,8 +1649,8 @@ public partial class DocsCanvas : FrameworkElement
                 }
                 continue;
             }
-            var style = GetStyleAtOffset(group.JoinedParsed.Runs, offset, ref runIdx);
-            double charW = MeasureCharWidth(group.JoinedText[offset], BlockKind.Paragraph, style);
+            var style = TextMeasurer.GetStyleAtOffset(group.JoinedParsed.Runs, offset, ref runIdx);
+            double charW = _measure.MeasureCharWidth(group.JoinedText[offset], BlockKind.Paragraph, style);
             if (x < accum + charW / 2)
                 return offset;
             accum += charW;
@@ -2966,7 +2794,7 @@ public partial class DocsCanvas : FrameworkElement
 
     protected override void OnRender(DrawingContext dc)
     {
-        EnsureMeasured();
+        _measure.EnsureMeasured(this);
         dc.DrawRectangle(_palette.Background, null, new Rect(0, 0, ActualWidth, ActualHeight));
 
         // Mutating layout state here violates WPF's OnRender contract (should only draw, not mutate).
@@ -3005,8 +2833,8 @@ public partial class DocsCanvas : FrameworkElement
                 {
                     string blockText = _doc.GetBlockText(vl.BlockIndex);
                     var parsed = _parsedBlocks![vl.BlockIndex];
-                    double fontSize = GetBlockFontSize(parsed.Kind);
-                    var baseTypeface = GetBlockBaseTypeface(parsed.Kind);
+                    double fontSize = TextMeasurer.GetBlockFontSize(parsed.Kind);
+                    var baseTypeface = TextMeasurer.GetBlockBaseTypeface(parsed.Kind);
                     var map = IsVisual ? _visualMaps?[vl.BlockIndex] : null;
 
                     double textX = _padding;
@@ -3035,9 +2863,9 @@ public partial class DocsCanvas : FrameworkElement
                                 {
                                     var prefixFt = new FormattedText(map.ReplacementPrefix!,
                                         CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
-                                        _normalTypeface, fontSize, _palette.Syntax, _dpiScale);
+                                        TextMeasurer.NormalTypeface, fontSize, _palette.Syntax, _measure.DpiScale);
                                     dc.DrawText(prefixFt, new Point(_padding, lineY - effectiveScroll));
-                                    textX += MeasureReplacementPrefix(map.ReplacementPrefix!, parsed.Kind);
+                                    textX += _measure.MeasureReplacementPrefix(map.ReplacementPrefix!, parsed.Kind);
                                 }
                             }
 
@@ -3046,7 +2874,7 @@ public partial class DocsCanvas : FrameworkElement
                             {
                                 var ft = new FormattedText(displayText, CultureInfo.InvariantCulture,
                                     FlowDirection.LeftToRight, baseTypeface, fontSize,
-                                    _palette.Foreground, _dpiScale);
+                                    _palette.Foreground, _measure.DpiScale);
                                 ApplyInlineStylesVisual(ft, vl, parsed, map);
                                 if (parsed.Kind == BlockKind.TaskListItemChecked)
                                 {
@@ -3062,7 +2890,7 @@ public partial class DocsCanvas : FrameworkElement
                         string text = blockText.Substring(vl.StartOffset, vl.Length);
                         var ft = new FormattedText(text, CultureInfo.InvariantCulture,
                             FlowDirection.LeftToRight, baseTypeface, fontSize,
-                            _palette.Foreground, _dpiScale);
+                            _palette.Foreground, _measure.DpiScale);
                         ApplyInlineStyles(ft, vl, parsed, blockText);
                         dc.DrawText(ft, new Point(textX, lineY - effectiveScroll));
 
@@ -3104,19 +2932,19 @@ public partial class DocsCanvas : FrameworkElement
         {
             DrawVisualLineWithImages(dc, vl, group.JoinedText, group.JoinedParsed,
                 group.JoinedMap, lineY, effectiveScroll,
-                GetBlockFontSize(BlockKind.Paragraph), GetBlockBaseTypeface(BlockKind.Paragraph));
+                TextMeasurer.GetBlockFontSize(BlockKind.Paragraph), TextMeasurer.GetBlockBaseTypeface(BlockKind.Paragraph));
             return;
         }
 
         string displayText = BuildJoinedDisplayString(group, vl.StartOffset, vl.Length);
         if (displayText.Length == 0) return;
 
-        double fontSize = GetBlockFontSize(BlockKind.Paragraph);
-        var baseTypeface = GetBlockBaseTypeface(BlockKind.Paragraph);
+        double fontSize = TextMeasurer.GetBlockFontSize(BlockKind.Paragraph);
+        var baseTypeface = TextMeasurer.GetBlockBaseTypeface(BlockKind.Paragraph);
 
         var ft = new FormattedText(displayText, CultureInfo.InvariantCulture,
             FlowDirection.LeftToRight, baseTypeface, fontSize,
-            _palette.Foreground, _dpiScale);
+            _palette.Foreground, _measure.DpiScale);
         ApplyInlineStylesVisual(ft, vl, group.JoinedParsed, group.JoinedMap);
 
         var softBreaks = new HashSet<int>(group.SoftBreakOffsets);
@@ -3165,7 +2993,7 @@ public partial class DocsCanvas : FrameworkElement
                     ft.SetFontStyle(FontStyles.Italic, localStart, count);
                     break;
                 case InlineStyle.Code:
-                    ft.SetFontFamily(_monoTypeface.FontFamily, localStart, count);
+                    ft.SetFontFamily(TextMeasurer.MonoTypeface.FontFamily, localStart, count);
                     break;
                 case InlineStyle.Strikethrough:
                     ft.SetTextDecorations(TextDecorations.Strikethrough, localStart, count);
@@ -3375,13 +3203,13 @@ public partial class DocsCanvas : FrameworkElement
         int runIdx = 0;
         for (int i = vl.StartOffset; i < trailStart; i++)
         {
-            var style = GetStyleAtOffset(parsed.Runs, i, ref runIdx);
-            x += MeasureCharWidth(blockText[i], parsed.Kind, style);
+            var style = TextMeasurer.GetStyleAtOffset(parsed.Runs, i, ref runIdx);
+            x += _measure.MeasureCharWidth(blockText[i], parsed.Kind, style);
         }
 
-        double spaceW = MeasureCharWidth(' ', parsed.Kind, InlineStyle.Normal);
+        double spaceW = _measure.MeasureCharWidth(' ', parsed.Kind, InlineStyle.Normal);
         double dotSize = Math.Max(2, spaceW * 0.25);
-        double lineH = GetLineHeight(parsed.Kind);
+        double lineH = _measure.GetLineHeight(parsed.Kind);
         double cy = screenY + lineH / 2;
 
         for (int i = 0; i < trailCount; i++)
@@ -3410,7 +3238,7 @@ public partial class DocsCanvas : FrameworkElement
             var vl = _visualLines[i];
             if (vl.BlockKind != BlockKind.FencedCodeLine) continue;
 
-            double lineH = GetLineHeight(vl.BlockKind);
+            double lineH = _measure.GetLineHeight(vl.BlockKind);
             double lineY = _lineYPositions[i];
             if (lineY + lineH < viewTop) continue;
             if (lineY > viewBottom) break;
@@ -3503,7 +3331,7 @@ public partial class DocsCanvas : FrameworkElement
 
                 if (map?.ReplacementPrefix != null && vl.StartOffset == 0)
                 {
-                    double prefixW = MeasureReplacementPrefix(map.ReplacementPrefix!, parsed.Kind);
+                    double prefixW = _measure.MeasureReplacementPrefix(map.ReplacementPrefix!, parsed.Kind);
                     x1 += prefixW;
                     x2 += prefixW;
                 }
@@ -3585,7 +3413,7 @@ public partial class DocsCanvas : FrameworkElement
 
                 if (map != null && map.ReplacementPrefix != null && vl.StartOffset == 0)
                 {
-                    double prefixW = MeasureReplacementPrefix(map.ReplacementPrefix!, parsed.Kind);
+                    double prefixW = _measure.MeasureReplacementPrefix(map.ReplacementPrefix!, parsed.Kind);
                     x1 += prefixW;
                     x2 += prefixW;
                 }
@@ -3658,8 +3486,8 @@ public partial class DocsCanvas : FrameworkElement
                 }
                 continue;
             }
-            var style = GetStyleAtOffset(runs, i, ref runIdx);
-            total += MeasureCharWidth(text[i], blockKind, style);
+            var style = TextMeasurer.GetStyleAtOffset(runs, i, ref runIdx);
+            total += _measure.MeasureCharWidth(text[i], blockKind, style);
         }
         return total;
     }
