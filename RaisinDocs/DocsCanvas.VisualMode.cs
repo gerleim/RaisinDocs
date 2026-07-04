@@ -1022,6 +1022,28 @@ public partial class DocsCanvas
 
             var clipRect = new Rect(x, y, colWidths[c], lineH);
             dc.PushClip(new RectangleGeometry(clipRect));
+
+            if (map?.ColorSpans != null)
+            {
+                foreach (var cs in map.ColorSpans)
+                {
+                    if (cs.Background == null) continue;
+                    int csEnd = cs.Start + cs.Length;
+                    if (csEnd <= s || cs.Start >= e) continue;
+
+                    int rawStart = Math.Max(cs.Start, s);
+                    int rawEnd = Math.Min(csEnd, e);
+                    double bgX1 = MeasureRangeWidth(blockText, s, rawStart - s, parsed.Runs, parsed.Kind, map);
+                    double bgX2 = MeasureRangeWidth(blockText, s, rawEnd - s, parsed.Runs, parsed.Kind, map);
+                    if (bgX2 <= bgX1) continue;
+
+                    var bg = cs.Background.Value;
+                    var brush = new SolidColorBrush(Color.FromArgb(40, bg.R, bg.G, bg.B));
+                    brush.Freeze();
+                    dc.DrawRectangle(brush, null, new Rect(textX + bgX1, y, bgX2 - bgX1, lineH));
+                }
+            }
+
             dc.DrawText(ft, new Point(textX, y));
             dc.Pop();
 
