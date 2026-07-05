@@ -542,7 +542,7 @@ public class DocumentTests
         doc.GetBlockText(2).Should().Be("c");
     }
 
-    private static bool IsFence(string text) => text.TrimStart().StartsWith("```");
+    private static int IsFence(string text) => text.TrimStart().StartsWith("```") ? 3 : 0;
 
     [Fact]
     public void Reflow_PreservesFencedCodeBlock()

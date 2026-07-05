@@ -92,15 +92,16 @@ public static class MarkdownParser
         var theme = CollectThemeDefinitions(getBlockText, blockCount);
 
         var result = new List<ParsedBlock>(blockCount);
-        bool insideFence = false;
+        int fenceLen = 0;
 
         for (int i = 0; i < blockCount; i++)
         {
             string text = getBlockText(i);
+            int backticks = GetFenceBacktickCount(text);
 
-            if (IsFenceLine(text))
+            if (fenceLen == 0 && backticks > 0)
             {
-                insideFence = !insideFence;
+                fenceLen = backticks;
                 result.Add(new ParsedBlock
                 {
                     Kind = BlockKind.FencedCodeLine,
@@ -110,12 +111,16 @@ public static class MarkdownParser
                 continue;
             }
 
-            if (insideFence)
+            if (fenceLen > 0)
             {
+                bool isClosing = backticks >= fenceLen;
+                if (isClosing)
+                    fenceLen = 0;
                 result.Add(new ParsedBlock
                 {
                     Kind = BlockKind.FencedCodeLine,
                     Runs = [new StyledRun(0, text.Length, InlineStyle.Normal)],
+                    IsFenceDelimiter = isClosing,
                 });
                 continue;
             }
@@ -204,12 +209,13 @@ public static class MarkdownParser
         Func<int, string> getBlockText, int blockCount)
     {
         Dictionary<string, RgbColor>? theme = null;
-        bool insideFence = false;
+        int fenceLen = 0;
         for (int i = 0; i < blockCount; i++)
         {
             string text = getBlockText(i);
-            if (IsFenceLine(text)) { insideFence = !insideFence; continue; }
-            if (insideFence) continue;
+            int backticks = GetFenceBacktickCount(text);
+            if (fenceLen == 0 && backticks > 0) { fenceLen = backticks; continue; }
+            if (fenceLen > 0) { if (backticks >= fenceLen) fenceLen = 0; continue; }
 
             if (IsThemeBlock(text))
             {
@@ -275,12 +281,13 @@ public static class MarkdownParser
         Func<int, string> getBlockText, int blockCount)
     {
         Dictionary<string, (string Url, string? Title)>? defs = null;
-        bool insideFence = false;
+        int fenceLen = 0;
         for (int i = 0; i < blockCount; i++)
         {
             string text = getBlockText(i);
-            if (IsFenceLine(text)) { insideFence = !insideFence; continue; }
-            if (insideFence) continue;
+            int backticks = GetFenceBacktickCount(text);
+            if (fenceLen == 0 && backticks > 0) { fenceLen = backticks; continue; }
+            if (fenceLen > 0) { if (backticks >= fenceLen) fenceLen = 0; continue; }
 
             if (TryParseLinkDefinition(text, out string? label, out string? url, out string? title))
             {
@@ -510,10 +517,16 @@ public static class MarkdownParser
         return cells;
     }
 
-    public static bool IsFenceLine(string text)
+    public static bool IsFenceLine(string text) => GetFenceBacktickCount(text) > 0;
+
+    public static int GetFenceBacktickCount(string text)
     {
         var trimmed = text.TrimStart();
-        return trimmed.StartsWith("```");
+        if (!trimmed.StartsWith("```")) return 0;
+        int count = 0;
+        while (count < trimmed.Length && trimmed[count] == '`') count++;
+        var infoString = trimmed[count..];
+        return infoString.Contains('`') ? 0 : count;
     }
 
     internal static BlockKind ClassifyBlock(string text)

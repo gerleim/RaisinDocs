@@ -560,9 +560,9 @@ public partial class DocsCanvas : FrameworkElement
             MarkdownParser.FindInlineColorCloseStart,
             MarkdownParser.InlineOpenToDivOpen);
         eb = Math.Min(eb, _doc.BlockCount - 1);
-        changed |= _doc.Reflow(sb, eb, IsMergeableParagraph, MarkdownParser.IsFenceLine);
+        changed |= _doc.Reflow(sb, eb, IsMergeableParagraph, MarkdownParser.GetFenceBacktickCount);
         if (!changed)
-            _doc.TrimWhitespace(sb, eb, MarkdownParser.IsFenceLine);
+            _doc.TrimWhitespace(sb, eb, MarkdownParser.GetFenceBacktickCount);
         _doc.SealUndoGroup();
         InvalidateLayout();
         EnsureCursorVisible();
@@ -576,7 +576,7 @@ public partial class DocsCanvas : FrameworkElement
             if (!_doc.HasSelection)
                 return false;
             var sel = _doc.GetOrderedSelection();
-            return _doc.HasReformattableContent(sel.startBlock, sel.endBlock, IsMergeableParagraph, MarkdownParser.IsFenceLine);
+            return _doc.HasReformattableContent(sel.startBlock, sel.endBlock, IsMergeableParagraph, MarkdownParser.GetFenceBacktickCount);
         }
     }
 
@@ -608,7 +608,7 @@ public partial class DocsCanvas : FrameworkElement
         }
         string marker = _hardBreak == HardBreakStyle.Backslash ? "\\" : "  ";
         _doc.BeginUndoGroup();
-        _doc.AddHardBreaks(sb, eb, marker, MarkdownParser.IsFenceLine);
+        _doc.AddHardBreaks(sb, eb, marker, MarkdownParser.GetFenceBacktickCount);
         _doc.SealUndoGroup();
         InvalidateLayout();
         EnsureCursorVisible();
@@ -631,7 +631,7 @@ public partial class DocsCanvas : FrameworkElement
                 sb = 0;
                 eb = _doc.BlockCount - 1;
             }
-            return _doc.HasSoftBreaks(sb, eb, MarkdownParser.IsFenceLine);
+            return _doc.HasSoftBreaks(sb, eb, MarkdownParser.GetFenceBacktickCount);
         }
     }
 

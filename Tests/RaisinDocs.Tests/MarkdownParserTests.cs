@@ -293,6 +293,27 @@ public class MarkdownParserTests
     }
 
     [Fact]
+    public void FencedCode_BacktickInInfoString_NotAFence()
+    {
+        var result = ParseBlocks("```c`sharp", "var x = 1;", "```");
+        result[0].Kind.Should().Be(BlockKind.Paragraph);
+        result[1].Kind.Should().Be(BlockKind.Paragraph);
+        result[2].Kind.Should().Be(BlockKind.FencedCodeLine);
+    }
+
+    [Fact]
+    public void FencedCode_LongerFence_IgnoresShorterClose()
+    {
+        var result = ParseBlocks("````", "```", "some code", "````");
+        result[0].Kind.Should().Be(BlockKind.FencedCodeLine);
+        result[1].Kind.Should().Be(BlockKind.FencedCodeLine);
+        result[2].Kind.Should().Be(BlockKind.FencedCodeLine);
+        result[3].Kind.Should().Be(BlockKind.FencedCodeLine);
+        result[1].IsFenceDelimiter.Should().BeFalse();
+        result[3].IsFenceDelimiter.Should().BeTrue();
+    }
+
+    [Fact]
     public void TextAfterFence_IsParagraph()
     {
         var result = ParseBlocks("```", "code", "```", "after");

@@ -573,7 +573,7 @@ public class Document
         else if (AnchorBlock == index) { AnchorBlock = Math.Max(0, index - 1); AnchorOffset = _blocks[AnchorBlock].Length; }
     }
 
-    public bool Reflow(int startBlock, int endBlock, Func<string, bool> isMergeableBlock, Func<string, bool>? isFenceLine = null)
+    public bool Reflow(int startBlock, int endBlock, Func<string, bool> isMergeableBlock, Func<string, int>? isFenceLine = null)
     {
         int countBefore = _blocks.Count;
         endBlock = ReflowBoxTable(startBlock, endBlock);
@@ -637,29 +637,31 @@ public class Document
         }
     }
 
-    private HashSet<int>? BuildFenceMap(int startBlock, int endBlock, Func<string, bool>? isFenceLine)
+    private HashSet<int>? BuildFenceMap(int startBlock, int endBlock, Func<string, int>? getFenceLength)
     {
-        if (isFenceLine == null) return null;
+        if (getFenceLength == null) return null;
 
         var fenced = new HashSet<int>();
-        bool inside = false;
+        int fenceLen = 0;
         for (int i = 0; i <= endBlock && i < _blocks.Count; i++)
         {
             string text = _blocks[i].ToString();
-            if (isFenceLine(text))
+            int backticks = getFenceLength(text);
+            if (fenceLen == 0 && backticks > 0)
+            {
+                fenceLen = backticks;
+                if (i >= startBlock) fenced.Add(i);
+            }
+            else if (fenceLen > 0)
             {
                 if (i >= startBlock) fenced.Add(i);
-                inside = !inside;
-            }
-            else if (inside && i >= startBlock)
-            {
-                fenced.Add(i);
+                if (backticks >= fenceLen) fenceLen = 0;
             }
         }
         return fenced.Count > 0 ? fenced : null;
     }
 
-    public bool TrimWhitespace(int startBlock, int endBlock, Func<string, bool>? isFenceLine = null)
+    public bool TrimWhitespace(int startBlock, int endBlock, Func<string, int>? isFenceLine = null)
     {
         var insideFence = BuildFenceMap(startBlock, endBlock, isFenceLine);
         bool changed = false;
@@ -692,7 +694,7 @@ public class Document
         return changed;
     }
 
-    public bool HasReformattableContent(int startBlock, int endBlock, Func<string, bool> isMergeableBlock, Func<string, bool>? isFenceLine = null)
+    public bool HasReformattableContent(int startBlock, int endBlock, Func<string, bool> isMergeableBlock, Func<string, int>? isFenceLine = null)
     {
         for (int i = startBlock; i <= endBlock; i++)
         {
@@ -743,7 +745,7 @@ public class Document
     }
 
     public bool AddHardBreaks(int startBlock, int endBlock, string marker,
-        Func<string, bool>? isFenceLine = null)
+        Func<string, int>? isFenceLine = null)
     {
         var insideFence = BuildFenceMap(startBlock, endBlock, isFenceLine);
         bool changed = false;
@@ -764,7 +766,7 @@ public class Document
     }
 
     public bool HasSoftBreaks(int startBlock, int endBlock,
-        Func<string, bool>? isFenceLine = null)
+        Func<string, int>? isFenceLine = null)
     {
         var insideFence = BuildFenceMap(startBlock, endBlock, isFenceLine);
         for (int i = startBlock; i < endBlock; i++)
