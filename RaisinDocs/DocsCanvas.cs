@@ -209,12 +209,7 @@ public partial class DocsCanvas : FrameworkElement
     private bool _layoutDirty = true;
     private double _totalContentHeight;
     private double _layoutMaxWidth;
-    private double _scrollOffset;
-    private readonly SmoothScroller _smoother;
-    private double _wheelVelocity;
-    private bool _wheelCoasting;
-    private TimeSpan _lastWheelFrameTime;
-    private const double WheelDamping = 10.0;
+    private readonly ScrollController _scroll;
 
     private List<ParsedBlock>? _parsedBlocks;
     private List<BlockVisualMap>? _visualMaps;
@@ -249,12 +244,12 @@ public partial class DocsCanvas : FrameworkElement
     }
 
     internal event Action? ScrollStateChanged;
-    internal double ScrollOffset => _scrollOffset;
+    internal double ScrollOffset => _scroll.Offset;
     internal double TotalContentHeight => _totalContentHeight;
 
     internal int MinimapLayoutVersion => _layoutVersion;
     internal int MinimapLineCount => _visualLines.Count;
-    internal double MinimapScrollOffset => _scrollOffset + _smoother.Offset;
+    internal double MinimapScrollOffset => _scroll.EffectiveOffset;
     internal double MinimapTotalHeight => _totalContentHeight;
     internal Color MinimapBackground => ((SolidColorBrush)_palette.Background).Color;
     internal Color MinimapForeground => ((SolidColorBrush)_palette.Foreground).Color;
@@ -313,24 +308,8 @@ public partial class DocsCanvas : FrameworkElement
         colorSpans = parsed.ColorSpans;
     }
 
-    internal void SetScrollOffsetDirect(double offset)
-    {
-        StopWheelCoast();
-        _scrollOffset = Math.Clamp(offset, 0, Math.Max(0, _totalContentHeight - ActualHeight));
-        _smoother.Offset = 0;
-        InvalidateVisual();
-    }
-
-    internal void SmoothScrollTo(double targetOffset)
-    {
-        StopWheelCoast();
-        double oldScroll = _scrollOffset;
-        _scrollOffset = Math.Clamp(targetOffset, 0, Math.Max(0, _totalContentHeight - ActualHeight));
-        double jump = _scrollOffset - oldScroll;
-        _smoother.Offset -= jump;
-        _smoother.Start();
-        InvalidateVisual();
-    }
+    internal void SetScrollOffsetDirect(double offset) => _scroll.SetDirect(offset);
+    internal void SmoothScrollTo(double targetOffset) => _scroll.SmoothScrollTo(targetOffset);
 
     public enum EditMode { Source, Visual }
     private EditMode _editMode = EditMode.Source;
@@ -387,8 +366,8 @@ public partial class DocsCanvas : FrameworkElement
     {
         if (_editMode == mode) return;
         SealAndStopTimer();
-        StopWheelCoast();
-        _smoother.Cancel();
+        _scroll.StopWheelCoast();
+        _scroll.CancelSmooth();
 
         var anchor = ComputeScrollAnchor();
 
@@ -419,8 +398,8 @@ public partial class DocsCanvas : FrameworkElement
         int cursorVli = CursorToVisualLineIndex();
         double cursorY = _lineYPositions[cursorVli];
         double cursorBottom = cursorY + GetEffectiveLineHeight(_visualLines[cursorVli]);
-        double viewTop = _scrollOffset;
-        double viewBottom = _scrollOffset + ActualHeight;
+        double viewTop = _scroll.Offset;
+        double viewBottom = _scroll.Offset + ActualHeight;
 
         bool cursorVisible = cursorBottom > viewTop && cursorY < viewBottom;
 
@@ -453,8 +432,8 @@ public partial class DocsCanvas : FrameworkElement
             targetVli = _visualLines.Count - 1;
 
         double newY = _lineYPositions[targetVli];
-        _scrollOffset = newY - anchor.OffsetInViewport;
-        ClampScroll();
+        _scroll.Offset = newY - anchor.OffsetInViewport;
+        _scroll.Clamp();
     }
 
     public void CycleImagePreview()
@@ -685,7 +664,7 @@ public partial class DocsCanvas : FrameworkElement
         _linkPopup.ApplyTheme(_palette.Background, _palette.Foreground, _palette.Syntax, _palette.CodeBackground);
 
         int vli = CursorToVisualLineIndex();
-        double effectiveScroll = _scrollOffset + _smoother.Offset;
+        double effectiveScroll = _scroll.EffectiveOffset;
         double lineY = _lineYPositions[vli] - effectiveScroll;
         double lineH = GetEffectiveLineHeight(_visualLines[vli]);
         _linkPopup.SetPopupPosition(_padding, lineY + lineH + 4);
@@ -1013,7 +992,7 @@ public partial class DocsCanvas : FrameworkElement
 
     public DocsCanvas()
     {
-        _smoother = new SmoothScroller(InvalidateVisual);
+        _scroll = new ScrollController(InvalidateVisual, () => Math.Max(0, _totalContentHeight - ActualHeight));
         _linkPopup = new LinkPopupController(_doc, this);
         Focusable = true;
         FocusVisualStyle = null;
@@ -1776,7 +1755,7 @@ public partial class DocsCanvas : FrameworkElement
     private void HitTestToPosition(Point pos, out int blockIndex, out int charOffset)
     {
         if (_visualLines.Count == 0) { blockIndex = 0; charOffset = 0; return; }
-        double effectiveScroll = _scrollOffset + _smoother.Offset;
+        double effectiveScroll = _scroll.EffectiveOffset;
         int vli = HitTestVisualLine(pos.Y + effectiveScroll);
         var vl = _visualLines[vli];
         int rawOffset = HitTestInVisualLine(vli, pos.X - _padding);
@@ -1795,94 +1774,29 @@ public partial class DocsCanvas : FrameworkElement
 
     // --- Scroll ---
 
-    private void ClampScroll()
-    {
-        double maxScroll = Math.Max(0, _totalContentHeight - ActualHeight);
-        _scrollOffset = Math.Clamp(_scrollOffset, 0, maxScroll);
-    }
-
     internal void EnsureCursorVisible()
     {
-        StopWheelCoast();
-        _smoother.Cancel();
+        _scroll.StopWheelCoast();
+        _scroll.CancelSmooth();
         ComputeLayout();
         if (_visualLines.Count == 0) return;
         int vli = CursorToVisualLineIndex();
         double cursorY = _lineYPositions[vli];
         double lineH = GetEffectiveLineHeight(_visualLines[vli]);
         double cursorBottom = cursorY + lineH;
-        if (cursorY < _scrollOffset + _padding)
-            _scrollOffset = cursorY - _padding;
-        else if (cursorBottom > _scrollOffset + ActualHeight - _padding)
-            _scrollOffset = cursorBottom - ActualHeight + _padding;
-        ClampScroll();
+        if (cursorY < _scroll.Offset + _padding)
+            _scroll.Offset = cursorY - _padding;
+        else if (cursorBottom > _scroll.Offset + ActualHeight - _padding)
+            _scroll.Offset = cursorBottom - ActualHeight + _padding;
+        _scroll.Clamp();
     }
 
     protected override void OnMouseWheel(MouseWheelEventArgs e)
     {
         base.OnMouseWheel(e);
         ComputeLayout();
-
-        if (_smoother.IsAnimating)
-        {
-            _scrollOffset += _smoother.Offset;
-            _smoother.Cancel();
-            ClampScroll();
-        }
-
-        _wheelVelocity -= e.Delta * WheelDamping;
-
-        if (!_wheelCoasting)
-        {
-            _wheelCoasting = true;
-            _lastWheelFrameTime = TimeSpan.Zero;
-            CompositionTarget.Rendering += OnWheelFrame;
-            InvalidateVisual();
-        }
+        _scroll.HandleWheel(e.Delta);
         e.Handled = true;
-    }
-
-    private void OnWheelFrame(object? sender, EventArgs e)
-    {
-        if (e is not RenderingEventArgs args) return;
-
-        double dt;
-        if (_lastWheelFrameTime == TimeSpan.Zero)
-        {
-            _lastWheelFrameTime = args.RenderingTime;
-            dt = 1.0 / 60;
-        }
-        else
-        {
-            dt = (args.RenderingTime - _lastWheelFrameTime).TotalSeconds;
-            _lastWheelFrameTime = args.RenderingTime;
-            if (dt <= 0 || dt >= 0.5) return;
-        }
-
-        double before = _scrollOffset;
-        _scrollOffset += _wheelVelocity * dt;
-        ClampScroll();
-        if (_scrollOffset != before + _wheelVelocity * dt)
-            _wheelVelocity = 0;
-
-        _wheelVelocity *= Math.Exp(-dt * WheelDamping);
-
-        if (Math.Abs(_wheelVelocity) < 0.5)
-        {
-            _wheelVelocity = 0;
-            _wheelCoasting = false;
-            CompositionTarget.Rendering -= OnWheelFrame;
-        }
-
-        InvalidateVisual();
-    }
-
-    private void StopWheelCoast()
-    {
-        if (!_wheelCoasting) return;
-        _wheelVelocity = 0;
-        _wheelCoasting = false;
-        CompositionTarget.Rendering -= OnWheelFrame;
     }
 
     // --- Mouse ---
@@ -1950,7 +1864,7 @@ public partial class DocsCanvas : FrameworkElement
                     if (_hoveredLinkUrl != url)
                     {
                         _hoveredLinkUrl = url;
-                        double effectiveScroll = _scrollOffset + _smoother.Offset;
+                        double effectiveScroll = _scroll.EffectiveOffset;
                         int vli = HitTestVisualLine(pos.Y + effectiveScroll);
                         double lineY = _lineYPositions[vli] - effectiveScroll;
                         double lineH = GetEffectiveLineHeight(_visualLines[vli]);
@@ -2016,7 +1930,7 @@ public partial class DocsCanvas : FrameworkElement
         }
 
         ComputeLayout();
-        double effectiveScroll = _scrollOffset + _smoother.Offset;
+        double effectiveScroll = _scroll.EffectiveOffset;
         double hitY = pos.Y + effectiveScroll;
         int vli = HitTestVisualLine(hitY);
         if (vli < 0 || vli >= _visualLines.Count)
@@ -2282,14 +2196,14 @@ public partial class DocsCanvas : FrameworkElement
         int vli = CursorToVisualLineIndex();
         double x = CursorXInVisualLine(vli);
         double cursorY = _lineYPositions[vli];
-        double relativeY = cursorY - _scrollOffset;
+        double relativeY = cursorY - _scroll.Offset;
         double lineH = GetEffectiveLineHeight(_visualLines[vli]);
         double pageAmount = Math.Max(lineH, ActualHeight - 3 * lineH);
 
-        _scrollOffset -= pageAmount;
-        ClampScroll();
+        _scroll.Offset -= pageAmount;
+        _scroll.Clamp();
 
-        int targetVli = HitTestVisualLine(_scrollOffset + relativeY);
+        int targetVli = HitTestVisualLine(_scroll.Offset + relativeY);
         SetCursorFromVisualLine(targetVli, x);
         if (IsVisual) HandleUpVisual();
         if (!shift) _doc.CollapseSelection();
@@ -2301,14 +2215,14 @@ public partial class DocsCanvas : FrameworkElement
         int vli = CursorToVisualLineIndex();
         double x = CursorXInVisualLine(vli);
         double cursorY = _lineYPositions[vli];
-        double relativeY = cursorY - _scrollOffset;
+        double relativeY = cursorY - _scroll.Offset;
         double lineH = GetEffectiveLineHeight(_visualLines[vli]);
         double pageAmount = Math.Max(lineH, ActualHeight - 3 * lineH);
 
-        _scrollOffset += pageAmount;
-        ClampScroll();
+        _scroll.Offset += pageAmount;
+        _scroll.Clamp();
 
-        int targetVli = HitTestVisualLine(_scrollOffset + relativeY);
+        int targetVli = HitTestVisualLine(_scroll.Offset + relativeY);
         SetCursorFromVisualLine(targetVli, x);
         if (IsVisual) HandleDownVisual();
         if (!shift) _doc.CollapseSelection();
@@ -2802,7 +2716,7 @@ public partial class DocsCanvas : FrameworkElement
         // ComputeLayout is idempotent and completes before any drawing calls.
         ComputeLayout();
 
-        double effectiveScroll = _scrollOffset + _smoother.Offset;
+        double effectiveScroll = _scroll.EffectiveOffset;
         double viewTop = effectiveScroll;
         double viewBottom = effectiveScroll + ActualHeight;
 

@@ -77,7 +77,7 @@ public partial class DocsCanvas
     {
         if (_parsedBlocks == null) return false;
 
-        double effectiveScroll = _scrollOffset + _smoother.Offset;
+        double effectiveScroll = _scroll.EffectiveOffset;
         int vli = HitTestVisualLine(pos.Y + effectiveScroll);
         var vl = _visualLines[vli];
         if (vl.StartOffset != 0) return false;
