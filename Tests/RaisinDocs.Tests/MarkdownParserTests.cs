@@ -1327,6 +1327,14 @@ public class MarkdownParserTests
         result[0].Runs[0].Style.Should().Be(InlineStyle.Link);
     }
 
+    [Fact]
+    public void LinkDefinition_TitleWithEscapedQuote()
+    {
+        var result = ParseBlocks("[click][docs]", "[docs]: https://example.com \"foo \\\"bar\\\" baz\"");
+        result[0].Links.Should().HaveCount(1);
+        result[0].Links![0].Url.Should().Be("https://example.com");
+    }
+
     // --- IsTrailingHardBreak ---
 
     [Fact]

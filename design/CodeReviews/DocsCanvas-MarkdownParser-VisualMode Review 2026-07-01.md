@@ -259,7 +259,7 @@
 - **What to do**: Extract a shared helper that yields `(start, end, isOpener, body)` tuples.
 - **Fix applied**: Extracted `FindNextColorTag` helper. `FindInlineColorTagRanges` reduced from 30 to 7 lines.
 
-### L8 — Link definition title doesn't handle escaped delimiters
+### ~~L8 — Link definition title doesn't handle escaped delimiters~~ FIXED
 
 - **Severity**: Low
 - **Category**: Bug

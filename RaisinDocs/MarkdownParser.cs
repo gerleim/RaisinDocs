@@ -348,8 +348,13 @@ public static class MarkdownParser
         if (qClose == '\0') return false;
 
         int titleStart = afterColon + 1;
-        int titleEnd = text.IndexOf(qClose, titleStart);
-        if (titleEnd < 0) return false;
+        int titleEnd = titleStart;
+        while (titleEnd < text.Length && text[titleEnd] != qClose)
+        {
+            if (text[titleEnd] == '\\' && titleEnd + 1 < text.Length) titleEnd++;
+            titleEnd++;
+        }
+        if (titleEnd >= text.Length) return false;
         title = text[titleStart..titleEnd];
 
         return true;
