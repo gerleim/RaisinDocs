@@ -1269,29 +1269,66 @@ public static class MarkdownParser
         return new BlockColor(fg, bg);
     }
 
+    private static bool FindNextColorTag(string text, ref int pos,
+        out int tagStart, out int tagEnd, out bool isOpener, out int bodyStart, out int bodyEnd)
+    {
+        tagStart = tagEnd = bodyStart = bodyEnd = 0;
+        isOpener = false;
+
+        while (pos < text.Length - 6)
+        {
+            if (text[pos] != '<' || pos + 4 >= text.Length
+                || text[pos + 1] != '!' || text[pos + 2] != '-' || text[pos + 3] != '-')
+            {
+                pos++;
+                continue;
+            }
+
+            if (text[pos + 4] == '@')
+            {
+                int closeIdx = text.IndexOf("-->", pos + 5, StringComparison.Ordinal);
+                if (closeIdx < 0) { pos++; continue; }
+                tagStart = pos;
+                tagEnd = closeIdx + 3;
+                isOpener = true;
+                bodyStart = pos + 5;
+                bodyEnd = closeIdx;
+                pos = tagEnd;
+                return true;
+            }
+
+            if (pos + 5 < text.Length && text[pos + 4] == '/' && text[pos + 5] == '@')
+            {
+                int closeIdx = text.IndexOf("-->", pos + 6, StringComparison.Ordinal);
+                if (closeIdx < 0) { pos++; continue; }
+                tagStart = pos;
+                tagEnd = closeIdx + 3;
+                isOpener = false;
+                bodyStart = pos + 6;
+                bodyEnd = closeIdx;
+                pos = tagEnd;
+                return true;
+            }
+
+            pos++;
+        }
+        return false;
+    }
+
     internal static List<ColorSpan>? ParseInlineColorTags(string text, Dictionary<string, RgbColor>? theme)
     {
         List<ColorSpan>? spans = null;
         var openFg = new Stack<(int tagEnd, RgbColor color)>();
         var openBg = new Stack<(int tagEnd, RgbColor color)>();
 
-        int i = 0;
-        while (i < text.Length - 6)
+        int pos = 0;
+        while (FindNextColorTag(text, ref pos, out int tagStart, out int tagEnd, out bool isOpener,
+                   out int bodyStart, out int bodyEnd))
         {
-            if (text[i] != '<' || i + 4 >= text.Length || text[i + 1] != '!' || text[i + 2] != '-' || text[i + 3] != '-')
+            var body = text.AsSpan()[bodyStart..bodyEnd].Trim();
+
+            if (isOpener)
             {
-                i++;
-                continue;
-            }
-
-            if (text[i + 4] == '@')
-            {
-                int closeIdx = text.IndexOf("-->", i + 5, StringComparison.Ordinal);
-                if (closeIdx < 0) { i++; continue; }
-
-                int tagEnd = closeIdx + 3;
-                var body = text.AsSpan()[(i + 5)..closeIdx].Trim();
-
                 if (body.StartsWith("fg:".AsSpan(), StringComparison.OrdinalIgnoreCase))
                 {
                     int spaceInBody = body.IndexOf(' ');
@@ -1322,19 +1359,9 @@ public static class MarkdownParser
                             openFg.Push((tagEnd, fgColor));
                     }
                 }
-
-                i = tagEnd;
-                continue;
             }
-
-            if (i + 5 < text.Length && text[i + 4] == '/' && text[i + 5] == '@')
+            else
             {
-                int closeIdx = text.IndexOf("-->", i + 6, StringComparison.Ordinal);
-                if (closeIdx < 0) { i++; continue; }
-
-                int tagEnd = closeIdx + 3;
-                var body = text.AsSpan()[(i + 6)..closeIdx].Trim();
-
                 bool closeFg = body.Equals("fg".AsSpan(), StringComparison.OrdinalIgnoreCase)
                                || body.IsEmpty;
                 bool closeBg = body.Equals("bg".AsSpan(), StringComparison.OrdinalIgnoreCase)
@@ -1343,30 +1370,24 @@ public static class MarkdownParser
                 if (closeFg && openFg.Count > 0)
                 {
                     var (start, color) = openFg.Pop();
-                    if (start < i)
+                    if (start < tagStart)
                     {
                         spans ??= [];
-                        AddOrMergeColorSpan(ref spans, start, i - start, color, null);
+                        AddOrMergeColorSpan(ref spans, start, tagStart - start, color, null);
                     }
                 }
                 if (closeBg && openBg.Count > 0)
                 {
                     var (start, color) = openBg.Pop();
-                    if (start < i)
+                    if (start < tagStart)
                     {
                         spans ??= [];
-                        AddOrMergeColorSpan(ref spans, start, i - start, null, color);
+                        AddOrMergeColorSpan(ref spans, start, tagStart - start, null, color);
                     }
                 }
-
-                i = tagEnd;
-                continue;
             }
-
-            i++;
         }
 
-        // Unclosed tags: extend to end of block
         while (openFg.Count > 0)
         {
             var (start, color) = openFg.Pop();
@@ -1392,32 +1413,11 @@ public static class MarkdownParser
     internal static List<HiddenRange>? FindInlineColorTagRanges(string text)
     {
         List<HiddenRange>? ranges = null;
-        int i = 0;
-        while (i < text.Length - 6)
+        int pos = 0;
+        while (FindNextColorTag(text, ref pos, out int tagStart, out int tagEnd, out _, out _, out _))
         {
-            if (text[i] != '<' || i + 4 >= text.Length || text[i + 1] != '!' || text[i + 2] != '-' || text[i + 3] != '-')
-            {
-                i++;
-                continue;
-            }
-
-            bool isOpener = text[i + 4] == '@';
-            bool isCloser = i + 5 < text.Length && text[i + 4] == '/' && text[i + 5] == '@';
-
-            if (isOpener || isCloser)
-            {
-                int searchFrom = isOpener ? i + 5 : i + 6;
-                int closeIdx = text.IndexOf("-->", searchFrom, StringComparison.Ordinal);
-                if (closeIdx >= 0)
-                {
-                    int tagEnd = closeIdx + 3;
-                    ranges ??= [];
-                    ranges.Add(new HiddenRange(i, tagEnd - i));
-                    i = tagEnd;
-                    continue;
-                }
-            }
-            i++;
+            ranges ??= [];
+            ranges.Add(new HiddenRange(tagStart, tagEnd - tagStart));
         }
         return ranges;
     }
