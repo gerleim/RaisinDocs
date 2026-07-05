@@ -196,61 +196,68 @@
 
 ## LOW (12)
 
-### L1 — God class architecture
+### ~~L1 — God class architecture~~ PARTIAL
 
 - **Severity**: Low
 - **Category**: Architecture
 - **Location**: `DocsCanvas.cs` (entire file, ~4800 lines across 3 partials)
 - **What's wrong**: `DocsCanvas` handles rendering, input, layout, formatting, scroll, tables, images, link popups, and test hooks. The partial-class split is not by abstraction — all three files directly access the same fields.
 - **What to do**: Long-term: extract `LinkPopupController`, `SelectionManager`, `FormattingCommands`, `LayoutEngine`, `ScrollController`. Short-term: move `Test*` members into `DocsCanvas.TestHooks.cs`.
+- **Fix applied**: Extracted `LinkPopupController`, `TextMeasurer`, `ScrollController` as separate classes, and `DocsCanvas.Input.cs` as a partial file. DocsCanvas.cs reduced from ~3934 to ~2529 lines.
 
-### L2 — Unbounded _charWidthCache
+### ~~L2 — Unbounded _charWidthCache~~ SKIPPED
 
 - **Severity**: Low
 - **Category**: Risk
 - **Location**: `DocsCanvas.cs:167`
 - **What's wrong**: `_charWidthCache` grows without bound. No eviction policy.
 - **What to do**: Add a size cap (e.g., 4096) or clear on theme change.
+- **Skipped**: Cache is naturally bounded by the character/style space (~3500 entries max). No eviction needed.
 
-### L3 — Silent catch on GetDpi
+### ~~L3 — Silent catch on GetDpi~~ FIXED
 
 - **Severity**: Low
 - **Category**: Suspicious
 - **Location**: `DocsCanvas.cs:1201-1203`
 - **What's wrong**: `try { GetDpi } catch { }` silently swallows all exceptions — wrong DPI scale with no diagnostic.
 - **What to do**: Log the exception or check `IsLoaded` before calling `GetDpi`.
+- **Fix applied**: Replaced try/catch with `PresentationSource.FromVisual` guard in `TextMeasurer.EnsureMeasured`.
 
-### L4 — GetStyleKey loses bold/italic for FencedCodeLine
+### ~~L4 — GetStyleKey loses bold/italic for FencedCodeLine~~ FIXED
 
 - **Severity**: Low
 - **Category**: Bug
 - **Location**: `DocsCanvas.cs:1279-1289`
 - **What's wrong**: `GetStyleKey` unconditionally resets `fontId=1` for `FencedCodeLine`, losing bold/italic distinction in the cache key.
 - **What to do**: Short-circuit at the top: `if (blockKind == FencedCodeLine) return 1 * 100 + (int)GetBlockFontSize(blockKind);`.
+- **Fix applied**: Added early return for `FencedCodeLine` in `TextMeasurer.GetStyleKey`.
 
-### L5 — IsFenceLine overly permissive
+### ~~L5 — IsFenceLine overly permissive~~ FIXED
 
 - **Severity**: Low
 - **Category**: Risk
 - **Location**: `MarkdownParser.cs:502-506`
 - **What's wrong**: Only checks `trimmed.StartsWith("```")` — backticks in info string pass, no fence-length tracking.
 - **What to do**: Verify no backticks after the initial run; track opening fence backtick count.
+- **Fix applied**: Added `GetFenceBacktickCount` that rejects backticks in info strings and tracks fence length. Parser, `Document.BuildFenceMap`, and all call sites updated. Closing fences must now match or exceed the opening fence length per CommonMark spec.
 
-### L6 — MarkEmphasis diverges from CommonMark
+### ~~L6 — MarkEmphasis diverges from CommonMark~~ FIXED
 
 - **Severity**: Low
 - **Category**: Suspicious
 - **Location**: `MarkdownParser.cs:962-1021`
 - **What's wrong**: `MarkEmphasis` with `>=3` stars uses greedy matching, diverging from CommonMark delimiter-run algorithm.
 - **What to do**: Document as known limitation, or implement delimiter run stack algorithm.
+- **Fix applied**: Implemented CommonMark delimiter-run algorithm with flanking/rule-of-three checks. Added `EmphasisMarker` tracking for correct visual-mode hiding and source-mode dimming of nested emphasis.
 
-### L7 — Duplicated HTML comment detection logic
+### ~~L7 — Duplicated HTML comment detection logic~~ FIXED
 
 - **Severity**: Low
 - **Category**: Duplication
 - **Location**: `MarkdownParser.cs:1162-1257` vs `1282-1313`
 - **What's wrong**: `ParseInlineColorTags` and `FindInlineColorTagRanges` duplicate HTML comment detection logic.
 - **What to do**: Extract a shared helper that yields `(start, end, isOpener, body)` tuples.
+- **Fix applied**: Extracted `FindNextColorTag` helper. `FindInlineColorTagRanges` reduced from 30 to 7 lines.
 
 ### L8 — Link definition title doesn't handle escaped delimiters
 
