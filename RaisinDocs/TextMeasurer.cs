@@ -110,11 +110,13 @@ internal class TextMeasurer
 
     internal static int GetStyleKey(BlockKind blockKind, InlineStyle style)
     {
-        int fontId = blockKind == BlockKind.FencedCodeLine || style == InlineStyle.Code ? 1 : 0;
+        if (blockKind == BlockKind.FencedCodeLine)
+            return 1 * 100 + (int)GetBlockFontSize(blockKind);
+
+        int fontId = style == InlineStyle.Code ? 1 : 0;
         if (style == InlineStyle.Bold) fontId = 2;
         else if (style == InlineStyle.Italic) fontId = 3;
         else if (style == InlineStyle.BoldItalic) fontId = 4;
-        if (blockKind == BlockKind.FencedCodeLine) fontId = 1;
         if (blockKind == BlockKind.TableHeaderRow && fontId == 0) fontId = 2;
         else if (blockKind == BlockKind.TableHeaderRow && fontId == 3) fontId = 4;
         int sizeKey = (int)GetBlockFontSize(blockKind);
