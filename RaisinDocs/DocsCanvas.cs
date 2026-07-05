@@ -880,6 +880,8 @@ public partial class DocsCanvas : FrameworkElement
         }
     }
 
+    private bool IsInFencedCode => CurrentBlockKind == BlockKind.FencedCodeLine;
+
     public bool SelectionIsBold => SelectionHasStyle(InlineStyle.Bold);
     public bool SelectionIsItalic => SelectionHasStyle(InlineStyle.Italic);
     public bool SelectionIsCode => SelectionHasStyle(InlineStyle.Code);
