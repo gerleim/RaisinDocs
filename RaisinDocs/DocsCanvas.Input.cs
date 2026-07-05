@@ -792,7 +792,9 @@ public partial class DocsCanvas
                 {
                     SealAndStopTimer();
                     string? pasteText = null;
-                    if (!shift)
+                    bool inCodeBlock = _parsedBlocks != null
+                        && _parsedBlocks[_doc.CursorBlock].Kind == BlockKind.FencedCodeLine;
+                    if (!shift && !inCodeBlock)
                     {
                         string? html = ClipboardHelper.GetHtml(Logger);
                         if (html != null)
@@ -834,17 +836,17 @@ public partial class DocsCanvas
                 break;
 
             case Key.B:
-                if (ctrl) ToggleBold();
+                if (ctrl && !IsInFencedCode) ToggleBold();
                 else handled = false;
                 break;
 
             case Key.I:
-                if (ctrl) ToggleItalic();
+                if (ctrl && !IsInFencedCode) ToggleItalic();
                 else handled = false;
                 break;
 
             case Key.K:
-                if (ctrl) InsertLink();
+                if (ctrl && !IsInFencedCode) InsertLink();
                 else handled = false;
                 break;
 
