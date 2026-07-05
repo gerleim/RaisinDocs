@@ -382,8 +382,34 @@ public class MarkdownParserTests
     public void BoldItalic_ParsedCorrectly()
     {
         var result = ParseBlocks("***both***");
-        result[0].Runs.Should().HaveCount(1);
-        result[0].Runs[0].Should().Be(new StyledRun(0, 10, InlineStyle.BoldItalic));
+        result[0].Runs.Should().HaveCount(3);
+        result[0].Runs[0].Should().Be(new StyledRun(0, 1, InlineStyle.Italic));
+        result[0].Runs[1].Should().Be(new StyledRun(1, 8, InlineStyle.BoldItalic));
+        result[0].Runs[2].Should().Be(new StyledRun(9, 1, InlineStyle.Italic));
+    }
+
+    [Fact]
+    public void NestedEmphasis_ItalicWrappingBold()
+    {
+        // *foo **bar** baz* → <em>foo <strong>bar</strong> baz</em>
+        var result = ParseBlocks("*foo **bar** baz*");
+        result[0].Runs.Should().SatisfyRespectively(
+            r => { r.Style.Should().Be(InlineStyle.Italic); r.Start.Should().Be(0); },
+            r => { r.Style.Should().Be(InlineStyle.BoldItalic); r.Start.Should().Be(5); },
+            r => { r.Style.Should().Be(InlineStyle.Italic); r.Start.Should().Be(12); }
+        );
+    }
+
+    [Fact]
+    public void NestedEmphasis_BoldClosesInsideItalic()
+    {
+        // ***foo** bar* → <em><strong>foo</strong> bar</em>
+        var result = ParseBlocks("***foo** bar*");
+        result[0].Runs.Should().SatisfyRespectively(
+            r => { r.Style.Should().Be(InlineStyle.Italic); r.Start.Should().Be(0); },
+            r => { r.Style.Should().Be(InlineStyle.BoldItalic); r.Start.Should().Be(1); },
+            r => { r.Style.Should().Be(InlineStyle.Italic); r.Start.Should().Be(8); }
+        );
     }
 
     // --- Inline parsing: code ---

@@ -66,6 +66,8 @@ public class TableInfo
     public required IReadOnlyList<ColumnAlignment> Alignments { get; init; }
 }
 
+public readonly record struct EmphasisMarker(int Start, int Length);
+
 public record class ParsedBlock
 {
     public required BlockKind Kind { get; init; }
@@ -76,6 +78,7 @@ public record class ParsedBlock
         || Kind == BlockKind.ThemeDefinition || Kind == BlockKind.ColorDivOpen || Kind == BlockKind.ColorDivClose;
     public IReadOnlyList<InlineImage>? Images { get; init; }
     public IReadOnlyList<InlineLink>? Links { get; init; }
+    public IReadOnlyList<EmphasisMarker>? EmphasisMarkers { get; init; }
     public IReadOnlyList<ColorSpan>? ColorSpans { get; init; }
     public BlockColor? BlockColor { get; init; }
     public BlockColor? DivOpenColor { get; init; }
@@ -186,15 +189,17 @@ public static class MarkdownParser
             var kind = ClassifyBlock(text);
             List<InlineImage>? images = null;
             List<InlineLink>? links = null;
+            List<EmphasisMarker>? emphasisMarkers = null;
             var runs = kind == BlockKind.FencedCodeLine
                 ? [new StyledRun(0, text.Length, InlineStyle.Normal)]
-                : ParseInlines(text, out images, out links, defs);
+                : ParseInlines(text, out images, out links, out emphasisMarkers, defs);
 
             var colorSpans = (kind == BlockKind.FencedCodeLine) ? null : ParseInlineColorTags(text, theme);
 
             result.Add(new ParsedBlock
             {
-                Kind = kind, Runs = runs, Images = images, Links = links, ColorSpans = colorSpans,
+                Kind = kind, Runs = runs, Images = images, Links = links,
+                EmphasisMarkers = emphasisMarkers, ColorSpans = colorSpans,
                 DivOpenColor = divOpenColor, HasDivClose = blockHasDivClose,
             });
         }
@@ -612,8 +617,15 @@ public static class MarkdownParser
     internal static List<StyledRun> ParseInlines(string text, out List<InlineImage>? images, out List<InlineLink>? links,
         Dictionary<string, (string Url, string? Title)>? defs = null)
     {
+        return ParseInlines(text, out images, out links, out _, defs);
+    }
+
+    internal static List<StyledRun> ParseInlines(string text, out List<InlineImage>? images, out List<InlineLink>? links,
+        out List<EmphasisMarker>? emphasisMarkers, Dictionary<string, (string Url, string? Title)>? defs = null)
+    {
         images = null;
         links = null;
+        emphasisMarkers = null;
         if (text.Length == 0)
             return [new StyledRun(0, 0, InlineStyle.Normal)];
 
@@ -624,7 +636,7 @@ public static class MarkdownParser
         links = MarkLinks(text, styles, defs);
         links = MarkAutolinks(text, styles, links);
         MarkStrikethrough(text, styles);
-        MarkEmphasis(text, styles);
+        MarkEmphasis(text, styles, out emphasisMarkers);
 
         return BuildRuns(styles);
     }
@@ -996,64 +1008,73 @@ public static class MarkdownParser
         }
     }
 
-    private static void MarkEmphasis(string text, InlineStyle[] styles)
+    private static void MarkEmphasis(string text, InlineStyle[] styles, out List<EmphasisMarker>? markers)
     {
+        markers = null;
+
+        var delimiters = new List<(int Pos, int Count, bool CanOpen, bool CanClose)>();
         int i = 0;
         while (i < text.Length)
         {
-            if (styles[i] != InlineStyle.Normal || text[i] != '*')
-            {
-                i++;
-                continue;
-            }
+            if (styles[i] != InlineStyle.Normal || text[i] != '*') { i++; continue; }
 
-            int starCount = 0;
-            int openStart = i;
-            while (i < text.Length && text[i] == '*' && styles[i] == InlineStyle.Normal)
-            {
-                starCount++;
-                i++;
-            }
+            int start = i;
+            while (i < text.Length && text[i] == '*' && styles[i] == InlineStyle.Normal) i++;
+            int count = i - start;
 
-            int searchFrom = openStart + starCount;
+            char before = start > 0 ? text[start - 1] : ' ';
+            char after = i < text.Length ? text[i] : ' ';
+            bool leftFlanking = !char.IsWhiteSpace(after)
+                && (!char.IsPunctuation(after) || char.IsWhiteSpace(before) || char.IsPunctuation(before));
+            bool rightFlanking = !char.IsWhiteSpace(before)
+                && (!char.IsPunctuation(before) || char.IsWhiteSpace(after) || char.IsPunctuation(after));
 
-            if (starCount >= 3)
+            delimiters.Add((start, count, leftFlanking, rightFlanking));
+        }
+
+        for (int ci = 0; ci < delimiters.Count; ci++)
+        {
+            var closer = delimiters[ci];
+            if (!closer.CanClose || closer.Count == 0) continue;
+
+            for (int oi = ci - 1; oi >= 0; oi--)
             {
-                int closeStart = FindClosingDelimiter(text, styles, searchFrom, 3, '*');
-                if (closeStart >= 0)
-                {
-                    for (int j = openStart; j < closeStart + 3; j++)
-                        if (styles[j] == InlineStyle.Normal)
-                            styles[j] = InlineStyle.BoldItalic;
-                    i = closeStart + 3;
+                var opener = delimiters[oi];
+                if (!opener.CanOpen || opener.Count == 0) continue;
+
+                if ((opener.CanClose || closer.CanOpen) && (opener.Count + closer.Count) % 3 == 0
+                    && opener.Count % 3 != 0 && closer.Count % 3 != 0)
                     continue;
-                }
-            }
 
-            if (starCount >= 2)
-            {
-                int closeStart = FindClosingDelimiter(text, styles, searchFrom, 2, '*');
-                if (closeStart >= 0)
-                {
-                    for (int j = openStart; j < closeStart + 2; j++)
-                        if (styles[j] == InlineStyle.Normal)
-                            styles[j] = InlineStyle.Bold;
-                    i = closeStart + 2;
-                    continue;
-                }
-            }
+                int consume = (opener.Count >= 2 && closer.Count >= 2) ? 2 : 1;
+                var emphStyle = consume == 2 ? InlineStyle.Bold : InlineStyle.Italic;
 
-            if (starCount >= 1)
-            {
-                int closeStart = FindClosingDelimiter(text, styles, searchFrom, 1, '*');
-                if (closeStart >= 0)
+                int markerOpenStart = opener.Pos + opener.Count - consume;
+                int markerCloseStart = closer.Pos;
+
+                for (int j = markerOpenStart; j < markerCloseStart + consume; j++)
                 {
-                    for (int j = openStart; j < closeStart + 1; j++)
-                        if (styles[j] == InlineStyle.Normal)
-                            styles[j] = InlineStyle.Italic;
-                    i = closeStart + 1;
-                    continue;
+                    if (styles[j] == InlineStyle.Normal)
+                        styles[j] = emphStyle;
+                    else if ((styles[j] == InlineStyle.Bold && emphStyle == InlineStyle.Italic)
+                          || (styles[j] == InlineStyle.Italic && emphStyle == InlineStyle.Bold))
+                        styles[j] = InlineStyle.BoldItalic;
                 }
+
+                markers ??= new();
+                markers.Add(new EmphasisMarker(markerOpenStart, consume));
+                markers.Add(new EmphasisMarker(markerCloseStart, consume));
+
+                opener = opener with { Count = opener.Count - consume };
+                closer = closer with { Count = closer.Count - consume, Pos = closer.Pos + consume };
+                delimiters[oi] = opener;
+                delimiters[ci] = closer;
+
+                for (int ri = oi + 1; ri < ci; ri++)
+                    delimiters[ri] = delimiters[ri] with { Count = 0 };
+
+                if (closer.Count > 0) ci--;
+                break;
             }
         }
     }

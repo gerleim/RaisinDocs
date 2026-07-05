@@ -151,17 +151,24 @@ public class BlockVisualMap
         foreach (var run in parsed.Runs)
         {
             if (run.Style == InlineStyle.Normal) continue;
-
             if (run.Style is InlineStyle.Image or InlineStyle.Link) continue;
 
-            int markerLen = run.Style == InlineStyle.Code
-                ? CountBackticks(blockText, run.Start)
-                : MarkdownParser.GetMarkerLength(run.Style);
-            if (markerLen == 0) continue;
+            if (run.Style is InlineStyle.Code or InlineStyle.Strikethrough)
+            {
+                int markerLen = run.Style == InlineStyle.Code
+                    ? CountBackticks(blockText, run.Start)
+                    : MarkdownParser.GetMarkerLength(run.Style);
+                if (markerLen == 0) continue;
+                int runEnd = run.Start + run.Length;
+                ranges.Add(new HiddenRange(run.Start, markerLen));
+                ranges.Add(new HiddenRange(runEnd - markerLen, markerLen));
+            }
+        }
 
-            int runEnd = run.Start + run.Length;
-            ranges.Add(new HiddenRange(run.Start, markerLen));
-            ranges.Add(new HiddenRange(runEnd - markerLen, markerLen));
+        if (parsed.EmphasisMarkers != null)
+        {
+            foreach (var marker in parsed.EmphasisMarkers)
+                ranges.Add(new HiddenRange(marker.Start, marker.Length));
         }
 
         if (MarkdownParser.IsTrailingHardBreak(parsed, blockText))
