@@ -267,7 +267,7 @@
 - **What's wrong**: `IndexOf(qClose, titleStart)` doesn't handle backslash-escaped delimiters in link definition titles.
 - **What to do**: Replace `IndexOf` with a loop that skips `\`-escaped characters.
 
-### L9 — SplitLines negates span parameter benefit
+### ~~L9 — SplitLines negates span parameter benefit~~ FIXED
 
 - **Severity**: Low
 - **Category**: Code Smell

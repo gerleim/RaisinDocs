@@ -1,3 +1,5 @@
+using System.Text;
+
 namespace RaisinDocs;
 
 public readonly record struct RgbColor(byte R, byte G, byte B)
@@ -138,6 +140,28 @@ public static class MarkdownParser
                 continue;
             }
 
+            if (IsThemeBlockStart(text))
+            {
+                result.Add(new ParsedBlock
+                {
+                    Kind = BlockKind.ThemeDefinition,
+                    Runs = [new StyledRun(0, text.Length, InlineStyle.Normal)],
+                });
+                for (int j = i + 1; j < blockCount; j++)
+                {
+                    string inner = getBlockText(j);
+                    result.Add(new ParsedBlock
+                    {
+                        Kind = BlockKind.ThemeDefinition,
+                        Runs = [new StyledRun(0, inner.Length, InlineStyle.Normal)],
+                    });
+                    i = j;
+                    if (inner.TrimEnd().EndsWith(CommentClose))
+                        break;
+                }
+                continue;
+            }
+
             bool hasDivOpen = TryExtractDivOpen(text, out int divOpenTagEnd);
             bool hasDivClose = TryExtractDivClose(text, out int divCloseTagStart);
 
@@ -222,15 +246,37 @@ public static class MarkdownParser
             if (fenceLen == 0 && backticks > 0) { fenceLen = backticks; continue; }
             if (fenceLen > 0) { if (backticks >= fenceLen) fenceLen = 0; continue; }
 
+            string themeText;
             if (IsThemeBlock(text))
             {
-                var parsed = ParseThemeBlock(text);
-                if (parsed.Count > 0)
+                themeText = text;
+            }
+            else if (IsThemeBlockStart(text))
+            {
+                var joined = new StringBuilder(text);
+                int j = i + 1;
+                while (j < blockCount)
                 {
-                    theme ??= new(StringComparer.OrdinalIgnoreCase);
-                    foreach (var kvp in parsed)
-                        theme[kvp.Key] = kvp.Value;
+                    joined.Append('\n').Append(getBlockText(j));
+                    if (getBlockText(j).TrimEnd().EndsWith(CommentClose))
+                        break;
+                    j++;
                 }
+                if (j >= blockCount) continue;
+                themeText = joined.ToString();
+                i = j;
+            }
+            else
+            {
+                continue;
+            }
+
+            var parsed = ParseThemeBlock(themeText);
+            if (parsed.Count > 0)
+            {
+                theme ??= new(StringComparer.OrdinalIgnoreCase);
+                foreach (var kvp in parsed)
+                    theme[kvp.Key] = kvp.Value;
             }
         }
         return theme;
@@ -1152,6 +1198,13 @@ public static class MarkdownParser
                && trimmed.EndsWith(CommentClose.AsSpan(), StringComparison.Ordinal);
     }
 
+    internal static bool IsThemeBlockStart(string text)
+    {
+        var trimmed = text.AsSpan().Trim();
+        return trimmed.StartsWith(ThemeOpen.AsSpan(), StringComparison.OrdinalIgnoreCase)
+               && !trimmed.EndsWith(CommentClose.AsSpan(), StringComparison.Ordinal);
+    }
+
     internal static bool IsColorDivOpen(string text) => TryExtractDivOpen(text, out _);
 
     internal static bool IsColorDivClose(string text) => TryExtractDivClose(text, out _);
@@ -1216,9 +1269,12 @@ public static class MarkdownParser
             || !trimmed.EndsWith(CommentClose.AsSpan(), StringComparison.Ordinal))
             return result;
 
-        var body = trimmed[ThemeOpen.Length..^CommentClose.Length];
+        var body = trimmed[ThemeOpen.Length..^CommentClose.Length].ToString();
+        var entries = body.Contains('\n')
+            ? SplitLines(body)
+            : new List<string>(body.Split(' ', StringSplitOptions.RemoveEmptyEntries));
 
-        foreach (var rawLine in SplitLines(body))
+        foreach (var rawLine in entries)
         {
             var line = rawLine.AsSpan().Trim();
             if (line.IsEmpty) continue;
@@ -1488,10 +1544,9 @@ public static class MarkdownParser
         return TryGetNamedColor(name, out color);
     }
 
-    private static List<string> SplitLines(ReadOnlySpan<char> text)
+    private static List<string> SplitLines(string str)
     {
         var lines = new List<string>();
-        var str = text.ToString();
         int start = 0;
         for (int i = 0; i < str.Length; i++)
         {

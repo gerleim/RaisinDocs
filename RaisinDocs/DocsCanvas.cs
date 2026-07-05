@@ -589,6 +589,7 @@ public partial class DocsCanvas : FrameworkElement
         && !MarkdownParser.TryExtractDivOpen(text, out _)
         && !MarkdownParser.TryExtractDivClose(text, out _)
         && !MarkdownParser.IsThemeBlock(text)
+        && !MarkdownParser.IsThemeBlockStart(text)
         && !MarkdownParser.TryParseLinkDefinition(text, out _, out _, out _);
 
     public void ConvertToHardBreaks()

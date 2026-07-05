@@ -1457,6 +1457,36 @@ public class MarkdownParserTests
         coloredBlock.Kind.Should().Be(BlockKind.Paragraph);
     }
 
+    [Fact]
+    public void ThemeBlock_MultiLine_AcrossBlocks()
+    {
+        var blocks = ParseBlocks(
+            "<!--@theme",
+            "myred=#FF0000",
+            "myblue=#0000FF",
+            "-->",
+            "<!--@fg:myred-->red<!--/@fg--> <!--@fg:myblue-->blue<!--/@fg-->");
+        blocks[0].Kind.Should().Be(BlockKind.ThemeDefinition);
+        blocks[1].Kind.Should().Be(BlockKind.ThemeDefinition);
+        blocks[2].Kind.Should().Be(BlockKind.ThemeDefinition);
+        blocks[3].Kind.Should().Be(BlockKind.ThemeDefinition);
+        blocks[4].ColorSpans.Should().HaveCount(2);
+        blocks[4].ColorSpans![0].Foreground.Should().Be(new RgbColor(0xFF, 0, 0));
+        blocks[4].ColorSpans![1].Foreground.Should().Be(new RgbColor(0, 0, 0xFF));
+    }
+
+    [Fact]
+    public void ThemeBlock_SingleLine_MultipleEntries()
+    {
+        var blocks = ParseBlocks(
+            "<!--@theme myred=#FF0000 myblue=#0000FF -->",
+            "<!--@fg:myred-->red<!--/@fg--> <!--@fg:myblue-->blue<!--/@fg-->");
+        blocks[0].Kind.Should().Be(BlockKind.ThemeDefinition);
+        blocks[1].ColorSpans.Should().HaveCount(2);
+        blocks[1].ColorSpans![0].Foreground.Should().Be(new RgbColor(0xFF, 0, 0));
+        blocks[1].ColorSpans![1].Foreground.Should().Be(new RgbColor(0, 0, 0xFF));
+    }
+
     // --- Inline color tags ---
 
     [Fact]
