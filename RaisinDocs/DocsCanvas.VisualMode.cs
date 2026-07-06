@@ -1314,19 +1314,7 @@ public partial class DocsCanvas
             }
             else
             {
-                var placeholderBrush = new SolidColorBrush(Color.FromArgb(40, 128, 128, 128));
-                placeholderBrush.Freeze();
-                dc.DrawRectangle(placeholderBrush, null, new Rect(x, imgY, imgW, imgH));
-
-                if (!string.IsNullOrEmpty(img.AltText))
-                {
-                    var altFt = new FormattedText(img.AltText,
-                        CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
-                        TextMeasurer.NormalTypeface, 11, _palette.Syntax, _measure.DpiScale);
-                    altFt.MaxTextWidth = Math.Max(1, imgW);
-                    altFt.MaxTextHeight = Math.Max(1, imgH);
-                    dc.DrawText(altFt, new Point(x + 2, imgY + 2));
-                }
+                DrawImagePlaceholder(dc, x, imgY, imgW, imgH, img.AltText);
             }
             x += imgW;
 

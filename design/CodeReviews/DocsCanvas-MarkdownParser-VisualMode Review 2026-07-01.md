@@ -283,7 +283,7 @@
 - **What's wrong**: `CollectLinkDefinitions`, `CollectThemeDefinitions`, and the main loop each independently scan all blocks.
 - **What to do**: Combine the two pre-scans into a single pass.
 
-### L11 — Image placeholder rendering duplicated 3 times
+### ~~L11 — Image placeholder rendering duplicated 3 times~~ FIXED
 
 - **Severity**: Low
 - **Category**: Duplication

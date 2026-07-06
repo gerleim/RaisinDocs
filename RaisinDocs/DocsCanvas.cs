@@ -29,12 +29,15 @@ public partial class DocsCanvas : FrameworkElement
     private ThemePalette _palette = _lightPalette!;
 
     private static readonly Brush _checkboxCheckedBrush;
+    private static readonly Brush _imagePlaceholderBrush;
     private readonly TextMeasurer _measure = new();
 
     static DocsCanvas()
     {
         _checkboxCheckedBrush = new SolidColorBrush(Color.FromRgb(0x2B, 0x7A, 0xE0));
         _checkboxCheckedBrush.Freeze();
+        _imagePlaceholderBrush = new SolidColorBrush(Color.FromArgb(40, 128, 128, 128));
+        _imagePlaceholderBrush.Freeze();
 
         _lightPalette = BuildPalette(
             background: Colors.White,
@@ -1875,7 +1878,7 @@ public partial class DocsCanvas : FrameworkElement
         // ComputeLayout is idempotent and completes before any drawing calls.
         ComputeLayout();
 
-        double effectiveScroll = _scroll.EffectiveOffset;
+        double effectiveScroll = Math.Round(_scroll.EffectiveOffset);
         double viewTop = effectiveScroll;
         double viewBottom = effectiveScroll + ActualHeight;
 
@@ -2129,6 +2132,20 @@ public partial class DocsCanvas : FrameworkElement
             _brushCache[color] = brush;
         }
         return brush;
+    }
+
+    private void DrawImagePlaceholder(DrawingContext dc, double x, double y, double w, double h, string? altText)
+    {
+        dc.DrawRectangle(_imagePlaceholderBrush, null, new Rect(x, y, w, h));
+        if (!string.IsNullOrEmpty(altText))
+        {
+            var altFt = new FormattedText(altText,
+                CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
+                TextMeasurer.NormalTypeface, 11, _palette.Syntax, _measure.DpiScale);
+            altFt.MaxTextWidth = Math.Max(1, w);
+            altFt.MaxTextHeight = Math.Max(1, h);
+            dc.DrawText(altFt, new Point(x + 2, y + 2));
+        }
     }
 
     private void ApplySyntaxDimming(FormattedText ft, VisualLine vl, ParsedBlock parsed, string blockText)

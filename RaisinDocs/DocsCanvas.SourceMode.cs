@@ -25,19 +25,7 @@ public partial class DocsCanvas
             }
             else
             {
-                var placeholderBrush = new SolidColorBrush(Color.FromArgb(40, 128, 128, 128));
-                placeholderBrush.Freeze();
-                dc.DrawRectangle(placeholderBrush, null, new Rect(_padding, imgY, imgW, imgH));
-
-                if (!string.IsNullOrEmpty(img.AltText))
-                {
-                    var altFt = new FormattedText(img.AltText,
-                        CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
-                        TextMeasurer.NormalTypeface, 11, _palette.Syntax, _measure.DpiScale);
-                    altFt.MaxTextWidth = Math.Max(1, imgW);
-                    altFt.MaxTextHeight = Math.Max(1, imgH);
-                    dc.DrawText(altFt, new Point(_padding + 2, imgY + 2));
-                }
+                DrawImagePlaceholder(dc, _padding, imgY, imgW, imgH, img.AltText);
             }
             imgY += imgH;
         }
@@ -69,19 +57,7 @@ public partial class DocsCanvas
         }
         else
         {
-            var placeholderBrush = new SolidColorBrush(Color.FromArgb(40, 128, 128, 128));
-            placeholderBrush.Freeze();
-            dc.DrawRectangle(placeholderBrush, null, new Rect(popupX, popupY, imgW, imgH));
-
-            if (!string.IsNullOrEmpty(img.AltText))
-            {
-                var altFt = new FormattedText(img.AltText,
-                    CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
-                    TextMeasurer.NormalTypeface, 11, _palette.Syntax, _measure.DpiScale);
-                altFt.MaxTextWidth = Math.Max(1, imgW);
-                altFt.MaxTextHeight = Math.Max(1, imgH);
-                dc.DrawText(altFt, new Point(popupX + 2, popupY + 2));
-            }
+            DrawImagePlaceholder(dc, popupX, popupY, imgW, imgH, img.AltText);
         }
     }
 
