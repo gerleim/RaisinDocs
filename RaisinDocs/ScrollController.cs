@@ -102,6 +102,7 @@ internal class ScrollController
             if (dt <= 0 || dt >= 0.5) return;
         }
 
+        double prevPixel = Math.Round(_offset);
         double before = _offset;
         _offset += _wheelVelocity * dt;
         Clamp();
@@ -110,7 +111,15 @@ internal class ScrollController
 
         _wheelVelocity *= Math.Exp(-dt * WheelDamping);
 
-        if (Math.Abs(_wheelVelocity) < 0.5)
+        bool stop = Math.Abs(_wheelVelocity) < 0.5;
+        if (!stop && Math.Round(_offset) != prevPixel
+                  && Math.Abs(_wheelVelocity) < WheelDamping)
+        {
+            _offset = prevPixel;
+            stop = true;
+        }
+
+        if (stop)
         {
             _wheelVelocity = 0;
             _wheelCoasting = false;
