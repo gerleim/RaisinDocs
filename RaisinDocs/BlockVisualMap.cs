@@ -171,15 +171,17 @@ public class BlockVisualMap
                 ranges.Add(new HiddenRange(marker.Start, marker.Length));
         }
 
+        int effectiveEnd = MarkdownParser.GetContentEnd(blockText);
         if (MarkdownParser.IsTrailingHardBreak(parsed, blockText))
         {
-            ranges.Add(new HiddenRange(blockText.Length - 1, 1));
+            ranges.Add(new HiddenRange(effectiveEnd - 1, 1));
         }
-        else if (parsed.Kind != BlockKind.FencedCodeLine && blockText.EndsWith("  "))
+        else if (parsed.Kind != BlockKind.FencedCodeLine && effectiveEnd >= 2
+                 && blockText[effectiveEnd - 1] == ' ' && blockText[effectiveEnd - 2] == ' ')
         {
-            int trailStart = blockText.Length;
+            int trailStart = effectiveEnd;
             while (trailStart > 0 && blockText[trailStart - 1] == ' ') trailStart--;
-            ranges.Add(new HiddenRange(trailStart, blockText.Length - trailStart));
+            ranges.Add(new HiddenRange(trailStart, effectiveEnd - trailStart));
         }
 
         if (parsed.Images != null)

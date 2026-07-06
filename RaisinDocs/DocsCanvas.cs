@@ -379,6 +379,7 @@ public partial class DocsCanvas : FrameworkElement
             EnsureCursorOnVisibleBlock();
             SkipCursorToVisible(forward: true);
             ClampCursorBeforeTrailingHidden();
+            _doc.CollapseSelection();
         }
         else
         {
@@ -719,6 +720,45 @@ public partial class DocsCanvas : FrameworkElement
             _doc.AnchorOffset = _doc.CursorOffset;
         }
 
+        _doc.SealUndoGroup();
+        InvalidateLayout();
+        EnsureCursorVisible();
+        RaiseFormattingChanged();
+    }
+
+    internal bool SelectionHasBackground()
+    {
+        ComputeLayout();
+        if (_parsedBlocks == null) return false;
+        return BackgroundHelper.SelectionHasBackground(_doc, _parsedBlocks);
+    }
+
+    internal bool CursorHasBackground()
+    {
+        ComputeLayout();
+        if (_parsedBlocks == null) return false;
+        return BackgroundHelper.CursorHasBackground(_doc, _parsedBlocks);
+    }
+
+    public void RemoveBackgroundAtCursor()
+    {
+        ComputeLayout();
+        SealAndStopTimer();
+        _doc.BeginUndoGroup();
+        BackgroundHelper.RemoveBackgroundAtCursor(_doc, _parsedBlocks);
+        _doc.SealUndoGroup();
+        InvalidateLayout();
+        EnsureCursorVisible();
+        RaiseFormattingChanged();
+    }
+
+    public void RemoveBackgroundFromSelection()
+    {
+        if (!_doc.HasSelection) return;
+        ComputeLayout();
+        SealAndStopTimer();
+        _doc.BeginUndoGroup();
+        BackgroundHelper.RemoveBackgroundFromSelection(_doc, _parsedBlocks);
         _doc.SealUndoGroup();
         InvalidateLayout();
         EnsureCursorVisible();
@@ -1200,8 +1240,9 @@ public partial class DocsCanvas : FrameworkElement
                 int prev = groupBlocks[^1];
                 string prevText = _doc.GetBlockText(prev);
                 var prevParsed = _parsedBlocks![prev];
+                int prevContentEnd = MarkdownParser.GetContentEnd(prevText);
                 bool prevHardBreak = MarkdownParser.IsTrailingHardBreak(prevParsed, prevText)
-                    || (prevText.Length >= 2 && prevText.EndsWith("  "));
+                    || (prevContentEnd >= 2 && prevText[prevContentEnd - 1] == ' ' && prevText[prevContentEnd - 2] == ' ');
                 if (!prevHardBreak)
                 {
                     bool hasEmptyBetween = false;
@@ -2037,25 +2078,31 @@ public partial class DocsCanvas : FrameworkElement
             }
         }
 
-        ApplyColorSpans(ft, vl, parsed);
+        ApplyColorSpans(ft, vl, parsed, blockText);
         ApplySyntaxDimming(ft, vl, parsed, blockText);
     }
 
-    private void ApplyColorSpans(FormattedText ft, VisualLine vl, ParsedBlock parsed)
+    private void ApplyColorSpans(FormattedText ft, VisualLine vl, ParsedBlock parsed, string blockText)
     {
         if (parsed.ColorSpans == null && parsed.BlockColor == null) return;
         if (parsed.Kind == BlockKind.FencedCodeLine) return;
 
+        int hardBreakClip = MarkdownParser.IsTrailingHardBreak(parsed, blockText)
+            ? MarkdownParser.GetContentEnd(blockText) - 1
+            : int.MaxValue;
+
         if (parsed.BlockColor?.Foreground is { } blockFg)
         {
-            ft.SetForegroundBrush(GetCachedBrush(blockFg.R, blockFg.G, blockFg.B), 0, vl.Length);
+            int len = Math.Min(vl.Length, hardBreakClip - vl.StartOffset);
+            if (len > 0)
+                ft.SetForegroundBrush(GetCachedBrush(blockFg.R, blockFg.G, blockFg.B), 0, len);
         }
 
         if (parsed.ColorSpans != null)
         {
             foreach (var cs in parsed.ColorSpans)
             {
-                int csEnd = cs.Start + cs.Length;
+                int csEnd = Math.Min(cs.Start + cs.Length, hardBreakClip);
                 int vlEnd = vl.StartOffset + vl.Length;
                 if (csEnd <= vl.StartOffset || cs.Start >= vlEnd) continue;
 
@@ -2190,7 +2237,7 @@ public partial class DocsCanvas : FrameworkElement
         }
 
         if (MarkdownParser.IsTrailingHardBreak(parsed, blockText))
-            DimRange(ft, vl, blockText.Length - 1, 1);
+            DimRange(ft, vl, MarkdownParser.GetContentEnd(blockText) - 1, 1);
 
         if (parsed.Kind != BlockKind.FencedCodeLine)
         {
@@ -2335,12 +2382,15 @@ public partial class DocsCanvas : FrameworkElement
             if (colorSpans == null) continue;
             if (IsVisual && parsed.Table != null && parsed.TableRow != null) continue;
 
+            int hardBreakClip = MarkdownParser.IsTrailingHardBreak(parsed, blockText)
+                ? MarkdownParser.GetContentEnd(blockText) - 1
+                : int.MaxValue;
             int vlEnd = vl.StartOffset + vl.Length;
 
             foreach (var cs in colorSpans)
             {
                 if (cs.Background == null) continue;
-                int csEnd = cs.Start + cs.Length;
+                int csEnd = Math.Min(cs.Start + cs.Length, hardBreakClip);
                 if (csEnd <= vl.StartOffset || cs.Start >= vlEnd) continue;
 
                 int rangeStart = Math.Max(cs.Start, vl.StartOffset);

@@ -620,17 +620,38 @@ public static class MarkdownParser
         return 0;
     }
 
+    internal static int GetContentEnd(string text)
+    {
+        int end = text.Length;
+        while (true)
+        {
+            var span = text.AsSpan(0, end);
+            if (span.EndsWith("<!--/@fg-->".AsSpan(), StringComparison.Ordinal))
+                end -= 11;
+            else if (span.EndsWith("<!--/@bg-->".AsSpan(), StringComparison.Ordinal))
+                end -= 11;
+            else if (span.EndsWith("<!--/@-->".AsSpan(), StringComparison.Ordinal))
+                end -= 9;
+            else
+                break;
+        }
+        return end;
+    }
+
     public static bool IsTrailingHardBreak(ParsedBlock parsed, string blockText)
     {
         if (parsed.Kind == BlockKind.FencedCodeLine) return false;
-        if (!blockText.EndsWith('\\')) return false;
+
+        int end = GetContentEnd(blockText);
+        if (end == 0) return false;
+        if (blockText[end - 1] != '\\') return false;
 
         int count = 0;
-        for (int i = blockText.Length - 1; i >= 0 && blockText[i] == '\\'; i--)
+        for (int i = end - 1; i >= 0 && blockText[i] == '\\'; i--)
             count++;
         if (count % 2 == 0) return false;
 
-        int backslashPos = blockText.Length - 1;
+        int backslashPos = end - 1;
         foreach (var run in parsed.Runs)
         {
             if (run.Style == InlineStyle.Code &&
@@ -1317,7 +1338,7 @@ public static class MarkdownParser
         return new BlockColor(fg, bg);
     }
 
-    private static bool FindNextColorTag(string text, ref int pos,
+    internal static bool FindNextColorTag(string text, ref int pos,
         out int tagStart, out int tagEnd, out bool isOpener, out int bodyStart, out int bodyEnd)
     {
         tagStart = tagEnd = bodyStart = bodyEnd = 0;

@@ -241,6 +241,11 @@ public partial class DocsCanvas
         ResetUndoSealTimer();
         ResetBlink();
         InvalidateLayout();
+        if (IsVisual)
+        {
+            ComputeLayout();
+            ClampCursorBeforeTrailingHidden();
+        }
         EnsureCursorVisible();
         e.Handled = true;
     }
@@ -550,16 +555,16 @@ public partial class DocsCanvas
     private void StripTrailingHardBreak()
     {
         string text = _doc.GetBlockText(_doc.CursorBlock);
-        if (text.EndsWith("\\"))
+        int end = MarkdownParser.GetContentEnd(text);
+        if (end > 0 && text[end - 1] == '\\')
         {
-            _doc.CursorOffset = text.Length;
-            _doc.Backspace();
+            _doc.RemoveTextAt(_doc.CursorBlock, end - 1, 1);
         }
-        else if (text.EndsWith("  "))
+        else if (end >= 2 && text[end - 1] == ' ' && text[end - 2] == ' ')
         {
-            _doc.CursorOffset = text.Length;
-            _doc.Backspace();
-            _doc.Backspace();
+            int trailStart = end;
+            while (trailStart > 0 && text[trailStart - 1] == ' ') trailStart--;
+            _doc.RemoveTextAt(_doc.CursorBlock, trailStart, end - trailStart);
         }
     }
 

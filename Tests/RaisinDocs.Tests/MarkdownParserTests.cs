@@ -1379,6 +1379,21 @@ public class MarkdownParserTests
         MarkdownParser.IsTrailingHardBreak(blocks[1], "path\\").Should().BeFalse();
     }
 
+    [Fact]
+    public void IsTrailingHardBreak_BeforeClosingColorTag()
+    {
+        var parsed = ParseBlocks("<!--@fg:red-->hello\\<!--/@fg-->")[0];
+        MarkdownParser.IsTrailingHardBreak(parsed, "<!--@fg:red-->hello\\<!--/@fg-->").Should().BeTrue();
+    }
+
+    [Fact]
+    public void IsTrailingHardBreak_TrailingSpacesBeforeClosingColorTag()
+    {
+        var parsed = ParseBlocks("<!--@bg:red-->hello  <!--/@bg-->")[0];
+        MarkdownParser.IsTrailingHardBreak(parsed, "<!--@bg:red-->hello  <!--/@bg-->").Should().BeFalse();
+        MarkdownParser.GetContentEnd("<!--@bg:red-->hello  <!--/@bg-->").Should().Be(21);
+    }
+
     // --- Theme parsing ---
 
     [Fact]
