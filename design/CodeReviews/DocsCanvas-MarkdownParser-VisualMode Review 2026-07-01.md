@@ -291,7 +291,7 @@
 - **What's wrong**: Placeholder brush create/freeze/draw code repeated three times. Brush recreated each frame.
 - **What to do**: Extract `DrawImagePlaceholder` helper; make the placeholder brush a static frozen field.
 
-### L12 — Cell-trimming logic repeated ~9 times
+### ~~L12 — Cell-trimming logic repeated ~9 times~~ FIXED
 
 - **Severity**: Low
 - **Category**: Duplication

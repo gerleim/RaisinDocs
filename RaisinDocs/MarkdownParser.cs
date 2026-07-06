@@ -55,7 +55,16 @@ public enum BlockKind
 
 public enum ColumnAlignment { Left, Center, Right }
 
-public readonly record struct TableCellInfo(int Start, int Length);
+public readonly record struct TableCellInfo(int Start, int Length)
+{
+    public (int Start, int End) TrimContent(string blockText)
+    {
+        int s = Start, e = Start + Length;
+        while (s < e && blockText[s] == ' ') s++;
+        while (e > s && blockText[e - 1] == ' ') e--;
+        return (s, e);
+    }
+}
 
 public class TableRowInfo
 {

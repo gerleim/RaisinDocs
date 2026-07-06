@@ -135,10 +135,7 @@ public class BlockVisualMap
             int prev = 0;
             foreach (var cell in parsed.TableRow.Cells)
             {
-                int contentStart = cell.Start;
-                int contentEnd = cell.Start + cell.Length;
-                while (contentStart < contentEnd && blockText[contentStart] == ' ') contentStart++;
-                while (contentEnd > contentStart && blockText[contentEnd - 1] == ' ') contentEnd--;
+                var (contentStart, contentEnd) = cell.TrimContent(blockText);
 
                 if (contentStart > prev)
                     ranges.Add(new HiddenRange(prev, contentStart - prev));

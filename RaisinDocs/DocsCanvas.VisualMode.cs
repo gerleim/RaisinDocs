@@ -369,12 +369,7 @@ public partial class DocsCanvas
         // find the trimmed content range for each cell
         var cellRanges = new List<(int Start, int End)>();
         foreach (var cell in cells)
-        {
-            int s = cell.Start, e = cell.Start + cell.Length;
-            while (s < e && blockText[s] == ' ') s++;
-            while (e > s && blockText[e - 1] == ' ') e--;
-            cellRanges.Add((s, e));
-        }
+            cellRanges.Add(cell.TrimContent(blockText));
 
         int offset = _doc.CursorOffset;
 
@@ -663,10 +658,9 @@ public partial class DocsCanvas
             {
                 var cell = parsed.TableRow.Cells[rect.StartCol];
                 string blockText = _doc.GetBlockText(b);
-                int s = cell.Start;
-                while (s < cell.Start + cell.Length && blockText[s] == ' ') s++;
+                var (trimStart, _) = cell.TrimContent(blockText);
                 _doc.CursorBlock = b;
-                _doc.CursorOffset = s;
+                _doc.CursorOffset = trimStart;
                 _doc.CollapseSelection();
                 return;
             }
@@ -723,10 +717,7 @@ public partial class DocsCanvas
             int cellEnd = cell.Start + cell.Length;
             if (cursorOffset >= cell.Start && cursorOffset <= cellEnd)
             {
-                int trimStart = cell.Start;
-                while (trimStart < cellEnd && blockText[trimStart] == ' ') trimStart++;
-                int trimEnd = cellEnd;
-                while (trimEnd > trimStart && blockText[trimEnd - 1] == ' ') trimEnd--;
+                var (trimStart, trimEnd) = cell.TrimContent(blockText);
 
                 double textW = 0;
                 double fullTextW = 0;
@@ -783,10 +774,7 @@ public partial class DocsCanvas
             if (x < cx + colWidths[c] || c == cells.Count - 1 || c == colWidths.Length - 1)
             {
                 var cell = cells[c];
-                int trimStart = cell.Start;
-                int trimEnd = cell.Start + cell.Length;
-                while (trimStart < trimEnd && blockText[trimStart] == ' ') trimStart++;
-                while (trimEnd > trimStart && blockText[trimEnd - 1] == ' ') trimEnd--;
+                var (trimStart, trimEnd) = cell.TrimContent(blockText);
 
                 double fullTextW;
                 if (map != null)
@@ -981,10 +969,7 @@ public partial class DocsCanvas
         for (int c = 0; c < Math.Min(parsed.TableRow.Cells.Count, colWidths.Length); c++)
         {
             var cell = parsed.TableRow.Cells[c];
-            int s = cell.Start;
-            int e = s + cell.Length;
-            while (s < e && blockText[s] == ' ') s++;
-            while (e > s && blockText[e - 1] == ' ') e--;
+            var (s, e) = cell.TrimContent(blockText);
 
             string cellText = map != null
                 ? map.BuildDisplayString(blockText, s, e - s)
@@ -1147,9 +1132,7 @@ public partial class DocsCanvas
 
         foreach (var cell in parsed.TableRow.Cells)
         {
-            int s = cell.Start, e = cell.Start + cell.Length;
-            while (s < e && blockText[s] == ' ') s++;
-            while (e > s && blockText[e - 1] == ' ') e--;
+            var (s, e) = cell.TrimContent(blockText);
             if (offset >= s && offset <= e) return;
         }
 
@@ -1158,9 +1141,7 @@ public partial class DocsCanvas
         int bestDist = int.MaxValue;
         foreach (var cell in parsed.TableRow.Cells)
         {
-            int s = cell.Start, e = cell.Start + cell.Length;
-            while (s < e && blockText[s] == ' ') s++;
-            while (e > s && blockText[e - 1] == ' ') e--;
+            var (s, e) = cell.TrimContent(blockText);
             if (Math.Abs(offset - s) < bestDist) { best = s; bestDist = Math.Abs(offset - s); }
             if (Math.Abs(offset - e) < bestDist) { best = e; bestDist = Math.Abs(offset - e); }
         }
