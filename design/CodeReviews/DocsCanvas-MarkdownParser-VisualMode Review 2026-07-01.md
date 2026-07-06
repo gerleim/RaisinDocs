@@ -275,7 +275,7 @@
 - **What's wrong**: Takes `ReadOnlySpan<char>` but immediately calls `.ToString()`.
 - **What to do**: Change parameter to `string` (honest API) or use span-based slicing throughout.
 
-### L10 — Three full scans before main parse
+### ~~L10 — Three full scans before main parse~~ FIXED
 
 - **Severity**: Low
 - **Category**: Architecture

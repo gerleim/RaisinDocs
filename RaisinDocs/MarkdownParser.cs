@@ -93,8 +93,7 @@ public static class MarkdownParser
 {
     public static List<ParsedBlock> Parse(Func<int, string> getBlockText, int blockCount)
     {
-        var defs = CollectLinkDefinitions(getBlockText, blockCount);
-        var theme = CollectThemeDefinitions(getBlockText, blockCount);
+        var (defs, theme) = CollectDefinitions(getBlockText, blockCount);
 
         var result = new List<ParsedBlock>(blockCount);
         int fenceLen = 0;
@@ -234,9 +233,10 @@ public static class MarkdownParser
         return result;
     }
 
-    private static Dictionary<string, RgbColor>? CollectThemeDefinitions(
-        Func<int, string> getBlockText, int blockCount)
+    private static (Dictionary<string, (string Url, string? Title)>? Defs, Dictionary<string, RgbColor>? Theme)
+        CollectDefinitions(Func<int, string> getBlockText, int blockCount)
     {
+        Dictionary<string, (string Url, string? Title)>? defs = null;
         Dictionary<string, RgbColor>? theme = null;
         int fenceLen = 0;
         for (int i = 0; i < blockCount; i++)
@@ -246,7 +246,13 @@ public static class MarkdownParser
             if (fenceLen == 0 && backticks > 0) { fenceLen = backticks; continue; }
             if (fenceLen > 0) { if (backticks >= fenceLen) fenceLen = 0; continue; }
 
-            string themeText;
+            if (TryParseLinkDefinition(text, out string? label, out string? url, out string? title))
+            {
+                defs ??= new(StringComparer.OrdinalIgnoreCase);
+                defs.TryAdd(label!, (url!, title));
+            }
+
+            string? themeText = null;
             if (IsThemeBlock(text))
             {
                 themeText = text;
@@ -262,24 +268,25 @@ public static class MarkdownParser
                         break;
                     j++;
                 }
-                if (j >= blockCount) continue;
-                themeText = joined.ToString();
-                i = j;
-            }
-            else
-            {
-                continue;
+                if (j < blockCount)
+                {
+                    themeText = joined.ToString();
+                    i = j;
+                }
             }
 
-            var parsed = ParseThemeBlock(themeText);
-            if (parsed.Count > 0)
+            if (themeText != null)
             {
-                theme ??= new(StringComparer.OrdinalIgnoreCase);
-                foreach (var kvp in parsed)
-                    theme[kvp.Key] = kvp.Value;
+                var parsed = ParseThemeBlock(themeText);
+                if (parsed.Count > 0)
+                {
+                    theme ??= new(StringComparer.OrdinalIgnoreCase);
+                    foreach (var kvp in parsed)
+                        theme[kvp.Key] = kvp.Value;
+                }
             }
         }
-        return theme;
+        return (defs, theme);
     }
 
     private static void ApplyBlockDivColors(List<ParsedBlock> blocks)
@@ -328,26 +335,6 @@ public static class MarkdownParser
         return new BlockColor(fg, bg);
     }
 
-    private static Dictionary<string, (string Url, string? Title)>? CollectLinkDefinitions(
-        Func<int, string> getBlockText, int blockCount)
-    {
-        Dictionary<string, (string Url, string? Title)>? defs = null;
-        int fenceLen = 0;
-        for (int i = 0; i < blockCount; i++)
-        {
-            string text = getBlockText(i);
-            int backticks = GetFenceBacktickCount(text);
-            if (fenceLen == 0 && backticks > 0) { fenceLen = backticks; continue; }
-            if (fenceLen > 0) { if (backticks >= fenceLen) fenceLen = 0; continue; }
-
-            if (TryParseLinkDefinition(text, out string? label, out string? url, out string? title))
-            {
-                defs ??= new(StringComparer.OrdinalIgnoreCase);
-                defs.TryAdd(label!, (url!, title));
-            }
-        }
-        return defs;
-    }
 
     internal static bool TryParseLinkDefinition(string text, out string? label, out string? url, out string? title)
     {
