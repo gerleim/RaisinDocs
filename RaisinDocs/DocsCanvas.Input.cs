@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Input;
 
 namespace RaisinDocs;
@@ -20,6 +21,26 @@ public partial class DocsCanvas
     protected override void OnMouseDown(MouseButtonEventArgs e)
     {
         base.OnMouseDown(e);
+
+        if (e.ChangedButton == MouseButton.Right)
+        {
+            Focus();
+            ComputeLayout();
+            var rpos = e.GetPosition(this);
+            HitTestToPosition(rpos, out int rBlock, out int rOffset);
+            if (!IsWithinSelection(rBlock, rOffset))
+            {
+                _doc.CursorBlock = rBlock;
+                _doc.CursorOffset = rOffset;
+                SkipCursorOverHiddenRanges(forward: true);
+                ClampCursorBeforeTrailingHidden();
+                _doc.CollapseSelection();
+                InvalidateVisual();
+            }
+            e.Handled = true;
+            return;
+        }
+
         Focus();
         ComputeLayout();
 
@@ -53,6 +74,7 @@ public partial class DocsCanvas
         _doc.CursorBlock = block;
         _doc.CursorOffset = offset;
         SkipCursorOverHiddenRanges(forward: true);
+        ClampCursorBeforeTrailingHidden();
 
         if (!Keyboard.Modifiers.HasFlag(ModifierKeys.Shift))
             _doc.CollapseSelection();
@@ -110,6 +132,7 @@ public partial class DocsCanvas
         _doc.CursorBlock = block;
         _doc.CursorOffset = offset;
         SkipCursorOverHiddenRanges(forward: true);
+        ClampCursorBeforeTrailingHidden();
 
         ResetBlink();
         InvalidateVisual();
@@ -513,8 +536,10 @@ public partial class DocsCanvas
             }
             else
             {
+                bool atEnd = _doc.CursorOffset == _doc.GetBlockLength(_doc.CursorBlock);
+                bool hasNextBlock = _doc.CursorBlock < _doc.BlockCount - 1;
                 _doc.InsertParagraphBreak();
-                if (!isStandalone)
+                if (!isStandalone && !(atEnd && hasNextBlock))
                     _doc.InsertParagraphBreak();
             }
         }
@@ -887,5 +912,74 @@ public partial class DocsCanvas
             e.Handled = true;
             RaiseFormattingChanged();
         }
+    }
+
+    // --- Right-click context menu ---
+
+    protected override void OnMouseRightButtonUp(MouseButtonEventArgs e)
+    {
+        base.OnMouseRightButtonUp(e);
+        ShowContextMenu(e.GetPosition(this));
+        e.Handled = true;
+    }
+
+    private bool IsWithinSelection(int block, int offset)
+    {
+        if (!_doc.HasSelection) return false;
+        var (sb, so, eb, eo) = _doc.GetOrderedSelection();
+        if (block < sb || block > eb) return false;
+        if (block == sb && offset < so) return false;
+        if (block == eb && offset >= eo) return false;
+        return true;
+    }
+
+    private void ShowContextMenu(Point position)
+    {
+        var menu = new ContextMenu();
+        ApplyContextMenuStyle(menu);
+
+        bool hasItems = false;
+
+        bool hasBg = _doc.HasSelection ? SelectionHasBackground() : CursorHasBackground();
+        if (hasBg)
+        {
+            var clearBackground = new MenuItem { Header = "Clear background" };
+            ApplyMenuItemStyle(clearBackground);
+            clearBackground.Click += (_, _) =>
+            {
+                if (_doc.HasSelection)
+                    RemoveBackgroundFromSelection();
+                else
+                    RemoveBackgroundAtCursor();
+                Focus();
+            };
+            menu.Items.Add(clearBackground);
+            hasItems = true;
+        }
+
+        if (!hasItems) return;
+
+        menu.Placement = System.Windows.Controls.Primitives.PlacementMode.RelativePoint;
+        menu.PlacementTarget = this;
+        menu.HorizontalOffset = position.X;
+        menu.VerticalOffset = position.Y;
+        menu.IsOpen = true;
+    }
+
+    private Style? _contextMenuStyle;
+    private Style? _menuItemStyle;
+
+    private void ApplyContextMenuStyle(ContextMenu menu)
+    {
+        _contextMenuStyle ??= TryFindResource("DarkContextMenu") as Style;
+        if (_contextMenuStyle != null)
+            menu.Style = _contextMenuStyle;
+    }
+
+    private void ApplyMenuItemStyle(MenuItem item)
+    {
+        _menuItemStyle ??= TryFindResource("DarkContextMenuItem") as Style;
+        if (_menuItemStyle != null)
+            item.Style = _menuItemStyle;
     }
 }

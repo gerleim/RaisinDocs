@@ -112,15 +112,6 @@ public partial class DocsCanvas
         if (forward)
         {
             int blockLen = _doc.GetBlockLength(_doc.CursorBlock);
-            if (offset > 0 && offset < blockLen && !map.IsHidden(offset - 1) && map.IsHidden(offset))
-            {
-                bool allRemainingHidden = true;
-                for (int i = offset; i < blockLen; i++)
-                {
-                    if (!map.IsHidden(i)) { allRemainingHidden = false; break; }
-                }
-                if (allRemainingHidden) return;
-            }
             offset = map.SkipHidden(offset, true);
             while (offset < blockLen && map.IsHidden(offset))
                 offset++;
@@ -128,7 +119,7 @@ public partial class DocsCanvas
         else
         {
             offset = map.SkipHidden(offset, false);
-            while (offset > 0 && map.IsHidden(offset - 1))
+            while (offset > 0 && map.IsHidden(offset))
                 offset--;
         }
         _doc.CursorOffset = offset;
