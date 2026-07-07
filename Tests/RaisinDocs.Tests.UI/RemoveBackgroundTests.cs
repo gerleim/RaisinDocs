@@ -314,15 +314,19 @@ public class RemoveBackgroundTests
     }
 
     [StaFact]
-    public void RemoveBackground_PartialInMultiLineDiv_WrapsOtherLines()
+    public void RemoveBackground_PartialInMultiLineDiv_SplitsDivAroundSelection()
     {
-        // 4 content lines, select "bbb" on line 2 → line 1 and 3 get full bg wrap, line 2 splits
+        // 3 content lines, select "bbb" on line 2 → div splits: lines 1,3 stay in divs, line 2 gets inline
         var canvas = CreateCanvas("<!--@div bg:green-->\nline one\naaa bbb ccc\nline three\n<!--/@div-->");
         canvas.TestSetSelection(2, 4, 2, 7);
         canvas.RemoveBackgroundFromSelection();
-        canvas.TestGetBlockText(0).Should().Be("<!--@bg:green-->line one<!--/@bg-->");
-        canvas.TestGetBlockText(1).Should().Be("<!--@bg:green-->aaa <!--/@bg-->bbb<!--@bg:green--> ccc<!--/@bg-->");
-        canvas.TestGetBlockText(2).Should().Be("<!--@bg:green-->line three<!--/@bg-->");
+        canvas.TestGetBlockText(0).Should().Be("<!--@div bg:green-->");
+        canvas.TestGetBlockText(1).Should().Be("line one");
+        canvas.TestGetBlockText(2).Should().Be("<!--/@div-->");
+        canvas.TestGetBlockText(3).Should().Be("<!--@bg:green-->aaa <!--/@bg-->bbb<!--@bg:green--> ccc<!--/@bg-->");
+        canvas.TestGetBlockText(4).Should().Be("<!--@div bg:green-->");
+        canvas.TestGetBlockText(5).Should().Be("line three");
+        canvas.TestGetBlockText(6).Should().Be("<!--/@div-->");
     }
 
     [StaFact]

@@ -127,13 +127,13 @@ internal static class BackgroundHelper
         if (!doc.HasSelection) return;
         var (sb, so, eb, eo) = doc.GetOrderedSelection();
 
-        var removedBlocks = new List<int>();
-        var wrappedBlocks = new Dictionary<int, int>();
+        var blockOps = new List<(int pos, int delta)>();
+        var wrappedOrigBlocks = new Dictionary<int, int>();
 
         if (parsedBlocks != null)
         {
             var seenDivOpens = new HashSet<int>();
-            var divs = new List<(int divOpen, int divClose, string bgColor, string? strippedDiv)>();
+            var divs = new List<(int divOpen, int divClose, string bgColor, string divOpenText)>();
 
             for (int b = sb; b <= eb; b++)
             {
@@ -150,71 +150,166 @@ internal static class BackgroundHelper
                 string? bgColor = ExtractBgColorFromDivOpen(divOpenText);
                 if (bgColor == null) continue;
 
-                string? strippedDiv = StripBgFromDivOpen(divOpenText);
-                divs.Add((divOpen, divClose, bgColor, strippedDiv));
+                divs.Add((divOpen, divClose, bgColor, divOpenText));
             }
 
             divs.Sort((a, b) => b.divOpen.CompareTo(a.divOpen));
 
-            foreach (var (divOpen, divClose, bgColor, strippedDiv) in divs)
-            {
-                string bgOpener = $"<!--@bg:{bgColor}-->";
-                int firstContent = divOpen + 1;
-                int lastContent = divClose - 1;
-
-                if (strippedDiv != null)
-                {
-                    int cur = AdjustIndex(divOpen, removedBlocks);
-                    doc.RemoveTextAt(cur, 0, doc.GetBlockLength(cur));
-                    doc.InsertTextAt(cur, 0, strippedDiv);
-                }
-                else
-                {
-                    doc.RemoveBlockAt(AdjustIndex(divClose, removedBlocks));
-                    removedBlocks.Add(divClose);
-                    doc.RemoveBlockAt(AdjustIndex(divOpen, removedBlocks));
-                    removedBlocks.Add(divOpen);
-                }
-
-                for (int origB = lastContent; origB >= firstContent; origB--)
-                {
-                    int curB = AdjustIndex(origB, removedBlocks);
-                    int len = doc.GetBlockLength(curB);
-                    doc.InsertTextAt(curB, len, "<!--/@bg-->");
-                    doc.InsertTextAt(curB, 0, bgOpener);
-                    wrappedBlocks[origB] = bgOpener.Length;
-                }
-            }
+            foreach (var div in divs)
+                SplitDivAtSelection(doc, div, sb, so, eb, eo, blockOps, wrappedOrigBlocks);
         }
 
         for (int origB = eb; origB >= sb; origB--)
         {
-            if (removedBlocks.Contains(origB)) continue;
+            if (WasBlockRemoved(origB, blockOps)) continue;
 
-            int curB = AdjustIndex(origB, removedBlocks);
+            int adjB = AdjustBlockIndex(origB, blockOps);
             int bSelStart = (origB == sb) ? so : 0;
-            int bSelEnd = (origB == eb) ? eo : doc.GetBlockLength(curB);
+            int bSelEnd = (origB == eb) ? eo : doc.GetBlockLength(adjB);
 
-            if (wrappedBlocks.TryGetValue(origB, out int openerLen))
+            if (wrappedOrigBlocks.TryGetValue(origB, out int openerLen))
             {
                 if (origB == sb) bSelStart += openerLen;
                 if (origB == eb) bSelEnd += openerLen;
             }
 
-            RemoveBgTagsFromBlock(doc, curB, bSelStart, bSelEnd);
+            RemoveBgTagsFromBlock(doc, adjB, bSelStart, bSelEnd);
         }
 
         doc.CollapseSelection();
     }
 
-    private static int AdjustIndex(int originalIndex, List<int> removedBlocks)
+    private static int AdjustBlockIndex(int origBlock, List<(int pos, int delta)> blockOps)
     {
         int shift = 0;
-        foreach (int r in removedBlocks)
+        foreach (var (pos, delta) in blockOps)
         {
-            if (r < originalIndex) shift++;
+            if (delta > 0 && pos <= origBlock) shift++;
+            else if (delta < 0 && pos < origBlock) shift--;
         }
-        return originalIndex - shift;
+        return origBlock + shift;
+    }
+
+    private static bool WasBlockRemoved(int origBlock, List<(int pos, int delta)> blockOps)
+    {
+        foreach (var (pos, delta) in blockOps)
+        {
+            if (delta < 0 && pos == origBlock) return true;
+        }
+        return false;
+    }
+
+    private static void SplitDivAtSelection(Document doc,
+        (int divOpen, int divClose, string bgColor, string divOpenText) div,
+        int sb, int so, int eb, int eo,
+        List<(int pos, int delta)> blockOps,
+        Dictionary<int, int> wrappedOrigBlocks)
+    {
+        int firstContent = div.divOpen + 1;
+        int lastContent = div.divClose - 1;
+
+        int selFirst = Math.Max(sb, firstContent);
+        int selLast = Math.Min(eb, lastContent);
+
+        bool hasAbove = selFirst > firstContent;
+        bool hasBelow = selLast < lastContent;
+
+        bool topPartial = selFirst == sb && so > 0;
+        bool bottomPartial = selLast == eb && eo < doc.GetBlockLength(selLast);
+
+        string? strippedDiv = StripBgFromDivOpen(div.divOpenText);
+        bool isCombined = strippedDiv != null;
+        string bgOpener = $"<!--@bg:{div.bgColor}-->";
+
+        if (!hasAbove && !hasBelow)
+        {
+            if (isCombined)
+            {
+                doc.RemoveTextAt(div.divOpen, 0, doc.GetBlockLength(div.divOpen));
+                doc.InsertTextAt(div.divOpen, 0, strippedDiv!);
+            }
+            else
+            {
+                doc.RemoveBlockAt(div.divClose);
+                blockOps.Add((div.divClose, -1));
+                doc.RemoveBlockAt(div.divOpen);
+                blockOps.Add((div.divOpen, -1));
+            }
+        }
+        else if (hasAbove && !hasBelow)
+        {
+            if (isCombined)
+            {
+                doc.InsertBlockAt(selFirst, strippedDiv!);
+                blockOps.Add((selFirst, +1));
+                doc.InsertBlockAt(selFirst, "<!--/@div-->");
+                blockOps.Add((selFirst, +1));
+            }
+            else
+            {
+                doc.RemoveBlockAt(div.divClose);
+                blockOps.Add((div.divClose, -1));
+                doc.InsertBlockAt(selFirst, "<!--/@div-->");
+                blockOps.Add((selFirst, +1));
+            }
+        }
+        else if (!hasAbove && hasBelow)
+        {
+            if (isCombined)
+            {
+                doc.InsertBlockAt(selLast + 1, div.divOpenText);
+                blockOps.Add((selLast + 1, +1));
+                doc.InsertBlockAt(selLast + 1, "<!--/@div-->");
+                blockOps.Add((selLast + 1, +1));
+                doc.RemoveTextAt(div.divOpen, 0, doc.GetBlockLength(div.divOpen));
+                doc.InsertTextAt(div.divOpen, 0, strippedDiv!);
+            }
+            else
+            {
+                doc.InsertBlockAt(selLast + 1, div.divOpenText);
+                blockOps.Add((selLast + 1, +1));
+                doc.RemoveBlockAt(div.divOpen);
+                blockOps.Add((div.divOpen, -1));
+            }
+        }
+        else
+        {
+            if (isCombined)
+            {
+                doc.InsertBlockAt(selLast + 1, div.divOpenText);
+                blockOps.Add((selLast + 1, +1));
+                doc.InsertBlockAt(selLast + 1, "<!--/@div-->");
+                blockOps.Add((selLast + 1, +1));
+                doc.InsertBlockAt(selFirst, strippedDiv!);
+                blockOps.Add((selFirst, +1));
+                doc.InsertBlockAt(selFirst, "<!--/@div-->");
+                blockOps.Add((selFirst, +1));
+            }
+            else
+            {
+                doc.InsertBlockAt(selLast + 1, div.divOpenText);
+                blockOps.Add((selLast + 1, +1));
+                doc.InsertBlockAt(selFirst, "<!--/@div-->");
+                blockOps.Add((selFirst, +1));
+            }
+        }
+
+        if (topPartial)
+        {
+            int wrapBlock = AdjustBlockIndex(selFirst, blockOps);
+            int len = doc.GetBlockLength(wrapBlock);
+            doc.InsertTextAt(wrapBlock, len, "<!--/@bg-->");
+            doc.InsertTextAt(wrapBlock, 0, bgOpener);
+            wrappedOrigBlocks[selFirst] = bgOpener.Length;
+        }
+        if (bottomPartial && selLast != selFirst)
+        {
+            int wrapBlock = AdjustBlockIndex(selLast, blockOps);
+            int len = doc.GetBlockLength(wrapBlock);
+            doc.InsertTextAt(wrapBlock, len, "<!--/@bg-->");
+            doc.InsertTextAt(wrapBlock, 0, bgOpener);
+            wrappedOrigBlocks[selLast] = bgOpener.Length;
+        }
     }
 
     private static string? ExtractBgColorFromDivOpen(string text)
