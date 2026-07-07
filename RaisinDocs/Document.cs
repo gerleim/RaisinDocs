@@ -266,6 +266,7 @@ public class Document
     public void InsertParagraphBreak()
     {
         var block = _blocks[CursorBlock];
+        CursorOffset = Math.Min(CursorOffset, block.Length);
         string after = block.ToString(CursorOffset, block.Length - CursorOffset);
         block.Remove(CursorOffset, block.Length - CursorOffset);
         CursorBlock++;
@@ -790,6 +791,7 @@ public class Document
         var lines = text.Split('\n');
 
         var block = _blocks[CursorBlock];
+        CursorOffset = Math.Min(CursorOffset, block.Length);
         string afterCursor = block.ToString(CursorOffset, block.Length - CursorOffset);
         block.Remove(CursorOffset, block.Length - CursorOffset);
 

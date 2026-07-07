@@ -101,6 +101,31 @@ public class DocumentTests
         doc.GetBlockText(1).Should().BeEmpty();
     }
 
+    [Fact]
+    public void InsertParagraphBreak_CursorBeyondBlockLength_ClampsAndSplits()
+    {
+        var doc = CreateDoc("hello\\");
+        // Simulate visual-mode desync: RemoveTextAt shortens the block without adjusting CursorOffset
+        doc.CursorOffset = 6; // at end of "hello\"
+        doc.RemoveTextAt(0, 5, 1); // remove backslash → block is now "hello" (len 5), cursor still 6
+        doc.InsertParagraphBreak();
+
+        doc.BlockCount.Should().Be(2);
+        doc.GetBlockText(0).Should().Be("hello");
+        doc.GetBlockText(1).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Paste_CursorBeyondBlockLength_ClampsAndInserts()
+    {
+        var doc = CreateDoc("hello\\");
+        doc.CursorOffset = 6;
+        doc.RemoveTextAt(0, 5, 1); // block is "hello" (len 5), cursor still 6
+        doc.Paste("!");
+
+        doc.GetBlockText(0).Should().Be("hello!");
+    }
+
     // --- Hard break (Shift+Enter) ---
 
     [Fact]
