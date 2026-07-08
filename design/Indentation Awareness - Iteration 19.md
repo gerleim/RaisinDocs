@@ -165,7 +165,7 @@ This is a signature change — callers that don't care about leading spaces use 
 
 ## Phases
 
-### Phase 1: Content column computation
+### Phase 1: Content column computation ✅
 
 **Goal**: Compute and store the content column for list items and blockquotes.
 
@@ -179,7 +179,7 @@ This is a signature change — callers that don't care about leading spaces use 
 **Files**: `MarkdownParser.cs`
 **Tests**: verify content column values for each list type, multi-digit ordered lists
 
-### Phase 2: Lazy continuation detection
+### Phase 2: Lazy continuation detection ✅
 
 **Goal**: Detect and mark lazy continuation lines (no blank line, no indent, paragraph text continues a list/blockquote).
 
@@ -192,7 +192,7 @@ This is a signature change — callers that don't care about leading spaces use 
 **Files**: `MarkdownParser.cs`
 **Tests**: `"1. text", "continuation"` → second block has OwnerBlock=0 and IsLazyContinuation=true; `"1. text", "", "not continuation"` → second block is blank, third is independent paragraph; `"1. text", "# heading"` → heading is not continuation
 
-### Phase 3: Indented continuation detection
+### Phase 3: Indented continuation detection ✅
 
 **Goal**: Detect continuation via indentation after blank lines.
 
@@ -204,7 +204,7 @@ This is a signature change — callers that don't care about leading spaces use 
 **Files**: `MarkdownParser.cs`
 **Tests**: `"1. text", "", "   continuation"` (3-space indent for `1. `) → indented continuation; `"10. text", "", "    continuation"` (4-space indent for `10. `) → indented continuation; `"1. text", "", "continuation"` (no indent after blank) → not continuation
 
-### Phase 4: Visual mode rendering — continuation indentation
+### Phase 4: Visual mode rendering — continuation indentation ✅
 
 **Goal**: Render continuation lines with proper indentation in visual mode.
 
@@ -214,7 +214,7 @@ This is a signature change — callers that don't care about leading spaces use 
 
 **Files**: `DocsCanvas.cs`, `DocsCanvas.VisualMode.cs`, `BlockVisualMap.cs`
 
-### Phase 5: Visual mode rendering — spacing adjustments
+### Phase 5: Visual mode rendering — spacing adjustments ✅
 
 **Goal**: Correct paragraph spacing for continuation lines.
 
@@ -261,11 +261,11 @@ This is a signature change — callers that don't care about leading spaces use 
 ## Implementation Order
 
 ```
-Phase 1 (Content column)    — data model, unit-testable
-Phase 2 (Lazy continuation) — two-pass detection, unit-testable
-Phase 3 (Indented cont.)    — extends phase 2, unit-testable
-Phase 4 (Visual indent)     — rendering, depends on 2+3
-Phase 5 (Spacing)           — rendering, depends on 4
+Phase 1 (Content column)    — data model, unit-testable               ✅
+Phase 2 (Lazy continuation) — two-pass detection, unit-testable       ✅
+Phase 3 (Indented cont.)    — extends phase 2, unit-testable          ✅
+Phase 4 (Visual indent)     — rendering, depends on 2+3              ✅
+Phase 5 (Spacing)           — rendering, depends on 4                ✅
 Phase 6 (Prefix tolerance)  — parser, independent of 2–5
 Phase 7 (Tab expansion)     — parser, independent of 2–5, pairs with phase 6
 Phase 8 (Source hints)       — optional polish
