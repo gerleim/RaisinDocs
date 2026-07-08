@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Data;
 using System.Windows.Media;
 using System.Windows.Shapes;
 
@@ -99,6 +100,15 @@ public class DocsFormattingBar : Control
 
     private static readonly Brush CrescentBrush = new SolidColorBrush(Color.FromRgb(100, 149, 237));
 
+    private static readonly Geometry IconTable = Geometry.Parse(
+        "M1,1 H15 V13 H1 Z M1,7 H15 M8,1 V13");
+
+    private static readonly Geometry IconReflow = Geometry.Parse(
+        "M1,3 H7 M1,7 H11 M1,11 H5 M10,4 L13,7 L10,10");
+
+    private static readonly Geometry IconHardBreaks = Geometry.Parse(
+        "M1,4 H10 M1,10 H10 M12,1 V7 M10.5,2.5 L12,1 L13.5,2.5");
+
     static DocsFormattingBar()
     {
         IconOff.Freeze();
@@ -117,6 +127,9 @@ public class DocsFormattingBar : Control
         IconMoon.Freeze();
         IconCrescent.Freeze();
         CrescentBrush.Freeze();
+        IconTable.Freeze();
+        IconReflow.Freeze();
+        IconHardBreaks.Freeze();
 
         DefaultStyleKeyProperty.OverrideMetadata(typeof(DocsFormattingBar),
             new FrameworkPropertyMetadata(typeof(DocsFormattingBar)));
@@ -583,6 +596,7 @@ public class DocsFormattingBar : Control
                 Header = label,
                 IsChecked = entry.IsChecked?.Invoke() ?? false,
                 IsEnabled = child.IsEnabled,
+                Icon = entry.Icon?.Invoke(),
             };
             item.Click += (_, _) => entry.Handler();
             menu.Items.Add(item);
@@ -601,69 +615,139 @@ public class DocsFormattingBar : Control
     private void BuildOverflowMap()
     {
         _overflowMap = new();
+        var mono = new FontFamily("Cascadia Mono,Consolas");
 
-        void Map(UIElement? el, string label, Action handler, Func<bool>? isChecked = null)
+        void Map(UIElement? el, string label, Action handler, Func<bool>? isChecked = null, Func<object>? icon = null)
         {
-            if (el != null) _overflowMap[el] = new OverflowEntry(label, handler, isChecked);
+            if (el != null) _overflowMap[el] = new OverflowEntry(label, handler, isChecked, icon);
         }
 
         Map(_boldButton, "Bold (Ctrl+B)",
             () => { Canvas?.ToggleBold(); Canvas?.Focus(); UpdateButtonStates(); },
-            () => Canvas?.SelectionIsBold ?? false);
+            () => Canvas?.SelectionIsBold ?? false,
+            () => new TextBlock { Text = "B", FontWeight = FontWeights.Bold });
         Map(_italicButton, "Italic (Ctrl+I)",
             () => { Canvas?.ToggleItalic(); Canvas?.Focus(); UpdateButtonStates(); },
-            () => Canvas?.SelectionIsItalic ?? false);
+            () => Canvas?.SelectionIsItalic ?? false,
+            () => new TextBlock { Text = "I", FontStyle = FontStyles.Italic });
         Map(_strikethroughButton, "Strikethrough",
             () => { Canvas?.ToggleStrikethrough(); Canvas?.Focus(); UpdateButtonStates(); },
-            () => Canvas?.SelectionIsStrikethrough ?? false);
+            () => Canvas?.SelectionIsStrikethrough ?? false,
+            () => new TextBlock { Text = "S", TextDecorations = TextDecorations.Strikethrough });
         Map(_codeButton, "Code",
             () => { Canvas?.ToggleCodeSpan(); Canvas?.Focus(); UpdateButtonStates(); },
-            () => Canvas?.SelectionIsCode ?? false);
+            () => Canvas?.SelectionIsCode ?? false,
+            () => new TextBlock { Text = "</>", FontSize = 11, FontFamily = mono });
         Map(_codeBlockButton, "Code block",
             () => { Canvas?.ToggleFencedCode(); Canvas?.Focus(); UpdateButtonStates(); },
-            () => Canvas?.CurrentBlockKind == BlockKind.FencedCodeLine);
+            () => Canvas?.CurrentBlockKind == BlockKind.FencedCodeLine,
+            () => new TextBlock { Text = "```", FontSize = 11, FontFamily = mono });
         Map(_h1Button, "Heading 1",
             () => { Canvas?.ToggleHeading(1); Canvas?.Focus(); UpdateButtonStates(); },
-            () => Canvas?.CurrentBlockKind == BlockKind.Heading1);
+            () => Canvas?.CurrentBlockKind == BlockKind.Heading1,
+            () => new TextBlock { Text = "H1", FontWeight = FontWeights.Bold, FontSize = 13 });
         Map(_h2Button, "Heading 2",
             () => { Canvas?.ToggleHeading(2); Canvas?.Focus(); UpdateButtonStates(); },
-            () => Canvas?.CurrentBlockKind == BlockKind.Heading2);
+            () => Canvas?.CurrentBlockKind == BlockKind.Heading2,
+            () => new TextBlock { Text = "H2", FontWeight = FontWeights.Bold, FontSize = 12 });
         Map(_h3Button, "Heading 3",
             () => { Canvas?.ToggleHeading(3); Canvas?.Focus(); UpdateButtonStates(); },
-            () => Canvas?.CurrentBlockKind == BlockKind.Heading3);
+            () => Canvas?.CurrentBlockKind == BlockKind.Heading3,
+            () => new TextBlock { Text = "H3", FontWeight = FontWeights.Bold, FontSize = 11 });
         Map(_bulletButton, "Bullet list",
             () => { Canvas?.ToggleBulletList(); Canvas?.Focus(); UpdateButtonStates(); },
-            () => Canvas?.CurrentBlockKind == BlockKind.UnorderedListItem);
+            () => Canvas?.CurrentBlockKind == BlockKind.UnorderedListItem,
+            () => MakePathIcon(IconBullet));
         Map(_orderedListButton, "Ordered list",
             () => { Canvas?.ToggleOrderedList(); Canvas?.Focus(); UpdateButtonStates(); },
-            () => Canvas?.CurrentBlockKind == BlockKind.OrderedListItem);
+            () => Canvas?.CurrentBlockKind == BlockKind.OrderedListItem,
+            () => MakePathIcon(IconOrderedList));
         Map(_taskListButton, "Task list",
             () => { Canvas?.ToggleTaskList(); Canvas?.Focus(); UpdateButtonStates(); },
-            () => Canvas?.CurrentBlockKind is BlockKind.TaskListItemUnchecked or BlockKind.TaskListItemChecked);
+            () => Canvas?.CurrentBlockKind is BlockKind.TaskListItemUnchecked or BlockKind.TaskListItemChecked,
+            () => MakePathIcon(IconTaskList));
         Map(_quoteButton, "Blockquote",
             () => { Canvas?.ToggleBlockquote(); Canvas?.Focus(); UpdateButtonStates(); },
-            () => Canvas?.CurrentBlockKind == BlockKind.Blockquote);
+            () => Canvas?.CurrentBlockKind == BlockKind.Blockquote,
+            () => MakePathIcon(IconQuote));
         Map(_linkButton, "Link (Ctrl+K)",
-            () => { Canvas?.InsertLink(); Canvas?.Focus(); });
+            () => { Canvas?.InsertLink(); Canvas?.Focus(); },
+            icon: () => MakePathIcon(IconLink, true));
         Map(_insertTableButton, "Insert table",
-            () => { Canvas?.InsertTable(3, 2); Canvas?.Focus(); });
+            () => { Canvas?.InsertTable(3, 2); Canvas?.Focus(); },
+            icon: () => MakePathIcon(IconTable, true));
         Map(_colorTextButton, "Text color",
-            () => ShowColorMenu(_moreButton));
+            () => ShowColorMenu(_moreButton),
+            icon: () =>
+            {
+                var grid = new Grid { Width = 16, Height = 16 };
+                grid.Children.Add(new TextBlock
+                {
+                    Text = "A", FontWeight = FontWeights.Bold, FontSize = 13,
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, -1, 0, 0),
+                });
+                grid.Children.Add(new Border
+                {
+                    Height = 3, VerticalAlignment = VerticalAlignment.Bottom,
+                    Background = _colorBar?.Background ?? Brushes.Red, CornerRadius = new CornerRadius(1),
+                });
+                return grid;
+            });
         Map(_reflowButton, "Reformat selection",
-            () => { Canvas?.Reflow(); Canvas?.Focus(); });
+            () => { Canvas?.Reflow(); Canvas?.Focus(); },
+            icon: () => MakePathIcon(IconReflow, true));
         Map(_hardBreaksButton, "Convert to hard breaks",
-            () => { Canvas?.ConvertToHardBreaks(); Canvas?.Focus(); });
+            () => { Canvas?.ConvertToHardBreaks(); Canvas?.Focus(); },
+            icon: () => MakePathIcon(IconHardBreaks, true));
         Map(_editModeButton, "Edit mode (Ctrl+M)",
             () => { Canvas?.ToggleEditMode(); Canvas?.Focus(); UpdateEditModeButton(); },
-            () => Canvas?.CurrentEditMode == DocsCanvas.EditMode.Visual);
+            () => Canvas?.CurrentEditMode == DocsCanvas.EditMode.Visual,
+            () => MakePathIcon(Canvas?.CurrentEditMode == DocsCanvas.EditMode.Visual ? IconVisual : IconSource));
         Map(_imagePreviewBorder, "Image preview",
-            () => { Canvas?.CycleImagePreview(); Canvas?.Focus(); UpdateImagePreviewButton(); });
+            () => { Canvas?.CycleImagePreview(); Canvas?.Focus(); UpdateImagePreviewButton(); },
+            icon: () => MakePathIcon(Canvas?.CurrentImagePreview switch
+            {
+                DocsCanvas.ImagePreviewMode.Inline => IconInline,
+                DocsCanvas.ImagePreviewMode.OnHover => IconOnHover,
+                _ => IconOff,
+            }));
         Map(_themeButton, "Theme",
-            () => { Canvas?.ToggleTheme(); Canvas?.Focus(); UpdateThemeButton(); });
+            () => { Canvas?.ToggleTheme(); Canvas?.Focus(); UpdateThemeButton(); },
+            icon: () =>
+            {
+                var theme = Canvas?.Theme ?? DocsCanvas.EditorTheme.Light;
+                if (theme == DocsCanvas.EditorTheme.DarkBlue)
+                    return new Path { Width = 14, Height = 14, Stretch = Stretch.Uniform, Data = IconCrescent, Fill = CrescentBrush };
+                return MakePathIcon(theme == DocsCanvas.EditorTheme.Dark ? IconMoon : IconSun);
+            });
         Map(_minimapButton, "Minimap",
             () => { Canvas?.ToggleMinimap(); Canvas?.Focus(); UpdateMinimapButton(); },
-            () => Canvas?.IsMinimapVisible ?? false);
+            () => Canvas?.IsMinimapVisible ?? false,
+            () => MakePathIcon(IconMinimap));
     }
 
-    private sealed record OverflowEntry(string Label, Action Handler, Func<bool>? IsChecked = null);
+    private static Path MakePathIcon(Geometry data, bool stroke = false)
+    {
+        var path = new Path { Width = 14, Height = 14, Stretch = Stretch.Uniform, Data = data };
+        var binding = new Binding("Foreground")
+        {
+            RelativeSource = new RelativeSource(RelativeSourceMode.FindAncestor, typeof(MenuItem), 1),
+        };
+        if (stroke)
+        {
+            path.SetBinding(Shape.StrokeProperty, binding);
+            path.StrokeThickness = 1.5;
+            path.StrokeStartLineCap = PenLineCap.Round;
+            path.StrokeEndLineCap = PenLineCap.Round;
+            path.StrokeLineJoin = PenLineJoin.Round;
+        }
+        else
+        {
+            path.SetBinding(Shape.FillProperty, binding);
+        }
+        return path;
+    }
+
+    private sealed record OverflowEntry(string Label, Action Handler, Func<bool>? IsChecked = null, Func<object>? Icon = null);
 }
