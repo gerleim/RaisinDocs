@@ -250,7 +250,7 @@ This is a signature change — callers that don't care about leading spaces use 
 **Files**: `MarkdownParser.cs`
 **Tests**: `"\t# heading"` → Paragraph (tab = 4 spaces, indented code); `"\ttext"` → indented code candidate (4 spaces); tab after `- ` counts correctly for continuation; mixed tabs and spaces expand correctly
 
-### Phase 8: Source mode — indentation hints (optional)
+### Phase 8: Source mode — indentation hints (optional) — discarded
 
 **Goal**: Subtle visual indicator in source mode showing which lines are continuations.
 
@@ -268,7 +268,7 @@ Phase 4 (Visual indent)     — rendering, depends on 2+3              ✅
 Phase 5 (Spacing)           — rendering, depends on 4                ✅
 Phase 6 (Prefix tolerance)  — parser, independent of 2–5
 Phase 7 (Tab expansion)     — parser, independent of 2–5, pairs with phase 6  ✅
-Phase 8 (Source hints)       — optional polish
+Phase 8 (Source hints)       — optional polish                        — discarded
 ```
 
 Phases 1–3 are pure parser work with no rendering changes — fully testable in isolation.

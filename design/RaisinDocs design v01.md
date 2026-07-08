@@ -216,7 +216,7 @@ A trailing `\` is a hard break only when:
 - Undo: entire multi-line indent/outdent is one undo unit
 - Useful across block types: indenting code inside fenced blocks, nesting list items, adjusting text alignment, preparing indented code blocks (iteration 16)
 
-### 19 — Indentation awareness
+### 19 — Indentation awareness ✅
 - See `design/Indentation Awareness - Iteration 19.md` for detailed plan
 - CommonMark indentation is load-bearing: it determines list continuation, code blocks, nesting, and block recognition
 - **Content column**: each list item / blockquote has a content column (marker width + spaces). Continuation lines indented to this column remain part of the same item.
