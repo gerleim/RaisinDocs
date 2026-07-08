@@ -166,6 +166,9 @@ public class DocsFormattingBar : Control
     private Button? _hardBreaksButton;
     private Border? _colorBar;
     private string _lastColorName = "red";
+    private OverflowPanel? _overflowPanel;
+    private Button? _moreButton;
+    private Dictionary<UIElement, OverflowEntry>? _overflowMap;
 
     public override void OnApplyTemplate()
     {
@@ -301,6 +304,13 @@ public class DocsFormattingBar : Control
         }
         UpdateMinimapButton();
         UpdateButtonStates();
+
+        _overflowPanel = GetTemplateChild("PART_OverflowPanel") as OverflowPanel;
+        _moreButton = GetTemplateChild("PART_Overflow") as Button;
+        if (_moreButton != null)
+            _moreButton.Click += (_, _) => ShowOverflowMenu();
+
+        BuildOverflowMap();
     }
 
     private ToggleButton? WireToggle(string partName, Action action)
@@ -506,9 +516,11 @@ public class DocsFormattingBar : Control
         ("forestgreen", Color.FromRgb(34, 139, 34)),
     ];
 
-    private void ShowColorMenu()
+    private void ShowColorMenu(FrameworkElement? target = null)
     {
-        if (Canvas == null || _colorTextButton == null) return;
+        if (Canvas == null) return;
+        target ??= _colorTextButton;
+        if (target == null) return;
 
         var menu = new ContextMenu();
 
@@ -540,8 +552,118 @@ public class DocsFormattingBar : Control
             menu.Items.Add(item);
         }
 
-        menu.PlacementTarget = _colorTextButton;
+        menu.PlacementTarget = target;
         menu.Placement = PlacementMode.Bottom;
         menu.IsOpen = true;
     }
+
+    private void ShowOverflowMenu()
+    {
+        if (_overflowPanel == null || !_overflowPanel.HasOverflow || _overflowMap == null) return;
+
+        var menu = new ContextMenu();
+
+        foreach (UIElement child in _overflowPanel.Children)
+        {
+            if (!_overflowPanel.IsOverflowed(child) || OverflowPanel.GetIsOverflowButton(child))
+                continue;
+
+            if (child.DesiredSize.Width < 15)
+            {
+                if (menu.Items.Count > 0 && menu.Items[menu.Items.Count - 1] is not Separator)
+                    menu.Items.Add(new Separator());
+                continue;
+            }
+
+            if (!_overflowMap.TryGetValue(child, out var entry)) continue;
+
+            string label = (child as FrameworkElement)?.ToolTip as string ?? entry.Label;
+            var item = new MenuItem
+            {
+                Header = label,
+                IsChecked = entry.IsChecked?.Invoke() ?? false,
+                IsEnabled = child.IsEnabled,
+            };
+            item.Click += (_, _) => entry.Handler();
+            menu.Items.Add(item);
+        }
+
+        while (menu.Items.Count > 0 && menu.Items[menu.Items.Count - 1] is Separator)
+            menu.Items.RemoveAt(menu.Items.Count - 1);
+
+        if (menu.Items.Count == 0) return;
+
+        menu.PlacementTarget = _moreButton;
+        menu.Placement = PlacementMode.Bottom;
+        menu.IsOpen = true;
+    }
+
+    private void BuildOverflowMap()
+    {
+        _overflowMap = new();
+
+        void Map(UIElement? el, string label, Action handler, Func<bool>? isChecked = null)
+        {
+            if (el != null) _overflowMap[el] = new OverflowEntry(label, handler, isChecked);
+        }
+
+        Map(_boldButton, "Bold (Ctrl+B)",
+            () => { Canvas?.ToggleBold(); Canvas?.Focus(); UpdateButtonStates(); },
+            () => Canvas?.SelectionIsBold ?? false);
+        Map(_italicButton, "Italic (Ctrl+I)",
+            () => { Canvas?.ToggleItalic(); Canvas?.Focus(); UpdateButtonStates(); },
+            () => Canvas?.SelectionIsItalic ?? false);
+        Map(_strikethroughButton, "Strikethrough",
+            () => { Canvas?.ToggleStrikethrough(); Canvas?.Focus(); UpdateButtonStates(); },
+            () => Canvas?.SelectionIsStrikethrough ?? false);
+        Map(_codeButton, "Code",
+            () => { Canvas?.ToggleCodeSpan(); Canvas?.Focus(); UpdateButtonStates(); },
+            () => Canvas?.SelectionIsCode ?? false);
+        Map(_codeBlockButton, "Code block",
+            () => { Canvas?.ToggleFencedCode(); Canvas?.Focus(); UpdateButtonStates(); },
+            () => Canvas?.CurrentBlockKind == BlockKind.FencedCodeLine);
+        Map(_h1Button, "Heading 1",
+            () => { Canvas?.ToggleHeading(1); Canvas?.Focus(); UpdateButtonStates(); },
+            () => Canvas?.CurrentBlockKind == BlockKind.Heading1);
+        Map(_h2Button, "Heading 2",
+            () => { Canvas?.ToggleHeading(2); Canvas?.Focus(); UpdateButtonStates(); },
+            () => Canvas?.CurrentBlockKind == BlockKind.Heading2);
+        Map(_h3Button, "Heading 3",
+            () => { Canvas?.ToggleHeading(3); Canvas?.Focus(); UpdateButtonStates(); },
+            () => Canvas?.CurrentBlockKind == BlockKind.Heading3);
+        Map(_bulletButton, "Bullet list",
+            () => { Canvas?.ToggleBulletList(); Canvas?.Focus(); UpdateButtonStates(); },
+            () => Canvas?.CurrentBlockKind == BlockKind.UnorderedListItem);
+        Map(_orderedListButton, "Ordered list",
+            () => { Canvas?.ToggleOrderedList(); Canvas?.Focus(); UpdateButtonStates(); },
+            () => Canvas?.CurrentBlockKind == BlockKind.OrderedListItem);
+        Map(_taskListButton, "Task list",
+            () => { Canvas?.ToggleTaskList(); Canvas?.Focus(); UpdateButtonStates(); },
+            () => Canvas?.CurrentBlockKind is BlockKind.TaskListItemUnchecked or BlockKind.TaskListItemChecked);
+        Map(_quoteButton, "Blockquote",
+            () => { Canvas?.ToggleBlockquote(); Canvas?.Focus(); UpdateButtonStates(); },
+            () => Canvas?.CurrentBlockKind == BlockKind.Blockquote);
+        Map(_linkButton, "Link (Ctrl+K)",
+            () => { Canvas?.InsertLink(); Canvas?.Focus(); });
+        Map(_insertTableButton, "Insert table",
+            () => { Canvas?.InsertTable(3, 2); Canvas?.Focus(); });
+        Map(_colorTextButton, "Text color",
+            () => ShowColorMenu(_moreButton));
+        Map(_reflowButton, "Reformat selection",
+            () => { Canvas?.Reflow(); Canvas?.Focus(); });
+        Map(_hardBreaksButton, "Convert to hard breaks",
+            () => { Canvas?.ConvertToHardBreaks(); Canvas?.Focus(); });
+        Map(_editModeButton, "Edit mode (Ctrl+M)",
+            () => { Canvas?.ToggleEditMode(); Canvas?.Focus(); UpdateEditModeButton(); },
+            () => Canvas?.CurrentEditMode == DocsCanvas.EditMode.Visual);
+        Map(_imagePreviewBorder, "Image preview",
+            () => { Canvas?.CycleImagePreview(); Canvas?.Focus(); UpdateImagePreviewButton(); });
+        Map(_themeButton, "Theme",
+            () => { Canvas?.ToggleTheme(); Canvas?.Focus(); UpdateThemeButton(); });
+        Map(_minimapButton, "Minimap",
+            () => { Canvas?.ToggleMinimap(); Canvas?.Focus(); UpdateMinimapButton(); },
+            () => Canvas?.IsMinimapVisible ?? false);
+    }
+
+    private sealed record OverflowEntry(string Label, Action Handler, Func<bool>? IsChecked = null);
 }
