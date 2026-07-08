@@ -130,9 +130,12 @@ public class BlockVisualMap
 
             if (parsed.IsIndentedContinuation && owner.ContentColumn > 0)
             {
-                int leadingSpaces = MarkdownParser.CountLeadingSpaces(blockText);
-                if (leadingSpaces >= owner.ContentColumn)
-                    ranges.Add(new HiddenRange(0, owner.ContentColumn));
+                var (_, cols) = MarkdownParser.MeasureLeadingWhitespace(blockText);
+                if (cols >= owner.ContentColumn)
+                {
+                    int hideChars = MarkdownParser.CharsForColumns(blockText, owner.ContentColumn);
+                    ranges.Add(new HiddenRange(0, hideChars));
+                }
             }
 
             replacementPrefix = GetOwnerVisualPrefix(owner.Kind, ownerText, owner.LeadingSpaces);

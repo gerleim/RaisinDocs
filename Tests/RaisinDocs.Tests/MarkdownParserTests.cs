@@ -574,6 +574,110 @@ public class MarkdownParserTests
         blocks[0].LeadingSpaces.Should().Be(2);
     }
 
+    // --- Tab structural expansion ---
+
+    [Theory]
+    [InlineData("\t# heading", BlockKind.Paragraph)]
+    [InlineData(" \t# heading", BlockKind.Paragraph)]
+    [InlineData("\ttext", BlockKind.Paragraph)]
+    public void TabExpansion_TabIsIndentedCode(string text, BlockKind expected)
+    {
+        MarkdownParser.ClassifyBlock(text).Should().Be(expected);
+    }
+
+    [Fact]
+    public void TabExpansion_LeadingSpaces_CharCount()
+    {
+        MarkdownParser.ClassifyBlock("\t# heading", out int ls);
+        ls.Should().Be(0);
+    }
+
+    [Fact]
+    public void TabExpansion_FencedCode_TabRejects()
+    {
+        MarkdownParser.GetFenceBacktickCount("\t```").Should().Be(0);
+    }
+
+    [Fact]
+    public void TabExpansion_FencedCode_SpaceTabRejects()
+    {
+        MarkdownParser.GetFenceBacktickCount(" \t```").Should().Be(0);
+    }
+
+    [Fact]
+    public void TabExpansion_MeasureLeadingWhitespace_Tab()
+    {
+        var (chars, cols) = MarkdownParser.MeasureLeadingWhitespace("\ttext");
+        chars.Should().Be(1);
+        cols.Should().Be(4);
+    }
+
+    [Fact]
+    public void TabExpansion_MeasureLeadingWhitespace_SpaceTab()
+    {
+        var (chars, cols) = MarkdownParser.MeasureLeadingWhitespace(" \ttext");
+        chars.Should().Be(2);
+        cols.Should().Be(4);
+    }
+
+    [Fact]
+    public void TabExpansion_MeasureLeadingWhitespace_TwoSpacesTab()
+    {
+        var (chars, cols) = MarkdownParser.MeasureLeadingWhitespace("  \ttext");
+        chars.Should().Be(3);
+        cols.Should().Be(4);
+    }
+
+    [Fact]
+    public void TabExpansion_MeasureLeadingWhitespace_ThreeSpacesTab()
+    {
+        var (chars, cols) = MarkdownParser.MeasureLeadingWhitespace("   \ttext");
+        chars.Should().Be(4);
+        cols.Should().Be(4);
+    }
+
+    [Fact]
+    public void TabExpansion_MeasureLeadingWhitespace_TwoTabs()
+    {
+        var (chars, cols) = MarkdownParser.MeasureLeadingWhitespace("\t\ttext");
+        chars.Should().Be(2);
+        cols.Should().Be(8);
+    }
+
+    [Fact]
+    public void TabExpansion_CharsForColumns_TabSatisfies()
+    {
+        MarkdownParser.CharsForColumns("\ttext", 2).Should().Be(1);
+    }
+
+    [Fact]
+    public void TabExpansion_CharsForColumns_SpacesOnly()
+    {
+        MarkdownParser.CharsForColumns("   text", 2).Should().Be(2);
+    }
+
+    [Fact]
+    public void TabExpansion_CharsForColumns_Mixed()
+    {
+        MarkdownParser.CharsForColumns(" \ttext", 3).Should().Be(2);
+    }
+
+    [Fact]
+    public void TabExpansion_IndentedContinuation_TabSatisfies()
+    {
+        var blocks = ParseBlocks("- item", "", "\tcontinuation");
+        blocks[2].IsIndentedContinuation.Should().BeTrue();
+        blocks[2].OwnerBlock.Should().Be(0);
+    }
+
+    [Fact]
+    public void TabExpansion_IndentedContinuation_OrderedList_TabSatisfies()
+    {
+        var blocks = ParseBlocks("1. item", "", "\tcontinuation");
+        blocks[2].IsIndentedContinuation.Should().BeTrue();
+        blocks[2].OwnerBlock.Should().Be(0);
+    }
+
     // --- Task list items ---
 
     [Fact]

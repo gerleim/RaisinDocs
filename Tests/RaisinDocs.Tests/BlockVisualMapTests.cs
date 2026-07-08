@@ -948,6 +948,24 @@ public class BlockVisualMapTests
         map.BuildDisplayString(text, 0, text.Length).Should().Be("Heading");
     }
 
+    // --- Tab structural expansion visual map ---
+
+    [Fact]
+    public void TabExpansion_IndentedContinuation_TabHidden()
+    {
+        var map = ComputeMapMultiBlock(["- item", "", "\tcontinuation"], 2);
+        map.IsHidden(0).Should().BeTrue();
+        map.IsHidden(1).Should().BeFalse();
+    }
+
+    [Fact]
+    public void TabExpansion_IndentedContinuation_DisplayString()
+    {
+        var text = "\tcontinuation";
+        var map = ComputeMapMultiBlock(["- item", "", text], 2);
+        map.BuildDisplayString(text, 0, text.Length).Should().Be("continuation");
+    }
+
     // --- Inline color tags ---
 
     [Fact]

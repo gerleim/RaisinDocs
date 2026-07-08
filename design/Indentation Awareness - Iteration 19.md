@@ -237,7 +237,7 @@ This is a signature change — callers that don't care about leading spaces use 
 **Files**: `MarkdownParser.cs`
 **Tests**: `"   # heading"` → Heading1; `"    # heading"` → Paragraph; `"  - item"` → UnorderedListItem; `"   > quote"` → Blockquote
 
-### Phase 7: Tab character structural expansion
+### Phase 7: Tab character structural expansion ✅
 
 **Goal**: Correctly interpret tab characters as structural indentation per CommonMark §2.2.
 
@@ -267,7 +267,7 @@ Phase 3 (Indented cont.)    — extends phase 2, unit-testable          ✅
 Phase 4 (Visual indent)     — rendering, depends on 2+3              ✅
 Phase 5 (Spacing)           — rendering, depends on 4                ✅
 Phase 6 (Prefix tolerance)  — parser, independent of 2–5
-Phase 7 (Tab expansion)     — parser, independent of 2–5, pairs with phase 6
+Phase 7 (Tab expansion)     — parser, independent of 2–5, pairs with phase 6  ✅
 Phase 8 (Source hints)       — optional polish
 ```
 
