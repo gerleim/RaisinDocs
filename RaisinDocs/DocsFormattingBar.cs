@@ -336,6 +336,7 @@ public class DocsFormattingBar : Control
         bar.UpdateButtonStates();
         bar.UpdateThemeButton();
         bar.UpdateEditModeButton();
+        bar.UpdateImagePreviewButton();
     }
 
     private void OnFormattingChanged(object? sender, EventArgs e) => UpdateButtonStates();
