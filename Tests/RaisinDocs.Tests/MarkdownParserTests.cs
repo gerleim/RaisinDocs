@@ -439,6 +439,141 @@ public class MarkdownParserTests
         blocks[1].OwnerBlock.Should().Be(-1);
     }
 
+    // --- 0–3 space prefix tolerance ---
+
+    [Theory]
+    [InlineData("# heading", BlockKind.Heading1)]
+    [InlineData(" # heading", BlockKind.Heading1)]
+    [InlineData("  # heading", BlockKind.Heading1)]
+    [InlineData("   # heading", BlockKind.Heading1)]
+    [InlineData("    # heading", BlockKind.Paragraph)]
+    public void PrefixTolerance_Headings(string text, BlockKind expected)
+    {
+        MarkdownParser.ClassifyBlock(text).Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData("## h2", BlockKind.Heading2)]
+    [InlineData("   ## h2", BlockKind.Heading2)]
+    [InlineData("### h3", BlockKind.Heading3)]
+    [InlineData("   ### h3", BlockKind.Heading3)]
+    [InlineData("#### h4", BlockKind.Heading4)]
+    [InlineData("   #### h4", BlockKind.Heading4)]
+    [InlineData("##### h5", BlockKind.Heading5)]
+    [InlineData("   ##### h5", BlockKind.Heading5)]
+    [InlineData("###### h6", BlockKind.Heading6)]
+    [InlineData("   ###### h6", BlockKind.Heading6)]
+    public void PrefixTolerance_AllHeadingLevels(string text, BlockKind expected)
+    {
+        MarkdownParser.ClassifyBlock(text).Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData("- item", BlockKind.UnorderedListItem)]
+    [InlineData(" - item", BlockKind.UnorderedListItem)]
+    [InlineData("  - item", BlockKind.UnorderedListItem)]
+    [InlineData("   - item", BlockKind.UnorderedListItem)]
+    [InlineData("    - item", BlockKind.Paragraph)]
+    [InlineData("  * item", BlockKind.UnorderedListItem)]
+    public void PrefixTolerance_UnorderedList(string text, BlockKind expected)
+    {
+        MarkdownParser.ClassifyBlock(text).Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData("1. item", BlockKind.OrderedListItem)]
+    [InlineData(" 1. item", BlockKind.OrderedListItem)]
+    [InlineData("  1. item", BlockKind.OrderedListItem)]
+    [InlineData("   1. item", BlockKind.OrderedListItem)]
+    [InlineData("    1. item", BlockKind.Paragraph)]
+    [InlineData("  10. item", BlockKind.OrderedListItem)]
+    public void PrefixTolerance_OrderedList(string text, BlockKind expected)
+    {
+        MarkdownParser.ClassifyBlock(text).Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData("> quote", BlockKind.Blockquote)]
+    [InlineData(" > quote", BlockKind.Blockquote)]
+    [InlineData("  > quote", BlockKind.Blockquote)]
+    [InlineData("   > quote", BlockKind.Blockquote)]
+    [InlineData("    > quote", BlockKind.Paragraph)]
+    public void PrefixTolerance_Blockquote(string text, BlockKind expected)
+    {
+        MarkdownParser.ClassifyBlock(text).Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData("- [ ] task", BlockKind.TaskListItemUnchecked)]
+    [InlineData("  - [ ] task", BlockKind.TaskListItemUnchecked)]
+    [InlineData("   - [x] task", BlockKind.TaskListItemChecked)]
+    [InlineData("    - [ ] task", BlockKind.Paragraph)]
+    public void PrefixTolerance_TaskList(string text, BlockKind expected)
+    {
+        MarkdownParser.ClassifyBlock(text).Should().Be(expected);
+    }
+
+    [Fact]
+    public void PrefixTolerance_LeadingSpaces_Stored()
+    {
+        MarkdownParser.ClassifyBlock("   # heading", out int ls);
+        ls.Should().Be(3);
+    }
+
+    [Fact]
+    public void PrefixTolerance_LeadingSpaces_ZeroForParagraph()
+    {
+        MarkdownParser.ClassifyBlock("    # heading", out int ls);
+        ls.Should().Be(0);
+    }
+
+    [Fact]
+    public void PrefixTolerance_LeadingSpaces_ZeroForPlainParagraph()
+    {
+        MarkdownParser.ClassifyBlock("   plain text", out int ls);
+        ls.Should().Be(0);
+    }
+
+    [Fact]
+    public void PrefixTolerance_ContentColumn_IncludesLeadingSpaces()
+    {
+        var blocks = ParseBlocks("  - item");
+        blocks[0].ContentColumn.Should().Be(4);
+    }
+
+    [Fact]
+    public void PrefixTolerance_ContentColumn_OrderedListWithLeadingSpaces()
+    {
+        var blocks = ParseBlocks("  1. item");
+        blocks[0].ContentColumn.Should().Be(5);
+    }
+
+    [Fact]
+    public void PrefixTolerance_ContentColumn_BlockquoteWithLeadingSpaces()
+    {
+        var blocks = ParseBlocks("   > quote");
+        blocks[0].ContentColumn.Should().Be(5);
+    }
+
+    [Fact]
+    public void PrefixTolerance_FencedCode_ThreeSpaces()
+    {
+        MarkdownParser.GetFenceBacktickCount("   ```").Should().BeGreaterThan(0);
+    }
+
+    [Fact]
+    public void PrefixTolerance_FencedCode_FourSpaces()
+    {
+        MarkdownParser.GetFenceBacktickCount("    ```").Should().Be(0);
+    }
+
+    [Fact]
+    public void PrefixTolerance_ParsedBlock_LeadingSpaces()
+    {
+        var blocks = ParseBlocks("  - item");
+        blocks[0].LeadingSpaces.Should().Be(2);
+    }
+
     // --- Task list items ---
 
     [Fact]

@@ -5,12 +5,13 @@ namespace RaisinDocs.Tests;
 
 public class BlockVisualMapTests
 {
-    private static BlockVisualMap ComputeMap(string text, BlockKind? kindOverride = null)
+    private static BlockVisualMap ComputeMap(string text, BlockKind? kindOverride = null, int? leadingSpaces = null)
     {
         var blocks = MarkdownParser.Parse(_ => text, 1);
         var parsed = blocks[0];
         if (kindOverride.HasValue)
-            parsed = new ParsedBlock { Kind = kindOverride.Value, Runs = parsed.Runs };
+            parsed = new ParsedBlock { Kind = kindOverride.Value, Runs = parsed.Runs,
+                LeadingSpaces = leadingSpaces ?? parsed.LeadingSpaces };
         return BlockVisualMap.Compute(parsed, text);
     }
 
@@ -889,6 +890,62 @@ public class BlockVisualMapTests
         int prefixLen = map.ReplacementPrefix!.Length;
         map.RawToVisual(2).Should().Be(prefixLen);
         map.RawToVisual(3).Should().Be(prefixLen + 1);
+    }
+
+    // --- Prefix tolerance visual map ---
+
+    [Fact]
+    public void PrefixTolerance_Heading_HidesLeadingSpaces()
+    {
+        var map = ComputeMap("  # Heading");
+        map.IsHidden(0).Should().BeTrue();
+        map.IsHidden(1).Should().BeTrue();
+        map.IsHidden(2).Should().BeTrue();
+        map.IsHidden(3).Should().BeTrue();
+        map.IsHidden(4).Should().BeFalse();
+    }
+
+    [Fact]
+    public void PrefixTolerance_UnorderedList_HidesLeadingSpaces()
+    {
+        var map = ComputeMap("  - item");
+        map.ReplacementPrefix.Should().Be("  • ");
+        map.IsHidden(0).Should().BeTrue();
+        map.IsHidden(1).Should().BeTrue();
+        map.IsHidden(2).Should().BeTrue();
+        map.IsHidden(3).Should().BeTrue();
+        map.IsHidden(4).Should().BeFalse();
+    }
+
+    [Fact]
+    public void PrefixTolerance_OrderedList_HidesLeadingSpaces()
+    {
+        var map = ComputeMap("  1. item");
+        map.ReplacementPrefix.Should().Be("  1. ");
+        map.IsHidden(0).Should().BeTrue();
+        map.IsHidden(1).Should().BeTrue();
+        map.IsHidden(2).Should().BeTrue();
+        map.IsHidden(3).Should().BeTrue();
+        map.IsHidden(4).Should().BeTrue();
+        map.IsHidden(5).Should().BeFalse();
+    }
+
+    [Fact]
+    public void PrefixTolerance_TaskList_HidesLeadingSpaces()
+    {
+        var map = ComputeMap("  - [ ] task");
+        map.ReplacementPrefix.Should().Be("  ☐ ");
+        map.IsHidden(0).Should().BeTrue();
+        map.IsHidden(7).Should().BeTrue();
+        map.IsHidden(8).Should().BeFalse();
+    }
+
+    [Fact]
+    public void PrefixTolerance_DisplayString_StripsLeadingSpaces()
+    {
+        var text = "  # Heading";
+        var map = ComputeMap(text);
+        map.BuildDisplayString(text, 0, text.Length).Should().Be("Heading");
     }
 
     // --- Inline color tags ---

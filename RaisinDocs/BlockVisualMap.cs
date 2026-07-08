@@ -95,21 +95,22 @@ public class BlockVisualMap
         return rawOffset;
     }
 
-    internal static string? GetOwnerVisualPrefix(BlockKind kind, string blockText) => kind switch
+    internal static string? GetOwnerVisualPrefix(BlockKind kind, string blockText, int leadingSpaces = 0) => kind switch
     {
         BlockKind.UnorderedListItem => "  • ",
         BlockKind.TaskListItemUnchecked => "  ☐ ",
         BlockKind.TaskListItemChecked => "  ☑ ",
-        BlockKind.OrderedListItem => GetOrderedListVisualPrefix(blockText),
+        BlockKind.OrderedListItem => GetOrderedListVisualPrefix(blockText, leadingSpaces),
         _ => null,
     };
 
-    private static string? GetOrderedListVisualPrefix(string blockText)
+    private static string? GetOrderedListVisualPrefix(string blockText, int leadingSpaces = 0)
     {
-        int prefixLen = MarkdownParser.GetOrderedListPrefixLength(blockText);
+        var text = leadingSpaces > 0 ? blockText[leadingSpaces..] : blockText;
+        int prefixLen = MarkdownParser.GetOrderedListPrefixLength(text);
         if (prefixLen <= 0) return null;
-        string number = blockText.Substring(0, prefixLen - 2);
-        char delim = blockText[prefixLen - 2];
+        string number = text.Substring(0, prefixLen - 2);
+        char delim = text[prefixLen - 2];
         return "  " + number + delim + " ";
     }
 
@@ -134,42 +135,48 @@ public class BlockVisualMap
                     ranges.Add(new HiddenRange(0, owner.ContentColumn));
             }
 
-            replacementPrefix = GetOwnerVisualPrefix(owner.Kind, ownerText);
+            replacementPrefix = GetOwnerVisualPrefix(owner.Kind, ownerText, owner.LeadingSpaces);
             isContinuation = replacementPrefix != null;
             if (isContinuation)
                 prefixMeasureKind = owner.Kind;
         }
         else if (parsed.Kind >= BlockKind.Heading1 && parsed.Kind <= BlockKind.Heading6)
         {
+            int ls = parsed.LeadingSpaces;
             int hashCount = parsed.Kind - BlockKind.Heading1 + 1;
             int prefixLen = hashCount + 1;
-            if (blockText.Length >= prefixLen)
-                ranges.Add(new HiddenRange(0, prefixLen));
+            if (blockText.Length >= ls + prefixLen)
+                ranges.Add(new HiddenRange(0, ls + prefixLen));
         }
         else if (parsed.Kind is BlockKind.TaskListItemUnchecked or BlockKind.TaskListItemChecked)
         {
-            if (blockText.Length >= 6)
+            int ls = parsed.LeadingSpaces;
+            if (blockText.Length >= ls + 6)
             {
-                ranges.Add(new HiddenRange(0, 6));
+                ranges.Add(new HiddenRange(0, ls + 6));
                 replacementPrefix = parsed.Kind == BlockKind.TaskListItemChecked ? "  ☑ " : "  ☐ ";
             }
         }
         else if (parsed.Kind == BlockKind.UnorderedListItem)
         {
-            if (blockText.StartsWith("- ") || blockText.StartsWith("* "))
+            int ls = parsed.LeadingSpaces;
+            var stripped = ls > 0 ? blockText[ls..] : blockText;
+            if (stripped.StartsWith("- ") || stripped.StartsWith("* "))
             {
-                ranges.Add(new HiddenRange(0, 2));
+                ranges.Add(new HiddenRange(0, ls + 2));
                 replacementPrefix = "  • ";
             }
         }
         else if (parsed.Kind == BlockKind.OrderedListItem)
         {
-            int prefixLen = MarkdownParser.GetOrderedListPrefixLength(blockText);
+            int ls = parsed.LeadingSpaces;
+            var stripped = ls > 0 ? blockText[ls..] : blockText;
+            int prefixLen = MarkdownParser.GetOrderedListPrefixLength(stripped);
             if (prefixLen > 0)
             {
-                ranges.Add(new HiddenRange(0, prefixLen));
-                string number = blockText.Substring(0, prefixLen - 2);
-                char delim = blockText[prefixLen - 2];
+                ranges.Add(new HiddenRange(0, ls + prefixLen));
+                string number = stripped.Substring(0, prefixLen - 2);
+                char delim = stripped[prefixLen - 2];
                 replacementPrefix = "  " + number + delim + " ";
             }
         }

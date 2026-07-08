@@ -96,6 +96,7 @@ public record class ParsedBlock
     public bool HasDivClose { get; init; }
     public TableRowInfo? TableRow { get; init; }
     public TableInfo? Table { get; init; }
+    public int LeadingSpaces { get; init; }
     public int ContentColumn { get; init; }
     public bool IsLazyContinuation { get; init; }
     public bool IsIndentedContinuation { get; init; }
@@ -222,7 +223,7 @@ public static class MarkdownParser
                 continue;
             }
 
-            var kind = ClassifyBlock(text);
+            var kind = ClassifyBlock(text, out int leadingSpaces);
             List<InlineImage>? images = null;
             List<InlineLink>? links = null;
             List<EmphasisMarker>? emphasisMarkers = null;
@@ -237,7 +238,8 @@ public static class MarkdownParser
                 Kind = kind, Runs = runs, Images = images, Links = links,
                 EmphasisMarkers = emphasisMarkers, ColorSpans = colorSpans,
                 DivOpenColor = divOpenColor, HasDivClose = blockHasDivClose,
-                ContentColumn = GetContentColumn(kind, text),
+                LeadingSpaces = leadingSpaces,
+                ContentColumn = GetContentColumn(kind, text, leadingSpaces),
             });
         }
 
@@ -634,7 +636,9 @@ public static class MarkdownParser
 
     public static int GetFenceBacktickCount(string text)
     {
-        var trimmed = text.TrimStart();
+        int ls = CountLeadingSpaces(text);
+        if (ls >= 4) return 0;
+        var trimmed = ls > 0 ? text[ls..] : text;
         if (!trimmed.StartsWith("```")) return 0;
         int count = 0;
         while (count < trimmed.Length && trimmed[count] == '`') count++;
@@ -642,8 +646,15 @@ public static class MarkdownParser
         return infoString.Contains('`') ? 0 : count;
     }
 
-    internal static BlockKind ClassifyBlock(string text)
+    internal static BlockKind ClassifyBlock(string text) => ClassifyBlock(text, out _);
+
+    internal static BlockKind ClassifyBlock(string text, out int leadingSpaces)
     {
+        int ls = CountLeadingSpaces(text);
+        if (ls >= 4) { leadingSpaces = 0; return BlockKind.Paragraph; }
+        leadingSpaces = ls;
+        if (ls > 0) text = text[ls..];
+
         if (text.StartsWith("######") && text.Length > 6 && text[6] == ' ')
             return BlockKind.Heading6;
         if (text.StartsWith("#####") && text.Length > 5 && text[5] == ' ')
@@ -673,15 +684,16 @@ public static class MarkdownParser
         if (text.StartsWith("> ") || text == ">")
             return BlockKind.Blockquote;
 
+        leadingSpaces = 0;
         return BlockKind.Paragraph;
     }
 
-    internal static int GetContentColumn(BlockKind kind, string text) => kind switch
+    internal static int GetContentColumn(BlockKind kind, string text, int leadingSpaces = 0) => kind switch
     {
-        BlockKind.UnorderedListItem => 2,
-        BlockKind.TaskListItemUnchecked or BlockKind.TaskListItemChecked => 6,
-        BlockKind.OrderedListItem => GetOrderedListPrefixLength(text),
-        BlockKind.Blockquote => 2,
+        BlockKind.UnorderedListItem => leadingSpaces + 2,
+        BlockKind.TaskListItemUnchecked or BlockKind.TaskListItemChecked => leadingSpaces + 6,
+        BlockKind.OrderedListItem => leadingSpaces + GetOrderedListPrefixLength(leadingSpaces > 0 ? text[leadingSpaces..] : text),
+        BlockKind.Blockquote => leadingSpaces + 2,
         _ => 0,
     };
 
