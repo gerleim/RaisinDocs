@@ -8,16 +8,21 @@ public class BlockVisualMap
 {
     public IReadOnlyList<HiddenRange> HiddenRanges { get; }
     public string? ReplacementPrefix { get; }
+    public bool IsContinuationIndent { get; }
+    public BlockKind PrefixMeasureKind { get; }
     public IReadOnlyList<InlineImage>? Images { get; }
     public IReadOnlyList<InlineLink>? Links { get; }
     public IReadOnlyList<ColorSpan>? ColorSpans { get; }
 
     public BlockVisualMap(IReadOnlyList<HiddenRange> hiddenRanges, string? replacementPrefix = null,
+        bool isContinuationIndent = false, BlockKind prefixMeasureKind = BlockKind.Paragraph,
         IReadOnlyList<InlineImage>? images = null, IReadOnlyList<InlineLink>? links = null,
         IReadOnlyList<ColorSpan>? colorSpans = null)
     {
         HiddenRanges = hiddenRanges;
         ReplacementPrefix = replacementPrefix;
+        IsContinuationIndent = isContinuationIndent;
+        PrefixMeasureKind = prefixMeasureKind;
         Images = images;
         Links = links;
         ColorSpans = colorSpans;
@@ -90,12 +95,51 @@ public class BlockVisualMap
         return rawOffset;
     }
 
-    public static BlockVisualMap Compute(ParsedBlock parsed, string blockText)
+    internal static string? GetOwnerVisualPrefix(BlockKind kind, string blockText) => kind switch
+    {
+        BlockKind.UnorderedListItem => "  • ",
+        BlockKind.TaskListItemUnchecked => "  ☐ ",
+        BlockKind.TaskListItemChecked => "  ☑ ",
+        BlockKind.OrderedListItem => GetOrderedListVisualPrefix(blockText),
+        _ => null,
+    };
+
+    private static string? GetOrderedListVisualPrefix(string blockText)
+    {
+        int prefixLen = MarkdownParser.GetOrderedListPrefixLength(blockText);
+        if (prefixLen <= 0) return null;
+        string number = blockText.Substring(0, prefixLen - 2);
+        char delim = blockText[prefixLen - 2];
+        return "  " + number + delim + " ";
+    }
+
+    public static BlockVisualMap Compute(ParsedBlock parsed, string blockText,
+        IReadOnlyList<ParsedBlock>? allBlocks = null, Func<int, string>? getBlockText = null)
     {
         var ranges = new List<HiddenRange>();
         string? replacementPrefix = null;
 
-        if (parsed.Kind >= BlockKind.Heading1 && parsed.Kind <= BlockKind.Heading6)
+        bool isContinuation = false;
+        BlockKind prefixMeasureKind = parsed.Kind;
+        if ((parsed.IsLazyContinuation || parsed.IsIndentedContinuation)
+            && parsed.OwnerBlock >= 0 && allBlocks != null && getBlockText != null)
+        {
+            var owner = allBlocks[parsed.OwnerBlock];
+            string ownerText = getBlockText(parsed.OwnerBlock);
+
+            if (parsed.IsIndentedContinuation && owner.ContentColumn > 0)
+            {
+                int leadingSpaces = MarkdownParser.CountLeadingSpaces(blockText);
+                if (leadingSpaces >= owner.ContentColumn)
+                    ranges.Add(new HiddenRange(0, owner.ContentColumn));
+            }
+
+            replacementPrefix = GetOwnerVisualPrefix(owner.Kind, ownerText);
+            isContinuation = replacementPrefix != null;
+            if (isContinuation)
+                prefixMeasureKind = owner.Kind;
+        }
+        else if (parsed.Kind >= BlockKind.Heading1 && parsed.Kind <= BlockKind.Heading6)
         {
             int hashCount = parsed.Kind - BlockKind.Heading1 + 1;
             int prefixLen = hashCount + 1;
@@ -207,7 +251,8 @@ public class BlockVisualMap
 
         ranges.Sort((a, b) => a.Start.CompareTo(b.Start));
 
-        return new BlockVisualMap(ranges, replacementPrefix, parsed.Images, parsed.Links, parsed.ColorSpans);
+        return new BlockVisualMap(ranges, replacementPrefix, isContinuation, prefixMeasureKind,
+            parsed.Images, parsed.Links, parsed.ColorSpans);
     }
 
     private static int CountBackticks(string text, int start)

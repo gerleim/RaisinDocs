@@ -179,6 +179,266 @@ public class MarkdownParserTests
         MarkdownParser.GetOrderedListPrefixLength("not a list").Should().Be(0);
     }
 
+    // --- Content column ---
+
+    [Fact]
+    public void ContentColumn_UnorderedList()
+    {
+        var blocks = ParseBlocks("- item");
+        blocks[0].ContentColumn.Should().Be(2);
+    }
+
+    [Fact]
+    public void ContentColumn_OrderedList_SingleDigit()
+    {
+        var blocks = ParseBlocks("1. item");
+        blocks[0].ContentColumn.Should().Be(3);
+    }
+
+    [Fact]
+    public void ContentColumn_OrderedList_MultiDigit()
+    {
+        var blocks = ParseBlocks("10. item");
+        blocks[0].ContentColumn.Should().Be(4);
+    }
+
+    [Fact]
+    public void ContentColumn_OrderedList_Paren()
+    {
+        var blocks = ParseBlocks("1) item");
+        blocks[0].ContentColumn.Should().Be(3);
+    }
+
+    [Fact]
+    public void ContentColumn_TaskList()
+    {
+        var blocks = ParseBlocks("- [ ] task");
+        blocks[0].ContentColumn.Should().Be(6);
+    }
+
+    [Fact]
+    public void ContentColumn_Blockquote()
+    {
+        var blocks = ParseBlocks("> quoted");
+        blocks[0].ContentColumn.Should().Be(2);
+    }
+
+    [Fact]
+    public void ContentColumn_Paragraph_IsZero()
+    {
+        var blocks = ParseBlocks("plain text");
+        blocks[0].ContentColumn.Should().Be(0);
+    }
+
+    [Fact]
+    public void ContentColumn_Heading_IsZero()
+    {
+        var blocks = ParseBlocks("# heading");
+        blocks[0].ContentColumn.Should().Be(0);
+    }
+
+    // --- Lazy continuation ---
+
+    [Fact]
+    public void LazyContinuation_ParagraphAfterUnorderedList()
+    {
+        var blocks = ParseBlocks("- item", "continuation");
+        blocks[1].IsLazyContinuation.Should().BeTrue();
+        blocks[1].OwnerBlock.Should().Be(0);
+    }
+
+    [Fact]
+    public void LazyContinuation_ParagraphAfterOrderedList()
+    {
+        var blocks = ParseBlocks("1. item", "continuation");
+        blocks[1].IsLazyContinuation.Should().BeTrue();
+        blocks[1].OwnerBlock.Should().Be(0);
+    }
+
+    [Fact]
+    public void LazyContinuation_ParagraphAfterBlockquote()
+    {
+        var blocks = ParseBlocks("> quote", "continuation");
+        blocks[1].IsLazyContinuation.Should().BeTrue();
+        blocks[1].OwnerBlock.Should().Be(0);
+    }
+
+    [Fact]
+    public void LazyContinuation_MultipleParagraphs()
+    {
+        var blocks = ParseBlocks("- item", "second line", "third line");
+        blocks[1].IsLazyContinuation.Should().BeTrue();
+        blocks[1].OwnerBlock.Should().Be(0);
+        blocks[2].IsLazyContinuation.Should().BeTrue();
+        blocks[2].OwnerBlock.Should().Be(0);
+    }
+
+    [Fact]
+    public void LazyContinuation_StopsAtBlankLine()
+    {
+        var blocks = ParseBlocks("1. item", "", "not continuation");
+        blocks[2].IsLazyContinuation.Should().BeFalse();
+        blocks[2].OwnerBlock.Should().Be(-1);
+    }
+
+    [Fact]
+    public void LazyContinuation_StopsAtHeading()
+    {
+        var blocks = ParseBlocks("- item", "# heading");
+        blocks[1].IsLazyContinuation.Should().BeFalse();
+    }
+
+    [Fact]
+    public void LazyContinuation_StopsAtListItem()
+    {
+        var blocks = ParseBlocks("- item one", "- item two");
+        blocks[1].IsLazyContinuation.Should().BeFalse();
+    }
+
+    [Fact]
+    public void LazyContinuation_StopsAtOrderedListItem()
+    {
+        var blocks = ParseBlocks("- item", "1. ordered");
+        blocks[1].IsLazyContinuation.Should().BeFalse();
+    }
+
+    [Fact]
+    public void LazyContinuation_StopsAtBlockquote()
+    {
+        var blocks = ParseBlocks("- item", "> quote");
+        blocks[1].IsLazyContinuation.Should().BeFalse();
+    }
+
+    [Fact]
+    public void LazyContinuation_StopsAtFencedCode()
+    {
+        var blocks = ParseBlocks("- item", "```");
+        blocks[1].IsLazyContinuation.Should().BeFalse();
+    }
+
+    [Fact]
+    public void LazyContinuation_TaskList()
+    {
+        var blocks = ParseBlocks("- [ ] task", "continuation");
+        blocks[1].IsLazyContinuation.Should().BeTrue();
+        blocks[1].OwnerBlock.Should().Be(0);
+    }
+
+    [Fact]
+    public void LazyContinuation_OwnerNotSetOnNonContinuation()
+    {
+        var blocks = ParseBlocks("plain text", "more text");
+        blocks[1].IsLazyContinuation.Should().BeFalse();
+        blocks[1].OwnerBlock.Should().Be(-1);
+    }
+
+    // --- Indented continuation ---
+
+    [Fact]
+    public void IndentedContinuation_AfterBlankLine_OrderedList()
+    {
+        var blocks = ParseBlocks("1. item", "", "   continuation");
+        blocks[2].IsIndentedContinuation.Should().BeTrue();
+        blocks[2].OwnerBlock.Should().Be(0);
+    }
+
+    [Fact]
+    public void IndentedContinuation_AfterBlankLine_MultiDigitOrderedList()
+    {
+        var blocks = ParseBlocks("10. item", "", "    continuation");
+        blocks[2].IsIndentedContinuation.Should().BeTrue();
+        blocks[2].OwnerBlock.Should().Be(0);
+    }
+
+    [Fact]
+    public void IndentedContinuation_AfterBlankLine_UnorderedList()
+    {
+        var blocks = ParseBlocks("- item", "", "  continuation");
+        blocks[2].IsIndentedContinuation.Should().BeTrue();
+        blocks[2].OwnerBlock.Should().Be(0);
+    }
+
+    [Fact]
+    public void IndentedContinuation_AfterBlankLine_Blockquote()
+    {
+        var blocks = ParseBlocks("> quote", "", "  continuation");
+        blocks[2].IsIndentedContinuation.Should().BeTrue();
+        blocks[2].OwnerBlock.Should().Be(0);
+    }
+
+    [Fact]
+    public void IndentedContinuation_NotEnoughIndent()
+    {
+        var blocks = ParseBlocks("1. item", "", "  not enough");
+        blocks[2].IsIndentedContinuation.Should().BeFalse();
+        blocks[2].OwnerBlock.Should().Be(-1);
+    }
+
+    [Fact]
+    public void IndentedContinuation_NoIndentAfterBlank()
+    {
+        var blocks = ParseBlocks("1. item", "", "no indent");
+        blocks[2].IsIndentedContinuation.Should().BeFalse();
+        blocks[2].OwnerBlock.Should().Be(-1);
+    }
+
+    [Fact]
+    public void IndentedContinuation_MultipleBlankLines()
+    {
+        var blocks = ParseBlocks("- item", "", "", "  continuation");
+        blocks[3].IsIndentedContinuation.Should().BeTrue();
+        blocks[3].OwnerBlock.Should().Be(0);
+    }
+
+    [Fact]
+    public void IndentedContinuation_MultipleParagraphs()
+    {
+        var blocks = ParseBlocks("- first", "", "  second", "", "  third");
+        blocks[2].IsIndentedContinuation.Should().BeTrue();
+        blocks[2].OwnerBlock.Should().Be(0);
+        blocks[4].IsIndentedContinuation.Should().BeTrue();
+        blocks[4].OwnerBlock.Should().Be(0);
+    }
+
+    [Fact]
+    public void IndentedContinuation_LazyThenIndented()
+    {
+        var blocks = ParseBlocks("- first", "lazy", "", "  indented");
+        blocks[1].IsLazyContinuation.Should().BeTrue();
+        blocks[1].OwnerBlock.Should().Be(0);
+        blocks[3].IsIndentedContinuation.Should().BeTrue();
+        blocks[3].OwnerBlock.Should().Be(0);
+    }
+
+    [Fact]
+    public void IndentedContinuation_IsNotLazy()
+    {
+        var blocks = ParseBlocks("- item", "", "  continuation");
+        blocks[2].IsLazyContinuation.Should().BeFalse();
+    }
+
+    [Fact]
+    public void IndentedContinuation_BlankLineMarkedWithOwner()
+    {
+        var blocks = ParseBlocks("- item", "", "  continuation");
+        blocks[1].OwnerBlock.Should().Be(0);
+    }
+
+    [Fact]
+    public void IndentedContinuation_MultipleBlankLinesMarkedWithOwner()
+    {
+        var blocks = ParseBlocks("- item", "", "", "  continuation");
+        blocks[1].OwnerBlock.Should().Be(0);
+        blocks[2].OwnerBlock.Should().Be(0);
+    }
+
+    [Fact]
+    public void IndentedContinuation_BlankLineNotMarkedWhenNoContinuation()
+    {
+        var blocks = ParseBlocks("- item", "", "no indent");
+        blocks[1].OwnerBlock.Should().Be(-1);
+    }
+
     // --- Task list items ---
 
     [Fact]

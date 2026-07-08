@@ -1265,13 +1265,17 @@ public partial class DocsCanvas
                 x += DrawTaskListCheckbox(dc, parsed.Kind == BlockKind.TaskListItemChecked,
                     _padding, screenY, parsed.Kind);
             }
+            else if (map.IsContinuationIndent)
+            {
+                x += _measure.MeasureReplacementPrefix(map.ReplacementPrefix, map.PrefixMeasureKind);
+            }
             else
             {
                 var prefixFt = new FormattedText(map.ReplacementPrefix,
                     CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
                     TextMeasurer.NormalTypeface, fontSize, _palette.Syntax, _measure.DpiScale);
                 dc.DrawText(prefixFt, new Point(_padding, screenY));
-                x += _measure.MeasureReplacementPrefix(map.ReplacementPrefix, parsed.Kind);
+                x += _measure.MeasureReplacementPrefix(map.ReplacementPrefix, map.PrefixMeasureKind);
             }
         }
 

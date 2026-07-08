@@ -1222,8 +1222,9 @@ public partial class DocsCanvas : FrameworkElement
         if (IsVisual && _visualMaps == null)
         {
             _visualMaps = new List<BlockVisualMap>(_doc.BlockCount);
+            Func<int, string> getText = _doc.GetBlockText;
             for (int i = 0; i < _doc.BlockCount; i++)
-                _visualMaps.Add(BlockVisualMap.Compute(_parsedBlocks[i], _doc.GetBlockText(i)));
+                _visualMaps.Add(BlockVisualMap.Compute(_parsedBlocks[i], getText(i), _parsedBlocks, getText));
         }
 
         ComputeLayoutCore(ActualWidth - _padding * 2);
@@ -1385,6 +1386,8 @@ public partial class DocsCanvas : FrameworkElement
 
             if (text.Length == 0)
             {
+                if (IsVisual && parsed.OwnerBlock >= 0)
+                    continue;
                 _visualLines.Add(new VisualLine(bi, 0, 0, parsed.Kind) { OverrideHeight = _paragraphGap });
                 continue;
             }
@@ -1449,7 +1452,7 @@ public partial class DocsCanvas : FrameworkElement
 
         double prefixWidth = 0;
         if (map?.ReplacementPrefix != null)
-            prefixWidth = _measure.MeasureReplacementPrefix(map.ReplacementPrefix, parsed.Kind);
+            prefixWidth = _measure.MeasureReplacementPrefix(map.ReplacementPrefix, map.PrefixMeasureKind);
 
         int pos = 0;
         while (pos < segment.Length)
@@ -1587,7 +1590,7 @@ public partial class DocsCanvas : FrameworkElement
         string blockText = _doc.GetBlockText(vl.BlockIndex);
         double x = 0;
         if (map != null && map.ReplacementPrefix != null && vl.StartOffset == 0)
-            x += _measure.MeasureReplacementPrefix(map.ReplacementPrefix!, vl.BlockKind);
+            x += _measure.MeasureReplacementPrefix(map.ReplacementPrefix!, map.PrefixMeasureKind);
 
         if (localOff == 0) return x;
 
@@ -1650,7 +1653,7 @@ public partial class DocsCanvas : FrameworkElement
 
         if (map != null && map.ReplacementPrefix != null && vl.StartOffset == 0)
         {
-            double prefixW = _measure.MeasureReplacementPrefix(map.ReplacementPrefix!, vl.BlockKind);
+            double prefixW = _measure.MeasureReplacementPrefix(map.ReplacementPrefix!, map.PrefixMeasureKind);
             if (x < prefixW) return vl.StartOffset;
             accum = prefixW;
         }
@@ -1935,13 +1938,17 @@ public partial class DocsCanvas : FrameworkElement
                                     textX += DrawTaskListCheckbox(dc, parsed.Kind == BlockKind.TaskListItemChecked,
                                         _padding, lineY - effectiveScroll, parsed.Kind);
                                 }
+                                else if (map.IsContinuationIndent)
+                                {
+                                    textX += _measure.MeasureReplacementPrefix(map.ReplacementPrefix!, map.PrefixMeasureKind);
+                                }
                                 else
                                 {
                                     var prefixFt = new FormattedText(map.ReplacementPrefix!,
                                         CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
                                         TextMeasurer.NormalTypeface, fontSize, _palette.Syntax, _measure.DpiScale);
                                     dc.DrawText(prefixFt, new Point(_padding, lineY - effectiveScroll));
-                                    textX += _measure.MeasureReplacementPrefix(map.ReplacementPrefix!, parsed.Kind);
+                                    textX += _measure.MeasureReplacementPrefix(map.ReplacementPrefix!, map.PrefixMeasureKind);
                                 }
                             }
 
@@ -2420,7 +2427,7 @@ public partial class DocsCanvas : FrameworkElement
 
                 if (map?.ReplacementPrefix != null && vl.StartOffset == 0)
                 {
-                    double prefixW = _measure.MeasureReplacementPrefix(map.ReplacementPrefix!, parsed.Kind);
+                    double prefixW = _measure.MeasureReplacementPrefix(map.ReplacementPrefix!, map.PrefixMeasureKind);
                     x1 += prefixW;
                     x2 += prefixW;
                 }
@@ -2502,7 +2509,7 @@ public partial class DocsCanvas : FrameworkElement
 
                 if (map != null && map.ReplacementPrefix != null && vl.StartOffset == 0)
                 {
-                    double prefixW = _measure.MeasureReplacementPrefix(map.ReplacementPrefix!, parsed.Kind);
+                    double prefixW = _measure.MeasureReplacementPrefix(map.ReplacementPrefix!, map.PrefixMeasureKind);
                     x1 += prefixW;
                     x2 += prefixW;
                 }

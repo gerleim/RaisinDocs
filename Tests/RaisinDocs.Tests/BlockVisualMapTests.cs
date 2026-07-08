@@ -499,7 +499,8 @@ public class BlockVisualMapTests
     private static List<BlockVisualMap> ComputeTableMaps(params string[] blocks)
     {
         var parsed = MarkdownParser.Parse(i => blocks[i], blocks.Length);
-        return parsed.Select((p, i) => BlockVisualMap.Compute(p, blocks[i])).ToList();
+        Func<int, string> getText = i => blocks[i];
+        return parsed.Select((p, i) => BlockVisualMap.Compute(p, blocks[i], parsed, getText)).ToList();
     }
 
     [Fact]
@@ -767,7 +768,8 @@ public class BlockVisualMapTests
     private static BlockVisualMap ComputeMapMultiBlock(string[] blocks, int blockIndex)
     {
         var parsed = MarkdownParser.Parse(i => blocks[i], blocks.Length);
-        return BlockVisualMap.Compute(parsed[blockIndex], blocks[blockIndex]);
+        Func<int, string> getText = i => blocks[i];
+        return BlockVisualMap.Compute(parsed[blockIndex], blocks[blockIndex], parsed, getText);
     }
 
     [Fact]
@@ -800,6 +802,93 @@ public class BlockVisualMapTests
         map.IsHidden(5).Should().BeTrue();   // ]
         map.IsHidden(6).Should().BeTrue();   // [
         map.IsHidden(7).Should().BeTrue();   // ]
+    }
+
+    // --- Continuation lines ---
+
+    [Fact]
+    public void LazyContinuation_UnorderedList_UsesOwnerPrefix()
+    {
+        var map = ComputeMapMultiBlock(["- item", "continuation"], 1);
+        map.ReplacementPrefix.Should().Be("  • ");
+        map.IsContinuationIndent.Should().BeTrue();
+        map.PrefixMeasureKind.Should().Be(BlockKind.UnorderedListItem);
+    }
+
+    [Fact]
+    public void LazyContinuation_OrderedList_UsesOwnerPrefix()
+    {
+        var map = ComputeMapMultiBlock(["1. item", "continuation"], 1);
+        map.ReplacementPrefix.Should().Be("  1. ");
+        map.IsContinuationIndent.Should().BeTrue();
+    }
+
+    [Fact]
+    public void LazyContinuation_MultiDigitOrderedList_UsesOwnerPrefix()
+    {
+        var map = ComputeMapMultiBlock(["10. item", "continuation"], 1);
+        map.ReplacementPrefix.Should().Be("  10. ");
+    }
+
+    [Fact]
+    public void LazyContinuation_TaskList_UsesOwnerPrefix()
+    {
+        var map = ComputeMapMultiBlock(["- [ ] task", "continuation"], 1);
+        map.ReplacementPrefix.Should().Be("  ☐ ");
+        map.PrefixMeasureKind.Should().Be(BlockKind.TaskListItemUnchecked);
+    }
+
+    [Fact]
+    public void LazyContinuation_NothingHidden()
+    {
+        var map = ComputeMapMultiBlock(["- item", "continuation"], 1);
+        for (int i = 0; i < "continuation".Length; i++)
+            map.IsHidden(i).Should().BeFalse($"offset {i} should be visible");
+    }
+
+    [Fact]
+    public void IndentedContinuation_LeadingSpacesHidden()
+    {
+        var map = ComputeMapMultiBlock(["- item", "", "  continuation"], 2);
+        map.IsHidden(0).Should().BeTrue();
+        map.IsHidden(1).Should().BeTrue();
+        map.IsHidden(2).Should().BeFalse();
+    }
+
+    [Fact]
+    public void IndentedContinuation_UsesOwnerPrefix()
+    {
+        var map = ComputeMapMultiBlock(["- item", "", "  continuation"], 2);
+        map.ReplacementPrefix.Should().Be("  • ");
+        map.IsContinuationIndent.Should().BeTrue();
+    }
+
+    [Fact]
+    public void IndentedContinuation_OrderedList_LeadingSpacesHidden()
+    {
+        var map = ComputeMapMultiBlock(["1. item", "", "   continuation"], 2);
+        map.IsHidden(0).Should().BeTrue();
+        map.IsHidden(1).Should().BeTrue();
+        map.IsHidden(2).Should().BeTrue();
+        map.IsHidden(3).Should().BeFalse();
+    }
+
+    [Fact]
+    public void IndentedContinuation_BuildDisplayString_StripsLeadingSpaces()
+    {
+        var text = "  continuation text";
+        var map = ComputeMapMultiBlock(["- item", "", text], 2);
+        map.BuildDisplayString(text, 0, text.Length).Should().Be("continuation text");
+    }
+
+    [Fact]
+    public void IndentedContinuation_RawToVisual()
+    {
+        var text = "  continuation";
+        var map = ComputeMapMultiBlock(["- item", "", text], 2);
+        int prefixLen = map.ReplacementPrefix!.Length;
+        map.RawToVisual(2).Should().Be(prefixLen);
+        map.RawToVisual(3).Should().Be(prefixLen + 1);
     }
 
     // --- Inline color tags ---

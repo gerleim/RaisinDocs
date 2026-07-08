@@ -96,6 +96,10 @@ public record class ParsedBlock
     public bool HasDivClose { get; init; }
     public TableRowInfo? TableRow { get; init; }
     public TableInfo? Table { get; init; }
+    public int ContentColumn { get; init; }
+    public bool IsLazyContinuation { get; init; }
+    public bool IsIndentedContinuation { get; init; }
+    public int OwnerBlock { get; init; } = -1;
 }
 
 public static class MarkdownParser
@@ -233,10 +237,12 @@ public static class MarkdownParser
                 Kind = kind, Runs = runs, Images = images, Links = links,
                 EmphasisMarkers = emphasisMarkers, ColorSpans = colorSpans,
                 DivOpenColor = divOpenColor, HasDivClose = blockHasDivClose,
+                ContentColumn = GetContentColumn(kind, text),
             });
         }
 
         DetectTables(result, getBlockText);
+        DetectContinuations(result, getBlockText);
         ApplyBlockDivColors(result);
 
         return result;
@@ -464,6 +470,61 @@ public static class MarkdownParser
         }
     }
 
+    private static bool IsContainerBlock(BlockKind kind) => kind is
+        BlockKind.UnorderedListItem or BlockKind.OrderedListItem
+        or BlockKind.TaskListItemUnchecked or BlockKind.TaskListItemChecked
+        or BlockKind.Blockquote;
+
+    internal static int CountLeadingSpaces(string text)
+    {
+        int count = 0;
+        while (count < text.Length && text[count] == ' ')
+            count++;
+        return count;
+    }
+
+    private static void DetectContinuations(List<ParsedBlock> blocks, Func<int, string> getBlockText)
+    {
+        for (int i = 0; i < blocks.Count; i++)
+        {
+            if (!IsContainerBlock(blocks[i].Kind))
+                continue;
+
+            int contentColumn = blocks[i].ContentColumn;
+            int blankStart = -1;
+
+            for (int j = i + 1; j < blocks.Count; j++)
+            {
+                string text = getBlockText(j);
+
+                if (text.Length == 0)
+                {
+                    if (blankStart < 0) blankStart = j;
+                    continue;
+                }
+
+                if (blankStart >= 0)
+                {
+                    if (CountLeadingSpaces(text) >= contentColumn
+                        && blocks[j].Kind == BlockKind.Paragraph)
+                    {
+                        for (int b = blankStart; b < j; b++)
+                            blocks[b] = blocks[b] with { OwnerBlock = i };
+                        blocks[j] = blocks[j] with { IsIndentedContinuation = true, OwnerBlock = i };
+                        blankStart = -1;
+                        continue;
+                    }
+                    break;
+                }
+
+                if (blocks[j].Kind != BlockKind.Paragraph)
+                    break;
+
+                blocks[j] = blocks[j] with { IsLazyContinuation = true, OwnerBlock = i };
+            }
+        }
+    }
+
     private static bool ContainsUnescapedPipe(string text)
     {
         for (int i = 0; i < text.Length; i++)
@@ -614,6 +675,15 @@ public static class MarkdownParser
 
         return BlockKind.Paragraph;
     }
+
+    internal static int GetContentColumn(BlockKind kind, string text) => kind switch
+    {
+        BlockKind.UnorderedListItem => 2,
+        BlockKind.TaskListItemUnchecked or BlockKind.TaskListItemChecked => 6,
+        BlockKind.OrderedListItem => GetOrderedListPrefixLength(text),
+        BlockKind.Blockquote => 2,
+        _ => 0,
+    };
 
     internal static int GetOrderedListPrefixLength(string text)
     {
