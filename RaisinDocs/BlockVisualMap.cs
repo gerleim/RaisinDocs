@@ -128,12 +128,19 @@ public class BlockVisualMap
             var owner = allBlocks[parsed.OwnerBlock];
             string ownerText = getBlockText(parsed.OwnerBlock);
 
-            if (parsed.IsIndentedContinuation && owner.ContentColumn > 0)
+            if (owner.ContentColumn > 0)
             {
-                var (_, cols) = MarkdownParser.MeasureLeadingWhitespace(blockText);
-                if (cols >= owner.ContentColumn)
+                var (leadChars, cols) = MarkdownParser.MeasureLeadingWhitespace(blockText);
+                if (parsed.IsIndentedContinuation && cols >= owner.ContentColumn)
                 {
                     int hideChars = MarkdownParser.CharsForColumns(blockText, owner.ContentColumn);
+                    ranges.Add(new HiddenRange(0, hideChars));
+                }
+                else if (parsed.IsLazyContinuation && leadChars > 0)
+                {
+                    int hideChars = cols <= owner.ContentColumn
+                        ? leadChars
+                        : MarkdownParser.CharsForColumns(blockText, owner.ContentColumn);
                     ranges.Add(new HiddenRange(0, hideChars));
                 }
             }

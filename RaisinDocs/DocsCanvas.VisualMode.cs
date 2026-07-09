@@ -719,40 +719,47 @@ public partial class DocsCanvas
             {
                 var (trimStart, trimEnd) = cell.TrimContent(blockText);
 
-                double textW = 0;
-                double fullTextW = 0;
+                string cellText = map != null
+                    ? map.BuildDisplayString(blockText, trimStart, trimEnd - trimStart)
+                    : blockText.Substring(trimStart, trimEnd - trimStart);
 
+                int visualOffset;
                 if (map != null)
                 {
-                    int ri = 0;
-                    for (int rawI = trimStart; rawI < trimEnd; rawI++)
-                    {
-                        if (map.IsHidden(rawI)) continue;
-                        var style = TextMeasurer.GetStyleAtOffset(parsed.Runs, rawI, ref ri);
-                        double cw = _measure.MeasureCharWidth(blockText[rawI], parsed.Kind, style);
-                        fullTextW += cw;
-                        if (rawI < cursorOffset) textW += cw;
-                    }
+                    int visBase = map.RawToVisual(trimStart);
+                    visualOffset = Math.Clamp(map.RawToVisual(cursorOffset) - visBase, 0, cellText.Length);
                 }
                 else
                 {
-                    string cellContent = blockText.Substring(trimStart, trimEnd - trimStart);
-                    int offsetInContent = Math.Clamp(cursorOffset - trimStart, 0, cellContent.Length);
-                    int ri = 0;
-                    for (int i = 0; i < offsetInContent; i++)
-                    {
-                        var style = TextMeasurer.GetStyleAtOffset(parsed.Runs, trimStart + i, ref ri);
-                        textW += _measure.MeasureCharWidth(cellContent[i], parsed.Kind, style);
-                    }
-                    fullTextW = _measure.MeasureStringWidth(cellContent, parsed.Kind, parsed.Runs, trimStart);
+                    visualOffset = Math.Clamp(cursorOffset - trimStart, 0, cellText.Length);
+                }
+
+                bool isHeader = parsed.Kind == BlockKind.TableHeaderRow;
+                double fontSize = TextMeasurer.GetBlockFontSize(parsed.Kind);
+                var cellTypeface = isHeader ? TextMeasurer.BoldTypeface : TextMeasurer.GetBlockBaseTypeface(parsed.Kind);
+
+                var ft = new FormattedText(cellText, CultureInfo.InvariantCulture,
+                    FlowDirection.LeftToRight, cellTypeface, fontSize,
+                    _palette.Foreground, _measure.DpiScale);
+
+                if (map != null)
+                    ApplyInlineStylesForCell(ft, parsed, map, trimStart, trimEnd);
+                else
+                    ApplyInlineStylesForCellRaw(ft, cellText, parsed, trimStart, trimEnd);
+
+                double textW = 0;
+                if (visualOffset > 0)
+                {
+                    var geom = ft.BuildHighlightGeometry(new Point(0, 0), 0, visualOffset);
+                    textW = geom != null ? geom.Bounds.Right : ft.WidthIncludingTrailingWhitespace;
                 }
 
                 var align = parsed.Table!.Alignments[c];
                 double cellContentWidth = colWidths[c] - _tableCellPadding * 2;
                 double alignOffset = align switch
                 {
-                    ColumnAlignment.Center => Math.Max(0, (cellContentWidth - fullTextW) / 2),
-                    ColumnAlignment.Right => Math.Max(0, cellContentWidth - fullTextW),
+                    ColumnAlignment.Center => Math.Max(0, (cellContentWidth - ft.Width) / 2),
+                    ColumnAlignment.Right => Math.Max(0, cellContentWidth - ft.Width),
                     _ => 0,
                 };
                 return x + _tableCellPadding + alignOffset + textW;

@@ -1021,6 +1021,15 @@ public partial class DocsCanvas : FrameworkElement
     }
     internal int TestAnchorBlock => _doc.AnchorBlock;
     internal int TestAnchorOffset => _doc.AnchorOffset;
+    internal double TestCursorX
+    {
+        get
+        {
+            ComputeLayout();
+            int vli = CursorToVisualLineIndex();
+            return _padding + CursorXInVisualLine(vli);
+        }
+    }
     internal string TestGetBlockText(int block) => _doc.GetBlockText(block);
     internal (int StartCol, int EndCol, int StartBlock, int EndBlock)?
         TestTryGetTableRectSelection()
@@ -2159,35 +2168,36 @@ public partial class DocsCanvas : FrameworkElement
     {
         int vlEnd = vl.StartOffset + vl.Length;
 
+        int ls = parsed.LeadingSpaces;
+
         if (parsed.Kind >= BlockKind.Heading1 && parsed.Kind <= BlockKind.Heading6)
         {
             int hashCount = parsed.Kind - BlockKind.Heading1 + 1;
-            int prefixLen = hashCount + 1;
+            int totalPrefix = ls + hashCount + 1;
             int localStart = Math.Max(0, 0 - vl.StartOffset);
-            int localEnd = Math.Min(vl.Length, prefixLen - vl.StartOffset);
+            int localEnd = Math.Min(vl.Length, totalPrefix - vl.StartOffset);
             if (localEnd > localStart)
                 ft.SetForegroundBrush(_palette.Syntax, localStart, localEnd - localStart);
         }
 
-        if (parsed.Kind is BlockKind.TaskListItemUnchecked or BlockKind.TaskListItemChecked && vl.StartOffset == 0 && vl.Length >= 6)
+        if (parsed.Kind is BlockKind.TaskListItemUnchecked or BlockKind.TaskListItemChecked && vl.StartOffset == 0 && vl.Length >= ls + 6)
         {
-            ft.SetForegroundBrush(_palette.Syntax, 0, 6);
+            ft.SetForegroundBrush(_palette.Syntax, 0, ls + 6);
         }
-        else if (parsed.Kind == BlockKind.UnorderedListItem && vl.Length >= 2)
+        else if (parsed.Kind == BlockKind.UnorderedListItem && vl.StartOffset == 0 && vl.Length >= ls + 2)
         {
-            string vlText = blockText.Substring(vl.StartOffset, Math.Min(vl.Length, 2));
-            if (vlText is "- " or "* ")
-                ft.SetForegroundBrush(_palette.Syntax, 0, 2);
+            ft.SetForegroundBrush(_palette.Syntax, 0, ls + 2);
         }
         else if (parsed.Kind == BlockKind.OrderedListItem && vl.StartOffset == 0)
         {
-            int prefixLen = MarkdownParser.GetOrderedListPrefixLength(blockText);
-            if (prefixLen > 0 && vl.Length >= prefixLen)
-                ft.SetForegroundBrush(_palette.Syntax, 0, prefixLen);
+            var stripped = ls > 0 ? blockText[ls..] : blockText;
+            int prefixLen = MarkdownParser.GetOrderedListPrefixLength(stripped);
+            if (prefixLen > 0 && vl.Length >= ls + prefixLen)
+                ft.SetForegroundBrush(_palette.Syntax, 0, ls + prefixLen);
         }
 
-        if (parsed.Kind == BlockKind.Blockquote && vl.StartOffset == 0 && vl.Length >= 2)
-            ft.SetForegroundBrush(_palette.Syntax, 0, 2);
+        if (parsed.Kind == BlockKind.Blockquote && vl.StartOffset == 0 && vl.Length >= ls + 2)
+            ft.SetForegroundBrush(_palette.Syntax, 0, ls + 2);
 
         if (parsed.Kind == BlockKind.LinkDefinition)
             ft.SetForegroundBrush(_palette.Syntax, 0, vl.Length);
