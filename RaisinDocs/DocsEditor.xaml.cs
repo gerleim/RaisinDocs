@@ -133,6 +133,12 @@ public partial class DocsEditor : UserControl
         set => SetValue(IsToolbarCollapsedProperty, value);
     }
 
+    public IDocsLogger? Logger
+    {
+        get => PART_Canvas.Logger;
+        set => PART_Canvas.Logger = value;
+    }
+
     public DocsCanvas Canvas => PART_Canvas;
 
     public string GetText() => PART_Canvas.GetText();
