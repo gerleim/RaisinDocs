@@ -165,7 +165,7 @@ A trailing `\` is a hard break only when:
 - Ctrl+Click, tooltip on hover, visual mode rendering all work via existing link infrastructure
 - 18 tests (15 parser + 3 visual map)
 
-### 13 — Ordered list items
+### 13 — Ordered list items ✅
 - See `design/Ordered Lists - Iteration 13.md` for detailed plan
 - CommonMark ordered list syntax: `1. item` or `1) item` (1–9 digits + `.` or `)` + space)
 - Parser detects numbered prefix, assigns `OrderedListItem` BlockKind
