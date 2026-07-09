@@ -9,6 +9,7 @@
     <DockPanel>
         <local:DocsFormattingBar DockPanel.Dock="Top"
                                 Canvas="{Binding ElementName=PART_Canvas}"
+                                IsCollapsed="{Binding IsToolbarCollapsed, RelativeSource={RelativeSource AncestorType=local:DocsEditor}, Mode=TwoWay}"
                                 Visibility="{Binding ShowToolbar, RelativeSource={RelativeSource AncestorType=local:DocsEditor}, Converter={StaticResource BoolToVis}}" />
         <Grid>
             <Grid.ColumnDefinitions>

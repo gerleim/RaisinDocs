@@ -28,6 +28,10 @@ public partial class DocsEditor : UserControl
         DependencyProperty.Register(nameof(ShowMinimap), typeof(bool), typeof(DocsEditor),
             new PropertyMetadata(false));
 
+    public static readonly DependencyProperty IsToolbarCollapsedProperty =
+        DependencyProperty.Register(nameof(IsToolbarCollapsed), typeof(bool), typeof(DocsEditor),
+            new FrameworkPropertyMetadata(false, FrameworkPropertyMetadataOptions.BindsTwoWayByDefault));
+
     public event EventHandler? ContentChanged;
     public event EventHandler? IsDirtyChanged;
     public event EventHandler? ThemeChanged;
@@ -123,6 +127,12 @@ public partial class DocsEditor : UserControl
         set => SetValue(ShowMinimapProperty, value);
     }
 
+    public bool IsToolbarCollapsed
+    {
+        get => (bool)GetValue(IsToolbarCollapsedProperty);
+        set => SetValue(IsToolbarCollapsedProperty, value);
+    }
+
     public DocsCanvas Canvas => PART_Canvas;
 
     public string GetText() => PART_Canvas.GetText();
@@ -139,6 +149,7 @@ public partial class DocsEditor : UserControl
         SoftBreak = PART_Canvas.CurrentSoftBreak,
         HardBreak = PART_Canvas.CurrentHardBreak,
         ShowMinimap = ShowMinimap,
+        IsToolbarCollapsed = IsToolbarCollapsed,
     };
 
     public void ApplyState(DocsEditorState state)
@@ -149,6 +160,7 @@ public partial class DocsEditor : UserControl
         PART_Canvas.SetSoftBreak(state.SoftBreak);
         PART_Canvas.SetHardBreak(state.HardBreak);
         ShowMinimap = state.ShowMinimap;
+        IsToolbarCollapsed = state.IsToolbarCollapsed;
     }
 
     private static void OnDocumentBasePathChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)

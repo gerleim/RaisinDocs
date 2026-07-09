@@ -118,16 +118,53 @@
         <Setter Property="Background" Value="#40000000" />
     </Style>
 
+    <Style x:Key="CollapsedStripButton" TargetType="Button">
+        <Setter Property="Height" Value="16" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Foreground" Value="{Binding Foreground, RelativeSource={RelativeSource AncestorType=local:DocsFormattingBar}}" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Focusable" Value="False" />
+        <Setter Property="HorizontalContentAlignment" Value="Left" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="Bd" Background="{TemplateBinding Background}" Padding="6,0">
+                        <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                          VerticalAlignment="Center" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="#10000000" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
     <Style TargetType="{x:Type local:DocsFormattingBar}">
         <Setter Property="Height" Value="36" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="{x:Type local:DocsFormattingBar}">
-                    <Border Background="{TemplateBinding Background}"
-                            BorderBrush="{TemplateBinding BorderBrush}"
-                            BorderThickness="{TemplateBinding BorderThickness}"
-                            Padding="4,2">
-                        <local:OverflowPanel x:Name="PART_OverflowPanel" VerticalAlignment="Center">
+                    <Grid>
+                        <Border x:Name="PART_ExpandedBar"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                Padding="4,2">
+                            <DockPanel>
+                                <Button x:Name="PART_Collapse" DockPanel.Dock="Right"
+                                        Style="{StaticResource FormattingButton}"
+                                        MinWidth="22" Width="22" BorderThickness="0"
+                                        ToolTip="Collapse toolbar">
+                                    <Path Width="10" Height="10" Stretch="Uniform" Opacity="0.5"
+                                          Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=local:DocsFormattingBar}}"
+                                          StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
+                                          Data="M2,8 L6,4 L10,8" />
+                                </Button>
+                                <local:OverflowPanel x:Name="PART_OverflowPanel" VerticalAlignment="Center">
                             <ToggleButton x:Name="PART_Bold" Style="{StaticResource FormattingToggle}"
                                           ToolTip="Bold (Ctrl+B)">
                                 <TextBlock FontWeight="Bold" Text="B" />
@@ -289,8 +326,30 @@
                                       StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
                                       Data="M2,3 L7,8 L2,13 M9,3 L14,8 L9,13" />
                             </Button>
-                        </local:OverflowPanel>
-                    </Border>
+                                </local:OverflowPanel>
+                            </DockPanel>
+                        </Border>
+
+                        <Button x:Name="PART_CollapsedStrip" Style="{StaticResource CollapsedStripButton}"
+                                Visibility="Collapsed">
+                            <StackPanel Orientation="Horizontal">
+                                <Path Width="8" Height="8" Stretch="Uniform" Opacity="0.5"
+                                      Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=local:DocsFormattingBar}}"
+                                      StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
+                                      Data="M2,4 L6,8 L10,4" />
+                                <TextBlock Text="Toolbar" FontSize="10" Margin="4,0,0,0" Opacity="0.5"
+                                           Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=local:DocsFormattingBar}}" />
+                            </StackPanel>
+                        </Button>
+                    </Grid>
+
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsCollapsed" Value="True">
+                            <Setter Property="Height" Value="16" />
+                            <Setter TargetName="PART_ExpandedBar" Property="Visibility" Value="Collapsed" />
+                            <Setter TargetName="PART_CollapsedStrip" Property="Visibility" Value="Visible" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
                 </ControlTemplate>
             </Setter.Value>
         </Setter>

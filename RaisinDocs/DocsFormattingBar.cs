@@ -139,6 +139,16 @@ public class DocsFormattingBar : Control
         DependencyProperty.Register(nameof(Canvas), typeof(DocsCanvas), typeof(DocsFormattingBar),
             new PropertyMetadata(null, OnCanvasChanged));
 
+    public static readonly DependencyProperty IsCollapsedProperty =
+        DependencyProperty.Register(nameof(IsCollapsed), typeof(bool), typeof(DocsFormattingBar),
+            new FrameworkPropertyMetadata(false));
+
+    public bool IsCollapsed
+    {
+        get => (bool)GetValue(IsCollapsedProperty);
+        set => SetValue(IsCollapsedProperty, value);
+    }
+
     public DocsCanvas? Canvas
     {
         get => (DocsCanvas?)GetValue(CanvasProperty);
@@ -322,6 +332,14 @@ public class DocsFormattingBar : Control
         _moreButton = GetTemplateChild("PART_Overflow") as Button;
         if (_moreButton != null)
             _moreButton.Click += (_, _) => ShowOverflowMenu();
+
+        var collapseButton = GetTemplateChild("PART_Collapse") as Button;
+        if (collapseButton != null)
+            collapseButton.Click += (_, _) => IsCollapsed = true;
+
+        var collapsedStrip = GetTemplateChild("PART_CollapsedStrip") as Button;
+        if (collapsedStrip != null)
+            collapsedStrip.Click += (_, _) => IsCollapsed = false;
 
         BuildOverflowMap();
     }
