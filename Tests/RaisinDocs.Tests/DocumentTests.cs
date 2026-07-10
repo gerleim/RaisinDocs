@@ -501,7 +501,7 @@ public class DocumentTests
     }
 
     [Fact]
-    public void Reflow_WithSelection_MergesAcrossBlankLines()
+    public void Reflow_WithSelection_CollapsesMultipleBlankLinesToOne()
     {
         var doc = new Document();
         doc.SetText("qwe\n\n\nasd");
@@ -510,8 +510,26 @@ public class DocumentTests
         doc.CursorBlock = doc.BlockCount - 1;
         doc.CursorOffset = 3;
         doc.Reflow(0, doc.BlockCount - 1, IsParagraph);
-        doc.BlockCount.Should().Be(1);
-        doc.GetBlockText(0).Should().Be("qwe asd");
+        doc.BlockCount.Should().Be(3);
+        doc.GetBlockText(0).Should().Be("qwe");
+        doc.GetBlockText(1).Should().Be("");
+        doc.GetBlockText(2).Should().Be("asd");
+    }
+
+    [Fact]
+    public void Reflow_WithSelection_PreservesSingleBlankLine()
+    {
+        var doc = new Document();
+        doc.SetText("qwe\n\nasd");
+        doc.AnchorBlock = 0;
+        doc.AnchorOffset = 0;
+        doc.CursorBlock = doc.BlockCount - 1;
+        doc.CursorOffset = 3;
+        doc.Reflow(0, doc.BlockCount - 1, IsParagraph);
+        doc.BlockCount.Should().Be(3);
+        doc.GetBlockText(0).Should().Be("qwe");
+        doc.GetBlockText(1).Should().Be("");
+        doc.GetBlockText(2).Should().Be("asd");
     }
 
     [Fact]
@@ -713,6 +731,31 @@ public class DocumentTests
     }
 
     [Fact]
+    public void ReflowBoxTable_MergesMultiLineRows()
+    {
+        var doc = new Document();
+        doc.SetText(
+            "┌─────┬──────────────┐\n" +
+            "│  #  │     Area     │\n" +
+            "├─────┼──────────────┤\n" +
+            "│ 1   │ Grammar      │\n" +
+            "│     │   a          │\n" +
+            "├─────┼──────────────┤\n" +
+            "│ 2   │ Wording      │\n" +
+            "│     │  a           │\n" +
+            "├─────┼──────────────┤\n" +
+            "│ 3   │ Completeness │\n" +
+            "└─────┴──────────────┘");
+        doc.ReflowBoxTable(0, doc.BlockCount - 1);
+        doc.BlockCount.Should().Be(5);
+        doc.GetBlockText(0).Should().Be("| # | Area |");
+        doc.GetBlockText(1).Should().Be("| --- | --- |");
+        doc.GetBlockText(2).Should().Be("| 1 | Grammar a |");
+        doc.GetBlockText(3).Should().Be("| 2 | Wording a |");
+        doc.GetBlockText(4).Should().Be("| 3 | Completeness |");
+    }
+
+    [Fact]
     public void ReflowBoxTable_LeavesNonBoxLinesAlone()
     {
         var doc = new Document();
@@ -809,6 +852,248 @@ public class DocumentTests
         doc.TrimWhitespace(0, doc.BlockCount - 1);
         doc.GetBlockText(0).Should().Be("hello  ");
         doc.GetBlockText(1).Should().Be("world");
+    }
+
+    // --- HasBoxDrawingTable ---
+
+    [Fact]
+    public void HasBoxDrawingTable_DetectsBoxDrawing()
+    {
+        var doc = new Document();
+        doc.SetText("┌───┬───┐\n│ A │ B │\n└───┴───┘");
+        doc.HasBoxDrawingTable(0, doc.BlockCount - 1).Should().BeTrue();
+    }
+
+    [Fact]
+    public void HasBoxDrawingTable_ReturnsFalseForPlainText()
+    {
+        var doc = new Document();
+        doc.SetText("hello\nworld");
+        doc.HasBoxDrawingTable(0, doc.BlockCount - 1).Should().BeFalse();
+    }
+
+    // --- HasMergeableParagraphs ---
+
+    [Fact]
+    public void HasMergeableParagraphs_DetectsConsecutiveParagraphs()
+    {
+        var doc = new Document();
+        doc.SetText("hello\nworld");
+        doc.HasMergeableParagraphs(0, doc.BlockCount - 1, IsParagraph).Should().BeTrue();
+    }
+
+    [Fact]
+    public void HasMergeableParagraphs_SkipsInsideFence()
+    {
+        var doc = new Document();
+        doc.SetText("```\nline1\nline2\n```");
+        doc.HasMergeableParagraphs(0, doc.BlockCount - 1, IsParagraph, IsFence).Should().BeFalse();
+    }
+
+    // --- HasConsecutiveBlankLines ---
+
+    [Fact]
+    public void HasConsecutiveBlankLines_DetectsMultipleBlanks()
+    {
+        var doc = new Document();
+        doc.SetText("hello\n\n\nworld");
+        doc.SelectAll();
+        doc.HasConsecutiveBlankLines(0, doc.BlockCount - 1).Should().BeTrue();
+    }
+
+    [Fact]
+    public void HasConsecutiveBlankLines_IgnoresSingleBlank()
+    {
+        var doc = new Document();
+        doc.SetText("hello\n\nworld");
+        doc.SelectAll();
+        doc.HasConsecutiveBlankLines(0, doc.BlockCount - 1).Should().BeFalse();
+    }
+
+    [Fact]
+    public void HasConsecutiveBlankLines_RequiresSelection()
+    {
+        var doc = new Document();
+        doc.SetText("hello\n\n\nworld");
+        doc.CollapseSelection();
+        doc.HasConsecutiveBlankLines(0, doc.BlockCount - 1).Should().BeFalse();
+    }
+
+    // --- HasTrimmableWhitespace ---
+
+    [Fact]
+    public void HasTrimmableWhitespace_DetectsLeadingSpaces()
+    {
+        var doc = new Document();
+        doc.SetText("  indented");
+        doc.HasTrimmableWhitespace(0, doc.BlockCount - 1).Should().BeTrue();
+    }
+
+    [Fact]
+    public void HasTrimmableWhitespace_DetectsLeadingTab()
+    {
+        var doc = new Document();
+        doc.SetText("\tindented");
+        doc.HasTrimmableWhitespace(0, doc.BlockCount - 1).Should().BeTrue();
+    }
+
+    [Fact]
+    public void HasTrimmableWhitespace_DetectsTrailingSpacesNonHardBreak()
+    {
+        var doc = new Document();
+        doc.SetText("hello ");
+        doc.HasTrimmableWhitespace(0, doc.BlockCount - 1).Should().BeTrue();
+    }
+
+    [Fact]
+    public void HasTrimmableWhitespace_IgnoresTrailingDoubleSpaceHardBreak()
+    {
+        var doc = new Document();
+        doc.SetText("hello  ");
+        doc.HasTrimmableWhitespace(0, doc.BlockCount - 1).Should().BeFalse();
+    }
+
+    [Fact]
+    public void HasTrimmableWhitespace_DetectsExcessiveTrailingSpaces()
+    {
+        var doc = new Document();
+        doc.SetText("hello   ");
+        doc.HasTrimmableWhitespace(0, doc.BlockCount - 1).Should().BeTrue();
+    }
+
+    [Fact]
+    public void HasTrimmableWhitespace_ReturnsFalseForCleanContent()
+    {
+        var doc = new Document();
+        doc.SetText("hello");
+        doc.HasTrimmableWhitespace(0, doc.BlockCount - 1).Should().BeFalse();
+    }
+
+    // --- HasMisnumberedOrderedList ---
+
+    [Fact]
+    public void HasMisnumberedOrderedList_DetectsMisnumbered()
+    {
+        var doc = new Document();
+        doc.SetText("1. first\n3. second");
+        doc.HasMisnumberedOrderedList(0, doc.BlockCount - 1, GetOrderedPrefix).Should().BeTrue();
+    }
+
+    [Fact]
+    public void HasMisnumberedOrderedList_IgnoresCorrectlyNumbered()
+    {
+        var doc = new Document();
+        doc.SetText("1. first\n2. second");
+        doc.HasMisnumberedOrderedList(0, doc.BlockCount - 1, GetOrderedPrefix).Should().BeFalse();
+    }
+
+    // --- RenumberOrderedLists ---
+
+    private static int GetOrderedPrefix(string text)
+    {
+        int i = 0;
+        while (i < text.Length && i < 9 && text[i] >= '0' && text[i] <= '9') i++;
+        if (i == 0 || i > 9) return 0;
+        if (i < text.Length && text[i] is '.' or ')')
+        {
+            if (i + 1 < text.Length && text[i + 1] == ' ')
+                return i + 2;
+        }
+        return 0;
+    }
+
+    [Fact]
+    public void RenumberOrderedLists_FixesGap()
+    {
+        var doc = new Document();
+        doc.SetText("1. first\n3. second\n4. third");
+        doc.RenumberOrderedLists(0, doc.BlockCount - 1, GetOrderedPrefix);
+        doc.GetBlockText(0).Should().Be("1. first");
+        doc.GetBlockText(1).Should().Be("2. second");
+        doc.GetBlockText(2).Should().Be("3. third");
+    }
+
+    [Fact]
+    public void RenumberOrderedLists_PreservesDelimiter()
+    {
+        var doc = new Document();
+        doc.SetText("1) first\n3) second\n5) third");
+        doc.RenumberOrderedLists(0, doc.BlockCount - 1, GetOrderedPrefix);
+        doc.GetBlockText(0).Should().Be("1) first");
+        doc.GetBlockText(1).Should().Be("2) second");
+        doc.GetBlockText(2).Should().Be("3) third");
+    }
+
+    [Fact]
+    public void RenumberOrderedLists_PreservesStartNumber()
+    {
+        var doc = new Document();
+        doc.SetText("3. alpha\n3. beta\n3. gamma");
+        doc.RenumberOrderedLists(0, doc.BlockCount - 1, GetOrderedPrefix);
+        doc.GetBlockText(0).Should().Be("3. alpha");
+        doc.GetBlockText(1).Should().Be("4. beta");
+        doc.GetBlockText(2).Should().Be("5. gamma");
+    }
+
+    [Fact]
+    public void RenumberOrderedLists_ReturnsFalseWhenAlreadyCorrect()
+    {
+        var doc = new Document();
+        doc.SetText("1. first\n2. second\n3. third");
+        doc.RenumberOrderedLists(0, doc.BlockCount - 1, GetOrderedPrefix).Should().BeFalse();
+    }
+
+    [Fact]
+    public void RenumberOrderedLists_ReturnsTrueWhenChanged()
+    {
+        var doc = new Document();
+        doc.SetText("1. first\n5. second");
+        doc.RenumberOrderedLists(0, doc.BlockCount - 1, GetOrderedPrefix).Should().BeTrue();
+    }
+
+    [Fact]
+    public void RenumberOrderedLists_HandlesMultipleSeparateRuns()
+    {
+        var doc = new Document();
+        doc.SetText("1. a\n3. b\nparagraph\n1. c\n5. d");
+        doc.RenumberOrderedLists(0, doc.BlockCount - 1, GetOrderedPrefix);
+        doc.GetBlockText(0).Should().Be("1. a");
+        doc.GetBlockText(1).Should().Be("2. b");
+        doc.GetBlockText(2).Should().Be("paragraph");
+        doc.GetBlockText(3).Should().Be("1. c");
+        doc.GetBlockText(4).Should().Be("2. d");
+    }
+
+    [Fact]
+    public void RenumberOrderedLists_SkipsFencedCodeBlocks()
+    {
+        var doc = new Document();
+        doc.SetText("1. first\n```\n5. not a list\n```\n3. second");
+        doc.RenumberOrderedLists(0, doc.BlockCount - 1, GetOrderedPrefix, IsFence);
+        doc.GetBlockText(0).Should().Be("1. first");
+        doc.GetBlockText(2).Should().Be("5. not a list");
+        doc.GetBlockText(4).Should().Be("3. second");
+    }
+
+    [Fact]
+    public void RenumberOrderedLists_AdjustsCursorOffset()
+    {
+        var doc = new Document();
+        doc.SetText("1. first\n10. second");
+        doc.CursorBlock = 1;
+        doc.CursorOffset = 6;
+        doc.RenumberOrderedLists(0, doc.BlockCount - 1, GetOrderedPrefix);
+        doc.GetBlockText(1).Should().Be("2. second");
+        doc.CursorOffset.Should().Be(5);
+    }
+
+    [Fact]
+    public void RenumberOrderedLists_NumberWidthChange()
+    {
+        var doc = new Document();
+        doc.SetText("1. a\n2. b\n3. c\n4. d\n5. e\n6. f\n7. g\n8. h\n9. i\n11. j");
+        doc.RenumberOrderedLists(0, doc.BlockCount - 1, GetOrderedPrefix);
+        doc.GetBlockText(9).Should().Be("10. j");
     }
 
     // --- ComparePositions ---

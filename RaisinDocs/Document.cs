@@ -420,19 +420,46 @@ public class Document
             int tableStart = i + 1;
 
             var dataRows = new List<string[]>();
+            string[]? pendingRow = null;
             for (int j = tableStart; j <= tableEnd; j++)
             {
                 string line = _blocks[j].ToString();
                 char sep = line.Contains('│') ? '│' : line.Contains('║') ? '║' : '\0';
-                if (sep == '\0') continue;
+                if (sep == '\0')
+                {
+                    if (pendingRow != null)
+                    {
+                        dataRows.Add(pendingRow);
+                        pendingRow = null;
+                    }
+                    continue;
+                }
 
                 var parts = line.Split(sep);
                 var cells = new List<string>();
                 for (int k = 1; k < parts.Length - 1; k++)
                     cells.Add(parts[k].Trim());
-                if (cells.Count > 0)
-                    dataRows.Add(cells.ToArray());
+                if (cells.Count == 0) continue;
+
+                if (pendingRow != null && pendingRow.Length == cells.Count)
+                {
+                    for (int k = 0; k < cells.Count; k++)
+                    {
+                        if (cells[k].Length > 0)
+                            pendingRow[k] = pendingRow[k].Length > 0
+                                ? pendingRow[k] + " " + cells[k]
+                                : cells[k];
+                    }
+                }
+                else
+                {
+                    if (pendingRow != null)
+                        dataRows.Add(pendingRow);
+                    pendingRow = cells.ToArray();
+                }
             }
+            if (pendingRow != null)
+                dataRows.Add(pendingRow);
 
             if (dataRows.Count == 0) continue;
 
@@ -589,8 +616,15 @@ public class Document
                     continue;
                 if (_blocks[i].Length == 0)
                 {
-                    RemoveBlockForReflow(i, 0);
-                    endBlock--;
+                    bool prevEmpty = i > startBlock && _blocks[i - 1].Length == 0
+                        && (insideFence == null || !insideFence.Contains(i - 1));
+                    bool nextEmpty = i < endBlock && _blocks[i + 1].Length == 0
+                        && (insideFence == null || !insideFence.Contains(i + 1));
+                    if (prevEmpty || nextEmpty)
+                    {
+                        RemoveBlockForReflow(i, 0);
+                        endBlock--;
+                    }
                 }
             }
             insideFence = BuildFenceMap(startBlock, endBlock, isFenceLine);
@@ -695,41 +729,53 @@ public class Document
         return changed;
     }
 
-    public bool HasReformattableContent(int startBlock, int endBlock, Func<string, bool> isMergeableBlock, Func<string, int>? isFenceLine = null)
+    public bool HasBoxDrawingTable(int startBlock, int endBlock)
     {
         for (int i = startBlock; i <= endBlock; i++)
         {
             if (IsBoxDrawingLine(_blocks[i].ToString()))
                 return true;
         }
+        return false;
+    }
 
+    public bool HasMergeableParagraphs(int startBlock, int endBlock, Func<string, bool> isMergeableBlock, Func<string, int>? isFenceLine = null)
+    {
         var insideFence = BuildFenceMap(startBlock, endBlock, isFenceLine);
-
         for (int i = endBlock; i > startBlock; i--)
         {
             if (insideFence != null && (insideFence.Contains(i) || insideFence.Contains(i - 1)))
                 continue;
-
             string curr = _blocks[i].ToString();
             string prev = _blocks[i - 1].ToString();
             if (curr.Length > 0 && prev.Length > 0
                 && isMergeableBlock(curr) && isMergeableBlock(prev))
                 return true;
         }
+        return false;
+    }
 
-        if (HasSelection)
+    public bool HasConsecutiveBlankLines(int startBlock, int endBlock, Func<string, int>? isFenceLine = null)
+    {
+        if (!HasSelection) return false;
+        var insideFence = BuildFenceMap(startBlock, endBlock, isFenceLine);
+        for (int i = startBlock + 1; i <= endBlock; i++)
         {
-            for (int i = startBlock; i <= endBlock; i++)
-            {
-                if (insideFence != null && insideFence.Contains(i))
-                    continue;
-                if (_blocks[i].Length == 0)
-                    return true;
-            }
+            if (insideFence != null && (insideFence.Contains(i) || insideFence.Contains(i - 1)))
+                continue;
+            if (_blocks[i].Length == 0 && _blocks[i - 1].Length == 0)
+                return true;
         }
+        return false;
+    }
 
+    public bool HasTrimmableWhitespace(int startBlock, int endBlock, Func<string, int>? isFenceLine = null)
+    {
+        var insideFence = BuildFenceMap(startBlock, endBlock, isFenceLine);
         for (int i = startBlock; i <= endBlock; i++)
         {
+            if (insideFence != null && insideFence.Contains(i))
+                continue;
             string text = _blocks[i].ToString();
             if (text.Length > 0 && (text[0] == ' ' || text[0] == '\t'))
                 return true;
@@ -741,8 +787,100 @@ public class Document
                     return true;
             }
         }
-
         return false;
+    }
+
+    public bool HasMisnumberedOrderedList(int startBlock, int endBlock, Func<string, int>? getOrderedPrefixLength, Func<string, int>? isFenceLine = null)
+    {
+        var insideFence = BuildFenceMap(startBlock, endBlock, isFenceLine);
+        return HasMisnumberedOrderedList(startBlock, endBlock, insideFence, getOrderedPrefixLength);
+    }
+
+    private bool HasMisnumberedOrderedList(int startBlock, int endBlock, HashSet<int>? insideFence, Func<string, int>? getOrderedPrefixLength)
+    {
+        if (getOrderedPrefixLength == null) return false;
+        int expected = -1;
+        for (int i = startBlock; i <= endBlock; i++)
+        {
+            if (insideFence != null && insideFence.Contains(i))
+            {
+                expected = -1;
+                continue;
+            }
+            string text = _blocks[i].ToString();
+            int pl = getOrderedPrefixLength(text);
+            if (pl > 0)
+            {
+                string numStr = text[..(pl - 2)];
+                if (int.TryParse(numStr, out int num))
+                {
+                    if (expected < 0)
+                        expected = num + 1;
+                    else if (num != expected)
+                        return true;
+                    else
+                        expected++;
+                }
+            }
+            else
+            {
+                expected = -1;
+            }
+        }
+        return false;
+    }
+
+    public bool RenumberOrderedLists(int startBlock, int endBlock, Func<string, int> getOrderedPrefixLength,
+        Func<string, int>? isFenceLine = null)
+    {
+        var insideFence = BuildFenceMap(startBlock, endBlock, isFenceLine);
+        bool changed = false;
+        int i = startBlock;
+        while (i <= endBlock)
+        {
+            if (insideFence != null && insideFence.Contains(i))
+            {
+                i++;
+                continue;
+            }
+            string text = _blocks[i].ToString();
+            int pl = getOrderedPrefixLength(text);
+            if (pl == 0)
+            {
+                i++;
+                continue;
+            }
+
+            int runStart = i;
+            string firstNumStr = text[..(pl - 2)];
+            char delim = text[pl - 2];
+            int expected = int.TryParse(firstNumStr, out int firstNum) ? firstNum : 1;
+
+            for (int j = runStart; j <= endBlock; j++)
+            {
+                if (insideFence != null && insideFence.Contains(j))
+                    break;
+                string jText = _blocks[j].ToString();
+                int jPl = getOrderedPrefixLength(jText);
+                if (jPl == 0) break;
+
+                string newPrefix = expected.ToString() + delim + " ";
+                if (jPl != newPrefix.Length || !jText.StartsWith(newPrefix))
+                {
+                    _blocks[j].Remove(0, jPl);
+                    _blocks[j].Insert(0, newPrefix);
+                    int delta = newPrefix.Length - jPl;
+                    if (CursorBlock == j)
+                        CursorOffset = Math.Max(0, CursorOffset + delta);
+                    if (AnchorBlock == j)
+                        AnchorOffset = Math.Max(0, AnchorOffset + delta);
+                    changed = true;
+                }
+                expected++;
+                i = j + 1;
+            }
+        }
+        return changed;
     }
 
     public bool AddHardBreaks(int startBlock, int endBlock, string marker,

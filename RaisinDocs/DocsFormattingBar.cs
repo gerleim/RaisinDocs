@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Data;
+using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Shapes;
 
@@ -186,6 +187,8 @@ public class DocsFormattingBar : Control
     private Button? _insertTableButton;
     private Button? _colorTextButton;
     private Button? _reflowButton;
+    private ReformatActions _lastReformatActions;
+    private TextBlock? _reflowTooltipText;
     private Button? _hardBreaksButton;
     private Border? _colorBar;
     private string _lastColorName = "red";
@@ -254,6 +257,27 @@ public class DocsFormattingBar : Control
             {
                 Canvas?.Reflow();
                 Canvas?.Focus();
+            };
+            _reflowTooltipText = new TextBlock();
+            _reflowButton.ToolTip = _reflowTooltipText;
+            _reflowButton.ToolTipOpening += (_, _) =>
+            {
+                UpdateReflowTooltipText();
+                var window = Window.GetWindow(this);
+                if (window != null)
+                {
+                    window.PreviewKeyDown += OnReflowTooltipKeyChange;
+                    window.PreviewKeyUp += OnReflowTooltipKeyChange;
+                }
+            };
+            _reflowButton.ToolTipClosing += (_, _) =>
+            {
+                var window = Window.GetWindow(this);
+                if (window != null)
+                {
+                    window.PreviewKeyDown -= OnReflowTooltipKeyChange;
+                    window.PreviewKeyUp -= OnReflowTooltipKeyChange;
+                }
             };
         }
 
@@ -520,9 +544,53 @@ public class DocsFormattingBar : Control
         if (_colorTextButton != null) _colorTextButton.IsEnabled = !inCodeBlock;
 
         if (_reflowButton != null)
-            _reflowButton.IsEnabled = canvas.CanReformat;
+        {
+            _lastReformatActions = canvas.GetReformatActions();
+            _reflowButton.IsEnabled = _lastReformatActions != ReformatActions.None;
+            UpdateReflowTooltipText();
+        }
         if (_hardBreaksButton != null)
             _hardBreaksButton.IsEnabled = canvas.CanConvertToHardBreaks;
+    }
+
+    private void OnReflowTooltipKeyChange(object sender, KeyEventArgs e)
+    {
+        if (e.Key is Key.LeftShift or Key.RightShift)
+            UpdateReflowTooltipText();
+    }
+
+    private void UpdateReflowTooltipText()
+    {
+        if (_reflowTooltipText == null) return;
+        bool shift = Keyboard.Modifiers.HasFlag(ModifierKeys.Shift);
+        _reflowTooltipText.Text = BuildReformatTooltip(_lastReformatActions, shift);
+    }
+
+    private static string BuildReformatTooltip(ReformatActions actions, bool shift)
+    {
+        if (shift)
+            return "Reformat selection\n" +
+                   "• Convert box-drawing table\n" +
+                   "• Merge paragraphs\n" +
+                   "• Collapse blank lines\n" +
+                   "• Trim whitespace\n" +
+                   "• Renumber ordered list";
+
+        if (actions == ReformatActions.None)
+            return "Reformat selection";
+
+        var sb = new System.Text.StringBuilder("Reformat selection");
+        if (actions.HasFlag(ReformatActions.ConvertBoxTable))
+            sb.Append("\n• Convert box-drawing table");
+        if (actions.HasFlag(ReformatActions.MergeParagraphs))
+            sb.Append("\n• Merge paragraphs");
+        if (actions.HasFlag(ReformatActions.CollapseBlankLines))
+            sb.Append("\n• Collapse blank lines");
+        if (actions.HasFlag(ReformatActions.TrimWhitespace))
+            sb.Append("\n• Trim whitespace");
+        if (actions.HasFlag(ReformatActions.RenumberOrderedList))
+            sb.Append("\n• Renumber ordered list");
+        return sb.ToString();
     }
 
     private static void SetCheckedSilent(ToggleButton? btn, bool value)

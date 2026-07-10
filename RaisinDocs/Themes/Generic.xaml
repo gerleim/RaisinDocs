@@ -252,8 +252,7 @@
                                 </Grid>
                             </Button>
 
-                            <Button x:Name="PART_Reflow" Style="{StaticResource FormattingButton}"
-                                    ToolTip="Reformat selection">
+                            <Button x:Name="PART_Reflow" Style="{StaticResource FormattingButton}">
                                 <Path Width="14" Height="14" Stretch="Uniform"
                                       Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=local:DocsFormattingBar}}"
                                       StrokeThickness="1.5" StrokeStartLineCap="Round" StrokeEndLineCap="Round"

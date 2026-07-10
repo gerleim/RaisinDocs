@@ -240,6 +240,7 @@ A trailing `\` is a hard break only when:
 - **Character/entity references** (§2.5): `&amp;`, `&#123;`, `&#x7B;` → decoded characters. Could decode for display in visual mode while keeping raw text in source mode.
 
 ### Future
+- Multi-line table cells: wrap long cell text across multiple visual lines, compute per-row height from tallest cell. Also enables explicit `\` hard breaks within cells. Infrastructure: word-wrap within cell bounds during layout, multi-line hit-testing and cursor navigation within cells, vertical alignment of shorter cells.
 - ~~Links (clickable in view mode, editable syntax in edit mode)~~ — ✅ implemented in iteration 9
 - Motion blur during smooth scroll (ghost copies offset in scroll direction, like RaisinTerminal2)
 - Image display sizing: GFM has no sizing syntax; options include inline HTML (`<img src="url" width="300">`), Obsidian-style pipe syntax (`![alt|300](url)`), or visual drag-resize that auto-generates markup. Typora's drag-to-resize UX is the gold standard. Could also auto-downscale pasted images to reduce file size.

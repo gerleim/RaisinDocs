@@ -9,6 +9,17 @@ using Raisin.WPF.Base;
 
 namespace RaisinDocs;
 
+[Flags]
+public enum ReformatActions
+{
+    None = 0,
+    ConvertBoxTable = 1,
+    MergeParagraphs = 2,
+    CollapseBlankLines = 4,
+    TrimWhitespace = 8,
+    RenumberOrderedList = 16,
+}
+
 public partial class DocsCanvas : FrameworkElement
 {
     private const double _padding = 10;
@@ -565,6 +576,8 @@ public partial class DocsCanvas : FrameworkElement
             MarkdownParser.InlineOpenToDivOpen);
         eb = Math.Min(eb, _doc.BlockCount - 1);
         changed |= _doc.Reflow(sb, eb, IsMergeableParagraph, MarkdownParser.GetFenceBacktickCount);
+        eb = Math.Min(eb, _doc.BlockCount - 1);
+        changed |= _doc.RenumberOrderedLists(sb, eb, MarkdownParser.GetOrderedListPrefixLength, MarkdownParser.GetFenceBacktickCount);
         if (!changed)
             _doc.TrimWhitespace(sb, eb, MarkdownParser.GetFenceBacktickCount);
         _doc.SealUndoGroup();
@@ -573,16 +586,27 @@ public partial class DocsCanvas : FrameworkElement
         RaiseFormattingChanged();
     }
 
-    public bool CanReformat
+    public ReformatActions GetReformatActions()
     {
-        get
-        {
-            if (!_doc.HasSelection)
-                return false;
-            var sel = _doc.GetOrderedSelection();
-            return _doc.HasReformattableContent(sel.startBlock, sel.endBlock, IsMergeableParagraph, MarkdownParser.GetFenceBacktickCount);
-        }
+        if (!_doc.HasSelection)
+            return ReformatActions.None;
+        var sel = _doc.GetOrderedSelection();
+        int sb = sel.startBlock, eb = sel.endBlock;
+        var actions = ReformatActions.None;
+        if (_doc.HasBoxDrawingTable(sb, eb))
+            actions |= ReformatActions.ConvertBoxTable;
+        if (_doc.HasMergeableParagraphs(sb, eb, IsMergeableParagraph, MarkdownParser.GetFenceBacktickCount))
+            actions |= ReformatActions.MergeParagraphs;
+        if (_doc.HasConsecutiveBlankLines(sb, eb, MarkdownParser.GetFenceBacktickCount))
+            actions |= ReformatActions.CollapseBlankLines;
+        if (_doc.HasTrimmableWhitespace(sb, eb, MarkdownParser.GetFenceBacktickCount))
+            actions |= ReformatActions.TrimWhitespace;
+        if (_doc.HasMisnumberedOrderedList(sb, eb, MarkdownParser.GetOrderedListPrefixLength, MarkdownParser.GetFenceBacktickCount))
+            actions |= ReformatActions.RenumberOrderedList;
+        return actions;
     }
+
+    public bool CanReformat => GetReformatActions() != ReformatActions.None;
 
     private static bool IsMergeableParagraph(string text) =>
         text.Length > 0
