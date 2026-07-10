@@ -142,7 +142,10 @@ public partial class DocsCanvas
     {
         base.OnMouseUp(e);
         if (IsMouseCaptured)
+        {
             ReleaseMouseCapture();
+            RaiseFormattingChanged();
+        }
     }
 
     protected override void OnMouseLeave(MouseEventArgs e)

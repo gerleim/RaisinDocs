@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Data;
+using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Shapes;
@@ -563,34 +564,40 @@ public class DocsFormattingBar : Control
     {
         if (_reflowTooltipText == null) return;
         bool shift = Keyboard.Modifiers.HasFlag(ModifierKeys.Shift);
-        _reflowTooltipText.Text = BuildReformatTooltip(_lastReformatActions, shift);
+        BuildReformatTooltip(_reflowTooltipText, _lastReformatActions, shift);
     }
 
-    private static string BuildReformatTooltip(ReformatActions actions, bool shift)
+    private static readonly (ReformatActions Flag, string Label)[] _reformatLabels =
+    [
+        (ReformatActions.ConvertBoxTable, "Convert box-drawing table"),
+        (ReformatActions.MergeParagraphs, "Merge paragraphs"),
+        (ReformatActions.CollapseBlankLines, "Collapse blank lines"),
+        (ReformatActions.TrimWhitespace, "Trim whitespace"),
+        (ReformatActions.RenumberOrderedList, "Renumber ordered list"),
+    ];
+
+    private static void BuildReformatTooltip(TextBlock tb, ReformatActions actions, bool shift)
     {
+        tb.Inlines.Clear();
+        tb.Inlines.Add(new Run("Reformat selection") { FontWeight = FontWeights.SemiBold });
+
         if (shift)
-            return "Reformat selection\n" +
-                   "• Convert box-drawing table\n" +
-                   "• Merge paragraphs\n" +
-                   "• Collapse blank lines\n" +
-                   "• Trim whitespace\n" +
-                   "• Renumber ordered list";
-
-        if (actions == ReformatActions.None)
-            return "Reformat selection";
-
-        var sb = new System.Text.StringBuilder("Reformat selection");
-        if (actions.HasFlag(ReformatActions.ConvertBoxTable))
-            sb.Append("\n• Convert box-drawing table");
-        if (actions.HasFlag(ReformatActions.MergeParagraphs))
-            sb.Append("\n• Merge paragraphs");
-        if (actions.HasFlag(ReformatActions.CollapseBlankLines))
-            sb.Append("\n• Collapse blank lines");
-        if (actions.HasFlag(ReformatActions.TrimWhitespace))
-            sb.Append("\n• Trim whitespace");
-        if (actions.HasFlag(ReformatActions.RenumberOrderedList))
-            sb.Append("\n• Renumber ordered list");
-        return sb.ToString();
+        {
+            foreach (var (_, label) in _reformatLabels)
+                tb.Inlines.Add(new Run("\n• " + label));
+        }
+        else
+        {
+            if (actions != ReformatActions.None)
+            {
+                foreach (var (flag, label) in _reformatLabels)
+                {
+                    if (actions.HasFlag(flag))
+                        tb.Inlines.Add(new Run("\n• " + label));
+                }
+            }
+            tb.Inlines.Add(new Run("\n\nHold Shift to see all operations") { FontStyle = FontStyles.Italic });
+        }
     }
 
     private static void SetCheckedSilent(ToggleButton? btn, bool value)
