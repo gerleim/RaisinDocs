@@ -997,6 +997,11 @@ public partial class DocsCanvas : FrameworkElement
         _doc.CollapseSelection();
         InvalidateLayout();
     }
+    internal void TestTypeText(string text)
+    {
+        foreach (char c in text)
+            InsertTextCore(c.ToString());
+    }
     internal void TestNavigate(Key key, bool shift = false, bool ctrl = false)
     {
         ComputeLayout();

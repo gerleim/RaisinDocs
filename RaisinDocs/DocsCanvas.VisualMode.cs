@@ -151,7 +151,10 @@ public partial class DocsCanvas
         int blockLen = _doc.GetBlockLength(_doc.CursorBlock);
         if (blockLen == 0 || !map.IsHidden(blockLen - 1)) return;
         int offset = _doc.CursorOffset;
-        while (offset > 0 && map.IsHidden(offset - 1))
+        int minOffset = 0;
+        if (map.HiddenRanges.Count > 0 && map.HiddenRanges[0].Start == 0)
+            minOffset = map.HiddenRanges[0].Length;
+        while (offset > minOffset && map.IsHidden(offset - 1))
             offset--;
         _doc.CursorOffset = offset;
     }

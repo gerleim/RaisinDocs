@@ -219,6 +219,13 @@ public partial class DocsCanvas
         }
         _doc.BeginUndoGroup();
 
+        InsertTextCore(e.Text);
+        EnsureCursorVisible();
+        e.Handled = true;
+    }
+
+    private void InsertTextCore(string text)
+    {
         if (_doc.HasSelection)
         {
             var rect = TryGetTableRectSelection();
@@ -231,7 +238,7 @@ public partial class DocsCanvas
                 _doc.DeleteSelection();
         }
 
-        foreach (char c in e.Text)
+        foreach (char c in text)
         {
             if (c < ' ' && c != '\t') continue;
             _doc.Insert(c);
@@ -245,9 +252,8 @@ public partial class DocsCanvas
         {
             ComputeLayout();
             ClampCursorBeforeTrailingHidden();
+            _doc.CollapseSelection();
         }
-        EnsureCursorVisible();
-        e.Handled = true;
     }
 
     // --- Key handlers (Source / Visual dispatch) ---
