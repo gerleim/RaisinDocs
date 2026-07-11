@@ -23,6 +23,10 @@ public class MinimapScrollbar : FrameworkElement
     private static GlyphInfo[]? s_monoGlyphs;
     private static double s_propCellW;
     private static double s_monoCellW;
+    private static Typeface s_propTypeface = null!;
+    private static Typeface s_monoTypeface = null!;
+    private static Dictionary<int, GlyphInfo> s_propExtended = null!;
+    private static Dictionary<int, GlyphInfo> s_monoExtended = null!;
     private const int FirstPrintable = 32;
     private const int LastPrintable = 126;
 
@@ -254,15 +258,19 @@ public class MinimapScrollbar : FrameworkElement
                     for (int ci = 0; ci < text.Length; ci++)
                     {
                         int ch2 = text[ci];
-                        if (ch2 > LastPrintable) ch2 = FoldToAscii(ch2);
 
                         double charAdv;
-                        if (ch2 < FirstPrintable)
-                            charAdv = baseAdvance;
+                        if (ch2 >= FirstPrintable && ch2 <= LastPrintable)
+                        {
+                            charAdv = glyphs[ch2 - FirstPrintable].Width * baseAdvance / 2.0;
+                        }
+                        else if (ch2 > LastPrintable)
+                        {
+                            charAdv = GetExtendedGlyph(ch2, isCode).Width * baseAdvance / 2.0;
+                        }
                         else
                         {
-                            ref var g = ref glyphs[ch2 - FirstPrintable];
-                            charAdv = g.Width * baseAdvance / 2.0;
+                            charAdv = baseAdvance;
                         }
 
                         int rawIdx = spanBaseOffset + ci;
@@ -297,16 +305,22 @@ public class MinimapScrollbar : FrameworkElement
             for (int ci = 0; ci < text.Length; ci++)
             {
                 int ch = text[ci];
-                if (ch > LastPrintable)
-                    ch = FoldToAscii(ch);
-                if (ch < FirstPrintable)
+                GlyphInfo glyph;
+                if (ch >= FirstPrintable && ch <= LastPrintable)
+                {
+                    glyph = glyphs[ch - FirstPrintable];
+                }
+                else if (ch > LastPrintable)
+                {
+                    glyph = GetExtendedGlyph(ch, isCode);
+                }
+                else
                 {
                     x += baseAdvance;
                     if (x >= w) break;
                     continue;
                 }
 
-                ref var glyph = ref glyphs[ch - FirstPrintable];
                 int gw = glyph.Width;
                 double advance = gw * baseAdvance / 2.0;
 
@@ -409,8 +423,12 @@ public class MinimapScrollbar : FrameworkElement
     private static void EnsureGlyphTables()
     {
         if (s_propGlyphs != null) return;
-        s_propGlyphs = BuildGlyphTable(new Typeface("Segoe UI"), out s_propCellW);
-        s_monoGlyphs = BuildGlyphTable(new Typeface("Cascadia Mono"), out s_monoCellW);
+        s_propTypeface = new Typeface("Segoe UI");
+        s_monoTypeface = new Typeface("Cascadia Mono");
+        s_propGlyphs = BuildGlyphTable(s_propTypeface, out s_propCellW);
+        s_monoGlyphs = BuildGlyphTable(s_monoTypeface, out s_monoCellW);
+        s_propExtended = new Dictionary<int, GlyphInfo>();
+        s_monoExtended = new Dictionary<int, GlyphInfo>();
     }
 
     private static GlyphInfo[] BuildGlyphTable(Typeface typeface, out double cellWidth)
@@ -496,6 +514,71 @@ public class MinimapScrollbar : FrameworkElement
         }
 
         return result;
+    }
+
+    private static GlyphInfo GetExtendedGlyph(int ch, bool isMono)
+    {
+        var cache = isMono ? s_monoExtended : s_propExtended;
+        if (cache.TryGetValue(ch, out var cached))
+            return cached;
+
+        var typeface = isMono ? s_monoTypeface : s_propTypeface;
+        double cellW = isMono ? s_monoCellW : s_propCellW;
+        var glyph = RenderGlyph(ch, typeface, cellW);
+        cache[ch] = glyph;
+        return glyph;
+    }
+
+    private static GlyphInfo RenderGlyph(int codePoint, Typeface typeface, double cellWidth)
+    {
+        const double size = 24.0;
+        string text = char.ConvertFromUtf32(codePoint);
+
+        var ft = new FormattedText(text, CultureInfo.InvariantCulture,
+            FlowDirection.LeftToRight, typeface, size, Brushes.White, 1.0);
+        double adv = ft.WidthIncludingTrailingWhitespace;
+        int pw = Math.Clamp((int)Math.Round(adv / cellWidth), 1, 4);
+
+        int bw = Math.Max(1, (int)Math.Ceiling(adv) + 2);
+        int bh = Math.Max(1, (int)Math.Ceiling(ft.Height) + 2);
+
+        var dv = new DrawingVisual();
+        using (var ctx = dv.RenderOpen())
+            ctx.DrawText(ft, new Point(1, 0));
+        var rtb = new RenderTargetBitmap(bw, bh, 96, 96, PixelFormats.Pbgra32);
+        rtb.Render(dv);
+
+        var pix = new byte[bw * bh * 4];
+        rtb.CopyPixels(pix, bw * 4, 0);
+
+        var alphas = new float[pw * GlyphH];
+        double cw = (double)bw / pw;
+        double ch = (double)bh / GlyphH;
+
+        for (int gy = 0; gy < GlyphH; gy++)
+        {
+            int py0 = (int)(gy * ch);
+            int py1 = Math.Min(bh, Math.Max(py0 + 1, (int)((gy + 1) * ch)));
+            for (int gx = 0; gx < pw; gx++)
+            {
+                int px0 = (int)(gx * cw);
+                int px1 = Math.Min(bw, Math.Max(px0 + 1, (int)((gx + 1) * cw)));
+
+                double sum = 0;
+                int cnt = 0;
+                for (int py = py0; py < py1; py++)
+                    for (int px = px0; px < px1; px++)
+                    {
+                        sum += pix[(py * bw + px) * 4 + 3];
+                        cnt++;
+                    }
+
+                float alpha = (float)(sum / cnt / 255.0 * 1.8);
+                alphas[gy * pw + gx] = Math.Min(1f, alpha);
+            }
+        }
+
+        return new GlyphInfo { Width = (byte)pw, Alphas = alphas };
     }
 
     internal static int FoldToAscii(int ch)
