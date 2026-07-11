@@ -1432,6 +1432,12 @@ public partial class DocsCanvas : FrameworkElement
 
             var map = IsVisual ? _visualMaps?[bi] : null;
 
+            if (IsVisual && parsed.Kind == BlockKind.ThematicBreak)
+            {
+                _visualLines.Add(new VisualLine(bi, 0, text.Length, parsed.Kind) { OverrideHeight = 20 });
+                continue;
+            }
+
             if (IsVisual && parsed.Table != null && parsed.Kind is BlockKind.TableHeaderRow or BlockKind.TableDataRow)
             {
                 _visualLines.Add(new VisualLine(bi, 0, text.Length, parsed.Kind));
@@ -1956,7 +1962,13 @@ public partial class DocsCanvas : FrameworkElement
 
                     double textX = _padding;
 
-                    if (IsVisual && parsed.Table != null && parsed.TableRow != null)
+                    if (IsVisual && parsed.Kind == BlockKind.ThematicBreak)
+                    {
+                        double ruleY = lineY - effectiveScroll + 10;
+                        double ruleRight = ActualWidth - _padding;
+                        dc.DrawLine(_palette.TableBorderPen, new Point(_padding, ruleY), new Point(ruleRight, ruleY));
+                    }
+                    else if (IsVisual && parsed.Table != null && parsed.TableRow != null)
                     {
                         DrawTableRow(dc, vl, blockText, parsed, lineY, effectiveScroll, fontSize, baseTypeface);
                     }
@@ -2201,12 +2213,16 @@ public partial class DocsCanvas : FrameworkElement
 
         if (parsed.Kind >= BlockKind.Heading1 && parsed.Kind <= BlockKind.Heading6)
         {
-            int hashCount = parsed.Kind - BlockKind.Heading1 + 1;
-            int totalPrefix = ls + hashCount + 1;
-            int localStart = Math.Max(0, 0 - vl.StartOffset);
-            int localEnd = Math.Min(vl.Length, totalPrefix - vl.StartOffset);
-            if (localEnd > localStart)
-                ft.SetForegroundBrush(_palette.Syntax, localStart, localEnd - localStart);
+            var stripped = ls > 0 ? blockText[ls..] : blockText;
+            if (stripped.Length > 0 && stripped[0] == '#')
+            {
+                int hashCount = parsed.Kind - BlockKind.Heading1 + 1;
+                int totalPrefix = ls + hashCount + 1;
+                int localStart = Math.Max(0, 0 - vl.StartOffset);
+                int localEnd = Math.Min(vl.Length, totalPrefix - vl.StartOffset);
+                if (localEnd > localStart)
+                    ft.SetForegroundBrush(_palette.Syntax, localStart, localEnd - localStart);
+            }
         }
 
         if (parsed.Kind is BlockKind.TaskListItemUnchecked or BlockKind.TaskListItemChecked && vl.StartOffset == 0 && vl.Length >= ls + 6)
@@ -2234,7 +2250,7 @@ public partial class DocsCanvas : FrameworkElement
         if (parsed.Kind is BlockKind.ThemeDefinition or BlockKind.ColorDivOpen or BlockKind.ColorDivClose)
             ft.SetForegroundBrush(_palette.Syntax, 0, vl.Length);
 
-        if (parsed.Kind == BlockKind.TableSeparatorRow)
+        if (parsed.Kind is BlockKind.TableSeparatorRow or BlockKind.ThematicBreak or BlockKind.SetextUnderline)
         {
             ft.SetForegroundBrush(_palette.Syntax, 0, vl.Length);
         }

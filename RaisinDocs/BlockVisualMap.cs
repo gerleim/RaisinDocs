@@ -153,10 +153,14 @@ public class BlockVisualMap
         else if (parsed.Kind >= BlockKind.Heading1 && parsed.Kind <= BlockKind.Heading6)
         {
             int ls = parsed.LeadingSpaces;
-            int hashCount = parsed.Kind - BlockKind.Heading1 + 1;
-            int prefixLen = hashCount + 1;
-            if (blockText.Length >= ls + prefixLen)
-                ranges.Add(new HiddenRange(0, ls + prefixLen));
+            var stripped = ls > 0 ? blockText[ls..] : blockText;
+            if (stripped.Length > 0 && stripped[0] == '#')
+            {
+                int hashCount = parsed.Kind - BlockKind.Heading1 + 1;
+                int prefixLen = hashCount + 1;
+                if (blockText.Length >= ls + prefixLen)
+                    ranges.Add(new HiddenRange(0, ls + prefixLen));
+            }
         }
         else if (parsed.Kind is BlockKind.TaskListItemUnchecked or BlockKind.TaskListItemChecked)
         {

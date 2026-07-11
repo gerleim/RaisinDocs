@@ -2334,4 +2334,149 @@ public class MarkdownParserTests
         blocks[0].IsSkippedInVisual.Should().BeTrue();
     }
 
+    // --- Thematic breaks ---
+
+    [Theory]
+    [InlineData("---")]
+    [InlineData("***")]
+    [InlineData("___")]
+    [InlineData("----")]
+    [InlineData("- - -")]
+    [InlineData("* * *")]
+    [InlineData("_ _ _")]
+    [InlineData("  ---")]
+    [InlineData("   ---")]
+    [InlineData(" - - - ")]
+    public void ThematicBreak_Detected(string text)
+    {
+        var result = ParseBlocks(text);
+        result[0].Kind.Should().Be(BlockKind.ThematicBreak);
+    }
+
+    [Theory]
+    [InlineData("--")]
+    [InlineData("**")]
+    [InlineData("__")]
+    [InlineData("-_-")]
+    [InlineData("- - text")]
+    [InlineData("    ---")]
+    public void ThematicBreak_NotDetected(string text)
+    {
+        var result = ParseBlocks(text);
+        result[0].Kind.Should().NotBe(BlockKind.ThematicBreak);
+    }
+
+    [Fact]
+    public void ThematicBreak_NotInsideFencedCode()
+    {
+        var result = ParseBlocks("```", "---", "```");
+        result[1].Kind.Should().Be(BlockKind.FencedCodeLine);
+    }
+
+    // --- Setext headings ---
+
+    [Fact]
+    public void SetextHeading_EqualsSign_IsH1()
+    {
+        var result = ParseBlocks("Title", "===");
+        result[0].Kind.Should().Be(BlockKind.Heading1);
+        result[1].Kind.Should().Be(BlockKind.SetextUnderline);
+    }
+
+    [Fact]
+    public void SetextHeading_DashSign_IsH2()
+    {
+        var result = ParseBlocks("Subtitle", "---");
+        result[0].Kind.Should().Be(BlockKind.Heading2);
+        result[1].Kind.Should().Be(BlockKind.SetextUnderline);
+    }
+
+    [Fact]
+    public void SetextHeading_SingleEquals()
+    {
+        var result = ParseBlocks("Title", "=");
+        result[0].Kind.Should().Be(BlockKind.Heading1);
+        result[1].Kind.Should().Be(BlockKind.SetextUnderline);
+    }
+
+    [Fact]
+    public void SetextHeading_SingleDash()
+    {
+        var result = ParseBlocks("Title", "-");
+        result[0].Kind.Should().Be(BlockKind.Heading2);
+        result[1].Kind.Should().Be(BlockKind.SetextUnderline);
+    }
+
+    [Fact]
+    public void SetextHeading_LeadingSpaces()
+    {
+        var result = ParseBlocks("Title", "  ===");
+        result[0].Kind.Should().Be(BlockKind.Heading1);
+        result[1].Kind.Should().Be(BlockKind.SetextUnderline);
+    }
+
+    [Fact]
+    public void SetextHeading_TrailingSpaces()
+    {
+        var result = ParseBlocks("Title", "===  ");
+        result[0].Kind.Should().Be(BlockKind.Heading1);
+        result[1].Kind.Should().Be(BlockKind.SetextUnderline);
+    }
+
+    [Fact]
+    public void SetextUnderline_IsSkippedInVisual()
+    {
+        var result = ParseBlocks("Title", "===");
+        result[1].IsSkippedInVisual.Should().BeTrue();
+    }
+
+    [Fact]
+    public void SetextHeading_NotPrecededByParagraph_StaysThematicBreak()
+    {
+        var result = ParseBlocks("---");
+        result[0].Kind.Should().Be(BlockKind.ThematicBreak);
+    }
+
+    [Fact]
+    public void SetextHeading_EqualsNotPrecededByParagraph_StaysParagraph()
+    {
+        var result = ParseBlocks("", "===");
+        result[1].Kind.Should().Be(BlockKind.Paragraph);
+    }
+
+    [Fact]
+    public void SetextHeading_NotInsideFencedCode()
+    {
+        var result = ParseBlocks("```", "Title", "===", "```");
+        result[1].Kind.Should().Be(BlockKind.FencedCodeLine);
+        result[2].Kind.Should().Be(BlockKind.FencedCodeLine);
+    }
+
+    [Fact]
+    public void SetextHeading_DashDisambiguation_AfterParagraph()
+    {
+        var result = ParseBlocks("text", "---");
+        result[0].Kind.Should().Be(BlockKind.Heading2);
+        result[1].Kind.Should().Be(BlockKind.SetextUnderline);
+    }
+
+    [Fact]
+    public void SetextHeading_DashDisambiguation_AfterBlankLine()
+    {
+        var result = ParseBlocks("text", "", "---");
+        result[0].Kind.Should().Be(BlockKind.Paragraph);
+        result[2].Kind.Should().Be(BlockKind.ThematicBreak);
+    }
+
+    [Theory]
+    [InlineData("---", BlockKind.ThematicBreak)]
+    [InlineData(" ---", BlockKind.ThematicBreak)]
+    [InlineData("  ---", BlockKind.ThematicBreak)]
+    [InlineData("   ---", BlockKind.ThematicBreak)]
+    [InlineData("    ---", BlockKind.Paragraph)]
+    public void PrefixTolerance_ThematicBreak(string text, BlockKind expected)
+    {
+        MarkdownParser.ClassifyBlock(text).Should().Be(expected);
+    }
+
 }

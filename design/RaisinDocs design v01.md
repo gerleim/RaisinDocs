@@ -174,14 +174,14 @@ A trailing `\` is a hard break only when:
 - Enter key auto-inserts next number; Enter on empty item exits the list
 - Toolbar button to insert/toggle ordered list
 
-### 14 — Thematic breaks
+### 14 — Thematic breaks ✅
 - CommonMark thematic breaks (§4.1): `---`, `***`, `___` (three or more of the same character, optionally with spaces)
 - Parser detects thematic break lines, assigns `ThematicBreak` BlockKind
 - Source mode: dimmed marker text
 - Visual mode: render as a horizontal rule (thin line spanning content width, with vertical spacing above/below)
 - Must not conflict with setext heading underlines (setext headings take priority when preceded by a paragraph)
 
-### 15 — Setext headings
+### 15 — Setext headings ✅
 - CommonMark setext headings (§4.3): a paragraph followed by `===...` (H1) or `---...` (H2) on the next line
 - Two-pass detection like tables/fenced code: parser looks at consecutive blocks to identify heading + underline pairs
 - Assigns existing `Heading1`/`Heading2` BlockKind to the text line; underline line marked as a new `SetextUnderline` BlockKind (skipped in visual mode like table separator rows)

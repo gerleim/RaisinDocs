@@ -524,7 +524,8 @@ public partial class DocsCanvas
             string blockText = _doc.GetBlockText(_doc.CursorBlock);
             var blockKind = MarkdownParser.ClassifyBlock(blockText);
             bool isStandalone = (blockKind >= BlockKind.Heading1 && blockKind <= BlockKind.Heading6)
-                             || MarkdownParser.IsFenceLine(blockText);
+                             || MarkdownParser.IsFenceLine(blockText)
+                             || blockKind == BlockKind.ThematicBreak;
             StripTrailingHardBreak();
 
             if (blockKind == BlockKind.OrderedListItem)

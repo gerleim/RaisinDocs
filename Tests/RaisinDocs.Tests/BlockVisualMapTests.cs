@@ -1032,4 +1032,36 @@ public class BlockVisualMapTests
         visEnd.Should().Be(28);
         display[visStart..visEnd].Should().Be("dgfhfzgjhfg fghfgh");
     }
+
+    // --- Setext headings ---
+
+    [Fact]
+    public void SetextH1_NoPrefixHidden()
+    {
+        var texts = new[] { "My Title", "===" };
+        var blocks = MarkdownParser.Parse(i => texts[i], texts.Length);
+        blocks[0].Kind.Should().Be(BlockKind.Heading1);
+        var map = BlockVisualMap.Compute(blocks[0], texts[0]);
+        var display = map.BuildDisplayString(texts[0], 0, texts[0].Length);
+        display.Should().Be("My Title");
+    }
+
+    [Fact]
+    public void SetextH2_NoPrefixHidden()
+    {
+        var texts = new[] { "Subtitle", "---" };
+        var blocks = MarkdownParser.Parse(i => texts[i], texts.Length);
+        blocks[0].Kind.Should().Be(BlockKind.Heading2);
+        var map = BlockVisualMap.Compute(blocks[0], texts[0]);
+        var display = map.BuildDisplayString(texts[0], 0, texts[0].Length);
+        display.Should().Be("Subtitle");
+    }
+
+    [Fact]
+    public void AtxH1_PrefixStillHidden()
+    {
+        var map = ComputeMap("# Title");
+        var display = map.BuildDisplayString("# Title", 0, 7);
+        display.Should().Be("Title");
+    }
 }

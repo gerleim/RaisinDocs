@@ -51,6 +51,8 @@ public enum BlockKind
     ThemeDefinition,
     ColorDivOpen,
     ColorDivClose,
+    ThematicBreak,
+    SetextUnderline,
 }
 
 public enum ColumnAlignment { Left, Center, Right }
@@ -86,7 +88,8 @@ public record class ParsedBlock
     public bool IsFenceDelimiter { get; init; }
     public bool IsTableSeparator { get; init; }
     public bool IsSkippedInVisual => IsFenceDelimiter || IsTableSeparator || Kind == BlockKind.LinkDefinition
-        || Kind == BlockKind.ThemeDefinition || Kind == BlockKind.ColorDivOpen || Kind == BlockKind.ColorDivClose;
+        || Kind == BlockKind.ThemeDefinition || Kind == BlockKind.ColorDivOpen || Kind == BlockKind.ColorDivClose
+        || Kind == BlockKind.SetextUnderline;
     public IReadOnlyList<InlineImage>? Images { get; init; }
     public IReadOnlyList<InlineLink>? Links { get; init; }
     public IReadOnlyList<EmphasisMarker>? EmphasisMarkers { get; init; }
@@ -243,6 +246,7 @@ public static class MarkdownParser
             });
         }
 
+        DetectSetextHeadings(result, getBlockText);
         DetectTables(result, getBlockText);
         DetectContinuations(result, getBlockText);
         ApplyBlockDivColors(result);
@@ -472,6 +476,48 @@ public static class MarkdownParser
         }
     }
 
+    private static void DetectSetextHeadings(List<ParsedBlock> blocks, Func<int, string> getBlockText)
+    {
+        for (int i = 0; i < blocks.Count - 1; i++)
+        {
+            if (blocks[i].Kind != BlockKind.Paragraph || getBlockText(i).Length == 0)
+                continue;
+
+            var nextKind = blocks[i + 1].Kind;
+            string nextText = getBlockText(i + 1);
+
+            BlockKind? headingKind = null;
+            if (nextKind is BlockKind.Paragraph or BlockKind.ThematicBreak && IsSetextUnderline(nextText, out char underlineChar))
+            {
+                headingKind = underlineChar == '=' ? BlockKind.Heading1 : BlockKind.Heading2;
+            }
+
+            if (headingKind == null)
+                continue;
+
+            blocks[i] = blocks[i] with { Kind = headingKind.Value };
+            blocks[i + 1] = blocks[i + 1] with { Kind = BlockKind.SetextUnderline };
+            i++;
+        }
+    }
+
+    internal static bool IsSetextUnderline(string text, out char underlineChar)
+    {
+        underlineChar = '\0';
+        int i = 0;
+        while (i < text.Length && i < 3 && text[i] == ' ') i++;
+        if (i >= text.Length) return false;
+        char ch = text[i];
+        if (ch is not '=' and not '-') return false;
+        for (int j = i; j < text.Length; j++)
+        {
+            if (text[j] != ch && text[j] != ' ') return false;
+        }
+        if (i >= text.Length || text[i] != ch) return false;
+        underlineChar = ch;
+        return true;
+    }
+
     private static bool IsContainerBlock(BlockKind kind) => kind is
         BlockKind.UnorderedListItem or BlockKind.OrderedListItem
         or BlockKind.TaskListItemUnchecked or BlockKind.TaskListItemChecked
@@ -697,6 +743,9 @@ public static class MarkdownParser
         if (text.StartsWith("#") && text.Length > 1 && text[1] == ' ')
             return BlockKind.Heading1;
 
+        if (IsThematicBreak(text))
+            return BlockKind.ThematicBreak;
+
         if (text.StartsWith("- ") || text.StartsWith("* "))
         {
             if (text.Length >= 6 && text[2] == '[' && text[4] == ']' && text[5] == ' ')
@@ -726,6 +775,23 @@ public static class MarkdownParser
         BlockKind.Blockquote => leadingColumns + 2,
         _ => 0,
     };
+
+    internal static bool IsThematicBreak(string text)
+    {
+        int i = 0;
+        while (i < text.Length && text[i] == ' ') i++;
+        if (i >= text.Length) return false;
+        char marker = text[i];
+        if (marker is not '-' and not '*' and not '_') return false;
+        int count = 0;
+        for (int j = i; j < text.Length; j++)
+        {
+            if (text[j] == marker) count++;
+            else if (text[j] is ' ' or '\t') continue;
+            else return false;
+        }
+        return count >= 3;
+    }
 
     internal static int GetOrderedListPrefixLength(string text)
     {
