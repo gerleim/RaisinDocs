@@ -377,7 +377,7 @@ public class Document
     public void MoveWordLeft()
     {
         var text = _blocks[CursorBlock].ToString();
-        int pos = CursorOffset;
+        int pos = Math.Min(CursorOffset, text.Length);
         if (pos == 0)
         {
             MoveLeft();

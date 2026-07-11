@@ -55,6 +55,7 @@ public class MinimapScrollbar : FrameworkElement
     private double[]? _lineYPos;
     private double _totalMinimapH;
     private int _heightTableVersion = -1;
+    private readonly List<MinimapTableCell> _tableCells = new();
 
     internal DocsCanvas? Canvas { get; set; }
 
@@ -199,17 +200,66 @@ public class MinimapScrollbar : FrameworkElement
 
             Canvas!.GetMinimapLineInfo(lineIdx, out string text, out BlockKind kind);
 
-            bool isCode = kind == BlockKind.FencedCodeLine;
-            var glyphs = isCode ? monoGlyphs : propGlyphs;
-            double cellW = isCode ? s_monoCellW : s_propCellW;
-            double baseAdvance = cellW * 2 * (16.0 / 24.0) * xScale;
+            if (kind == BlockKind.ThematicBreak)
+            {
+                double lineH2 = _lineYPos[lineIdx + 1] - _lineYPos[lineIdx];
+                double lineY2 = (_lineYPos[lineIdx] - firstLineYPos) - subPixelOff;
+                int ruleY = Math.Clamp((int)(lineY2 + lineH2 / 2), 0, h - 1);
+                int ruleX0 = 1;
+                int ruleX1 = w - 1;
+                float ruleAlpha = 0.4f;
+                for (int px = ruleX0; px < ruleX1; px++)
+                {
+                    int off = (ruleY * w + px) * 4;
+                    _pixelBuf[off] = (byte)(fg.B * ruleAlpha + _pixelBuf[off] * (1 - ruleAlpha));
+                    _pixelBuf[off + 1] = (byte)(fg.G * ruleAlpha + _pixelBuf[off + 1] * (1 - ruleAlpha));
+                    _pixelBuf[off + 2] = (byte)(fg.R * ruleAlpha + _pixelBuf[off + 2] * (1 - ruleAlpha));
+                }
+                continue;
+            }
 
             double lineH = _lineYPos[lineIdx + 1] - _lineYPos[lineIdx];
             double scale = lineH / CharHeight;
-
             double lineY = (_lineYPos[lineIdx] - firstLineYPos) - subPixelOff;
             int py0 = Math.Max(0, (int)lineY);
             int pyEnd = Math.Min(h, (int)(lineY + lineH));
+
+            if (kind is BlockKind.TableHeaderRow or BlockKind.TableDataRow)
+            {
+                _tableCells.Clear();
+                if (Canvas!.GetMinimapTableRowInfo(lineIdx, _tableCells,
+                    out bool isHeader, out double tableWidth,
+                    out var tableColorSpans))
+                {
+                    double propBaseAdvance = s_propCellW * 2 * (16.0 / 24.0) * xScale;
+                    int bgPxEnd = Math.Min(w, (int)(1 + tableWidth * xScale));
+
+                    Color tableBg = Canvas.MinimapTableBackground;
+                    BlendRect(0, bgPxEnd, py0, pyEnd,
+                        tableBg.B, tableBg.G, tableBg.R, tableBg.A / 255.0, w);
+
+                    if (isHeader)
+                    {
+                        Color hdrBg = Canvas.MinimapTableHeaderBackground;
+                        BlendRect(0, bgPxEnd, py0, pyEnd,
+                            hdrBg.B, hdrBg.G, hdrBg.R, hdrBg.A / 255.0, w);
+                    }
+
+                    foreach (var cell in _tableCells)
+                    {
+                        RenderTextGlyphs(cell.Text, 1 + cell.XOffset * xScale,
+                            lineY, scale, propBaseAdvance, false,
+                            fg.B, fg.G, fg.R, tableColorSpans, cell.RawStart,
+                            py0, pyEnd, w, h);
+                    }
+                    continue;
+                }
+            }
+
+            bool isCode = kind is BlockKind.FencedCodeLine or BlockKind.IndentedCodeLine;
+            var glyphs = isCode ? monoGlyphs : propGlyphs;
+            double cellW = isCode ? s_monoCellW : s_propCellW;
+            double baseAdvance = cellW * 2 * (16.0 / 24.0) * xScale;
 
             byte lineFgB = fg.B, lineFgG = fg.G, lineFgR = fg.R;
             IReadOnlyList<ColorSpan>? colorSpans = null;
@@ -241,142 +291,114 @@ public class MinimapScrollbar : FrameworkElement
                 if (blockBg != null)
                 {
                     var bgc = blockBg.Value;
-                    const double ba = 40.0 / 255.0;
-                    for (int py = py0; py < pyEnd; py++)
-                        for (int px = 0; px < w; px++)
-                        {
-                            int off = (py * w + px) * 4;
-                            _pixelBuf[off] = (byte)(bgc.B * ba + _pixelBuf[off] * (1 - ba));
-                            _pixelBuf[off + 1] = (byte)(bgc.G * ba + _pixelBuf[off + 1] * (1 - ba));
-                            _pixelBuf[off + 2] = (byte)(bgc.R * ba + _pixelBuf[off + 2] * (1 - ba));
-                        }
-                }
-
-                if (colorSpans != null)
-                {
-                    double bgX = 1;
-                    for (int ci = 0; ci < text.Length; ci++)
-                    {
-                        int ch2 = text[ci];
-
-                        double charAdv;
-                        if (ch2 >= FirstPrintable && ch2 <= LastPrintable)
-                        {
-                            charAdv = glyphs[ch2 - FirstPrintable].Width * baseAdvance / 2.0;
-                        }
-                        else if (ch2 > LastPrintable)
-                        {
-                            charAdv = GetExtendedGlyph(ch2, isCode).Width * baseAdvance / 2.0;
-                        }
-                        else
-                        {
-                            charAdv = baseAdvance;
-                        }
-
-                        int rawIdx = spanBaseOffset + ci;
-                        foreach (var cs in colorSpans)
-                        {
-                            if (cs.Background != null
-                                && rawIdx >= cs.Start && rawIdx < cs.Start + cs.Length)
-                            {
-                                var bgc = cs.Background.Value;
-                                const double ba = 40.0 / 255.0;
-                                int pxS = Math.Max(0, (int)bgX);
-                                int pxE = Math.Min(w, (int)(bgX + charAdv));
-                                for (int py = py0; py < pyEnd; py++)
-                                    for (int px = pxS; px < pxE; px++)
-                                    {
-                                        int off = (py * w + px) * 4;
-                                        _pixelBuf[off] = (byte)(bgc.B * ba + _pixelBuf[off] * (1 - ba));
-                                        _pixelBuf[off + 1] = (byte)(bgc.G * ba + _pixelBuf[off + 1] * (1 - ba));
-                                        _pixelBuf[off + 2] = (byte)(bgc.R * ba + _pixelBuf[off + 2] * (1 - ba));
-                                    }
-                                break;
-                            }
-                        }
-
-                        bgX += charAdv;
-                        if (bgX >= w) break;
-                    }
+                    BlendRect(0, w, py0, pyEnd, bgc.B, bgc.G, bgc.R, 40.0 / 255.0, w);
                 }
             }
 
-            double x = 1;
-            for (int ci = 0; ci < text.Length; ci++)
+            RenderTextGlyphs(text, 1, lineY, scale, baseAdvance, isCode,
+                lineFgB, lineFgG, lineFgR, colorSpans, spanBaseOffset,
+                py0, pyEnd, w, h);
+        }
+
+        _bitmap.WritePixels(new Int32Rect(0, 0, w, h), _pixelBuf, w * 4, 0);
+    }
+
+    private void BlendRect(int px0, int px1, int py0, int pyEnd, byte cB, byte cG, byte cR, double alpha, int w)
+    {
+        for (int py = py0; py < pyEnd; py++)
+            for (int px = px0; px < px1; px++)
             {
-                int ch = text[ci];
-                GlyphInfo glyph;
-                if (ch >= FirstPrintable && ch <= LastPrintable)
-                {
-                    glyph = glyphs[ch - FirstPrintable];
-                }
-                else if (ch > LastPrintable)
-                {
-                    glyph = GetExtendedGlyph(ch, isCode);
-                }
-                else
-                {
-                    x += baseAdvance;
-                    if (x >= w) break;
-                    continue;
-                }
+                int off = (py * w + px) * 4;
+                _pixelBuf[off] = (byte)(cB * alpha + _pixelBuf[off] * (1 - alpha));
+                _pixelBuf[off + 1] = (byte)(cG * alpha + _pixelBuf[off + 1] * (1 - alpha));
+                _pixelBuf[off + 2] = (byte)(cR * alpha + _pixelBuf[off + 2] * (1 - alpha));
+            }
+    }
 
-                int gw = glyph.Width;
-                double advance = gw * baseAdvance / 2.0;
+    private void RenderTextGlyphs(string text, double startX, double lineY, double scale,
+        double baseAdvance, bool isCode, byte fgB, byte fgG, byte fgR,
+        IReadOnlyList<ColorSpan>? colorSpans, int spanRawBase,
+        int py0, int pyEnd, int w, int h)
+    {
+        var glyphs = isCode ? s_monoGlyphs! : s_propGlyphs!;
+        double x = startX;
 
-                byte cB = lineFgB, cG = lineFgG, cR = lineFgR;
-                if (colorSpans != null)
+        for (int ci = 0; ci < text.Length; ci++)
+        {
+            int ch = text[ci];
+            GlyphInfo glyph;
+            if (ch >= FirstPrintable && ch <= LastPrintable)
+                glyph = glyphs[ch - FirstPrintable];
+            else if (ch > LastPrintable)
+                glyph = GetExtendedGlyph(ch, isCode);
+            else
+            {
+                x += baseAdvance;
+                if (x >= w) break;
+                continue;
+            }
+
+            int gw = glyph.Width;
+            double advance = gw * baseAdvance / 2.0;
+
+            byte cB = fgB, cG = fgG, cR = fgR;
+            if (colorSpans != null)
+            {
+                int rawIdx = spanRawBase + ci;
+                foreach (var cs in colorSpans)
                 {
-                    int rawIdx = spanBaseOffset + ci;
-                    foreach (var cs in colorSpans)
+                    if (rawIdx >= cs.Start && rawIdx < cs.Start + cs.Length)
                     {
-                        if (cs.Foreground != null
-                            && rawIdx >= cs.Start && rawIdx < cs.Start + cs.Length)
+                        if (cs.Background != null)
+                        {
+                            var bgc = cs.Background.Value;
+                            BlendRect(Math.Max(0, (int)x), Math.Min(w, (int)(x + advance)),
+                                py0, pyEnd, bgc.B, bgc.G, bgc.R, 40.0 / 255.0, w);
+                        }
+                        if (cs.Foreground != null)
                         {
                             cB = cs.Foreground.Value.B;
                             cG = cs.Foreground.Value.G;
                             cR = cs.Foreground.Value.R;
-                            break;
                         }
+                        break;
                     }
                 }
+            }
 
-                if (glyph.Alphas != null)
+            if (glyph.Alphas != null)
+            {
+                for (int gy = 0; gy < GlyphH; gy++)
                 {
-                    for (int gy = 0; gy < GlyphH; gy++)
+                    int pyStart = Math.Max(0, (int)(lineY + gy * scale));
+                    int pyEndG = Math.Min(h, (int)(lineY + (gy + 1) * scale));
+
+                    for (int pyR = pyStart; pyR < pyEndG; pyR++)
                     {
-                        int pyStart = Math.Max(0, (int)(lineY + gy * scale));
-                        int pyEndG = Math.Min(h, (int)(lineY + (gy + 1) * scale));
-
-                        for (int pyR = pyStart; pyR < pyEndG; pyR++)
+                        for (int gx = 0; gx < gw; gx++)
                         {
-                            for (int gx = 0; gx < gw; gx++)
+                            int pxStart = (int)(x + gx * advance / gw);
+                            int pxEnd = Math.Max(pxStart + 1, (int)(x + (gx + 1) * advance / gw));
+
+                            float a = glyph.Alphas[gy * gw + gx];
+                            if (a < 0.01f) continue;
+
+                            for (int pxR = pxStart; pxR < pxEnd; pxR++)
                             {
-                                int pxStart = (int)(x + gx * advance / gw);
-                                int pxEnd = Math.Max(pxStart + 1, (int)(x + (gx + 1) * advance / gw));
-
-                                float a = glyph.Alphas[gy * gw + gx];
-                                if (a < 0.01f) continue;
-
-                                for (int pxR = pxStart; pxR < pxEnd; pxR++)
-                                {
-                                    if (pxR < 0 || pxR >= w) continue;
-                                    int off = (pyR * w + pxR) * 4;
-                                    _pixelBuf[off] = (byte)(cB * a + _pixelBuf[off] * (1 - a));
-                                    _pixelBuf[off + 1] = (byte)(cG * a + _pixelBuf[off + 1] * (1 - a));
-                                    _pixelBuf[off + 2] = (byte)(cR * a + _pixelBuf[off + 2] * (1 - a));
-                                }
+                                if (pxR < 0 || pxR >= w) continue;
+                                int off = (pyR * w + pxR) * 4;
+                                _pixelBuf[off] = (byte)(cB * a + _pixelBuf[off] * (1 - a));
+                                _pixelBuf[off + 1] = (byte)(cG * a + _pixelBuf[off + 1] * (1 - a));
+                                _pixelBuf[off + 2] = (byte)(cR * a + _pixelBuf[off + 2] * (1 - a));
                             }
                         }
                     }
                 }
-
-                x += advance;
-                if (x >= w) break;
             }
-        }
 
-        _bitmap.WritePixels(new Int32Rect(0, 0, w, h), _pixelBuf, w * 4, 0);
+            x += advance;
+            if (x >= w) break;
+        }
     }
 
     private static double GetLineHeight(BlockKind kind) => kind switch
