@@ -670,6 +670,85 @@ public partial class DocsCanvas
         }
     }
 
+    private bool TryPasteIntoTableCells(string pasteText)
+    {
+        if (!IsVisual || _parsedBlocks == null) return false;
+
+        var cursorParsed = _parsedBlocks[_doc.CursorBlock];
+        if (cursorParsed.Table == null || cursorParsed.TableRow == null) return false;
+
+        var pasteLines = pasteText.Replace("\r\n", "\n").Replace("\r", "\n")
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        if (pasteLines.Length == 0) return false;
+
+        foreach (var line in pasteLines)
+        {
+            var trimmed = line.Trim();
+            if (!trimmed.StartsWith('|') || !trimmed.EndsWith('|'))
+                return false;
+        }
+
+        int startCol = FindCellIndexAtOffset(cursorParsed.TableRow.Cells, _doc.CursorOffset);
+        int destBlock = _doc.CursorBlock;
+        int lastBlock = destBlock;
+        int lastOffset = _doc.CursorOffset;
+
+        foreach (var line in pasteLines)
+        {
+            while (destBlock < _doc.BlockCount)
+            {
+                var dp = _parsedBlocks[destBlock];
+                if (dp.Table == cursorParsed.Table && dp.TableRow != null && !dp.IsTableSeparator)
+                    break;
+                destBlock++;
+            }
+            if (destBlock >= _doc.BlockCount) break;
+
+            var destParsed = _parsedBlocks[destBlock];
+            if (destParsed.Table != cursorParsed.Table || destParsed.TableRow == null) break;
+
+            var srcCells = ParseTableLineCells(line);
+            var destCells = destParsed.TableRow.Cells;
+
+            int lastColThisRow = -1;
+            for (int i = srcCells.Count - 1; i >= 0; i--)
+            {
+                int destCol = startCol + i;
+                if (destCol >= destCells.Count) continue;
+
+                var dc = destCells[destCol];
+                string replacement = " " + srcCells[i] + " ";
+                _doc.RemoveTextAt(destBlock, dc.Start, dc.Length);
+                _doc.InsertTextAt(destBlock, dc.Start, replacement);
+
+                if (lastColThisRow < 0)
+                {
+                    lastColThisRow = destCol;
+                    lastBlock = destBlock;
+                    lastOffset = dc.Start + replacement.Length;
+                }
+            }
+
+            destBlock++;
+        }
+
+        _doc.CursorBlock = lastBlock;
+        _doc.CursorOffset = lastOffset;
+        _doc.CollapseSelection();
+        return true;
+    }
+
+    private static List<string> ParseTableLineCells(string line)
+    {
+        var cells = new List<string>();
+        var trimmed = line.Trim();
+        if (trimmed.StartsWith('|')) trimmed = trimmed[1..];
+        if (trimmed.EndsWith('|')) trimmed = trimmed[..^1];
+        foreach (var part in trimmed.Split('|'))
+            cells.Add(part.Trim());
+        return cells;
+    }
+
     private static int FindCellIndexAtOffset(IReadOnlyList<TableCellInfo> cells, int offset)
     {
         for (int c = 0; c < cells.Count; c++)

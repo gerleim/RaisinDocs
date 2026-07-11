@@ -844,8 +844,18 @@ public partial class DocsCanvas
                     if (!string.IsNullOrEmpty(pasteText))
                     {
                         _doc.BeginUndoGroup();
-                        if (_doc.HasSelection) _doc.DeleteSelection();
-                        _doc.Paste(pasteText);
+                        var rectPaste = TryGetTableRectSelection();
+                        if (rectPaste != null)
+                        {
+                            ClearTableRectCells(rectPaste.Value);
+                            MoveCursorToRectStart(rectPaste.Value);
+                        }
+                        else if (_doc.HasSelection)
+                        {
+                            _doc.DeleteSelection();
+                        }
+                        if (!TryPasteIntoTableCells(pasteText))
+                            _doc.Paste(pasteText);
                         _doc.SealUndoGroup();
                         textChanged = true;
                     }
