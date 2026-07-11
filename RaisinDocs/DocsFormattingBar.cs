@@ -513,7 +513,7 @@ public class DocsFormattingBar : Control
         if (canvas == null) return;
 
         var kind = canvas.CurrentBlockKind;
-        bool inCodeBlock = kind == BlockKind.FencedCodeLine;
+        bool inCodeBlock = kind is BlockKind.FencedCodeLine or BlockKind.IndentedCodeLine;
 
         SetCheckedSilent(_boldButton, canvas.SelectionIsBold);
         SetCheckedSilent(_italicButton, canvas.SelectionIsItalic);

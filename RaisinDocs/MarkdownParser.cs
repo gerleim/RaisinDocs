@@ -53,6 +53,7 @@ public enum BlockKind
     ColorDivClose,
     ThematicBreak,
     SetextUnderline,
+    IndentedCodeLine,
 }
 
 public enum ColumnAlignment { Left, Center, Right }
@@ -230,11 +231,12 @@ public static class MarkdownParser
             List<InlineImage>? images = null;
             List<InlineLink>? links = null;
             List<EmphasisMarker>? emphasisMarkers = null;
-            var runs = kind == BlockKind.FencedCodeLine
+            bool isCode = kind is BlockKind.FencedCodeLine or BlockKind.IndentedCodeLine;
+            var runs = isCode
                 ? [new StyledRun(0, text.Length, InlineStyle.Normal)]
                 : ParseInlines(text, out images, out links, out emphasisMarkers, defs);
 
-            var colorSpans = (kind == BlockKind.FencedCodeLine) ? null : ParseInlineColorTags(text, theme);
+            var colorSpans = isCode ? null : ParseInlineColorTags(text, theme);
 
             result.Add(new ParsedBlock
             {
@@ -249,6 +251,7 @@ public static class MarkdownParser
         DetectSetextHeadings(result, getBlockText);
         DetectTables(result, getBlockText);
         DetectContinuations(result, getBlockText);
+        DetectIndentedCode(result, getBlockText, defs);
         ApplyBlockDivColors(result);
 
         return result;
@@ -579,7 +582,7 @@ public static class MarkdownParser
                 if (blankStart >= 0)
                 {
                     if (MeasureLeadingWhitespace(text).columns >= contentColumn
-                        && blocks[j].Kind == BlockKind.Paragraph)
+                        && blocks[j].Kind is BlockKind.Paragraph or BlockKind.IndentedCodeLine)
                     {
                         for (int b = blankStart; b < j; b++)
                             blocks[b] = blocks[b] with { OwnerBlock = i };
@@ -590,12 +593,86 @@ public static class MarkdownParser
                     break;
                 }
 
-                if (blocks[j].Kind != BlockKind.Paragraph)
+                if (blocks[j].Kind is not BlockKind.Paragraph and not BlockKind.IndentedCodeLine)
                     break;
 
                 blocks[j] = blocks[j] with { IsLazyContinuation = true, OwnerBlock = i };
             }
         }
+    }
+
+    private static void DetectIndentedCode(List<ParsedBlock> blocks, Func<int, string> getBlockText,
+        Dictionary<string, (string Url, string? Title)>? defs)
+    {
+        for (int i = 0; i < blocks.Count; i++)
+        {
+            if (blocks[i].Kind != BlockKind.IndentedCodeLine)
+                continue;
+            if (blocks[i].IsLazyContinuation || blocks[i].IsIndentedContinuation)
+                continue;
+
+            string text = getBlockText(i);
+            if (text.Length == 0)
+                continue;
+
+            bool canStart = true;
+            if (i > 0)
+            {
+                string prevText = getBlockText(i - 1);
+                if (prevText.Length > 0 && blocks[i - 1].Kind == BlockKind.Paragraph)
+                    canStart = false;
+            }
+
+            if (!canStart)
+            {
+                blocks[i] = ReclassifyAsParagraph(blocks[i], text, defs);
+                continue;
+            }
+
+            int lastCodeLine = i;
+            int j = i + 1;
+            while (j < blocks.Count)
+            {
+                string jText = getBlockText(j);
+                if (jText.Length == 0)
+                {
+                    j++;
+                    continue;
+                }
+
+                if (blocks[j].Kind != BlockKind.IndentedCodeLine)
+                    break;
+                if (blocks[j].IsLazyContinuation || blocks[j].IsIndentedContinuation)
+                    break;
+
+                for (int k = lastCodeLine + 1; k < j; k++)
+                    blocks[k] = blocks[k] with { Kind = BlockKind.IndentedCodeLine };
+
+                lastCodeLine = j;
+                j++;
+            }
+
+            i = j - 1;
+        }
+
+        for (int i = 0; i < blocks.Count; i++)
+        {
+            if (blocks[i].Kind != BlockKind.IndentedCodeLine)
+                continue;
+            if (blocks[i].IsLazyContinuation || blocks[i].IsIndentedContinuation)
+                blocks[i] = ReclassifyAsParagraph(blocks[i], getBlockText(i), defs);
+        }
+    }
+
+    private static ParsedBlock ReclassifyAsParagraph(ParsedBlock block, string text,
+        Dictionary<string, (string Url, string? Title)>? defs)
+    {
+        return block with
+        {
+            Kind = BlockKind.Paragraph,
+            Runs = ParseInlines(text, out var imgs, out var lnks, out var emph, defs),
+            Images = imgs, Links = lnks, EmphasisMarkers = emph,
+        };
     }
 
     private static bool ContainsUnescapedPipe(string text)
@@ -725,7 +802,7 @@ public static class MarkdownParser
     internal static BlockKind ClassifyBlock(string text, out int leadingSpaces, out int leadingColumns)
     {
         var (chars, cols) = MeasureLeadingWhitespace(text);
-        if (cols >= 4) { leadingSpaces = 0; leadingColumns = 0; return BlockKind.Paragraph; }
+        if (cols >= 4) { leadingSpaces = 0; leadingColumns = 0; return BlockKind.IndentedCodeLine; }
         leadingSpaces = chars;
         leadingColumns = cols;
         if (chars > 0) text = text[chars..];
@@ -827,7 +904,7 @@ public static class MarkdownParser
 
     public static bool IsTrailingHardBreak(ParsedBlock parsed, string blockText)
     {
-        if (parsed.Kind == BlockKind.FencedCodeLine) return false;
+        if (parsed.Kind is BlockKind.FencedCodeLine or BlockKind.IndentedCodeLine) return false;
 
         int end = GetContentEnd(blockText);
         if (end == 0) return false;

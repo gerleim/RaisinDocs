@@ -195,6 +195,13 @@ public class BlockVisualMap
             }
         }
 
+        if (parsed.Kind == BlockKind.IndentedCodeLine && blockText.Length > 0)
+        {
+            int hideChars = MarkdownParser.CharsForColumns(blockText, 4);
+            if (hideChars > 0 && hideChars <= blockText.Length)
+                ranges.Add(new HiddenRange(0, hideChars));
+        }
+
         if (parsed.Kind is BlockKind.TableHeaderRow or BlockKind.TableDataRow && parsed.TableRow != null)
         {
             int prev = 0;
@@ -238,7 +245,7 @@ public class BlockVisualMap
         {
             ranges.Add(new HiddenRange(effectiveEnd - 1, 1));
         }
-        else if (parsed.Kind != BlockKind.FencedCodeLine && effectiveEnd >= 2
+        else if (parsed.Kind is not BlockKind.FencedCodeLine and not BlockKind.IndentedCodeLine && effectiveEnd >= 2
                  && blockText[effectiveEnd - 1] == ' ' && blockText[effectiveEnd - 2] == ' ')
         {
             int trailStart = effectiveEnd;

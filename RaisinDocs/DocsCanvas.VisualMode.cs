@@ -1169,7 +1169,7 @@ public partial class DocsCanvas
             if (run.Style == InlineStyle.Normal || run.Style == InlineStyle.Image) continue;
             int runEnd = run.Start + run.Length;
             if (runEnd <= vl.StartOffset || run.Start >= vlEnd) continue;
-            if (parsed.Kind == BlockKind.FencedCodeLine) continue;
+            if (parsed.Kind is BlockKind.FencedCodeLine or BlockKind.IndentedCodeLine) continue;
 
             int rawStart = Math.Max(run.Start, vl.StartOffset);
             int rawEnd = Math.Min(runEnd, vlEnd);
@@ -1209,7 +1209,7 @@ public partial class DocsCanvas
     private void ApplyColorSpansVisual(FormattedText ft, VisualLine vl,
         ParsedBlock parsed, BlockVisualMap map)
     {
-        if (parsed.Kind == BlockKind.FencedCodeLine) return;
+        if (parsed.Kind is BlockKind.FencedCodeLine or BlockKind.IndentedCodeLine) return;
         int ftLen = ft.Text.Length;
 
         if (parsed.BlockColor?.Foreground is { } blockFg)

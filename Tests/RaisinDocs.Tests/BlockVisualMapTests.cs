@@ -1064,4 +1064,38 @@ public class BlockVisualMapTests
         var display = map.BuildDisplayString("# Title", 0, 7);
         display.Should().Be("Title");
     }
+
+    // --- Indented code blocks (iteration 16) ---
+
+    [Fact]
+    public void IndentedCode_FourSpacePrefixHidden()
+    {
+        var map = ComputeMap("    code", BlockKind.IndentedCodeLine);
+        var display = map.BuildDisplayString("    code", 0, 8);
+        display.Should().Be("code");
+    }
+
+    [Fact]
+    public void IndentedCode_MoreThanFourSpaces_OnlyFourHidden()
+    {
+        var map = ComputeMap("      code", BlockKind.IndentedCodeLine);
+        var display = map.BuildDisplayString("      code", 0, 10);
+        display.Should().Be("  code");
+    }
+
+    [Fact]
+    public void IndentedCode_TabPrefixHidden()
+    {
+        var map = ComputeMap("\tcode", BlockKind.IndentedCodeLine);
+        var display = map.BuildDisplayString("\tcode", 0, 5);
+        display.Should().Be("code");
+    }
+
+    [Fact]
+    public void IndentedCode_TrailingSpaces_NotHidden()
+    {
+        var map = ComputeMap("    code  ", BlockKind.IndentedCodeLine);
+        var display = map.BuildDisplayString("    code  ", 0, 10);
+        display.Should().Be("code  ");
+    }
 }

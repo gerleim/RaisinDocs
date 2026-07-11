@@ -833,7 +833,7 @@ public partial class DocsCanvas
                     SealAndStopTimer();
                     string? pasteText = null;
                     bool inCodeBlock = _parsedBlocks != null
-                        && _parsedBlocks[_doc.CursorBlock].Kind == BlockKind.FencedCodeLine;
+                        && _parsedBlocks[_doc.CursorBlock].Kind is BlockKind.FencedCodeLine or BlockKind.IndentedCodeLine;
                     if (!shift && !inCodeBlock)
                     {
                         string? html = ClipboardHelper.GetHtml(Logger);

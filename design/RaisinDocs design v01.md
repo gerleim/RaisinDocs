@@ -189,7 +189,7 @@ A trailing `\` is a hard break only when:
 - Visual mode: heading text rendered as H1/H2, underline line hidden
 - Disambiguation: `---` under a paragraph is a setext H2, not a thematic break
 
-### 16 — Indented code blocks
+### 16 — Indented code blocks ✅
 - CommonMark indented code blocks (§4.4): lines indented by 4+ spaces (not inside a list or other container)
 - Parser detects 4-space indent, assigns `IndentedCodeLine` BlockKind (or reuses `FencedCodeLine` with a flag)
 - Source mode: code font, subtle background (same as fenced code)

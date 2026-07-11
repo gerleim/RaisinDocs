@@ -316,7 +316,7 @@ public partial class DocsCanvas : FrameworkElement
 
         if (vl.BlockIndex >= _parsedBlocks.Count) return;
         var parsed = _parsedBlocks[vl.BlockIndex];
-        if (parsed.Kind == BlockKind.FencedCodeLine) return;
+        if (parsed.Kind is BlockKind.FencedCodeLine or BlockKind.IndentedCodeLine) return;
         blockFg = parsed.BlockColor?.Foreground;
         blockBg = parsed.BlockColor?.Background;
         colorSpans = parsed.ColorSpans;
@@ -948,7 +948,7 @@ public partial class DocsCanvas : FrameworkElement
         }
     }
 
-    private bool IsInFencedCode => CurrentBlockKind == BlockKind.FencedCodeLine;
+    private bool IsInFencedCode => CurrentBlockKind is BlockKind.FencedCodeLine or BlockKind.IndentedCodeLine;
 
     public bool SelectionIsBold => SelectionHasStyle(InlineStyle.Bold);
     public bool SelectionIsItalic => SelectionHasStyle(InlineStyle.Italic);
@@ -2111,7 +2111,7 @@ public partial class DocsCanvas : FrameworkElement
             int count = localEnd - localStart;
             if (count <= 0) continue;
 
-            if (parsed.Kind == BlockKind.FencedCodeLine) continue;
+            if (parsed.Kind is BlockKind.FencedCodeLine or BlockKind.IndentedCodeLine) continue;
 
             switch (run.Style)
             {
@@ -2145,7 +2145,7 @@ public partial class DocsCanvas : FrameworkElement
     private void ApplyColorSpans(FormattedText ft, VisualLine vl, ParsedBlock parsed, string blockText)
     {
         if (parsed.ColorSpans == null && parsed.BlockColor == null) return;
-        if (parsed.Kind == BlockKind.FencedCodeLine) return;
+        if (parsed.Kind is BlockKind.FencedCodeLine or BlockKind.IndentedCodeLine) return;
 
         int hardBreakClip = MarkdownParser.IsTrailingHardBreak(parsed, blockText)
             ? MarkdownParser.GetContentEnd(blockText) - 1
@@ -2318,7 +2318,7 @@ public partial class DocsCanvas : FrameworkElement
         if (MarkdownParser.IsTrailingHardBreak(parsed, blockText))
             DimRange(ft, vl, MarkdownParser.GetContentEnd(blockText) - 1, 1);
 
-        if (parsed.Kind != BlockKind.FencedCodeLine)
+        if (parsed.Kind is not BlockKind.FencedCodeLine and not BlockKind.IndentedCodeLine)
         {
             var tagRanges = MarkdownParser.FindInlineColorTagRanges(blockText);
             if (tagRanges != null)
@@ -2339,7 +2339,7 @@ public partial class DocsCanvas : FrameworkElement
     private void DrawTrailingSpaceDots(DrawingContext dc, VisualLine vl,
         string blockText, ParsedBlock parsed, double textX, double screenY)
     {
-        if (parsed.Kind == BlockKind.FencedCodeLine) return;
+        if (parsed.Kind is BlockKind.FencedCodeLine or BlockKind.IndentedCodeLine) return;
         if (vl.StartOffset + vl.Length < blockText.Length) return;
 
         int trailStart = blockText.Length;
@@ -2384,7 +2384,7 @@ public partial class DocsCanvas : FrameworkElement
         for (int i = 0; i < _visualLines.Count; i++)
         {
             var vl = _visualLines[i];
-            if (vl.BlockKind != BlockKind.FencedCodeLine) continue;
+            if (vl.BlockKind is not BlockKind.FencedCodeLine and not BlockKind.IndentedCodeLine) continue;
 
             double lineH = _measure.GetLineHeight(vl.BlockKind);
             double lineY = _lineYPositions[i];
@@ -2407,7 +2407,7 @@ public partial class DocsCanvas : FrameworkElement
             var vl = _visualLines[i];
             if (vl.BlockIndex >= _parsedBlocks.Count) continue;
             var parsed = _parsedBlocks[vl.BlockIndex];
-            if (parsed.Kind == BlockKind.FencedCodeLine) continue;
+            if (parsed.Kind is BlockKind.FencedCodeLine or BlockKind.IndentedCodeLine) continue;
             if (parsed.BlockColor?.Background is not { } bg) continue;
 
             double lineH = GetEffectiveLineHeight(vl);
@@ -2452,7 +2452,7 @@ public partial class DocsCanvas : FrameworkElement
             {
                 if (vl.BlockIndex >= _parsedBlocks.Count) continue;
                 parsed = _parsedBlocks[vl.BlockIndex];
-                if (parsed.Kind == BlockKind.FencedCodeLine) continue;
+                if (parsed.Kind is BlockKind.FencedCodeLine or BlockKind.IndentedCodeLine) continue;
                 blockText = _doc.GetBlockText(vl.BlockIndex);
                 map = IsVisual ? _visualMaps?[vl.BlockIndex] : null;
                 colorSpans = IsVisual ? map?.ColorSpans : parsed.ColorSpans;

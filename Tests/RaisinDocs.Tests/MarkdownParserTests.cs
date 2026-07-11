@@ -446,7 +446,7 @@ public class MarkdownParserTests
     [InlineData(" # heading", BlockKind.Heading1)]
     [InlineData("  # heading", BlockKind.Heading1)]
     [InlineData("   # heading", BlockKind.Heading1)]
-    [InlineData("    # heading", BlockKind.Paragraph)]
+    [InlineData("    # heading", BlockKind.IndentedCodeLine)]
     public void PrefixTolerance_Headings(string text, BlockKind expected)
     {
         MarkdownParser.ClassifyBlock(text).Should().Be(expected);
@@ -473,7 +473,7 @@ public class MarkdownParserTests
     [InlineData(" - item", BlockKind.UnorderedListItem)]
     [InlineData("  - item", BlockKind.UnorderedListItem)]
     [InlineData("   - item", BlockKind.UnorderedListItem)]
-    [InlineData("    - item", BlockKind.Paragraph)]
+    [InlineData("    - item", BlockKind.IndentedCodeLine)]
     [InlineData("  * item", BlockKind.UnorderedListItem)]
     public void PrefixTolerance_UnorderedList(string text, BlockKind expected)
     {
@@ -485,7 +485,7 @@ public class MarkdownParserTests
     [InlineData(" 1. item", BlockKind.OrderedListItem)]
     [InlineData("  1. item", BlockKind.OrderedListItem)]
     [InlineData("   1. item", BlockKind.OrderedListItem)]
-    [InlineData("    1. item", BlockKind.Paragraph)]
+    [InlineData("    1. item", BlockKind.IndentedCodeLine)]
     [InlineData("  10. item", BlockKind.OrderedListItem)]
     public void PrefixTolerance_OrderedList(string text, BlockKind expected)
     {
@@ -497,7 +497,7 @@ public class MarkdownParserTests
     [InlineData(" > quote", BlockKind.Blockquote)]
     [InlineData("  > quote", BlockKind.Blockquote)]
     [InlineData("   > quote", BlockKind.Blockquote)]
-    [InlineData("    > quote", BlockKind.Paragraph)]
+    [InlineData("    > quote", BlockKind.IndentedCodeLine)]
     public void PrefixTolerance_Blockquote(string text, BlockKind expected)
     {
         MarkdownParser.ClassifyBlock(text).Should().Be(expected);
@@ -507,7 +507,7 @@ public class MarkdownParserTests
     [InlineData("- [ ] task", BlockKind.TaskListItemUnchecked)]
     [InlineData("  - [ ] task", BlockKind.TaskListItemUnchecked)]
     [InlineData("   - [x] task", BlockKind.TaskListItemChecked)]
-    [InlineData("    - [ ] task", BlockKind.Paragraph)]
+    [InlineData("    - [ ] task", BlockKind.IndentedCodeLine)]
     public void PrefixTolerance_TaskList(string text, BlockKind expected)
     {
         MarkdownParser.ClassifyBlock(text).Should().Be(expected);
@@ -577,9 +577,9 @@ public class MarkdownParserTests
     // --- Tab structural expansion ---
 
     [Theory]
-    [InlineData("\t# heading", BlockKind.Paragraph)]
-    [InlineData(" \t# heading", BlockKind.Paragraph)]
-    [InlineData("\ttext", BlockKind.Paragraph)]
+    [InlineData("\t# heading", BlockKind.IndentedCodeLine)]
+    [InlineData(" \t# heading", BlockKind.IndentedCodeLine)]
+    [InlineData("\ttext", BlockKind.IndentedCodeLine)]
     public void TabExpansion_TabIsIndentedCode(string text, BlockKind expected)
     {
         MarkdownParser.ClassifyBlock(text).Should().Be(expected);
@@ -2473,10 +2473,155 @@ public class MarkdownParserTests
     [InlineData(" ---", BlockKind.ThematicBreak)]
     [InlineData("  ---", BlockKind.ThematicBreak)]
     [InlineData("   ---", BlockKind.ThematicBreak)]
-    [InlineData("    ---", BlockKind.Paragraph)]
+    [InlineData("    ---", BlockKind.IndentedCodeLine)]
     public void PrefixTolerance_ThematicBreak(string text, BlockKind expected)
     {
         MarkdownParser.ClassifyBlock(text).Should().Be(expected);
+    }
+
+    // --- Indented code blocks (iteration 16) ---
+
+    [Theory]
+    [InlineData("    code")]
+    [InlineData("     code")]
+    [InlineData("      indented more")]
+    [InlineData("\tcode")]
+    [InlineData("    ")]
+    public void IndentedCode_ClassifyBlock(string text)
+    {
+        MarkdownParser.ClassifyBlock(text).Should().Be(BlockKind.IndentedCodeLine);
+    }
+
+    [Fact]
+    public void IndentedCode_Detected_AfterBlankLine()
+    {
+        var blocks = ParseBlocks("text", "", "    code");
+        blocks[0].Kind.Should().Be(BlockKind.Paragraph);
+        blocks[2].Kind.Should().Be(BlockKind.IndentedCodeLine);
+    }
+
+    [Fact]
+    public void IndentedCode_Detected_AtStart()
+    {
+        var blocks = ParseBlocks("    code", "text");
+        blocks[0].Kind.Should().Be(BlockKind.IndentedCodeLine);
+        blocks[1].Kind.Should().Be(BlockKind.Paragraph);
+    }
+
+    [Fact]
+    public void IndentedCode_CannotInterruptParagraph()
+    {
+        var blocks = ParseBlocks("paragraph", "    not code");
+        blocks[0].Kind.Should().Be(BlockKind.Paragraph);
+        blocks[1].Kind.Should().Be(BlockKind.Paragraph);
+    }
+
+    [Fact]
+    public void IndentedCode_CanFollowHeading()
+    {
+        var blocks = ParseBlocks("# heading", "    code");
+        blocks[0].Kind.Should().Be(BlockKind.Heading1);
+        blocks[1].Kind.Should().Be(BlockKind.IndentedCodeLine);
+    }
+
+    [Fact]
+    public void IndentedCode_CanFollowThematicBreak()
+    {
+        var blocks = ParseBlocks("---", "    code");
+        blocks[0].Kind.Should().Be(BlockKind.ThematicBreak);
+        blocks[1].Kind.Should().Be(BlockKind.IndentedCodeLine);
+    }
+
+    [Fact]
+    public void IndentedCode_AfterListItem_IsLazyContinuation()
+    {
+        var blocks = ParseBlocks("- item", "    code");
+        blocks[1].IsLazyContinuation.Should().BeTrue();
+    }
+
+    [Fact]
+    public void IndentedCode_ConsecutiveLines()
+    {
+        var blocks = ParseBlocks("    line1", "    line2", "    line3");
+        blocks[0].Kind.Should().Be(BlockKind.IndentedCodeLine);
+        blocks[1].Kind.Should().Be(BlockKind.IndentedCodeLine);
+        blocks[2].Kind.Should().Be(BlockKind.IndentedCodeLine);
+    }
+
+    [Fact]
+    public void IndentedCode_BlankLineBetweenChunks()
+    {
+        var blocks = ParseBlocks("    chunk1", "", "    chunk2");
+        blocks[0].Kind.Should().Be(BlockKind.IndentedCodeLine);
+        blocks[1].Kind.Should().Be(BlockKind.IndentedCodeLine);
+        blocks[2].Kind.Should().Be(BlockKind.IndentedCodeLine);
+    }
+
+    [Fact]
+    public void IndentedCode_TrailingBlankNotIncluded()
+    {
+        var blocks = ParseBlocks("    code", "", "text");
+        blocks[0].Kind.Should().Be(BlockKind.IndentedCodeLine);
+        blocks[1].Kind.Should().Be(BlockKind.Paragraph);
+        blocks[2].Kind.Should().Be(BlockKind.Paragraph);
+    }
+
+    [Fact]
+    public void IndentedCode_NoInlineParsing()
+    {
+        var blocks = ParseBlocks("    **not bold**");
+        blocks[0].Kind.Should().Be(BlockKind.IndentedCodeLine);
+        blocks[0].Runs.Should().HaveCount(1);
+        blocks[0].Runs[0].Style.Should().Be(InlineStyle.Normal);
+    }
+
+    [Fact]
+    public void IndentedCode_NotInsideFencedCode()
+    {
+        var blocks = ParseBlocks("```", "    indented", "```");
+        blocks[0].Kind.Should().Be(BlockKind.FencedCodeLine);
+        blocks[1].Kind.Should().Be(BlockKind.FencedCodeLine);
+        blocks[2].Kind.Should().Be(BlockKind.FencedCodeLine);
+    }
+
+    [Fact]
+    public void IndentedCode_TabIndent()
+    {
+        var blocks = ParseBlocks("\tcode");
+        blocks[0].Kind.Should().Be(BlockKind.IndentedCodeLine);
+    }
+
+    [Fact]
+    public void IndentedCode_AfterBlankAfterParagraph()
+    {
+        var blocks = ParseBlocks("text", "", "    code");
+        blocks[0].Kind.Should().Be(BlockKind.Paragraph);
+        blocks[1].Kind.Should().Be(BlockKind.Paragraph);
+        blocks[2].Kind.Should().Be(BlockKind.IndentedCodeLine);
+    }
+
+    [Fact]
+    public void IndentedCode_ListContinuation_NotCode()
+    {
+        var blocks = ParseBlocks("- item", "", "    continuation");
+        blocks[2].IsIndentedContinuation.Should().BeTrue();
+    }
+
+    [Fact]
+    public void IndentedCode_MultipleBlanksBetweenChunks()
+    {
+        var blocks = ParseBlocks("    a", "", "", "    b");
+        blocks[0].Kind.Should().Be(BlockKind.IndentedCodeLine);
+        blocks[1].Kind.Should().Be(BlockKind.IndentedCodeLine);
+        blocks[2].Kind.Should().Be(BlockKind.IndentedCodeLine);
+        blocks[3].Kind.Should().Be(BlockKind.IndentedCodeLine);
+    }
+
+    [Fact]
+    public void IndentedCode_AfterFencedCode()
+    {
+        var blocks = ParseBlocks("```", "code", "```", "    indented");
+        blocks[3].Kind.Should().Be(BlockKind.IndentedCodeLine);
     }
 
 }

@@ -60,19 +60,19 @@ internal class TextMeasurer
         BlockKind.Heading4 => _headingFontSizes[3],
         BlockKind.Heading5 => _headingFontSizes[4],
         BlockKind.Heading6 => _headingFontSizes[5],
-        BlockKind.FencedCodeLine => _codeFontSize,
+        BlockKind.FencedCodeLine or BlockKind.IndentedCodeLine => _codeFontSize,
         _ => BaseFontSize,
     };
 
     internal static Typeface GetBlockBaseTypeface(BlockKind kind) => kind switch
     {
-        BlockKind.FencedCodeLine => MonoTypeface,
+        BlockKind.FencedCodeLine or BlockKind.IndentedCodeLine => MonoTypeface,
         _ => NormalTypeface,
     };
 
     internal static Typeface GetInlineTypeface(BlockKind blockKind, InlineStyle style) => blockKind switch
     {
-        BlockKind.FencedCodeLine => MonoTypeface,
+        BlockKind.FencedCodeLine or BlockKind.IndentedCodeLine => MonoTypeface,
         BlockKind.TableHeaderRow => style switch
         {
             InlineStyle.Italic or InlineStyle.BoldItalic => _boldItalicTypeface,
@@ -91,7 +91,7 @@ internal class TextMeasurer
 
     internal GlyphTypeface? GetInlineGlyph(BlockKind blockKind, InlineStyle style) => blockKind switch
     {
-        BlockKind.FencedCodeLine => _monoGlyph,
+        BlockKind.FencedCodeLine or BlockKind.IndentedCodeLine => _monoGlyph,
         BlockKind.TableHeaderRow => style switch
         {
             InlineStyle.Italic or InlineStyle.BoldItalic => _boldItalicGlyph,
@@ -110,7 +110,7 @@ internal class TextMeasurer
 
     internal static int GetStyleKey(BlockKind blockKind, InlineStyle style)
     {
-        if (blockKind == BlockKind.FencedCodeLine)
+        if (blockKind is BlockKind.FencedCodeLine or BlockKind.IndentedCodeLine)
             return 1 * 100 + (int)GetBlockFontSize(blockKind);
 
         int fontId = style == InlineStyle.Code ? 1 : 0;
