@@ -551,10 +551,8 @@ public partial class DocsCanvas
             }
             else
             {
-                bool atEnd = _doc.CursorOffset == _doc.GetBlockLength(_doc.CursorBlock);
-                bool hasNextBlock = _doc.CursorBlock < _doc.BlockCount - 1;
                 _doc.InsertParagraphBreak();
-                if (!isStandalone && !(atEnd && hasNextBlock))
+                if (!isStandalone)
                     _doc.InsertParagraphBreak();
             }
         }

@@ -16,20 +16,7 @@ public class EnterKeyTests
         return canvas;
     }
 
-    // --- Enter at end of line with content below (original bug) ---
-
-    [StaFact]
-    public void Enter_AtEndOfLine_WithNextLine_InsertsOneParagraphBreak()
-    {
-        var canvas = CreateCanvas("asd\n123");
-        canvas.TestSetCursor(0, 3); // end of "asd"
-        canvas.TestHandleEnter();
-
-        canvas.TestGetBlockText(0).Should().Be("asd");
-        canvas.TestGetBlockText(1).Should().Be("");
-        canvas.TestGetBlockText(2).Should().Be("123");
-        canvas.TestCursorBlock.Should().Be(1);
-    }
+    // --- Enter at end of line ---
 
     [StaFact]
     public void Enter_AtEndOfLastLine_InsertsParagraphBreak()
@@ -89,6 +76,38 @@ public class EnterKeyTests
         canvas.TestGetBlockText(0).Should().Be("# Heading");
         canvas.TestGetBlockText(1).Should().Be("");
         canvas.TestCursorBlock.Should().Be(1);
+    }
+
+    // --- Enter between paragraphs ---
+
+    [StaFact]
+    public void Enter_AtEndOfFirstParagraph_WithBlankLineBefore_SecondParagraph_InsertsNewParagraph()
+    {
+        // "First paragraph\n\nSecond paragraph"
+        var canvas = CreateCanvas("First paragraph\n\nSecond paragraph");
+        canvas.TestSetCursor(0, 15); // end of "First paragraph"
+        canvas.TestHandleEnter();
+
+        canvas.TestGetBlockText(0).Should().Be("First paragraph");
+        canvas.TestGetBlockText(1).Should().Be("");
+        canvas.TestGetBlockText(2).Should().Be(""); // cursor here
+        canvas.TestGetBlockText(3).Should().Be("");
+        canvas.TestGetBlockText(4).Should().Be("Second paragraph");
+        canvas.TestCursorBlock.Should().Be(2);
+    }
+
+    [StaFact]
+    public void Enter_AtEndOfLine_WithNextLine_InsertsNewParagraph()
+    {
+        var canvas = CreateCanvas("asd\n123");
+        canvas.TestSetCursor(0, 3); // end of "asd"
+        canvas.TestHandleEnter();
+
+        canvas.TestGetBlockText(0).Should().Be("asd");
+        canvas.TestGetBlockText(1).Should().Be("");
+        canvas.TestGetBlockText(2).Should().Be(""); // cursor here
+        canvas.TestGetBlockText(3).Should().Be("123");
+        canvas.TestCursorBlock.Should().Be(2);
     }
 
     // --- Ctrl+Enter (soft break) ---
