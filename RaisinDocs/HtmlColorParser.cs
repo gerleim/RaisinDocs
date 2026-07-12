@@ -324,7 +324,7 @@ internal static class HtmlColorParser
                 int.TryParse(numPart[1..].ToString(), System.Globalization.NumberStyles.HexNumber, null, out codePoint);
             else
                 int.TryParse(numPart.ToString(), out codePoint);
-            if (codePoint > 0) output.Append((char)codePoint);
+            if (codePoint > 0) output.Append(char.ConvertFromUtf32(codePoint));
             else output.Append(entity);
         }
         else

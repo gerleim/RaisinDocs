@@ -56,7 +56,7 @@
 
 ## MEDIUM (2)
 
-### M1 — DecodeEntity truncates Unicode codepoints above U+FFFF
+### ~~M1 — DecodeEntity truncates Unicode codepoints above U+FFFF~~ FIXED
 
 - **Severity**: Medium
 - **Category**: Bug
