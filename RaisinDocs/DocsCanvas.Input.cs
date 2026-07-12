@@ -549,7 +549,7 @@ public partial class DocsCanvas
         else
         {
             string blockText = _doc.GetBlockText(_doc.CursorBlock);
-            var blockKind = MarkdownParser.ClassifyBlock(blockText);
+            var blockKind = MarkdownParser.ClassifyBlock(blockText, out int leadingSpaces);
             bool isStandalone = (blockKind >= BlockKind.Heading1 && blockKind <= BlockKind.Heading6)
                              || MarkdownParser.IsFenceLine(blockText)
                              || blockKind == BlockKind.ThematicBreak;
@@ -557,21 +557,23 @@ public partial class DocsCanvas
 
             if (blockKind == BlockKind.OrderedListItem)
             {
-                int prefixLen = MarkdownParser.GetOrderedListPrefixLength(blockText);
-                string content = blockText.Substring(prefixLen);
+                string stripped = leadingSpaces > 0 ? blockText[leadingSpaces..] : blockText;
+                int prefixLen = MarkdownParser.GetOrderedListPrefixLength(stripped);
+                string content = stripped.Substring(prefixLen);
                 if (content.Length == 0)
                 {
-                    _doc.RemoveTextAt(_doc.CursorBlock, 0, prefixLen);
+                    _doc.RemoveTextAt(_doc.CursorBlock, 0, blockText.Length);
                     _doc.CursorOffset = 0;
                 }
                 else
                 {
-                    string number = blockText.Substring(0, prefixLen - 2);
-                    char delim = blockText[prefixLen - 2];
+                    string indent = blockText[..leadingSpaces];
+                    string number = stripped.Substring(0, prefixLen - 2);
+                    char delim = stripped[prefixLen - 2];
                     _doc.InsertParagraphBreak();
                     if (int.TryParse(number, out int n))
                     {
-                        _doc.Paste((n + 1).ToString() + delim + " ");
+                        _doc.Paste(indent + (n + 1).ToString() + delim + " ");
                         RenumberOrderedList(_doc.CursorBlock + 1, n + 2, delim);
                     }
                 }
@@ -608,11 +610,14 @@ public partial class DocsCanvas
         for (int i = startBlock; i < _doc.BlockCount; i++)
         {
             string text = _doc.GetBlockText(i);
-            int oldPl = MarkdownParser.GetOrderedListPrefixLength(text);
+            var kind = MarkdownParser.ClassifyBlock(text, out int ls);
+            if (kind != BlockKind.OrderedListItem) break;
+            string stripped = ls > 0 ? text[ls..] : text;
+            int oldPl = MarkdownParser.GetOrderedListPrefixLength(stripped);
             if (oldPl == 0) break;
             string newPrefix = nextNumber.ToString() + delim + " ";
-            _doc.RemoveTextAt(i, 0, oldPl);
-            _doc.InsertTextAt(i, 0, newPrefix);
+            _doc.RemoveTextAt(i, ls, oldPl);
+            _doc.InsertTextAt(i, ls, newPrefix);
             nextNumber++;
         }
     }

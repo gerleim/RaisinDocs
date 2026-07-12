@@ -8,7 +8,7 @@
 
 ## CRITICAL (1)
 
-### C1 — HandleEnter crashes on indented ordered list items
+### ~~C1 — HandleEnter crashes on indented ordered list items~~ FIXED
 
 - **Severity**: Critical
 - **Category**: Bug / Crash
@@ -64,7 +64,7 @@
 - **What's wrong**: `(char)codePoint` truncates 32-bit values to 16 bits. Numeric character references above U+FFFF (e.g. `&#128512;` for U+1F600 grinning face emoji) produce a wrong character (U+F600) instead of the intended emoji. Should use `char.ConvertFromUtf32()` or emit a surrogate pair.
 - **Repro**: Paste HTML from clipboard containing a numeric character reference above U+FFFF.
 
-### M2 — RenumberOrderedList silently fails for indented items
+### ~~M2 — RenumberOrderedList silently fails for indented items~~ FIXED
 
 - **Severity**: Medium
 - **Category**: Bug
