@@ -570,7 +570,8 @@ public class Document
             }
 
             string divOpen = openToDiv(tag);
-            _blocks[i] = new StringBuilder(after);
+            string content = closeBlock == i ? after[..(closeStart - openEnd)] : after;
+            _blocks[i] = new StringBuilder(content);
             _blocks.Insert(i, new StringBuilder(divOpen));
             AdjustPositionAfterInsert(i);
             endBlock++;

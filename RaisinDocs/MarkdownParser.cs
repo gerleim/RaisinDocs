@@ -1740,6 +1740,12 @@ public static class MarkdownParser
             }
         }
 
+        spans?.Sort((a, b) =>
+        {
+            int cmp = a.Start.CompareTo(b.Start);
+            return cmp != 0 ? cmp : b.Length.CompareTo(a.Length);
+        });
+
         return spans;
     }
 

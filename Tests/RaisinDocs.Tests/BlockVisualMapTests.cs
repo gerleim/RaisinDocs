@@ -1033,6 +1033,77 @@ public class BlockVisualMapTests
         display[visStart..visEnd].Should().Be("dgfhfzgjhfg fghfgh");
     }
 
+    private static RgbColor?[] ResolveVisualColors(BlockVisualMap map, string display)
+    {
+        var result = new RgbColor?[display.Length];
+        if (map.ColorSpans == null) return result;
+        foreach (var cs in map.ColorSpans)
+        {
+            if (cs.Foreground == null) continue;
+            int visStart = map.RawToVisual(cs.Start);
+            int visEnd = map.RawToVisual(cs.Start + cs.Length);
+            for (int i = visStart; i < visEnd && i < display.Length; i++)
+                result[i] = cs.Foreground;
+        }
+        return result;
+    }
+
+    [Fact]
+    public void InlineColorTag_Nested_InnerColorWins()
+    {
+        var text = "<!--@fg:red-->one<!--@fg:green-->two<!--/@fg-->three<!--/@fg-->";
+        var map = ComputeMap(text);
+        var display = map.BuildDisplayString(text, 0, text.Length);
+        display.Should().Be("onetwothree");
+
+        var red = new RgbColor(255, 0, 0);
+        var green = new RgbColor(0, 128, 0);
+        var colors = ResolveVisualColors(map, display);
+
+        // "one" = red
+        colors[0].Should().Be(red);
+        colors[1].Should().Be(red);
+        colors[2].Should().Be(red);
+        // "two" = green (inner must override outer)
+        colors[3].Should().Be(green);
+        colors[4].Should().Be(green);
+        colors[5].Should().Be(green);
+        // "three" = red
+        colors[6].Should().Be(red);
+        colors[7].Should().Be(red);
+        colors[8].Should().Be(red);
+        colors[9].Should().Be(red);
+        colors[10].Should().Be(red);
+    }
+
+    [Fact]
+    public void InlineColorTag_SequentialAdjacent_EachSegmentCorrect()
+    {
+        var text = "<!--@fg:red-->one<!--/@fg--><!--@fg:green-->two<!--/@fg--><!--@fg:red-->three<!--/@fg-->";
+        var map = ComputeMap(text);
+        var display = map.BuildDisplayString(text, 0, text.Length);
+        display.Should().Be("onetwothree");
+
+        var red = new RgbColor(255, 0, 0);
+        var green = new RgbColor(0, 128, 0);
+        var colors = ResolveVisualColors(map, display);
+
+        // "one" = red
+        colors[0].Should().Be(red);
+        colors[1].Should().Be(red);
+        colors[2].Should().Be(red);
+        // "two" = green
+        colors[3].Should().Be(green);
+        colors[4].Should().Be(green);
+        colors[5].Should().Be(green);
+        // "three" = red
+        colors[6].Should().Be(red);
+        colors[7].Should().Be(red);
+        colors[8].Should().Be(red);
+        colors[9].Should().Be(red);
+        colors[10].Should().Be(red);
+    }
+
     // --- Setext headings ---
 
     [Fact]

@@ -20,7 +20,7 @@
 
 ## HIGH (4)
 
-### H1 — SplitInlineColorDivs leaves orphaned close tag on same-line pairs
+### ~~H1 — SplitInlineColorDivs leaves orphaned close tag on same-line pairs~~ FIXED
 
 - **Severity**: High
 - **Category**: Bug

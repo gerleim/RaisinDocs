@@ -659,6 +659,18 @@ public class DocumentTests
         doc.GetBlockText(0).Should().Be("hello <!--@fg:blue-->world<!--/@fg--> end");
     }
 
+    [Fact]
+    public void SplitInlineColorDivs_SameLineStartingWithTag_StripsCloseTag()
+    {
+        var doc = new Document();
+        doc.SetText("<!--@fg:blue-->content<!--/@fg-->");
+        doc.SplitInlineColorDivs(0, doc.BlockCount - 1, FindOpenEnd, FindCloseStart, OpenToDiv);
+        doc.BlockCount.Should().Be(3);
+        doc.GetBlockText(0).Should().Be("<!--@div fg:blue-->");
+        doc.GetBlockText(1).Should().Be("content");
+        doc.GetBlockText(2).Should().Be("<!--/@div-->");
+    }
+
     // --- ReflowBoxTable ---
 
     [Fact]
