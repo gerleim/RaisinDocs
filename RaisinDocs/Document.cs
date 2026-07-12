@@ -328,19 +328,23 @@ public class Document
 
     private static string? GetBlockPrefix(string text)
     {
+        int ls = 0;
+        while (ls < text.Length && ls < 3 && text[ls] == ' ') ls++;
+        string stripped = ls > 0 ? text[ls..] : text;
+
         for (int h = 6; h >= 1; h--)
         {
             var hp = new string('#', h) + " ";
-            if (text.StartsWith(hp)) return hp;
+            if (stripped.StartsWith(hp)) return text.Substring(0, ls + hp.Length);
         }
-        if (text.Length >= 6 && (text.StartsWith("- ") || text.StartsWith("* "))
-            && text[2] == '[' && (text[3] == ' ' || text[3] == 'x' || text[3] == 'X') && text[4] == ']' && text[5] == ' ')
-            return text.Substring(0, 6);
-        if (text.StartsWith("- ")) return "- ";
-        if (text.StartsWith("* ")) return "* ";
-        int olLen = MarkdownParser.GetOrderedListPrefixLength(text);
-        if (olLen > 0) return text.Substring(0, olLen);
-        if (text.StartsWith("> ")) return "> ";
+        if (stripped.Length >= 6 && (stripped.StartsWith("- ") || stripped.StartsWith("* "))
+            && stripped[2] == '[' && (stripped[3] == ' ' || stripped[3] == 'x' || stripped[3] == 'X') && stripped[4] == ']' && stripped[5] == ' ')
+            return text.Substring(0, ls + 6);
+        if (stripped.StartsWith("- ")) return text.Substring(0, ls + 2);
+        if (stripped.StartsWith("* ")) return text.Substring(0, ls + 2);
+        int olLen = MarkdownParser.GetOrderedListPrefixLength(stripped);
+        if (olLen > 0) return text.Substring(0, ls + olLen);
+        if (stripped.StartsWith("> ")) return text.Substring(0, ls + 2);
         return null;
     }
 

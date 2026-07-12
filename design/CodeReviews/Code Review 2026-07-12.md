@@ -44,7 +44,7 @@
 - **What's wrong**: The right-to-left loop captures `lastOffset` from the rightmost cell first. When left cells are then modified with different-length replacements, all right-side positions shift, but `lastOffset` is never updated. The cursor ends up at a wrong position — potentially inside a pipe delimiter or in adjacent cell content.
 - **Repro**: Paste pipe-delimited table rows where replacement cell content differs in length from original cells.
 
-### H4 — GetBlockPrefix doesn't strip whitespace before ordered-list detection
+### ~~H4 — GetBlockPrefix doesn't strip whitespace before ordered-list detection~~ FIXED
 
 - **Severity**: High
 - **Category**: Bug
