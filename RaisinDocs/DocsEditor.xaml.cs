@@ -12,7 +12,7 @@ public partial class DocsEditor : UserControl
 
     public static readonly DependencyProperty ThemeProperty =
         DependencyProperty.Register(nameof(Theme), typeof(DocsCanvas.EditorTheme), typeof(DocsEditor),
-            new FrameworkPropertyMetadata(DocsCanvas.EditorTheme.Light, FrameworkPropertyMetadataOptions.BindsTwoWayByDefault));
+            new FrameworkPropertyMetadata(DocsCanvas.EditorTheme.Dark, FrameworkPropertyMetadataOptions.BindsTwoWayByDefault));
 
     private static readonly DependencyPropertyKey IsDirtyPropertyKey =
         DependencyProperty.RegisterReadOnly(nameof(IsDirty), typeof(bool), typeof(DocsEditor),

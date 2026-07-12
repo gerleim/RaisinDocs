@@ -37,7 +37,7 @@ public partial class DocsCanvas : FrameworkElement
     private static readonly ThemePalette _lightPalette;
     private static readonly ThemePalette _darkPalette;
     private static readonly ThemePalette _darkBluePalette;
-    private ThemePalette _palette = _lightPalette!;
+    private ThemePalette _palette = _darkPalette!;
 
     private static readonly Brush _checkboxCheckedBrush;
     private static readonly Brush _imagePlaceholderBrush;
@@ -114,7 +114,7 @@ public partial class DocsCanvas : FrameworkElement
 
     public static readonly DependencyProperty ThemeProperty =
         DependencyProperty.Register(nameof(Theme), typeof(EditorTheme), typeof(DocsCanvas),
-            new FrameworkPropertyMetadata(EditorTheme.Light, FrameworkPropertyMetadataOptions.AffectsRender, OnThemePropertyChanged));
+            new FrameworkPropertyMetadata(EditorTheme.Dark, FrameworkPropertyMetadataOptions.AffectsRender, OnThemePropertyChanged));
 
     public EditorTheme Theme
     {
