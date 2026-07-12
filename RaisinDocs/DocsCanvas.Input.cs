@@ -32,8 +32,13 @@ public partial class DocsCanvas
             {
                 _doc.CursorBlock = rBlock;
                 _doc.CursorOffset = rOffset;
-                SkipCursorOverHiddenRanges(forward: true);
-                ClampCursorBeforeTrailingHidden();
+                if (_parsedBlocks != null && IsTableRow(_parsedBlocks[_doc.CursorBlock]))
+                    ClampCursorToTableCell();
+                else
+                {
+                    SkipCursorOverHiddenRanges(forward: true);
+                    ClampCursorBeforeTrailingHidden();
+                }
                 _doc.CollapseSelection();
                 InvalidateVisual();
             }
@@ -73,8 +78,13 @@ public partial class DocsCanvas
 
         _doc.CursorBlock = block;
         _doc.CursorOffset = offset;
-        SkipCursorOverHiddenRanges(forward: true);
-        ClampCursorBeforeTrailingHidden();
+        if (_parsedBlocks != null && IsTableRow(_parsedBlocks[_doc.CursorBlock]))
+            ClampCursorToTableCell();
+        else
+        {
+            SkipCursorOverHiddenRanges(forward: true);
+            ClampCursorBeforeTrailingHidden();
+        }
 
         if (!Keyboard.Modifiers.HasFlag(ModifierKeys.Shift))
             _doc.CollapseSelection();
@@ -131,8 +141,13 @@ public partial class DocsCanvas
         HitTestToPosition(pos, out int block, out int offset);
         _doc.CursorBlock = block;
         _doc.CursorOffset = offset;
-        SkipCursorOverHiddenRanges(forward: true);
-        ClampCursorBeforeTrailingHidden();
+        if (_parsedBlocks != null && IsTableRow(_parsedBlocks[_doc.CursorBlock]))
+            ClampCursorToTableCell();
+        else
+        {
+            SkipCursorOverHiddenRanges(forward: true);
+            ClampCursorBeforeTrailingHidden();
+        }
 
         ResetBlink();
         InvalidateVisual();
@@ -323,7 +338,13 @@ public partial class DocsCanvas
             {
                 _doc.MoveWordLeft();
             }
-            if (IsVisual) SkipCursorOverHiddenRanges(forward: false);
+            if (IsVisual)
+            {
+                if (_parsedBlocks != null && IsTableRow(_parsedBlocks[_doc.CursorBlock]))
+                    ClampCursorToTableCell();
+                else
+                    SkipCursorOverHiddenRanges(forward: false);
+            }
             if (!shift) _doc.CollapseSelection();
         }
         else
@@ -350,7 +371,13 @@ public partial class DocsCanvas
             {
                 _doc.MoveWordRight();
             }
-            if (IsVisual) SkipCursorOverHiddenRanges(forward: true);
+            if (IsVisual)
+            {
+                if (_parsedBlocks != null && IsTableRow(_parsedBlocks[_doc.CursorBlock]))
+                    ClampCursorToTableCell();
+                else
+                    SkipCursorOverHiddenRanges(forward: true);
+            }
             if (!shift) _doc.CollapseSelection();
         }
         else
@@ -926,7 +953,11 @@ public partial class DocsCanvas
                 {
                     ComputeLayout();
                     EnsureCursorOnVisibleBlock();
-                    SkipCursorToVisible(forward: true);
+                    if (_parsedBlocks != null && _doc.CursorBlock < _parsedBlocks.Count
+                        && IsTableRow(_parsedBlocks[_doc.CursorBlock]))
+                        ClampCursorToTableCell();
+                    else
+                        SkipCursorToVisible(forward: true);
                 }
             }
             else

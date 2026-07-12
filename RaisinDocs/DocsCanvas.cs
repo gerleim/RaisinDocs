@@ -306,8 +306,16 @@ public partial class DocsCanvas : FrameworkElement
         {
             ComputeLayout();
             EnsureCursorOnVisibleBlock();
-            SkipCursorToVisible(forward: true);
-            ClampCursorBeforeTrailingHidden();
+            if (_parsedBlocks != null && _doc.CursorBlock < _parsedBlocks.Count
+                && IsTableRow(_parsedBlocks[_doc.CursorBlock]))
+            {
+                ClampCursorToTableCell();
+            }
+            else
+            {
+                SkipCursorToVisible(forward: true);
+                ClampCursorBeforeTrailingHidden();
+            }
             _doc.CollapseSelection();
         }
         else
@@ -944,6 +952,7 @@ public partial class DocsCanvas : FrameworkElement
     internal void TestNavigate(Key key, bool shift = false, bool ctrl = false)
     {
         ComputeLayout();
+        bool textChanged = false;
         switch (key)
         {
             case Key.Left: HandleLeft(shift, ctrl); break;
@@ -954,6 +963,22 @@ public partial class DocsCanvas : FrameworkElement
             case Key.PageDown: HandlePageDown(shift); break;
             case Key.Home: HandleHome(shift, ctrl); break;
             case Key.End: HandleEnd(shift, ctrl); break;
+            case Key.Back: HandleBack(shift, out textChanged); break;
+            case Key.Delete: HandleDelete(shift, out textChanged); break;
+        }
+        if (textChanged)
+        {
+            InvalidateLayout();
+            if (IsVisual)
+            {
+                ComputeLayout();
+                EnsureCursorOnVisibleBlock();
+                if (_parsedBlocks != null && _doc.CursorBlock < _parsedBlocks.Count
+                    && IsTableRow(_parsedBlocks[_doc.CursorBlock]))
+                    ClampCursorToTableCell();
+                else
+                    SkipCursorToVisible(forward: true);
+            }
         }
     }
     internal void TestSetSelection(int anchorBlock, int anchorOffset, int cursorBlock, int cursorOffset)

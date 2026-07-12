@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Input;
 using FluentAssertions;
 using Xunit;
 
@@ -136,5 +137,186 @@ public class TableCursorTests
             tableDeltas[i].Should().BeApproximately(paraDeltas[i], 0.5,
                 $"table cell relative X at char {i} should match FormattedText measurement");
         }
+    }
+
+    [StaFact]
+    public void SetEditMode_ToVisual_PreservesCursorInSecondTableCell()
+    {
+        // Source: "|  one | two |" — cursor at 't' in "two" (offset 9)
+        // Switching to visual mode must keep cursor in the second cell.
+        var canvas = CreateCanvas("| Header 1 | Header 2 |\n| --- | --- |\n|  one | two |",
+            DocsCanvas.EditMode.Source);
+        canvas.TestSetCursor(2, 9); // 't' in "two"
+
+        canvas.SetEditMode(DocsCanvas.EditMode.Visual);
+        canvas.TestComputeLayout();
+
+        canvas.TestCursorBlock.Should().Be(2);
+        canvas.TestCursorOffset.Should().BeInRange(9, 12,
+            "cursor should remain within the second cell content (offsets 9–12)");
+    }
+
+    [StaFact]
+    public void SetEditMode_ToVisual_PreservesCursorAtEndOfFirstCell()
+    {
+        // Cursor at end of "one" content (offset 6) — in the inter-cell hidden zone.
+        // Must clamp back to cell 1, not skip forward to cell 2.
+        var canvas = CreateCanvas("| Header 1 | Header 2 |\n| --- | --- |\n|  one | two |",
+            DocsCanvas.EditMode.Source);
+        canvas.TestSetCursor(2, 6); // end of "one"
+
+        canvas.SetEditMode(DocsCanvas.EditMode.Visual);
+        canvas.TestComputeLayout();
+
+        canvas.TestCursorBlock.Should().Be(2);
+        canvas.TestCursorOffset.Should().BeInRange(3, 6,
+            "cursor should remain within the first cell content (offsets 3–6)");
+    }
+
+    [StaFact]
+    public void SetEditMode_ToVisual_PreservesCursorAtEndOfLastCell()
+    {
+        // Cursor at end of "two" content (offset 12) — sits at boundary of trailing hidden region.
+        var canvas = CreateCanvas("| Header 1 | Header 2 |\n| --- | --- |\n|  one | two |",
+            DocsCanvas.EditMode.Source);
+        canvas.TestSetCursor(2, 12); // end of "two"
+
+        canvas.SetEditMode(DocsCanvas.EditMode.Visual);
+        canvas.TestComputeLayout();
+
+        canvas.TestCursorBlock.Should().Be(2);
+        canvas.TestCursorOffset.Should().BeInRange(9, 12,
+            "cursor should clamp to second cell, not jump to first cell");
+    }
+
+    // --- Backspace/Delete: general text-changed handler must not jump cells ---
+
+    [StaFact]
+    public void Backspace_AtEndOfCell_CursorStaysInSameCell()
+    {
+        // "| ab | cd |" — cursor at offset 4 (end of cell 1 "ab").
+        // Backspace deletes 'b', leaving "| a | cd |". Cursor must stay in cell 1.
+        var canvas = CreateCanvas("| H1 | H2 |\n|---|---|\n| ab | cd |");
+        canvas.TestSetCursor(2, 4); // end of "ab"
+
+        canvas.TestNavigate(Key.Back);
+
+        canvas.TestCursorBlock.Should().Be(2);
+        canvas.TestGetBlockText(2).Should().Be("| a | cd |");
+        canvas.TestCursorOffset.Should().BeInRange(2, 3,
+            "cursor should stay in cell 1 after backspace");
+    }
+
+    [StaFact]
+    public void Backspace_InMiddleOfSecondCell_CursorStaysInSecondCell()
+    {
+        // "| ab | cd |" — cursor at offset 8 ('d'). Backspace deletes 'c'.
+        // After: "| ab | d |". Cursor must remain in cell 2.
+        var canvas = CreateCanvas("| H1 | H2 |\n|---|---|\n| ab | cd |");
+        canvas.TestSetCursor(2, 8); // 'd' in "cd"
+
+        canvas.TestNavigate(Key.Back);
+
+        canvas.TestCursorBlock.Should().Be(2);
+        canvas.TestGetBlockText(2).Should().Be("| ab | d |");
+        canvas.TestCursorOffset.Should().BeInRange(7, 8,
+            "cursor should stay in cell 2 after backspace");
+    }
+
+    // --- Right-arrow collapse selection must not jump cells ---
+
+    [StaFact]
+    public void RightCollapseSelection_AtEndOfCell_CursorStaysInCell()
+    {
+        // Selection spans "ab" in cell 1: anchor=2, cursor=4.
+        // Pressing Right (no shift) should collapse to offset 4 (end of cell 1).
+        var canvas = CreateCanvas("| H1 | H2 |\n|---|---|\n| ab | cd |");
+        canvas.TestSetSelection(2, 2, 2, 4); // select "ab"
+
+        canvas.TestNavigate(Key.Right);
+
+        canvas.TestCursorBlock.Should().Be(2);
+        canvas.TestCursorOffset.Should().BeInRange(2, 4,
+            "collapsing right should stay within cell 1");
+    }
+
+    // --- Ctrl+Right: word navigation should clamp to table cell ---
+
+    // --- Backspace/Delete at cell boundary must not cross into adjacent cell ---
+
+    [StaFact]
+    public void Backspace_AtStartOfSecondCell_IsNoop()
+    {
+        // Cursor at 't' in "two" (offset 9 = start of cell 2 content).
+        // Backspace must not delete from cell 1.
+        var canvas = CreateCanvas("| H1 | H2 |\n|---|---|\n|  one | two |");
+        canvas.TestSetCursor(2, 9); // 't' in "two"
+
+        canvas.TestNavigate(Key.Back);
+
+        canvas.TestGetBlockText(2).Should().Be("|  one | two |",
+            "backspace at start of cell should not modify text");
+        canvas.TestCursorOffset.Should().Be(9);
+    }
+
+    [StaFact]
+    public void Backspace_AtStartOfFirstCell_IsNoop()
+    {
+        // Cursor at 'o' in "one" (offset 3 = start of cell 1 content).
+        var canvas = CreateCanvas("| H1 | H2 |\n|---|---|\n|  one | two |");
+        canvas.TestSetCursor(2, 3); // 'o' in "one"
+
+        canvas.TestNavigate(Key.Back);
+
+        canvas.TestGetBlockText(2).Should().Be("|  one | two |",
+            "backspace at start of first cell should not modify text");
+        canvas.TestCursorOffset.Should().Be(3);
+    }
+
+    [StaFact]
+    public void Delete_AtEndOfFirstCell_IsNoop()
+    {
+        // Cursor at end of "one" (offset 6 = TrimContent end of cell 1).
+        // Delete must not remove from cell 2.
+        var canvas = CreateCanvas("| H1 | H2 |\n|---|---|\n|  one | two |");
+        canvas.TestSetCursor(2, 6); // end of "one"
+
+        canvas.TestNavigate(Key.Delete);
+
+        canvas.TestGetBlockText(2).Should().Be("|  one | two |",
+            "delete at end of cell should not modify text");
+        canvas.TestCursorOffset.Should().Be(6);
+    }
+
+    [StaFact]
+    public void Delete_AtEndOfLastCell_IsNoop()
+    {
+        // Cursor at end of "two" (offset 12 = TrimContent end of cell 2).
+        var canvas = CreateCanvas("| H1 | H2 |\n|---|---|\n|  one | two |");
+        canvas.TestSetCursor(2, 12); // end of "two"
+
+        canvas.TestNavigate(Key.Delete);
+
+        canvas.TestGetBlockText(2).Should().Be("|  one | two |",
+            "delete at end of last cell should not modify text");
+        canvas.TestCursorOffset.Should().Be(12);
+    }
+
+    [StaFact]
+    public void CtrlRight_FromWithinCell_CursorLandsOnValidPosition()
+    {
+        // "| ab | cd |" — cursor at 'a' (offset 2). Ctrl+Right jumps past word "ab".
+        // Cursor must land on a valid cell position (not in a hidden zone).
+        // MoveWordRight may cross to the next cell's word — that's acceptable.
+        var canvas = CreateCanvas("| H1 | H2 |\n|---|---|\n| ab | cd |");
+        canvas.TestSetCursor(2, 2); // 'a'
+
+        canvas.TestNavigate(Key.Right, ctrl: true);
+
+        canvas.TestCursorBlock.Should().Be(2);
+        // Valid positions: cell 1 content (2–4) or cell 2 content (7–9)
+        var offset = canvas.TestCursorOffset;
+        ((offset >= 2 && offset <= 4) || (offset >= 7 && offset <= 9)).Should().BeTrue(
+            $"cursor at offset {offset} should be within a cell's content range");
     }
 }

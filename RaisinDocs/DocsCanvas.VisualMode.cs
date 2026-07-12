@@ -147,6 +147,8 @@ public partial class DocsCanvas
     {
         if (_visualMaps == null) return;
         if (_doc.CursorBlock >= _visualMaps.Count) return;
+        if (_parsedBlocks != null && _doc.CursorBlock < _parsedBlocks.Count
+            && IsTableRow(_parsedBlocks[_doc.CursorBlock])) return;
         var map = _visualMaps[_doc.CursorBlock];
         int blockLen = _doc.GetBlockLength(_doc.CursorBlock);
         if (blockLen == 0 || !map.IsHidden(blockLen - 1)) return;
@@ -246,6 +248,23 @@ public partial class DocsCanvas
 
     private bool HandleBackVisual()
     {
+        if (_parsedBlocks != null && IsTableRow(_parsedBlocks[_doc.CursorBlock]))
+        {
+            var parsed = _parsedBlocks[_doc.CursorBlock];
+            if (parsed.TableRow != null)
+            {
+                string blockText = _doc.GetBlockText(_doc.CursorBlock);
+                foreach (var cell in parsed.TableRow.Cells)
+                {
+                    var (s, e) = cell.TrimContent(blockText);
+                    if (_doc.CursorOffset > s && _doc.CursorOffset <= e)
+                        break;
+                    if (_doc.CursorOffset <= s)
+                        return false;
+                }
+            }
+        }
+
         SkipBackspacePastHiddenVisual();
         if (_doc.CursorOffset == 0 && _doc.CursorBlock > 0 && _parsedBlocks != null)
         {
@@ -268,6 +287,23 @@ public partial class DocsCanvas
 
     private bool HandleDeleteVisual()
     {
+        if (_parsedBlocks != null && IsTableRow(_parsedBlocks[_doc.CursorBlock]))
+        {
+            var parsed = _parsedBlocks[_doc.CursorBlock];
+            if (parsed.TableRow != null)
+            {
+                string blockText = _doc.GetBlockText(_doc.CursorBlock);
+                bool canDelete = false;
+                foreach (var cell in parsed.TableRow.Cells)
+                {
+                    var (s, e) = cell.TrimContent(blockText);
+                    if (_doc.CursorOffset >= s && _doc.CursorOffset < e)
+                    { canDelete = true; break; }
+                }
+                if (!canDelete) return false;
+            }
+        }
+
         SkipDeletePastHiddenVisual();
         if (_doc.CursorOffset >= _doc.GetBlockLength(_doc.CursorBlock) &&
             _doc.CursorBlock < _doc.BlockCount - 1 && _parsedBlocks != null)
@@ -298,7 +334,10 @@ public partial class DocsCanvas
             _doc.CursorOffset = so;
             _doc.CollapseSelection();
             EnsureCursorOnVisibleBlock(preferForward: false);
-            SkipCursorOverHiddenRanges(forward: false);
+            if (_parsedBlocks != null && IsTableRow(_parsedBlocks[_doc.CursorBlock]))
+                ClampCursorToTableCell();
+            else
+                SkipCursorOverHiddenRanges(forward: false);
         }
         else if (_parsedBlocks != null && HandleTableArrow(_parsedBlocks[_doc.CursorBlock], forward: false))
         {
@@ -335,7 +374,10 @@ public partial class DocsCanvas
             _doc.CursorOffset = eo;
             _doc.CollapseSelection();
             EnsureCursorOnVisibleBlock(preferForward: true);
-            SkipCursorOverHiddenRanges(forward: true);
+            if (_parsedBlocks != null && IsTableRow(_parsedBlocks[_doc.CursorBlock]))
+                ClampCursorToTableCell();
+            else
+                SkipCursorOverHiddenRanges(forward: true);
         }
         else if (_parsedBlocks != null && HandleTableArrow(_parsedBlocks[_doc.CursorBlock], forward: true))
         {
