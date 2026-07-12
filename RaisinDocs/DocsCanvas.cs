@@ -471,7 +471,43 @@ public partial class DocsCanvas : FrameworkElement
 
     public void ToggleOrderedList()
     {
-        ToggleBlockPrefixForSelection("1. ");
+        SealAndStopTimer();
+        var (sb, _, eb, _) = _doc.HasSelection
+            ? _doc.GetOrderedSelection()
+            : (_doc.CursorBlock, 0, _doc.CursorBlock, 0);
+
+        bool allOrdered = true;
+        for (int b = sb; b <= eb; b++)
+        {
+            var kind = MarkdownParser.ClassifyBlock(_doc.GetBlockText(b));
+            if (kind != BlockKind.OrderedListItem)
+            {
+                allOrdered = false;
+                break;
+            }
+        }
+
+        _doc.BeginUndoGroup();
+        for (int b = sb; b <= eb; b++)
+        {
+            if (allOrdered)
+            {
+                string text = _doc.GetBlockText(b);
+                var prefix = Document.GetBlockPrefix(text);
+                if (prefix != null)
+                    _doc.ToggleBlockPrefix(b, prefix);
+            }
+            else
+            {
+                string text = _doc.GetBlockText(b);
+                if (MarkdownParser.ClassifyBlock(text) != BlockKind.OrderedListItem)
+                    _doc.ToggleBlockPrefix(b, (b - sb + 1) + ". ");
+            }
+        }
+        _doc.SealUndoGroup();
+        InvalidateLayout();
+        EnsureCursorVisible();
+        RaiseFormattingChanged();
     }
 
     public void ToggleTaskList()

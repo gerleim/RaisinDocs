@@ -326,7 +326,7 @@ public class Document
         }
     }
 
-    private static string? GetBlockPrefix(string text)
+    internal static string? GetBlockPrefix(string text)
     {
         int ls = 0;
         while (ls < text.Length && ls < 3 && text[ls] == ' ') ls++;
