@@ -628,7 +628,8 @@ public class DocumentTests
     {
         var doc = new Document();
         doc.SetText("<!--@fg:blue-->asdsd\n\nffsdf<!--/@fg-->");
-        doc.SplitInlineColorDivs(0, doc.BlockCount - 1, FindOpenEnd, FindCloseStart, OpenToDiv);
+        int eb = doc.BlockCount - 1;
+        doc.SplitInlineColorDivs(0, ref eb, FindOpenEnd, FindCloseStart, OpenToDiv);
         doc.GetBlockText(0).Should().Be("<!--@div fg:blue-->");
         doc.GetBlockText(1).Should().Be("asdsd");
         doc.GetBlockText(2).Should().BeEmpty();
@@ -642,7 +643,8 @@ public class DocumentTests
     {
         var doc = new Document();
         doc.SetText("<!--@div fg:blue-->\nhello\n<!--/@div-->");
-        doc.SplitInlineColorDivs(0, doc.BlockCount - 1, FindOpenEnd, FindCloseStart, OpenToDiv);
+        int eb = doc.BlockCount - 1;
+        doc.SplitInlineColorDivs(0, ref eb, FindOpenEnd, FindCloseStart, OpenToDiv);
         doc.BlockCount.Should().Be(3);
         doc.GetBlockText(0).Should().Be("<!--@div fg:blue-->");
         doc.GetBlockText(1).Should().Be("hello");
@@ -654,7 +656,8 @@ public class DocumentTests
     {
         var doc = new Document();
         doc.SetText("hello <!--@fg:blue-->world<!--/@fg--> end");
-        doc.SplitInlineColorDivs(0, doc.BlockCount - 1, FindOpenEnd, FindCloseStart, OpenToDiv);
+        int eb = doc.BlockCount - 1;
+        doc.SplitInlineColorDivs(0, ref eb, FindOpenEnd, FindCloseStart, OpenToDiv);
         doc.BlockCount.Should().Be(1);
         doc.GetBlockText(0).Should().Be("hello <!--@fg:blue-->world<!--/@fg--> end");
     }
@@ -664,7 +667,8 @@ public class DocumentTests
     {
         var doc = new Document();
         doc.SetText("<!--@fg:blue-->content<!--/@fg-->");
-        doc.SplitInlineColorDivs(0, doc.BlockCount - 1, FindOpenEnd, FindCloseStart, OpenToDiv);
+        int eb = doc.BlockCount - 1;
+        doc.SplitInlineColorDivs(0, ref eb, FindOpenEnd, FindCloseStart, OpenToDiv);
         doc.BlockCount.Should().Be(3);
         doc.GetBlockText(0).Should().Be("<!--@div fg:blue-->");
         doc.GetBlockText(1).Should().Be("content");

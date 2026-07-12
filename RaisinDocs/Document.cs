@@ -529,7 +529,7 @@ public class Document
         return false;
     }
 
-    public bool SplitInlineColorDivs(int startBlock, int endBlock,
+    public bool SplitInlineColorDivs(int startBlock, ref int endBlock,
         Func<string, int> findOpenEnd, Func<string, int> findCloseStart,
         Func<string, string> openToDiv)
     {

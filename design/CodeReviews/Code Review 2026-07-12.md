@@ -28,15 +28,15 @@
 - **What's wrong**: When open and close color tags are on the same line, line 573 overwrites the close-tag removal done at line 564. The `after` variable (text from openEnd onward) still includes the close tag. Result: the converted output contains `content<!--/@fg-->` with an orphaned close tag that corrupts subsequent color rendering.
 - **Repro**: Select text containing a same-line inline color pair like `<!--@fg:red-->content<!--/@fg-->` and trigger Reflow.
 
-### H2 — Reflow operates on stale block range after SplitInlineColorDivs
+### ~~H2 — Reflow operates on stale block range after SplitInlineColorDivs~~ FIXED
 
 - **Severity**: High
 - **Category**: Bug
 - **Location**: `DocsCanvas.cs:500`
 - **What's wrong**: After `SplitInlineColorDivs` inserts new blocks (increasing block count), `eb` is not updated to the new end block. The subsequent Reflow merge-paragraphs pass does not cover the content block that was split out, so the paragraph remains unwrapped.
-- **Repro**: Select text containing inline color tags and invoke Reflow. The paragraph stays unwrapped despite the reflow action.
+- **Repro**: Select text containing inline color tags and invoke Reformat. The paragraph stays unwrapped despite the reformat action.
 
-### H3 — TryPasteIntoTableCells cursor offset wrong after multi-cell paste
+### ~~H3 — TryPasteIntoTableCells cursor offset wrong after multi-cell paste~~ FIXED
 
 - **Severity**: High
 - **Category**: Bug

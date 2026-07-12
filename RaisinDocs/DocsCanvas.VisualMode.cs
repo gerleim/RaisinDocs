@@ -767,8 +767,20 @@ public partial class DocsCanvas
                 {
                     lastColThisRow = destCol;
                     lastBlock = destBlock;
-                    lastOffset = dc.Start + replacement.Length;
                 }
+            }
+            if (lastColThisRow >= 0)
+            {
+                string updated = _doc.GetBlockText(destBlock);
+                int pipe = 0;
+                int pos = 0;
+                while (pos < updated.Length && pipe <= lastColThisRow)
+                {
+                    if (updated[pos] == '|') pipe++;
+                    pos++;
+                }
+                int cellEnd = updated.IndexOf('|', pos);
+                lastOffset = cellEnd >= 0 ? cellEnd : updated.Length;
             }
 
             destBlock++;

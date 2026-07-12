@@ -493,11 +493,10 @@ public partial class DocsCanvas : FrameworkElement
         int sb = sel.startBlock;
         int eb = sel.endBlock;
         _doc.BeginUndoGroup();
-        bool changed = _doc.SplitInlineColorDivs(sb, eb,
+        bool changed = _doc.SplitInlineColorDivs(sb, ref eb,
             MarkdownParser.FindInlineColorOpenEnd,
             MarkdownParser.FindInlineColorCloseStart,
             MarkdownParser.InlineOpenToDivOpen);
-        eb = Math.Min(eb, _doc.BlockCount - 1);
         changed |= _doc.Reflow(sb, eb, IsMergeableParagraph, MarkdownParser.GetFenceBacktickCount);
         eb = Math.Min(eb, _doc.BlockCount - 1);
         changed |= _doc.RenumberOrderedLists(sb, eb, MarkdownParser.GetOrderedListPrefixLength, MarkdownParser.GetFenceBacktickCount);
