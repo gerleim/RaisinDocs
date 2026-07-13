@@ -76,12 +76,13 @@
 
 ## LOW — Cleanup (3)
 
-### L1 — RetryHelper blocks UI thread with Thread.Sleep
+### L1 — RetryHelper blocks UI thread with Thread.Sleep — SKIPPED
 
 - **Severity**: Low
 - **Category**: Performance
 - **Location**: `RetryHelper.cs:17`
 - **What's wrong**: `ClipboardHelper` is called from `OnKeyDown` (Ctrl+C/V/X) on the WPF dispatcher thread. If another app holds the clipboard, `RetryHelper` sleeps 100ms × 2 retries = 200ms of UI freeze. A `DispatcherTimer` or async retry would keep the UI responsive.
+- **Skip reason**: Async retry adds ~30 lines of state management (timer field, attempt counter, extracted paste method, re-entrant edge cases) to avoid a 200ms worst-case freeze that requires active clipboard contention from another process. Not worth the complexity.
 
 ### L2 — SolidColorBrush allocated per colored line per frame in OnRender
 
