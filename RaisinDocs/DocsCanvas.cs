@@ -581,8 +581,6 @@ public partial class DocsCanvas : FrameworkElement
         Loaded += (_, _) =>
         {
             _measure.EnsureMeasured(this);
-            try { Focus(); }
-            catch (NullReferenceException) { }
         };
         IsVisibleChanged += (_, e) =>
         {
