@@ -305,12 +305,12 @@
 
 The test suite is solid for common cases but has notable gaps that would expose several findings above:
 
-1. No tests for emphasis with >3 opening stars (e.g., `****text****`) — would expose H5
-2. No tests for `FindClosingStars` with mismatched star run lengths — would expose H5
-3. No tests for colored text inside table cells — would expose M6
-4. No tests for strikethrough in visual mode (BlockVisualMap) — would expose M8
-5. No tests for link definition titles with escaped delimiters — would expose L8
-6. No tests for `IsFenceLine` with backticks in the info string
-7. No tests for `ParseTableCells` with degenerate inputs (empty string, single pipe, no pipes)
-8. No tests for empty `_visualLines` scenarios — would expose H2
-9. No tests for toggling Bold off from `***bold-italic***` — would expose H3
+1. ~~No tests for emphasis with >3 opening stars (e.g., `****text****`) — would expose H5~~ COVERED (2026-07-13, 4 tests in MarkdownParserTests)
+2. ~~No tests for `FindClosingStars` with mismatched star run lengths — would expose H5~~ COVERED (2026-07-13, 4 tests in MarkdownParserTests)
+3. ~~No tests for colored text inside table cells — would expose M6~~ COVERED (2026-07-13, 3 tests in MarkdownParserTests)
+4. ~~No tests for strikethrough in visual mode (BlockVisualMap) — would expose M8~~ COVERED (2026-07-13, 7 tests in BlockVisualMapTests)
+5. ~~No tests for link definition titles with escaped delimiters — would expose L8~~ COVERED (during original review, `LinkDefinition_TitleWithEscapedQuote`)
+6. ~~No tests for `IsFenceLine` with backticks in the info string~~ COVERED (during original review, `FencedCode_BacktickInInfoString_NotAFence` + `GetFenceBacktickCount` tests)
+7. ~~No tests for `ParseTableCells` with degenerate inputs (empty string, single pipe, no pipes)~~ COVERED (2026-07-13, 6 tests in MarkdownParserTests)
+8. No tests for empty `_visualLines` scenarios — would expose H2 (requires UI tests)
+9. No tests for toggling Bold off from `***bold-italic***` — would expose H3 (requires UI tests)
