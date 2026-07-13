@@ -312,5 +312,5 @@ The test suite is solid for common cases but has notable gaps that would expose 
 5. ~~No tests for link definition titles with escaped delimiters — would expose L8~~ COVERED (during original review, `LinkDefinition_TitleWithEscapedQuote`)
 6. ~~No tests for `IsFenceLine` with backticks in the info string~~ COVERED (during original review, `FencedCode_BacktickInInfoString_NotAFence` + `GetFenceBacktickCount` tests)
 7. ~~No tests for `ParseTableCells` with degenerate inputs (empty string, single pipe, no pipes)~~ COVERED (2026-07-13, 6 tests in MarkdownParserTests)
-8. No tests for empty `_visualLines` scenarios — would expose H2 (requires UI tests)
-9. No tests for toggling Bold off from `***bold-italic***` — would expose H3 (requires UI tests)
+8. ~~No tests for empty `_visualLines` scenarios — would expose H2~~ COVERED (2026-07-13, 4 tests in EmptyVisualLinesTests)
+9. ~~No tests for toggling Bold off from `***bold-italic***` — would expose H3~~ COVERED (2026-07-13, 6 tests in FormattingToggleTests)
