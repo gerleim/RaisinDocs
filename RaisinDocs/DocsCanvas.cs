@@ -2166,6 +2166,18 @@ public partial class DocsCanvas : FrameworkElement
         return brush;
     }
 
+    private SolidColorBrush GetCachedBrush(byte a, byte r, byte g, byte b)
+    {
+        var color = Color.FromArgb(a, r, g, b);
+        if (!_brushCache.TryGetValue(color, out var brush))
+        {
+            brush = new SolidColorBrush(color);
+            brush.Freeze();
+            _brushCache[color] = brush;
+        }
+        return brush;
+    }
+
     private void DrawImagePlaceholder(DrawingContext dc, double x, double y, double w, double h, string? altText)
     {
         dc.DrawRectangle(_imagePlaceholderBrush, null, new Rect(x, y, w, h));
@@ -2390,9 +2402,7 @@ public partial class DocsCanvas : FrameworkElement
             if (lineY + lineH < viewTop) continue;
             if (lineY > viewBottom) break;
 
-            var brush = new SolidColorBrush(Color.FromArgb(40, bg.R, bg.G, bg.B));
-            brush.Freeze();
-            dc.DrawRectangle(brush, null,
+            dc.DrawRectangle(GetCachedBrush(40, bg.R, bg.G, bg.B), null,
                 new Rect(0, lineY - effectiveScroll, contentWidth, lineH));
         }
     }
@@ -2466,9 +2476,7 @@ public partial class DocsCanvas : FrameworkElement
                 if (w <= 0) continue;
 
                 var bg = cs.Background.Value;
-                var brush = new SolidColorBrush(Color.FromArgb(40, bg.R, bg.G, bg.B));
-                brush.Freeze();
-                dc.DrawRectangle(brush, null,
+                dc.DrawRectangle(GetCachedBrush(40, bg.R, bg.G, bg.B), null,
                     new Rect(_padding + x1, lineY - effectiveScroll, w, lineH));
             }
         }
