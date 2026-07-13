@@ -48,6 +48,7 @@ dotnet build RaisinDocs.slnx -p:UseProjectReferences=false
 
 - **DocsCanvas** — Custom `FrameworkElement` handling rendering, input, scrolling, selection, and layout. Renders text via `FormattedText`/`GlyphTypeface` with viewport culling and smooth scrolling. Owns the `Document` instance and delegates all text mutations to it. Split across partial classes:
   - `DocsCanvas.cs` — core rendering (`OnRender`), layout, measurement, keyboard/mouse input
+  - `DocsCanvas.Formatting.cs` — formatting API: inline style toggles, block prefix toggles, insert link/table/color, reflow, formatting query properties
   - `DocsCanvas.VisualMode.cs` — visual-mode-only logic: cursor navigation over hidden ranges, table cell navigation/hit-testing/rendering, image rendering
   - `DocsCanvas.SourceMode.cs` — source-mode-only logic: source cursor navigation, inline image preview
 - **Document** — Testable document model: `List<StringBuilder>` blocks, cursor/anchor positions, text mutations (insert, delete, paste), selection, undo/redo, and navigation. No UI dependencies — all tests target this class.
@@ -69,17 +70,17 @@ The render pipeline is: **Document → MarkdownParser → BlockVisualMap → Doc
 
 Key invariant: `Document` never depends on `MarkdownParser` or `BlockVisualMap`. All markdown awareness flows one way — from parser output into the rendering/navigation layer.
 
-### DocsCanvas functional areas (~5400 lines across 3 partials)
+### DocsCanvas functional areas (~5400 lines across 4 partials)
 
-The partial class split is by edit mode, not by concern. All three files share the same fields. The major functional areas within DocsCanvas are:
+The partial class is split by edit mode and by concern. All files share the same fields. The major functional areas within DocsCanvas are:
 
 - **Layout** (`ComputeLayout`, `ComputeLayoutCore`, `WrapSegment`, `FitLine`, `BuildParagraphGroups`) — word wrapping, visual line computation, paragraph group joining for soft breaks
 - **Rendering** (`OnRender`, `DrawJoinedLine`, `ApplyInlineStyles`, `ApplyColorSpans`, `ApplySyntaxDimming`, `DrawSelection`, background drawing methods) — all drawing happens here
 - **Text measurement** (`MeasureCharWidth`, `MeasureStringWidth`, `MeasureRangeWidth`, `GetLineHeight`, glyph/typeface management, `_charWidthCache`)
 - **Input handling** (`OnKeyDown`, `OnTextInput`, `OnMouseDown/Move/Up`, `Handle*` key dispatch methods)
 - **Cursor/navigation mapping** (`CursorToVisualLineIndex`, `CursorXInVisualLine`, `HitTestVisualLine`, `HitTestToPosition`, `SetCursorFromVisualLine`)
-- **Formatting API** (`ToggleBold/Italic/Code/Strikethrough`, `ToggleInlineStyle`, `ToggleHeading`, `ToggleBlockPrefixForSelection`, `ToggleFencedCode`, `InsertLink`, `InsertTable`)
-- **Link popup** (`ShowLinkPopup`, `BuildLinkPopup`, `CloseLinkPopup`, link popup fields)
+- **Formatting API** (in Formatting.cs: `ToggleBold/Italic/Code/Strikethrough`, `ToggleInlineStyle`, `ToggleHeading`, `ToggleBlockPrefixForSelection`, `ToggleFencedCode`, `InsertLink`, `InsertTable`, formatting query properties)
+- **Link popup** (in `LinkPopupController.cs`: `Show`, `Build`, `Close`, `Cancel`)
 - **Table rendering/navigation** (in VisualMode.cs: `DrawTableRow`, `ComputeAllTableColumnWidths`, `CursorXInTableRow`, `HitTestInTableRow`, `HandleTableArrow`, rectangular selection)
 - **Visual-mode cursor skipping** (in VisualMode.cs: `SkipCursorOverHiddenRanges`, `EnsureCursorOnVisibleBlock`, `ClampCursorBeforeTrailingHidden`)
 - **Scrolling** (`ClampScroll`, `EnsureCursorVisible`, `OnMouseWheel`, smooth scroll via `SmoothScroller`)
