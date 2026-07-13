@@ -267,6 +267,7 @@ public partial class DocsCanvas : FrameworkElement
     public bool ShowWhitespace => _showWhitespace;
 
     public IDocsLogger? Logger { get; set; }
+    internal DocsFormattingBar? FormattingBar { get; set; }
 
     public event EventHandler? ContentChanged;
     public event EventHandler? FormattingChanged;
@@ -604,6 +605,22 @@ public partial class DocsCanvas : FrameworkElement
         _lastAction = LastActionKind.None;
     }
 
+    public void PerformUndo()
+    {
+        _undoSealTimer.Stop();
+        _doc.Undo();
+        _lastAction = LastActionKind.None;
+        InvalidateLayout();
+    }
+
+    public void PerformRedo()
+    {
+        _undoSealTimer.Stop();
+        _doc.Redo();
+        _lastAction = LastActionKind.None;
+        InvalidateLayout();
+    }
+
     private double GetEffectiveLineHeight(VisualLine vl)
     {
         double h = _measure.GetLineHeight(vl.BlockKind);
@@ -629,6 +646,7 @@ public partial class DocsCanvas : FrameworkElement
     protected override void OnGotFocus(RoutedEventArgs e)
     {
         base.OnGotFocus(e);
+        FormattingBar?.DeactivateKeyboardNavigation();
         _blinkTimer.Start();
         ResetBlink();
         InvalidateVisual();

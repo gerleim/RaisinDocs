@@ -745,6 +745,8 @@ public partial class DocsCanvas
 
     // --- Keyboard ---
 
+    private bool _altKeyAlone;
+
     protected override void OnKeyDown(KeyEventArgs e)
     {
         base.OnKeyDown(e);
@@ -754,10 +756,24 @@ public partial class DocsCanvas
         bool ctrl = Keyboard.Modifiers.HasFlag(ModifierKeys.Control) && !alt;
         bool textChanged = false;
 
+        var rawKey = e.Key == Key.System ? e.SystemKey : e.Key;
+        if (rawKey is Key.LeftAlt or Key.RightAlt)
+            _altKeyAlone = true;
+        else if (alt)
+            _altKeyAlone = false;
+
         ComputeLayout();
 
         switch (e.Key)
         {
+            case Key.F6:
+                if (!shift && !ctrl && !alt && FormattingBar?.ActivateKeyboardNavigation() == true)
+                {
+                    e.Handled = true;
+                    return;
+                }
+                handled = false;
+                break;
             case Key.Tab:
                 if (HandleTableTab(shift, out textChanged))
                     break;
@@ -971,6 +987,22 @@ public partial class DocsCanvas
             e.Handled = true;
             RaiseFormattingChanged();
         }
+    }
+
+    protected override void OnKeyUp(KeyEventArgs e)
+    {
+        var key = e.Key == Key.System ? e.SystemKey : e.Key;
+        if ((key is Key.LeftAlt or Key.RightAlt) && _altKeyAlone)
+        {
+            _altKeyAlone = false;
+            if (FormattingBar?.ActivateKeyboardNavigation() == true)
+            {
+                e.Handled = true;
+                return;
+            }
+        }
+        _altKeyAlone = false;
+        base.OnKeyUp(e);
     }
 
     // --- Right-click context menu ---

@@ -196,6 +196,9 @@ public class DocsFormattingBar : Control
     private OverflowPanel? _overflowPanel;
     private Button? _moreButton;
     private Dictionary<UIElement, OverflowEntry>? _overflowMap;
+    private List<(ButtonBase Button, UIElement OverflowChild, Action Action)>? _navigableButtons;
+    private int _keyboardFocusIndex = -1;
+    private bool _isKeyboardActive;
 
     public override void OnApplyTemplate()
     {
@@ -367,6 +370,7 @@ public class DocsFormattingBar : Control
             collapsedStrip.Click += (_, _) => IsCollapsed = false;
 
         BuildOverflowMap();
+        BuildNavigableButtons();
     }
 
     private ToggleButton? WireToggle(string partName, Action action)
@@ -392,12 +396,14 @@ public class DocsFormattingBar : Control
             oldCanvas.FormattingChanged -= bar.OnFormattingChanged;
             oldCanvas.ThemeChanged -= bar.OnThemeChanged;
             oldCanvas.EditModeChanged -= bar.OnEditModeChanged;
+            oldCanvas.FormattingBar = null;
         }
         if (e.NewValue is DocsCanvas newCanvas)
         {
             newCanvas.FormattingChanged += bar.OnFormattingChanged;
             newCanvas.ThemeChanged += bar.OnThemeChanged;
             newCanvas.EditModeChanged += bar.OnEditModeChanged;
+            newCanvas.FormattingBar = bar;
         }
         bar.UpdateButtonStates();
         bar.UpdateThemeButton();
@@ -818,6 +824,192 @@ public class DocsFormattingBar : Control
             () => { Canvas?.ToggleMinimap(); Canvas?.Focus(); UpdateMinimapButton(); },
             () => Canvas?.IsMinimapVisible ?? false,
             () => MakePathIcon(IconMinimap));
+    }
+
+    private void BuildNavigableButtons()
+    {
+        _navigableButtons = [];
+
+        void Add(ButtonBase? btn, Action action, UIElement? overflowChild = null)
+        {
+            if (btn != null)
+                _navigableButtons.Add((btn, overflowChild ?? btn, action));
+        }
+
+        Add(_boldButton, () => { Canvas?.ToggleBold(); UpdateButtonStates(); });
+        Add(_italicButton, () => { Canvas?.ToggleItalic(); UpdateButtonStates(); });
+        Add(_strikethroughButton, () => { Canvas?.ToggleStrikethrough(); UpdateButtonStates(); });
+        Add(_codeButton, () => { Canvas?.ToggleCodeSpan(); UpdateButtonStates(); });
+        Add(_codeBlockButton, () => { Canvas?.ToggleFencedCode(); UpdateButtonStates(); });
+        Add(_h1Button, () => { Canvas?.ToggleHeading(1); UpdateButtonStates(); });
+        Add(_h2Button, () => { Canvas?.ToggleHeading(2); UpdateButtonStates(); });
+        Add(_h3Button, () => { Canvas?.ToggleHeading(3); UpdateButtonStates(); });
+        Add(_bulletButton, () => { Canvas?.ToggleBulletList(); UpdateButtonStates(); });
+        Add(_orderedListButton, () => { Canvas?.ToggleOrderedList(); UpdateButtonStates(); });
+        Add(_taskListButton, () => { Canvas?.ToggleTaskList(); UpdateButtonStates(); });
+        Add(_quoteButton, () => { Canvas?.ToggleBlockquote(); UpdateButtonStates(); });
+        Add(_linkButton, () => Canvas?.InsertLink());
+        Add(_insertTableButton, () => Canvas?.InsertTable(3, 2));
+        Add(_colorTextButton, () => ShowColorMenu());
+        Add(_reflowButton, () => { Canvas?.Reflow(); UpdateButtonStates(); });
+        Add(_hardBreaksButton, () => { Canvas?.ConvertToHardBreaks(); UpdateButtonStates(); });
+        Add(_editModeButton, () => { Canvas?.ToggleEditMode(); UpdateEditModeButton(); });
+        Add(_imagePreviewButton, () => { Canvas?.CycleImagePreview(); UpdateImagePreviewButton(); }, _imagePreviewBorder);
+        Add(_themeButton, () => { Canvas?.ToggleTheme(); UpdateThemeButton(); });
+        Add(_minimapButton, () => { Canvas?.ToggleMinimap(); UpdateMinimapButton(); });
+    }
+
+    internal bool ActivateKeyboardNavigation()
+    {
+        if (_navigableButtons == null || _navigableButtons.Count == 0) return false;
+        if (IsCollapsed || Visibility != Visibility.Visible) return false;
+
+        int idx = FindNextAccessible(-1, forward: true);
+        if (idx < 0) return false;
+
+        _isKeyboardActive = true;
+        FocusButton(idx);
+        return true;
+    }
+
+    internal void DeactivateKeyboardNavigation()
+    {
+        if (!_isKeyboardActive) return;
+
+        if (_keyboardFocusIndex >= 0 && _navigableButtons != null
+            && _keyboardFocusIndex < _navigableButtons.Count)
+            _navigableButtons[_keyboardFocusIndex].Button.Focusable = false;
+        _keyboardFocusIndex = -1;
+        _isKeyboardActive = false;
+    }
+
+    private void FocusButton(int index)
+    {
+        if (_navigableButtons == null) return;
+
+        if (_keyboardFocusIndex >= 0 && _keyboardFocusIndex < _navigableButtons.Count)
+            _navigableButtons[_keyboardFocusIndex].Button.Focusable = false;
+
+        _keyboardFocusIndex = index;
+        var btn = _navigableButtons[index].Button;
+        btn.Focusable = true;
+        btn.Focus();
+    }
+
+    private int FindNextAccessible(int from, bool forward, bool wrap = false)
+    {
+        if (_navigableButtons == null) return -1;
+        int count = _navigableButtons.Count;
+        int step = forward ? 1 : -1;
+        int i = from + step;
+
+        while (i >= 0 && i < count)
+        {
+            if (IsButtonAccessible(i)) return i;
+            i += step;
+        }
+
+        if (!wrap) return -1;
+
+        i = forward ? 0 : count - 1;
+        int limit = from < 0 ? 0 : from;
+        while (forward ? i < limit : i > limit)
+        {
+            if (IsButtonAccessible(i)) return i;
+            i += step;
+        }
+
+        return -1;
+    }
+
+    private bool IsButtonAccessible(int index)
+    {
+        if (_navigableButtons == null) return false;
+        var (btn, overflowChild, _) = _navigableButtons[index];
+        return btn.IsEnabled && !(_overflowPanel?.IsOverflowed(overflowChild) ?? false);
+    }
+
+    protected override void OnPreviewKeyDown(KeyEventArgs e)
+    {
+        base.OnPreviewKeyDown(e);
+        if (e.Handled || !_isKeyboardActive || _navigableButtons == null) return;
+
+        switch (e.Key)
+        {
+            case Key.Left:
+            {
+                int next = FindNextAccessible(_keyboardFocusIndex, forward: false, wrap: true);
+                if (next >= 0) FocusButton(next);
+                e.Handled = true;
+                break;
+            }
+
+            case Key.Right:
+            {
+                int next = FindNextAccessible(_keyboardFocusIndex, forward: true, wrap: true);
+                if (next >= 0) FocusButton(next);
+                e.Handled = true;
+                break;
+            }
+
+            case Key.Home:
+            {
+                int first = FindNextAccessible(-1, forward: true);
+                if (first >= 0) FocusButton(first);
+                e.Handled = true;
+                break;
+            }
+
+            case Key.End:
+            {
+                int last = FindNextAccessible(_navigableButtons.Count, forward: false);
+                if (last >= 0) FocusButton(last);
+                e.Handled = true;
+                break;
+            }
+
+            case Key.Enter:
+            case Key.Space:
+            {
+                if (_keyboardFocusIndex >= 0 && _keyboardFocusIndex < _navigableButtons.Count)
+                    _navigableButtons[_keyboardFocusIndex].Action();
+                e.Handled = true;
+                break;
+            }
+
+            case Key.Tab:
+            {
+                bool shift = Keyboard.Modifiers.HasFlag(ModifierKeys.Shift);
+                int next = FindNextAccessible(_keyboardFocusIndex, forward: !shift);
+                if (next >= 0)
+                    FocusButton(next);
+                else
+                {
+                    DeactivateKeyboardNavigation();
+                    Canvas?.Focus();
+                }
+                e.Handled = true;
+                break;
+            }
+
+            case Key.Escape:
+            case Key.LeftAlt:
+            case Key.RightAlt:
+                DeactivateKeyboardNavigation();
+                Canvas?.Focus();
+                e.Handled = true;
+                break;
+
+            case Key.Z:
+            case Key.Y:
+                if (Keyboard.Modifiers == ModifierKeys.Control && Canvas != null)
+                {
+                    if (e.Key == Key.Z) Canvas.PerformUndo();
+                    else Canvas.PerformRedo();
+                    e.Handled = true;
+                }
+                break;
+        }
     }
 
     private static Path MakePathIcon(Geometry data, bool stroke = false)
