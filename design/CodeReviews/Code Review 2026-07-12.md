@@ -91,7 +91,7 @@
 - **Location**: `DocsCanvas.cs:2358` (also line 2434)
 - **What's wrong**: `DrawBlockColorBackgrounds` creates `new SolidColorBrush(Color.FromArgb(40, ...))` per visible colored line on every render frame. With many colored blocks, this generates GC pressure during scrolling. `GetCachedBrush` already exists for foreground colors — the same pattern with an ARGB key would eliminate these allocations.
 
-### L3 — Overflow menu handlers double-trigger UpdateButtonStates
+### ~~L3 — Overflow menu handlers double-trigger UpdateButtonStates~~ FIXED
 
 - **Severity**: Low
 - **Category**: Redundant work

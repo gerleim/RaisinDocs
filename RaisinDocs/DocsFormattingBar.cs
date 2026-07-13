@@ -716,51 +716,51 @@ public class DocsFormattingBar : Control
         }
 
         Map(_boldButton, "Bold (Ctrl+B)",
-            () => { Canvas?.ToggleBold(); Canvas?.Focus(); UpdateButtonStates(); },
+            () => { Canvas?.ToggleBold(); Canvas?.Focus(); },
             () => Canvas?.SelectionIsBold ?? false,
             () => new TextBlock { Text = "B", FontWeight = FontWeights.Bold });
         Map(_italicButton, "Italic (Ctrl+I)",
-            () => { Canvas?.ToggleItalic(); Canvas?.Focus(); UpdateButtonStates(); },
+            () => { Canvas?.ToggleItalic(); Canvas?.Focus(); },
             () => Canvas?.SelectionIsItalic ?? false,
             () => new TextBlock { Text = "I", FontStyle = FontStyles.Italic });
         Map(_strikethroughButton, "Strikethrough",
-            () => { Canvas?.ToggleStrikethrough(); Canvas?.Focus(); UpdateButtonStates(); },
+            () => { Canvas?.ToggleStrikethrough(); Canvas?.Focus(); },
             () => Canvas?.SelectionIsStrikethrough ?? false,
             () => new TextBlock { Text = "S", TextDecorations = TextDecorations.Strikethrough });
         Map(_codeButton, "Code",
-            () => { Canvas?.ToggleCodeSpan(); Canvas?.Focus(); UpdateButtonStates(); },
+            () => { Canvas?.ToggleCodeSpan(); Canvas?.Focus(); },
             () => Canvas?.SelectionIsCode ?? false,
             () => new TextBlock { Text = "</>", FontSize = 11, FontFamily = mono });
         Map(_codeBlockButton, "Code block",
-            () => { Canvas?.ToggleFencedCode(); Canvas?.Focus(); UpdateButtonStates(); },
+            () => { Canvas?.ToggleFencedCode(); Canvas?.Focus(); },
             () => Canvas?.CurrentBlockKind == BlockKind.FencedCodeLine,
             () => new TextBlock { Text = "```", FontSize = 11, FontFamily = mono });
         Map(_h1Button, "Heading 1",
-            () => { Canvas?.ToggleHeading(1); Canvas?.Focus(); UpdateButtonStates(); },
+            () => { Canvas?.ToggleHeading(1); Canvas?.Focus(); },
             () => Canvas?.CurrentBlockKind == BlockKind.Heading1,
             () => new TextBlock { Text = "H1", FontWeight = FontWeights.Bold, FontSize = 13 });
         Map(_h2Button, "Heading 2",
-            () => { Canvas?.ToggleHeading(2); Canvas?.Focus(); UpdateButtonStates(); },
+            () => { Canvas?.ToggleHeading(2); Canvas?.Focus(); },
             () => Canvas?.CurrentBlockKind == BlockKind.Heading2,
             () => new TextBlock { Text = "H2", FontWeight = FontWeights.Bold, FontSize = 12 });
         Map(_h3Button, "Heading 3",
-            () => { Canvas?.ToggleHeading(3); Canvas?.Focus(); UpdateButtonStates(); },
+            () => { Canvas?.ToggleHeading(3); Canvas?.Focus(); },
             () => Canvas?.CurrentBlockKind == BlockKind.Heading3,
             () => new TextBlock { Text = "H3", FontWeight = FontWeights.Bold, FontSize = 11 });
         Map(_bulletButton, "Bullet list",
-            () => { Canvas?.ToggleBulletList(); Canvas?.Focus(); UpdateButtonStates(); },
+            () => { Canvas?.ToggleBulletList(); Canvas?.Focus(); },
             () => Canvas?.CurrentBlockKind == BlockKind.UnorderedListItem,
             () => MakePathIcon(IconBullet));
         Map(_orderedListButton, "Ordered list",
-            () => { Canvas?.ToggleOrderedList(); Canvas?.Focus(); UpdateButtonStates(); },
+            () => { Canvas?.ToggleOrderedList(); Canvas?.Focus(); },
             () => Canvas?.CurrentBlockKind == BlockKind.OrderedListItem,
             () => MakePathIcon(IconOrderedList));
         Map(_taskListButton, "Task list",
-            () => { Canvas?.ToggleTaskList(); Canvas?.Focus(); UpdateButtonStates(); },
+            () => { Canvas?.ToggleTaskList(); Canvas?.Focus(); },
             () => Canvas?.CurrentBlockKind is BlockKind.TaskListItemUnchecked or BlockKind.TaskListItemChecked,
             () => MakePathIcon(IconTaskList));
         Map(_quoteButton, "Blockquote",
-            () => { Canvas?.ToggleBlockquote(); Canvas?.Focus(); UpdateButtonStates(); },
+            () => { Canvas?.ToggleBlockquote(); Canvas?.Focus(); },
             () => Canvas?.CurrentBlockKind == BlockKind.Blockquote,
             () => MakePathIcon(IconQuote));
         Map(_linkButton, "Link (Ctrl+K)",
