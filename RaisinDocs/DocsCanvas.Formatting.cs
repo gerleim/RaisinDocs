@@ -88,6 +88,11 @@ public partial class DocsCanvas
                     _doc.ToggleBlockPrefix(b, (b - sb + 1) + ". ");
             }
         }
+        _doc.AnchorBlock = sb;
+        _doc.AnchorOffset = 0;
+        _doc.CursorBlock = eb;
+        _doc.CursorOffset = _doc.GetBlockLength(eb);
+
         _doc.SealUndoGroup();
         InvalidateLayout();
         EnsureCursorVisible();
@@ -466,6 +471,11 @@ public partial class DocsCanvas
                     _doc.ToggleBlockPrefix(b, prefix);
             }
         }
+
+        _doc.AnchorBlock = sb;
+        _doc.AnchorOffset = 0;
+        _doc.CursorBlock = eb;
+        _doc.CursorOffset = _doc.GetBlockLength(eb);
 
         _doc.SealUndoGroup();
         InvalidateLayout();
