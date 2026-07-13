@@ -1710,6 +1710,144 @@ public class MarkdownParserTests
         result[0].Links![1].Text.Should().Be("https://b.com");
     }
 
+    // --- Angle-bracket autolinks ---
+
+    [Fact]
+    public void AngleBracketAutolink_HttpsUrl()
+    {
+        var result = ParseBlocks("see <https://example.com> end");
+        result[0].Links.Should().HaveCount(1);
+        var link = result[0].Links![0];
+        link.Text.Should().Be("https://example.com");
+        link.Url.Should().Be("https://example.com");
+        link.Start.Should().Be(4);
+        link.Length.Should().Be(21);
+        link.IsAngleBracket.Should().BeTrue();
+    }
+
+    [Fact]
+    public void AngleBracketAutolink_HttpUrl()
+    {
+        var result = ParseBlocks("<http://example.com/path>");
+        result[0].Links.Should().HaveCount(1);
+        var link = result[0].Links![0];
+        link.Text.Should().Be("http://example.com/path");
+        link.Url.Should().Be("http://example.com/path");
+        link.IsAngleBracket.Should().BeTrue();
+    }
+
+    [Fact]
+    public void AngleBracketAutolink_FtpScheme()
+    {
+        var result = ParseBlocks("<ftp://files.example.com>");
+        result[0].Links.Should().HaveCount(1);
+        result[0].Links![0].Url.Should().Be("ftp://files.example.com");
+        result[0].Links![0].IsAngleBracket.Should().BeTrue();
+    }
+
+    [Fact]
+    public void AngleBracketAutolink_MailtoScheme()
+    {
+        var result = ParseBlocks("<mailto:user@example.com>");
+        result[0].Links.Should().HaveCount(1);
+        result[0].Links![0].Url.Should().Be("mailto:user@example.com");
+    }
+
+    [Fact]
+    public void AngleBracketAutolink_Email()
+    {
+        var result = ParseBlocks("<user@example.com>");
+        result[0].Links.Should().HaveCount(1);
+        var link = result[0].Links![0];
+        link.Text.Should().Be("user@example.com");
+        link.Url.Should().Be("mailto:user@example.com");
+        link.IsAngleBracket.Should().BeTrue();
+    }
+
+    [Fact]
+    public void AngleBracketAutolink_Email_Complex()
+    {
+        var result = ParseBlocks("<foo+bar.baz@sub.example.com>");
+        result[0].Links.Should().HaveCount(1);
+        result[0].Links![0].Text.Should().Be("foo+bar.baz@sub.example.com");
+        result[0].Links![0].Url.Should().Be("mailto:foo+bar.baz@sub.example.com");
+    }
+
+    [Fact]
+    public void AngleBracketAutolink_NotEmail_NoDot()
+    {
+        var result = ParseBlocks("<user@localhost>");
+        result[0].Links.Should().BeNull();
+    }
+
+    [Fact]
+    public void AngleBracketAutolink_NotEmail_InvalidChars()
+    {
+        var result = ParseBlocks("<us er@example.com>");
+        result[0].Links.Should().BeNull();
+    }
+
+    [Fact]
+    public void AngleBracketAutolink_Empty_NotDetected()
+    {
+        var result = ParseBlocks("<>");
+        result[0].Links.Should().BeNull();
+    }
+
+    [Fact]
+    public void AngleBracketAutolink_SingleCharScheme_NotDetected()
+    {
+        var result = ParseBlocks("<a:foo>");
+        result[0].Links.Should().BeNull();
+    }
+
+    [Fact]
+    public void AngleBracketAutolink_InsideCodeSpan_NotDetected()
+    {
+        var result = ParseBlocks("`<https://example.com>`");
+        result[0].Links.Should().BeNull();
+    }
+
+    [Fact]
+    public void AngleBracketAutolink_Multiple()
+    {
+        var result = ParseBlocks("<https://a.com> and <user@b.com>");
+        result[0].Links.Should().HaveCount(2);
+        result[0].Links![0].Url.Should().Be("https://a.com");
+        result[0].Links![1].Url.Should().Be("mailto:user@b.com");
+    }
+
+    [Fact]
+    public void AngleBracketAutolink_WithGfmAutolink()
+    {
+        var result = ParseBlocks("<https://a.com> and https://b.com");
+        result[0].Links.Should().HaveCount(2);
+        result[0].Links![0].IsAngleBracket.Should().BeTrue();
+        result[0].Links![1].IsAngleBracket.Should().BeFalse();
+    }
+
+    [Fact]
+    public void AngleBracketAutolink_GfmAutolink_IsAngleBracketFalse()
+    {
+        var result = ParseBlocks("https://example.com");
+        result[0].Links![0].IsAngleBracket.Should().BeFalse();
+    }
+
+    [Fact]
+    public void AngleBracketAutolink_NoSpaceInUrl()
+    {
+        var result = ParseBlocks("<https://example .com>");
+        result[0].Links.Should().BeNull();
+    }
+
+    [Fact]
+    public void AngleBracketAutolink_UrlWithQueryAndFragment()
+    {
+        var result = ParseBlocks("<https://example.com/search?q=test#anchor>");
+        result[0].Links.Should().HaveCount(1);
+        result[0].Links![0].Url.Should().Be("https://example.com/search?q=test#anchor");
+    }
+
     // --- Reference Links and Images ---
 
     [Fact]

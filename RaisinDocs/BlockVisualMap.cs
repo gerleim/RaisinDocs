@@ -263,6 +263,12 @@ public class BlockVisualMap
         {
             foreach (var link in parsed.Links)
             {
+                if (link.IsAngleBracket)
+                {
+                    ranges.Add(new HiddenRange(link.Start, 1));
+                    ranges.Add(new HiddenRange(link.Start + link.Length - 1, 1));
+                    continue;
+                }
                 if (link.Text == link.Url) continue;
                 ranges.Add(new HiddenRange(link.Start, 1));
                 int closeBracket = link.Start + 1 + link.Text.Length;

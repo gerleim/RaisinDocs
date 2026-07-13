@@ -764,6 +764,52 @@ public class BlockVisualMapTests
         map.RawToVisual(23).Should().Be(23);
     }
 
+    // --- Angle-bracket autolinks ---
+
+    [Fact]
+    public void AngleBracketAutolink_HidesAngleBrackets()
+    {
+        var map = ComputeMap("<https://example.com>");
+        map.IsHidden(0).Should().BeTrue("< should be hidden");
+        map.IsHidden(20).Should().BeTrue("> should be hidden");
+        for (int i = 1; i < 20; i++)
+            map.IsHidden(i).Should().BeFalse($"offset {i} should be visible");
+    }
+
+    [Fact]
+    public void AngleBracketAutolink_DisplayString_NoBrackets()
+    {
+        string text = "<https://example.com>";
+        var map = ComputeMap(text);
+        map.BuildDisplayString(text, 0, text.Length).Should().Be("https://example.com");
+    }
+
+    [Fact]
+    public void AngleBracketAutolink_RawToVisual()
+    {
+        var map = ComputeMap("<https://example.com>");
+        map.RawToVisual(0).Should().Be(0);
+        map.RawToVisual(1).Should().Be(0);
+        map.RawToVisual(20).Should().Be(19);
+    }
+
+    [Fact]
+    public void AngleBracketAutolink_Email_HidesBrackets()
+    {
+        var map = ComputeMap("<user@example.com>");
+        map.IsHidden(0).Should().BeTrue();
+        map.IsHidden(17).Should().BeTrue();
+        map.BuildDisplayString("<user@example.com>", 0, 18).Should().Be("user@example.com");
+    }
+
+    [Fact]
+    public void AngleBracketAutolink_WithSurroundingText()
+    {
+        string text = "see <https://a.com> end";
+        var map = ComputeMap(text);
+        map.BuildDisplayString(text, 0, text.Length).Should().Be("see https://a.com end");
+    }
+
     // --- Reference Links ---
 
     private static BlockVisualMap ComputeMapMultiBlock(string[] blocks, int blockIndex)

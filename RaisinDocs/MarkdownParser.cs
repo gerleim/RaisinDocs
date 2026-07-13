@@ -27,7 +27,7 @@ public readonly record struct StyledRun(int Start, int Length, InlineStyle Style
 
 public readonly record struct InlineImage(int Start, int Length, string AltText, string Url, string? Title);
 
-public readonly record struct InlineLink(int Start, int Length, string Text, string Url, string? Title, string? RefLabel = null);
+public readonly record struct InlineLink(int Start, int Length, string Text, string Url, string? Title, string? RefLabel = null, bool IsAngleBracket = false);
 
 public enum BlockKind
 {
@@ -1123,6 +1123,12 @@ public static class MarkdownParser
         {
             if (styles[i] != InlineStyle.Normal) continue;
 
+            if (text[i] == '<')
+            {
+                links = TryAngleBracketAutolink(text, styles, links, i, out int abEnd);
+                if (abEnd > i) { i = abEnd - 1; continue; }
+            }
+
             string? matchedPrefix = null;
             foreach (var prefix in _autolinkPrefixes)
             {
@@ -1188,6 +1194,92 @@ public static class MarkdownParser
             break;
         }
         return end;
+    }
+
+    private static List<InlineLink>? TryAngleBracketAutolink(string text, InlineStyle[] styles,
+        List<InlineLink>? links, int start, out int end)
+    {
+        end = start;
+        int closeAngle = text.IndexOf('>', start + 1);
+        if (closeAngle < 0 || closeAngle == start + 1) return links;
+
+        for (int j = start + 1; j < closeAngle; j++)
+        {
+            char c = text[j];
+            if (c == '<' || c == ' ' || c == '\t') return links;
+        }
+
+        var inner = text.AsSpan(start + 1, closeAngle - start - 1);
+
+        int colonPos = inner.IndexOf(':');
+        if (colonPos >= 2 && colonPos <= 32)
+        {
+            bool schemeValid = true;
+            for (int j = 0; j < colonPos; j++)
+            {
+                if (!char.IsAsciiLetter(inner[j])) { schemeValid = false; break; }
+            }
+            if (schemeValid && inner.Length > colonPos + 1)
+            {
+                int totalLength = closeAngle - start + 1;
+                string innerStr = inner.ToString();
+                links ??= [];
+                links.Add(new InlineLink(start, totalLength, innerStr, innerStr, null, IsAngleBracket: true));
+                for (int j = start; j <= closeAngle; j++)
+                    styles[j] = InlineStyle.Link;
+                end = closeAngle + 1;
+                return links;
+            }
+        }
+
+        if (IsEmailAutolink(inner))
+        {
+            int totalLength = closeAngle - start + 1;
+            string innerStr = inner.ToString();
+            links ??= [];
+            links.Add(new InlineLink(start, totalLength, innerStr, "mailto:" + innerStr, null, IsAngleBracket: true));
+            for (int j = start; j <= closeAngle; j++)
+                styles[j] = InlineStyle.Link;
+            end = closeAngle + 1;
+            return links;
+        }
+
+        return links;
+    }
+
+    private static bool IsEmailAutolink(ReadOnlySpan<char> s)
+    {
+        int at = s.IndexOf('@');
+        if (at < 1 || at == s.Length - 1) return false;
+
+        for (int i = 0; i < at; i++)
+        {
+            char c = s[i];
+            if (char.IsAsciiLetterOrDigit(c)) continue;
+            if (".!#$%&'*+/=?^_`{|}~-".Contains(c)) continue;
+            return false;
+        }
+
+        int domainStart = at + 1;
+        if (s[domainStart] == '-' || s[domainStart] == '.') return false;
+        if (s[^1] == '-' || s[^1] == '.') return false;
+
+        bool hasDot = false;
+        for (int i = domainStart; i < s.Length; i++)
+        {
+            char c = s[i];
+            if (char.IsAsciiLetterOrDigit(c)) continue;
+            if (c == '-') continue;
+            if (c == '.')
+            {
+                if (i + 1 < s.Length && (s[i + 1] == '.' || s[i + 1] == '-')) return false;
+                hasDot = true;
+                continue;
+            }
+            return false;
+        }
+
+        return hasDot;
     }
 
     private static bool TryResolveReference(string text, int bracketClose, string fallbackLabel,

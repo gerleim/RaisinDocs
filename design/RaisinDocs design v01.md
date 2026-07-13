@@ -197,7 +197,7 @@ A trailing `\` is a hard break only when:
 - Interacts with iteration 19 (indentation awareness): inside a list item with content column C, indented code requires C+4 spaces total
 - Lower priority: fenced code blocks are the dominant convention; indented code is legacy
 
-### 17 — Angle-bracket autolinks
+### 17 — Angle-bracket autolinks ✅
 - CommonMark autolinks (§6.7): `<https://url>` and `<email@example.com>` wrapped in angle brackets
 - Currently only GFM extended autolinks (bare URLs) are implemented; the CommonMark `<url>` form is not
 - Add detection in `MarkAutolinks()` for `<` + scheme + `:` + url + `>` and `<` + email + `>` patterns
