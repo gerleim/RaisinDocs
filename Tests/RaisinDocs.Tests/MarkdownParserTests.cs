@@ -2624,4 +2624,163 @@ public class MarkdownParserTests
         blocks[3].Kind.Should().Be(BlockKind.IndentedCodeLine);
     }
 
+    // --- Emphasis with >3 stars (gap #1) ---
+
+    [Fact]
+    public void Emphasis_FourStars_Bold()
+    {
+        // ****text**** → delimiter algorithm matches ** twice → Bold
+        var result = ParseBlocks("****text****");
+        var runs = result[0].Runs;
+        runs.Should().Contain(r => r.Style == InlineStyle.Bold);
+    }
+
+    [Fact]
+    public void Emphasis_FiveStars_BoldItalic()
+    {
+        var result = ParseBlocks("*****text*****");
+        var runs = result[0].Runs;
+        runs.Should().Contain(r => r.Style == InlineStyle.BoldItalic);
+    }
+
+    [Fact]
+    public void Emphasis_FourStarsOpen_ThreeStarsClose()
+    {
+        // ****text*** → delimiter algorithm: consumes ** (bold), then * (italic)
+        var result = ParseBlocks("****text***");
+        var runs = result[0].Runs;
+        runs.Should().Contain(r => r.Style == InlineStyle.BoldItalic);
+    }
+
+    [Fact]
+    public void Emphasis_ThreeStarsOpen_FourStarsClose()
+    {
+        // ***text**** → CommonMark: <em><strong>text</strong></em>*
+        var result = ParseBlocks("***text****");
+        var runs = result[0].Runs;
+        runs.Should().Contain(r => r.Style == InlineStyle.BoldItalic);
+    }
+
+    // --- Mismatched star run lengths (gap #2) ---
+
+    [Fact]
+    public void Emphasis_TwoStarsOpen_OneClose()
+    {
+        // **text* — delimiter algorithm consumes 1 from each: italic match
+        var result = ParseBlocks("**text*");
+        var runs = result[0].Runs;
+        runs.Should().Contain(r => r.Style == InlineStyle.Italic);
+    }
+
+    [Fact]
+    public void Emphasis_OneStarOpen_TwoClose()
+    {
+        // *text** — delimiter algorithm consumes 1 from each: italic match
+        var result = ParseBlocks("*text**");
+        var runs = result[0].Runs;
+        runs.Should().Contain(r => r.Style == InlineStyle.Italic);
+    }
+
+    [Fact]
+    public void Emphasis_MismatchedRuns_RuleOfThree()
+    {
+        // CommonMark rule: if opener+closer is multiple of 3 and neither is multiple of 3, skip
+        // *foo**bar* — 1+2=3, 1%3!=0 and 2%3!=0 → skip per rule of three
+        var result = ParseBlocks("*foo**bar*");
+        var runs = result[0].Runs;
+        runs.Should().Contain(r => r.Style == InlineStyle.Italic);
+    }
+
+    [Fact]
+    public void Emphasis_MatchedThenLeftover()
+    {
+        // **foo*** → <strong>foo</strong>* (leftover star is literal)
+        var result = ParseBlocks("**foo***");
+        var runs = result[0].Runs;
+        runs.Should().Contain(r => r.Style == InlineStyle.Bold);
+    }
+
+    // --- Colored text inside table cells (gap #3) ---
+
+    [Fact]
+    public void Table_CellWithInlineColor_ParsesColorSpan()
+    {
+        var result = ParseBlocks("| <!--@fg:red-->text<!--/@fg--> |", "| --- |", "| data |");
+        result[0].ColorSpans.Should().NotBeNull();
+        result[0].ColorSpans!.Count.Should().BeGreaterThanOrEqualTo(1);
+        result[0].ColorSpans![0].Foreground.Should().Be(new RgbColor(255, 0, 0));
+    }
+
+    [Fact]
+    public void Table_DataCellWithInlineColor_ParsesColorSpan()
+    {
+        var result = ParseBlocks("| header |", "| --- |", "| <!--@fg:blue-->value<!--/@fg--> |");
+        result[2].ColorSpans.Should().NotBeNull();
+        result[2].ColorSpans!.Count.Should().BeGreaterThanOrEqualTo(1);
+        result[2].ColorSpans![0].Foreground.Should().Be(new RgbColor(0, 0, 255));
+    }
+
+    [Fact]
+    public void Table_MultipleCellsWithDifferentColors()
+    {
+        var result = ParseBlocks(
+            "| <!--@fg:red-->a<!--/@fg--> | <!--@fg:green-->b<!--/@fg--> |",
+            "| --- | --- |",
+            "| x | y |");
+        result[0].ColorSpans.Should().NotBeNull();
+        result[0].ColorSpans!.Count.Should().Be(2);
+        result[0].ColorSpans![0].Foreground.Should().Be(new RgbColor(255, 0, 0));
+        result[0].ColorSpans![1].Foreground.Should().Be(new RgbColor(0, 128, 0));
+    }
+
+    // --- ParseTableCells degenerate inputs (gap #7) ---
+
+    [Fact]
+    public void ParseTableCells_EmptyString_ReturnsEmpty()
+    {
+        var cells = MarkdownParser.ParseTableCells("");
+        cells.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void ParseTableCells_SinglePipe_ReturnsEmpty()
+    {
+        var cells = MarkdownParser.ParseTableCells("|");
+        cells.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void ParseTableCells_TwoPipes_OneEmptyCell()
+    {
+        var cells = MarkdownParser.ParseTableCells("||");
+        cells.Should().HaveCount(1);
+        cells[0].Length.Should().Be(0);
+    }
+
+    [Fact]
+    public void ParseTableCells_NoPipes_SingleCell()
+    {
+        var cells = MarkdownParser.ParseTableCells("text");
+        cells.Should().HaveCount(1);
+        cells[0].Start.Should().Be(0);
+        cells[0].Length.Should().Be(4);
+    }
+
+    [Fact]
+    public void ParseTableCells_OnlySpaces_SingleCell()
+    {
+        var cells = MarkdownParser.ParseTableCells("   ");
+        cells.Should().HaveCount(1);
+    }
+
+    [Fact]
+    public void ParseTableCells_PipeWithSpaces_CellBoundaries()
+    {
+        // "| a | b |" — leading pipe skipped, cells split on inner pipes
+        var cells = MarkdownParser.ParseTableCells("| a | b |");
+        cells.Should().HaveCount(2);
+        cells[0].Start.Should().Be(1);  // after leading |
+        cells[1].Start.Should().Be(5);  // after second |
+    }
+
 }

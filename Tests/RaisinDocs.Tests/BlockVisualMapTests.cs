@@ -1169,4 +1169,85 @@ public class BlockVisualMapTests
         var display = map.BuildDisplayString("    code  ", 0, 10);
         display.Should().Be("code  ");
     }
+
+    // --- Strikethrough in visual mode (gap #4) ---
+
+    [Fact]
+    public void Strikethrough_MarkersHidden()
+    {
+        var map = ComputeMap("~~struck~~");
+        map.IsHidden(0).Should().BeTrue();   // ~
+        map.IsHidden(1).Should().BeTrue();   // ~
+        map.IsHidden(2).Should().BeFalse();  // s
+        map.IsHidden(7).Should().BeFalse();  // k
+        map.IsHidden(8).Should().BeTrue();   // ~
+        map.IsHidden(9).Should().BeTrue();   // ~
+    }
+
+    [Fact]
+    public void Strikethrough_DisplayString()
+    {
+        var map = ComputeMap("~~struck~~");
+        map.BuildDisplayString("~~struck~~", 0, 10).Should().Be("struck");
+    }
+
+    [Fact]
+    public void Strikethrough_WithSurroundingText_MarkersHidden()
+    {
+        var text = "before ~~struck~~ after";
+        var map = ComputeMap(text);
+        // "~~" at 7,8 hidden
+        map.IsHidden(7).Should().BeTrue();
+        map.IsHidden(8).Should().BeTrue();
+        // "struck" at 9..14 visible
+        map.IsHidden(9).Should().BeFalse();
+        map.IsHidden(14).Should().BeFalse();
+        // "~~" at 15,16 hidden
+        map.IsHidden(15).Should().BeTrue();
+        map.IsHidden(16).Should().BeTrue();
+    }
+
+    [Fact]
+    public void Strikethrough_DisplayString_WithSurroundingText()
+    {
+        var text = "before ~~struck~~ after";
+        var map = ComputeMap(text);
+        map.BuildDisplayString(text, 0, text.Length).Should().Be("before struck after");
+    }
+
+    [Fact]
+    public void Strikethrough_RawToVisual()
+    {
+        var map = ComputeMap("~~struck~~");
+        map.RawToVisual(0).Should().Be(0);   // before first ~
+        map.RawToVisual(2).Should().Be(0);   // s (first visible char)
+        map.RawToVisual(7).Should().Be(5);   // k (last visible char)
+        map.RawToVisual(10).Should().Be(6);  // past end
+    }
+
+    [Fact]
+    public void Strikethrough_VisualToRaw()
+    {
+        var map = ComputeMap("~~struck~~");
+        map.VisualToRaw(0).Should().Be(2);   // visual start → raw 2 (past ~~)
+        map.VisualToRaw(6).Should().Be(10);  // past end → raw 10 (past ~~)
+    }
+
+    [Fact]
+    public void Strikethrough_CombinedWithBold()
+    {
+        var text = "**bold** ~~struck~~";
+        var map = ComputeMap(text);
+        // bold markers hidden
+        map.IsHidden(0).Should().BeTrue();
+        map.IsHidden(1).Should().BeTrue();
+        map.IsHidden(6).Should().BeTrue();
+        map.IsHidden(7).Should().BeTrue();
+        // strikethrough markers hidden
+        map.IsHidden(9).Should().BeTrue();
+        map.IsHidden(10).Should().BeTrue();
+        map.IsHidden(17).Should().BeTrue();
+        map.IsHidden(18).Should().BeTrue();
+        map.BuildDisplayString(text, 0, text.Length).Should().Be("bold struck");
+    }
 }
