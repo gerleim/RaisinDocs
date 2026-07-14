@@ -105,6 +105,23 @@ public record class ParsedBlock
     public bool IsLazyContinuation { get; init; }
     public bool IsIndentedContinuation { get; init; }
     public int OwnerBlock { get; init; } = -1;
+
+    public bool HasStyleAt(int offset, InlineStyle targetStyle)
+    {
+        foreach (var run in Runs)
+        {
+            if (offset >= run.Start && offset < run.Start + run.Length)
+            {
+                if (run.Style == targetStyle)
+                    return true;
+                if (run.Style == InlineStyle.BoldItalic &&
+                    (targetStyle == InlineStyle.Bold || targetStyle == InlineStyle.Italic))
+                    return true;
+                return false;
+            }
+        }
+        return false;
+    }
 }
 
 public static class MarkdownParser

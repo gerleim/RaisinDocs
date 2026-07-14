@@ -32,8 +32,9 @@
                             <Setter TargetName="Bd" Property="Background" Value="#20000000" />
                         </Trigger>
                         <Trigger Property="IsChecked" Value="True">
-                            <Setter TargetName="Bd" Property="Background" Value="#30000000" />
-                            <Setter TargetName="Bd" Property="BorderBrush" Value="#999" />
+                            <Setter TargetName="Bd" Property="Background" Value="#50000000" />
+                            <Setter TargetName="Bd" Property="BorderBrush" Value="#DDD" />
+                            <Setter TargetName="Bd" Property="BorderThickness" Value="1.5" />
                         </Trigger>
                         <Trigger Property="IsKeyboardFocused" Value="True">
                             <Setter TargetName="Bd" Property="BorderBrush" Value="#0078D4" />

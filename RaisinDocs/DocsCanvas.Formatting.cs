@@ -504,7 +504,12 @@ public partial class DocsCanvas
 
     private bool SelectionHasStyle(InlineStyle targetStyle)
     {
-        if (!_measure.IsMeasured || !_doc.HasSelection) return false;
+        if (!_measure.IsMeasured) return false;
+        if (!_doc.HasSelection)
+        {
+            ComputeLayout();
+            return _parsedBlocks![_doc.CursorBlock].HasStyleAt(_doc.CursorOffset, targetStyle);
+        }
         var (sb, so, eb, eo) = _doc.GetOrderedSelection();
         so = Math.Min(so, _doc.GetBlockLength(sb));
         eo = Math.Min(eo, _doc.GetBlockLength(eb));
