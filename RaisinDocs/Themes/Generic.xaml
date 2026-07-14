@@ -326,9 +326,14 @@
 
                             <ToggleButton x:Name="PART_Minimap" Style="{StaticResource FormattingToggle}"
                                           ToolTip="Minimap">
-                                <Path x:Name="PART_MinimapIcon"
-                                      Width="14" Height="14" Stretch="Uniform"
-                                      Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=local:DocsFormattingBar}}" />
+                                <Grid Width="14" Height="14">
+                                    <Path x:Name="PART_MinimapIcon"
+                                          Stretch="Uniform"
+                                          Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=local:DocsFormattingBar}}" />
+                                    <Path x:Name="PART_MinimapLines"
+                                          Stretch="Uniform" Opacity="0.45"
+                                          Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=local:DocsFormattingBar}}" />
+                                </Grid>
                             </ToggleButton>
 
                             <Button x:Name="PART_Overflow" Style="{StaticResource FormattingButton}"

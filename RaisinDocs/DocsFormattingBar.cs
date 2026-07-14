@@ -70,9 +70,21 @@ public class DocsFormattingBar : Control
         "M2,9 C2,5.5 4,3 7,2 L7,3.5 C5,4.5 4.2,6 4,7.5 L6.5,7.5 V12 H2 Z " +
         "M9,9 C9,5.5 11,3 14,2 L14,3.5 C12,4.5 11.2,6 11,7.5 L13.5,7.5 V12 H9 Z");
 
-    // Minimap: small rectangle with horizontal lines (document overview)
+    // Minimap off: rectangle frame only
     private static readonly Geometry IconMinimap = Geometry.Parse(
-        "M1,1 H15 V15 H1 Z M2,2 H14 V14 H2 Z M3,4 H13 M3,6.5 H11 M3,9 H12 M3,11.5 H9");
+        "M1,1 H15 V15 H1 Z M2,2 H14 V14 H2 Z");
+
+    // Minimap off: document text lines (rendered at reduced opacity)
+    private static readonly Geometry IconMinimapLines = Geometry.Parse(
+        "M3,3.5 H13 V4.5 H3 Z M3,6 H11 V7 H3 Z M3,8.5 H12 V9.5 H3 Z M3,11 H9 V12 H3 Z");
+
+    // Minimap on: frame with filled right column
+    private static readonly Geometry IconMinimapOn = Geometry.Parse(
+        "M1,1 H15 V15 H1 Z M2,2 H10.5 V14 H2 Z");
+
+    // Minimap on: shorter text lines (rendered at reduced opacity)
+    private static readonly Geometry IconMinimapOnLines = Geometry.Parse(
+        "M3,3.5 H9.5 V4.5 H3 Z M3,6 H8 V7 H3 Z M3,8.5 H9 V9.5 H3 Z M3,11 H7 V12 H3 Z");
 
     // Dropdown arrow: small chevron down
     private static readonly Geometry IconDropdownArrow = Geometry.Parse(
@@ -125,6 +137,9 @@ public class DocsFormattingBar : Control
         IconQuote.Freeze();
         IconDropdownArrow.Freeze();
         IconMinimap.Freeze();
+        IconMinimapLines.Freeze();
+        IconMinimapOn.Freeze();
+        IconMinimapOnLines.Freeze();
         IconSun.Freeze();
         IconMoon.Freeze();
         IconCrescent.Freeze();
@@ -184,6 +199,7 @@ public class DocsFormattingBar : Control
     private Path? _imagePreviewIcon;
     private ToggleButton? _minimapButton;
     private Path? _minimapIcon;
+    private Path? _minimapLines;
     private Button? _linkButton;
     private Button? _insertTableButton;
     private Button? _colorTextButton;
@@ -344,7 +360,9 @@ public class DocsFormattingBar : Control
 
         _minimapButton = GetTemplateChild("PART_Minimap") as ToggleButton;
         _minimapIcon = GetTemplateChild("PART_MinimapIcon") as Path;
+        _minimapLines = GetTemplateChild("PART_MinimapLines") as Path;
         if (_minimapIcon != null) _minimapIcon.Data = IconMinimap;
+        if (_minimapLines != null) _minimapLines.Data = IconMinimapLines;
         if (_minimapButton != null)
         {
             _minimapButton.Click += (_, _) =>
@@ -511,7 +529,12 @@ public class DocsFormattingBar : Control
     private void UpdateMinimapButton()
     {
         if (_minimapButton == null || Canvas == null) return;
-        SetCheckedSilent(_minimapButton, Canvas.IsMinimapVisible);
+        var visible = Canvas.IsMinimapVisible;
+        SetCheckedSilent(_minimapButton, visible);
+        if (_minimapIcon != null)
+            _minimapIcon.Data = visible ? IconMinimapOn : IconMinimap;
+        if (_minimapLines != null)
+            _minimapLines.Data = visible ? IconMinimapOnLines : IconMinimapLines;
     }
 
     private void UpdateButtonStates()
