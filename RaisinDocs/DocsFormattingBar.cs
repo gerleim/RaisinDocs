@@ -195,6 +195,7 @@ public class DocsFormattingBar : Control
     private string _lastColorName = "red";
     private OverflowPanel? _overflowPanel;
     private Button? _moreButton;
+    private Button? _collapseButton;
     private Dictionary<UIElement, OverflowEntry>? _overflowMap;
     private List<(ButtonBase Button, UIElement OverflowChild, Action Action)>? _navigableButtons;
     private int _keyboardFocusIndex = -1;
@@ -361,9 +362,9 @@ public class DocsFormattingBar : Control
         if (_moreButton != null)
             _moreButton.Click += (_, _) => ShowOverflowMenu();
 
-        var collapseButton = GetTemplateChild("PART_Collapse") as Button;
-        if (collapseButton != null)
-            collapseButton.Click += (_, _) => IsCollapsed = true;
+        _collapseButton = GetTemplateChild("PART_Collapse") as Button;
+        if (_collapseButton != null)
+            _collapseButton.Click += (_, _) => IsCollapsed = true;
 
         var collapsedStrip = GetTemplateChild("PART_CollapsedStrip") as Button;
         if (collapsedStrip != null)
@@ -419,7 +420,7 @@ public class DocsFormattingBar : Control
     {
         if (_themeButton == null || Canvas == null) return;
         var theme = Canvas.Theme;
-        SetCheckedSilent(_themeButton, theme != DocsCanvas.EditorTheme.Light);
+        SetCheckedSilent(_themeButton, false);
         if (_themeIcon != null)
         {
             _themeIcon.Data = theme switch
@@ -855,8 +856,11 @@ public class DocsFormattingBar : Control
         Add(_hardBreaksButton, () => { Canvas?.ConvertToHardBreaks(); UpdateButtonStates(); });
         Add(_editModeButton, () => { Canvas?.ToggleEditMode(); UpdateEditModeButton(); });
         Add(_imagePreviewButton, () => { Canvas?.CycleImagePreview(); UpdateImagePreviewButton(); }, _imagePreviewBorder);
+        Add(_imagePreviewArrow, () => ShowImagePreviewMenu(), _imagePreviewBorder);
         Add(_themeButton, () => { Canvas?.ToggleTheme(); UpdateThemeButton(); });
         Add(_minimapButton, () => { Canvas?.ToggleMinimap(); UpdateMinimapButton(); });
+        Add(_moreButton, () => ShowOverflowMenu());
+        Add(_collapseButton, () => IsCollapsed = true);
     }
 
     internal bool ActivateKeyboardNavigation()
