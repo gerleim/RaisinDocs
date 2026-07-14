@@ -1735,4 +1735,138 @@ public class DocumentTests
         doc.MoveWordLeft();
         doc.CursorOffset.Should().Be(9);
     }
+
+    // --- IndentLines / OutdentLines ---
+
+    [Fact]
+    public void IndentLines_SingleLine_AddsSpacesAndAdjustsCursor()
+    {
+        var doc = CreateDoc("hello");
+        doc.CursorBlock = 0;
+        doc.CursorOffset = 3;
+        doc.CollapseSelection();
+        doc.IndentLines(0, 0, 4);
+        doc.GetBlockText(0).Should().Be("    hello");
+        doc.CursorOffset.Should().Be(7);
+    }
+
+    [Fact]
+    public void IndentLines_MultipleLines_AllGetSpaces()
+    {
+        var doc = CreateDoc("aaa", "bbb", "ccc");
+        doc.CursorBlock = 1;
+        doc.CursorOffset = 1;
+        doc.CollapseSelection();
+        doc.IndentLines(0, 2, 4);
+        doc.GetBlockText(0).Should().Be("    aaa");
+        doc.GetBlockText(1).Should().Be("    bbb");
+        doc.GetBlockText(2).Should().Be("    ccc");
+        doc.CursorOffset.Should().Be(5);
+    }
+
+    [Fact]
+    public void IndentLines_TwoSpaces_ForListNesting()
+    {
+        var doc = CreateDoc("- item");
+        doc.CursorBlock = 0;
+        doc.CursorOffset = 2;
+        doc.CollapseSelection();
+        doc.IndentLines(0, 0, 2);
+        doc.GetBlockText(0).Should().Be("  - item");
+        doc.CursorOffset.Should().Be(4);
+    }
+
+    [Fact]
+    public void OutdentLines_RemovesLeadingSpaces()
+    {
+        var doc = CreateDoc("    hello");
+        doc.CursorBlock = 0;
+        doc.CursorOffset = 7;
+        doc.CollapseSelection();
+        doc.OutdentLines(0, 0, 4);
+        doc.GetBlockText(0).Should().Be("hello");
+        doc.CursorOffset.Should().Be(3);
+    }
+
+    [Fact]
+    public void OutdentLines_FewerSpacesThanMax_RemovesOnlyAvailable()
+    {
+        var doc = CreateDoc("  hello");
+        doc.CursorBlock = 0;
+        doc.CursorOffset = 4;
+        doc.CollapseSelection();
+        doc.OutdentLines(0, 0, 4);
+        doc.GetBlockText(0).Should().Be("hello");
+        doc.CursorOffset.Should().Be(2);
+    }
+
+    [Fact]
+    public void OutdentLines_NoLeadingSpaces_NoOp()
+    {
+        var doc = CreateDoc("hello");
+        doc.CursorBlock = 0;
+        doc.CursorOffset = 3;
+        doc.CollapseSelection();
+        doc.OutdentLines(0, 0, 4);
+        doc.GetBlockText(0).Should().Be("hello");
+        doc.CursorOffset.Should().Be(3);
+    }
+
+    [Fact]
+    public void OutdentLines_MultipleLines()
+    {
+        var doc = CreateDoc("    aaa", "  bbb", "      ccc");
+        doc.CursorBlock = 2;
+        doc.CursorOffset = 9;
+        doc.CollapseSelection();
+        doc.OutdentLines(0, 2, 4);
+        doc.GetBlockText(0).Should().Be("aaa");
+        doc.GetBlockText(1).Should().Be("bbb");
+        doc.GetBlockText(2).Should().Be("  ccc");
+        doc.CursorOffset.Should().Be(5);
+    }
+
+    [Fact]
+    public void IndentLines_AdjustsAnchorOnAffectedBlock()
+    {
+        var doc = CreateDoc("aaa", "bbb");
+        doc.AnchorBlock = 0;
+        doc.AnchorOffset = 2;
+        doc.CursorBlock = 1;
+        doc.CursorOffset = 1;
+        doc.IndentLines(0, 1, 4);
+        doc.AnchorOffset.Should().Be(6);
+        doc.CursorOffset.Should().Be(5);
+    }
+
+    [Fact]
+    public void OutdentLines_ClampsPositionsToZero()
+    {
+        var doc = CreateDoc("  hello");
+        doc.CursorBlock = 0;
+        doc.CursorOffset = 1;
+        doc.CollapseSelection();
+        doc.OutdentLines(0, 0, 4);
+        doc.GetBlockText(0).Should().Be("hello");
+        doc.CursorOffset.Should().Be(0);
+    }
+
+    [Fact]
+    public void IndentOutdent_UndoRoundTrip()
+    {
+        var doc = CreateDoc("hello", "world");
+        doc.CursorBlock = 0;
+        doc.CursorOffset = 3;
+        doc.CollapseSelection();
+        doc.BeginUndoGroup();
+        doc.IndentLines(0, 1, 4);
+        doc.SealUndoGroup();
+        doc.GetBlockText(0).Should().Be("    hello");
+        doc.GetBlockText(1).Should().Be("    world");
+
+        doc.Undo();
+        doc.GetBlockText(0).Should().Be("hello");
+        doc.GetBlockText(1).Should().Be("world");
+        doc.CursorOffset.Should().Be(3);
+    }
 }

@@ -204,7 +204,7 @@ A trailing `\` is a hard break only when:
 - Render same as existing autolinks (blue, underline, Ctrl+Click to open)
 - Hide the angle brackets in visual mode
 
-### 18 — Tab indent / outdent
+### 18 — Tab indent / outdent ✅
 - Tab and Shift+Tab insert/remove leading spaces for line indentation
 - Context-aware priority: table cell navigation (existing) > list nesting > general indent
 - **List items**: Tab on a list item nests it (adds spaces equal to the content column width of the parent), matching VS Code/Obsidian/Typora behavior. Shift+Tab un-nests. This is the dominant UX across all markdown editors.

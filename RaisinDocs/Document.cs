@@ -356,6 +356,32 @@ public class Document
             AnchorOffset = Math.Max(0, AnchorOffset + delta);
     }
 
+    public void IndentLines(int startBlock, int endBlock, int spaces)
+    {
+        var indent = new string(' ', spaces);
+        for (int b = startBlock; b <= endBlock; b++)
+        {
+            _blocks[b].Insert(0, indent);
+            AdjustPositionsAfterPrefixChange(b, spaces);
+        }
+    }
+
+    public void OutdentLines(int startBlock, int endBlock, int maxSpaces)
+    {
+        for (int b = startBlock; b <= endBlock; b++)
+        {
+            var text = _blocks[b].ToString();
+            int remove = 0;
+            while (remove < maxSpaces && remove < text.Length && text[remove] == ' ')
+                remove++;
+            if (remove > 0)
+            {
+                _blocks[b].Remove(0, remove);
+                AdjustPositionsAfterPrefixChange(b, -remove);
+            }
+        }
+    }
+
     public void MoveLeft()
     {
         if (CursorOffset > 0)

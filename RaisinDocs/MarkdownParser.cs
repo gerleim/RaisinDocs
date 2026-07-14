@@ -676,8 +676,17 @@ public static class MarkdownParser
         {
             if (blocks[i].Kind != BlockKind.IndentedCodeLine)
                 continue;
-            if (blocks[i].IsLazyContinuation || blocks[i].IsIndentedContinuation)
+            if (blocks[i].IsLazyContinuation)
+            {
                 blocks[i] = ReclassifyAsParagraph(blocks[i], getBlockText(i), defs);
+            }
+            else if (blocks[i].IsIndentedContinuation)
+            {
+                int ownerCC = blocks[blocks[i].OwnerBlock].ContentColumn;
+                int indent = MeasureLeadingWhitespace(getBlockText(i)).columns;
+                if (indent < ownerCC + 4)
+                    blocks[i] = ReclassifyAsParagraph(blocks[i], getBlockText(i), defs);
+            }
         }
     }
 
@@ -861,14 +870,39 @@ public static class MarkdownParser
         return BlockKind.Paragraph;
     }
 
-    internal static int GetContentColumn(BlockKind kind, string text, int leadingChars = 0, int leadingColumns = 0) => kind switch
+    internal static int GetContentColumn(BlockKind kind, string text, int leadingChars = 0, int leadingColumns = 0)
     {
-        BlockKind.UnorderedListItem => leadingColumns + 2,
-        BlockKind.TaskListItemUnchecked or BlockKind.TaskListItemChecked => leadingColumns + 6,
-        BlockKind.OrderedListItem => leadingColumns + GetOrderedListPrefixLength(leadingChars > 0 ? text[leadingChars..] : text),
-        BlockKind.Blockquote => leadingColumns + 2,
-        _ => 0,
-    };
+        if (kind == BlockKind.Blockquote)
+            return leadingColumns + 2;
+
+        int rawMarkerWidth = kind switch
+        {
+            BlockKind.UnorderedListItem
+                or BlockKind.TaskListItemUnchecked
+                or BlockKind.TaskListItemChecked => 1,
+            BlockKind.OrderedListItem =>
+                GetOrderedListPrefixLength(leadingChars > 0 ? text[leadingChars..] : text) - 1,
+            _ => 0,
+        };
+        if (rawMarkerWidth <= 0) return 0;
+
+        int markerEndCol = leadingColumns + rawMarkerWidth;
+        int i = leadingChars + rawMarkerWidth;
+        int col = markerEndCol;
+        while (i < text.Length && (text[i] == ' ' || text[i] == '\t'))
+        {
+            if (text[i] == '\t')
+                col = ((col / 4) + 1) * 4;
+            else
+                col++;
+            i++;
+        }
+
+        if (col - markerEndCol > 4 || i >= text.Length)
+            return markerEndCol + 1;
+
+        return col;
+    }
 
     internal static bool IsThematicBreak(string text)
     {

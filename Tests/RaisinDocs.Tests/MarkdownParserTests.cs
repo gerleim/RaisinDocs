@@ -213,13 +213,41 @@ public class MarkdownParserTests
     public void ContentColumn_TaskList()
     {
         var blocks = ParseBlocks("- [ ] task");
-        blocks[0].ContentColumn.Should().Be(6);
+        blocks[0].ContentColumn.Should().Be(2);
     }
 
     [Fact]
     public void ContentColumn_Blockquote()
     {
         var blocks = ParseBlocks("> quoted");
+        blocks[0].ContentColumn.Should().Be(2);
+    }
+
+    [Fact]
+    public void ContentColumn_ExtraSpacesAfterMarker()
+    {
+        var blocks = ParseBlocks(" -    one");
+        blocks[0].ContentColumn.Should().Be(6);
+    }
+
+    [Fact]
+    public void ContentColumn_FivePlusSpaces_CollapsesToMarkerPlusOne()
+    {
+        var blocks = ParseBlocks("-      code");
+        blocks[0].ContentColumn.Should().Be(2);
+    }
+
+    [Fact]
+    public void ContentColumn_ExtraSpacesAfterMarker_OrderedList()
+    {
+        var blocks = ParseBlocks("1.   one");
+        blocks[0].ContentColumn.Should().Be(5);
+    }
+
+    [Fact]
+    public void ContentColumn_MarkerOnly_NoContent()
+    {
+        var blocks = ParseBlocks("- ");
         blocks[0].ContentColumn.Should().Be(2);
     }
 
@@ -235,6 +263,67 @@ public class MarkdownParserTests
     {
         var blocks = ParseBlocks("# heading");
         blocks[0].ContentColumn.Should().Be(0);
+    }
+
+    // --- Continuation with extra spaces after marker (CommonMark §5.3 examples 257-258) ---
+
+    [Fact]
+    public void IndentedContinuation_ExtraSpaces_BelowContentColumn_NotContinuation()
+    {
+        // " -    one" has content column 6, so 5 spaces is not enough
+        var blocks = ParseBlocks(" -    one", "", "     two");
+        blocks[2].IsIndentedContinuation.Should().BeFalse();
+    }
+
+    [Fact]
+    public void IndentedContinuation_ExtraSpaces_AtContentColumn_IsContinuation()
+    {
+        // " -    one" has content column 6, so 6 spaces is enough
+        var blocks = ParseBlocks(" -    one", "", "      two");
+        blocks[2].IsIndentedContinuation.Should().BeTrue();
+    }
+
+    [Fact]
+    public void IndentedContinuation_TwoSpacesAfterMarker_SixSpaces_IsParagraph()
+    {
+        // "-  one" has content column 3, relative indent 6-3=3 < 4 → paragraph continuation
+        var blocks = ParseBlocks("-  one", "", "      two");
+        blocks[2].IsIndentedContinuation.Should().BeTrue();
+    }
+
+    [Fact]
+    public void IndentedContinuation_OneSpaceAfterMarker_SixSpaces_IsCodeBlock()
+    {
+        // "- one" has content column 2, relative indent 6-2=4 → indented code within list item
+        var blocks = ParseBlocks("- one", "", "      two");
+        blocks[2].IsIndentedContinuation.Should().BeTrue();
+        blocks[2].Kind.Should().Be(BlockKind.IndentedCodeLine);
+    }
+
+    [Fact]
+    public void IndentedContinuation_AtContentColumn_IsParagraph()
+    {
+        // "- one" has content column 2, relative indent 2-2=0 → paragraph continuation
+        var blocks = ParseBlocks("- one", "", "  two");
+        blocks[2].IsIndentedContinuation.Should().BeTrue();
+        blocks[2].Kind.Should().Be(BlockKind.Paragraph);
+    }
+
+    [Fact]
+    public void IndentedContinuation_FiveSpaces_IsParagraph()
+    {
+        // "- one" has content column 2, relative indent 5-2=3 < 4 → paragraph
+        var blocks = ParseBlocks("- one", "", "     two");
+        blocks[2].IsIndentedContinuation.Should().BeTrue();
+        blocks[2].Kind.Should().Be(BlockKind.Paragraph);
+    }
+
+    [Fact]
+    public void IndentedContinuation_BelowContentColumn_NotContinuation()
+    {
+        // "- one" has content column 2, 1 space < 2 → not a continuation
+        var blocks = ParseBlocks("- one", "", " two");
+        blocks[2].IsIndentedContinuation.Should().BeFalse();
     }
 
     // --- Lazy continuation ---
