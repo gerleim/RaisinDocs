@@ -215,6 +215,8 @@ A trailing `\` is a hard break only when:
 - Never inserts literal tab characters — always spaces (universal convention across markdown editors)
 - Undo: entire multi-line indent/outdent is one undo unit
 - Useful across block types: indenting code inside fenced blocks, nesting list items, adjusting text alignment, preparing indented code blocks (iteration 16)
+- **Enter auto-continuation**: pressing Enter on a non-empty list item or blockquote inserts a new line with the same prefix (marker character, indentation, unchecked task checkbox). Pressing Enter on an empty list item clears the prefix and exits the list. Matches VS Code/Obsidian/Typora behavior.
+- **GetContentColumn fix**: rewrote `GetContentColumn` to scan actual text per CommonMark §5.3 — handles 1–4 spaces after marker (content starts where it starts) and 5+ spaces (collapses to marker + 1). Fixed `DetectIndentedCode` to preserve code blocks within list items when relative indent ≥ 4.
 
 ### 19 — Indentation awareness ✅
 - See `design/Indentation Awareness - Iteration 19.md` for detailed plan
