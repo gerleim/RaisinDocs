@@ -1046,6 +1046,26 @@ public partial class DocsCanvas
                 else handled = false;
                 break;
 
+            case Key.F:
+                if (ctrl) OpenFind(showReplace: false);
+                else handled = false;
+                break;
+
+            case Key.H:
+                if (ctrl) OpenFind(showReplace: true);
+                else handled = false;
+                break;
+
+            case Key.F3:
+                if (_searchMatches.Count > 0) NavigateMatch(shift ? -1 : 1);
+                else handled = false;
+                break;
+
+            case Key.Escape:
+                if (FindBar?.IsOpen == true) CloseFind();
+                else handled = false;
+                break;
+
             case Key.M:
                 if (ctrl)
                 {

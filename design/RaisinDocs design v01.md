@@ -230,6 +230,18 @@ A trailing `\` is a hard break only when:
 - Visual mode: continuation lines rendered with matching indent, correct paragraph spacing (tight vs loose lists)
 - Scope: single-level continuation for lists and blockquotes. Nested containers (lists in lists) deferred to a follow-up iteration.
 
+### 20 — Find & Replace ✅
+- **Ctrl+F** opens find bar at top-right of canvas (VS Code style overlay), **Ctrl+H** opens with replace row visible
+- Incremental search with debounce (~50ms): all matches highlighted in yellow/gold, current match in orange
+- **Enter / F3** navigates to next match, **Shift+Enter / Shift+F3** to previous, wrapping at ends
+- Match count indicator ("3 of 17"), case-sensitive toggle (Aa button)
+- If text is selected when opening, populates search field automatically
+- Replace current match / Replace All, each as a single undo unit (Ctrl+Z undoes entire Replace All)
+- Search operates on raw block text; highlights render correctly in both source and visual mode via `MeasureRangeWidth` + `BlockVisualMap`
+- `FindBarController` builds UI programmatically (mirrors `LinkPopupController` pattern), themed via `ApplyTheme()`
+- `DocsCanvas.Find.cs` partial: search engine, match storage, navigation, replace logic, `DrawSearchHighlights` rendering
+- Theme palette extended with `SearchMatch` and `CurrentSearchMatch` brushes for all three themes
+
 ### GFM extensions roadmap
 - ~~Strikethrough (`~~text~~`)~~ — ✅ implemented in iteration 4
 - ~~Tables~~ — ✅ implemented in iteration 7

@@ -32,7 +32,8 @@ public partial class DocsCanvas : FrameworkElement
         Brush Background, Brush Foreground, Pen CursorPen,
         Brush Selection, Brush ScrollTrack, Brush ScrollThumb,
         Brush Syntax, Brush CodeBackground,
-        Brush TableBackground, Brush TableHeaderBackground, Pen TableBorderPen);
+        Brush TableBackground, Brush TableHeaderBackground, Pen TableBorderPen,
+        Brush SearchMatch, Brush CurrentSearchMatch);
 
     private static readonly ThemePalette _lightPalette;
     private static readonly ThemePalette _darkPalette;
@@ -61,7 +62,9 @@ public partial class DocsCanvas : FrameworkElement
             codeBackground: Color.FromArgb(25, 0, 0, 0),
             tableBg: Color.FromArgb(15, 0, 0, 0),
             tableHeaderBg: Color.FromArgb(30, 0, 0, 0),
-            tableBorder: Color.FromArgb(60, 0, 0, 0));
+            tableBorder: Color.FromArgb(60, 0, 0, 0),
+            searchMatch: Color.FromArgb(80, 255, 210, 0),
+            currentSearchMatch: Color.FromArgb(160, 255, 165, 0));
 
         _darkPalette = BuildPalette(
             background: Color.FromRgb(30, 30, 30),
@@ -74,7 +77,9 @@ public partial class DocsCanvas : FrameworkElement
             codeBackground: Color.FromArgb(25, 255, 255, 255),
             tableBg: Color.FromArgb(15, 255, 255, 255),
             tableHeaderBg: Color.FromArgb(30, 255, 255, 255),
-            tableBorder: Color.FromArgb(60, 255, 255, 255));
+            tableBorder: Color.FromArgb(60, 255, 255, 255),
+            searchMatch: Color.FromArgb(60, 255, 210, 0),
+            currentSearchMatch: Color.FromArgb(130, 255, 165, 0));
 
         _darkBluePalette = BuildPalette(
             background: Color.FromRgb(13, 17, 23),
@@ -87,14 +92,17 @@ public partial class DocsCanvas : FrameworkElement
             codeBackground: Color.FromArgb(25, 100, 140, 255),
             tableBg: Color.FromArgb(15, 100, 140, 255),
             tableHeaderBg: Color.FromArgb(30, 100, 140, 255),
-            tableBorder: Color.FromArgb(60, 100, 140, 255));
+            tableBorder: Color.FromArgb(60, 100, 140, 255),
+            searchMatch: Color.FromArgb(60, 200, 180, 0),
+            currentSearchMatch: Color.FromArgb(130, 220, 160, 0));
     }
 
     private static ThemePalette BuildPalette(
         Color background, Color foreground, Color cursor,
         Color selection, Color scrollTrack, Color scrollThumb,
         Color syntax, Color codeBackground,
-        Color tableBg, Color tableHeaderBg, Color tableBorder)
+        Color tableBg, Color tableHeaderBg, Color tableBorder,
+        Color searchMatch, Color currentSearchMatch)
     {
         var cursorBrush = new SolidColorBrush(cursor);
         cursorBrush.Freeze();
@@ -107,7 +115,8 @@ public partial class DocsCanvas : FrameworkElement
             Frozen(background), Frozen(foreground), cursorPen,
             Frozen(selection), Frozen(scrollTrack), Frozen(scrollThumb),
             Frozen(syntax), Frozen(codeBackground),
-            Frozen(tableBg), Frozen(tableHeaderBg), tBorderPen);
+            Frozen(tableBg), Frozen(tableHeaderBg), tBorderPen,
+            Frozen(searchMatch), Frozen(currentSearchMatch));
 
         static Brush Frozen(Color c) { var b = new SolidColorBrush(c); b.Freeze(); return b; }
     }
@@ -133,6 +142,7 @@ public partial class DocsCanvas : FrameworkElement
         };
         if (canvas._linkPopup.IsOpen)
             canvas._linkPopup.ApplyTheme(canvas._palette.Background, canvas._palette.Foreground, canvas._palette.Syntax, canvas._palette.CodeBackground);
+        canvas.FindBar?.ApplyTheme(canvas._palette.Background, canvas._palette.Foreground, canvas._palette.Syntax, canvas._palette.CodeBackground);
         canvas.Minimap?.InvalidateVisual();
         canvas.ThemeChanged?.Invoke(canvas, EventArgs.Empty);
     }
@@ -268,6 +278,7 @@ public partial class DocsCanvas : FrameworkElement
 
     public IDocsLogger? Logger { get; set; }
     internal DocsFormattingBar? FormattingBar { get; set; }
+    internal FindBarController? FindBar { get; set; }
 
     public event EventHandler? ContentChanged;
     public event EventHandler? FormattingChanged;
@@ -509,6 +520,8 @@ public partial class DocsCanvas : FrameworkElement
         }
     }
     internal string TestGetBlockText(int block) => _doc.GetBlockText(block);
+    internal int TestBlockCount => _doc.BlockCount;
+    internal void TestUndo() { _doc.Undo(); InvalidateLayout(); }
     internal (int StartCol, int EndCol, int StartBlock, int EndBlock)?
         TestTryGetTableRectSelection()
     {
@@ -640,6 +653,7 @@ public partial class DocsCanvas : FrameworkElement
         _parsedBlocks = null;
         _visualMaps = null;
         _blockToGroup = null;
+        InvalidateSearchOnContentChange();
         InvalidateVisual();
     }
 
@@ -1295,6 +1309,9 @@ public partial class DocsCanvas : FrameworkElement
         DrawInlineColorBackgrounds(dc, effectiveScroll, viewTop, viewBottom);
         if (IsVisual)
             DrawTableBackgrounds(dc, effectiveScroll, viewTop, viewBottom);
+
+        if (_searchMatches.Count > 0)
+            DrawSearchHighlights(dc, effectiveScroll);
 
         if (_doc.HasSelection)
             DrawSelection(dc, effectiveScroll);

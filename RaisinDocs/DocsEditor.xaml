@@ -11,7 +11,7 @@
                                 Canvas="{Binding ElementName=PART_Canvas}"
                                 IsCollapsed="{Binding IsToolbarCollapsed, RelativeSource={RelativeSource AncestorType=local:DocsEditor}, Mode=TwoWay}"
                                 Visibility="{Binding ShowToolbar, RelativeSource={RelativeSource AncestorType=local:DocsEditor}, Converter={StaticResource BoolToVis}}" />
-        <Grid>
+        <Grid x:Name="PART_Grid">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>

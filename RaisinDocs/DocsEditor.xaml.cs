@@ -61,6 +61,11 @@ public partial class DocsEditor : UserControl
 
         PART_Canvas.ScrollStateChanged += UpdateScrollBar;
 
+        var findBar = new FindBarController(PART_Canvas);
+        Grid.SetColumn(findBar.Element, 0);
+        PART_Grid.Children.Add(findBar.Element);
+        PART_Canvas.FindBar = findBar;
+
         SizeChanged += (_, _) => UpdateMinimapWidth();
     }
 
