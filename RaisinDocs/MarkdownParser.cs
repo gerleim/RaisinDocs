@@ -105,6 +105,8 @@ public record class ParsedBlock
     public bool IsLazyContinuation { get; init; }
     public bool IsIndentedContinuation { get; init; }
     public int OwnerBlock { get; init; } = -1;
+    public string? CodeLanguage { get; init; }
+    public IReadOnlyList<SyntaxToken>? SyntaxTokens { get; init; }
 
     public bool HasStyleAt(int offset, InlineStyle targetStyle)
     {
@@ -127,32 +129,39 @@ public record class ParsedBlock
 public static class MarkdownParser
 {
     public static List<ParsedBlock> Parse(Func<int, string> getBlockText, int blockCount)
+        => Parse(getBlockText, blockCount, null);
+
+    internal static List<ParsedBlock> Parse(Func<int, string> getBlockText, int blockCount,
+        SyntaxHighlighter? highlighter)
     {
         var (defs, theme) = CollectDefinitions(getBlockText, blockCount);
 
         var result = new List<ParsedBlock>(blockCount);
         int fenceLen = 0;
+        string? fenceLanguage = null;
 
         for (int i = 0; i < blockCount; i++)
         {
             string text = getBlockText(i);
-            int backticks = GetFenceBacktickCount(text);
+            var fenceInfo = GetFenceInfo(text);
 
-            if (fenceLen == 0 && backticks > 0)
+            if (fenceLen == 0 && fenceInfo.Count > 0)
             {
-                fenceLen = backticks;
+                fenceLen = fenceInfo.Count;
+                fenceLanguage = fenceInfo.Language;
                 result.Add(new ParsedBlock
                 {
                     Kind = BlockKind.FencedCodeLine,
                     Runs = [new StyledRun(0, text.Length, InlineStyle.Normal)],
                     IsFenceDelimiter = true,
+                    CodeLanguage = fenceLanguage,
                 });
                 continue;
             }
 
             if (fenceLen > 0)
             {
-                bool isClosing = backticks >= fenceLen;
+                bool isClosing = fenceInfo.Count >= fenceLen;
                 if (isClosing)
                     fenceLen = 0;
                 result.Add(new ParsedBlock
@@ -160,7 +169,10 @@ public static class MarkdownParser
                     Kind = BlockKind.FencedCodeLine,
                     Runs = [new StyledRun(0, text.Length, InlineStyle.Normal)],
                     IsFenceDelimiter = isClosing,
+                    CodeLanguage = fenceLanguage,
                 });
+                if (isClosing)
+                    fenceLanguage = null;
                 continue;
             }
 
@@ -270,6 +282,7 @@ public static class MarkdownParser
         DetectContinuations(result, getBlockText);
         DetectIndentedCode(result, getBlockText, defs);
         ApplyBlockDivColors(result);
+        ApplySyntaxHighlighting(result, getBlockText, highlighter);
 
         return result;
     }
@@ -328,6 +341,51 @@ public static class MarkdownParser
             }
         }
         return (defs, theme);
+    }
+
+    private static void ApplySyntaxHighlighting(List<ParsedBlock> blocks,
+        Func<int, string> getBlockText, SyntaxHighlighter? highlighter)
+    {
+        if (highlighter == null) return;
+
+        int i = 0;
+        while (i < blocks.Count)
+        {
+            if (blocks[i].Kind != BlockKind.FencedCodeLine || !blocks[i].IsFenceDelimiter)
+            {
+                i++;
+                continue;
+            }
+
+            string? language = blocks[i].CodeLanguage;
+            int fenceStart = i;
+            i++;
+
+            int contentStart = i;
+            while (i < blocks.Count && blocks[i].Kind == BlockKind.FencedCodeLine && !blocks[i].IsFenceDelimiter)
+                i++;
+            int contentEnd = i;
+
+            if (i < blocks.Count && blocks[i].IsFenceDelimiter)
+                i++;
+
+            if (language == null || contentEnd <= contentStart)
+                continue;
+
+            var lines = new List<string>(contentEnd - contentStart);
+            for (int j = contentStart; j < contentEnd; j++)
+                lines.Add(getBlockText(j));
+
+            var tokenized = highlighter.Tokenize(language, lines);
+            if (tokenized == null) continue;
+
+            for (int j = 0; j < tokenized.Length; j++)
+            {
+                int blockIdx = contentStart + j;
+                if (tokenized[j].Count > 0)
+                    blocks[blockIdx] = blocks[blockIdx] with { SyntaxTokens = tokenized[j] };
+            }
+        }
     }
 
     private static void ApplyBlockDivColors(List<ParsedBlock> blocks)
@@ -808,16 +866,20 @@ public static class MarkdownParser
 
     public static bool IsFenceLine(string text) => GetFenceBacktickCount(text) > 0;
 
-    public static int GetFenceBacktickCount(string text)
+    public static int GetFenceBacktickCount(string text) => GetFenceInfo(text).Count;
+
+    internal static (int Count, string? Language) GetFenceInfo(string text)
     {
         var (chars, cols) = MeasureLeadingWhitespace(text);
-        if (cols >= 4) return 0;
+        if (cols >= 4) return (0, null);
         var trimmed = chars > 0 ? text[chars..] : text;
-        if (!trimmed.StartsWith("```")) return 0;
+        if (!trimmed.StartsWith("```")) return (0, null);
         int count = 0;
         while (count < trimmed.Length && trimmed[count] == '`') count++;
         var infoString = trimmed[count..];
-        return infoString.Contains('`') ? 0 : count;
+        if (infoString.Contains('`')) return (0, null);
+        var lang = infoString.Trim();
+        return (count, lang.Length > 0 ? lang : null);
     }
 
     internal static BlockKind ClassifyBlock(string text) => ClassifyBlock(text, out _, out _);

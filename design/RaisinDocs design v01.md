@@ -242,6 +242,18 @@ A trailing `\` is a hard break only when:
 - `DocsCanvas.Find.cs` partial: search engine, match storage, navigation, replace logic, `DrawSearchHighlights` rendering
 - Theme palette extended with `SearchMatch` and `CurrentSearchMatch` brushes for all three themes
 
+### 21 — Syntax highlighting in code blocks ✅
+- See `design/Syntax Highlighting.md` for detailed design
+- Uses **TextMateSharp** NuGet package (MIT-licensed .NET port of VS Code's `vscode-textmate` engine) with bundled grammars for 50+ languages
+- `MarkdownParser.GetFenceInfo` extracts language identifier from fence info string (e.g., `csharp` from ` ```csharp `)
+- `ParsedBlock.CodeLanguage` stores the language; `ParsedBlock.SyntaxTokens` stores per-token foreground colors as `SyntaxToken(Start, Length, ForegroundArgb)`
+- `SyntaxHighlighter` class wraps TextMateSharp registry, grammar caching, and theme-to-color resolution
+- Post-pass `ApplySyntaxHighlighting` groups consecutive `FencedCodeLine` blocks, tokenizes each code block as a unit, and attaches tokens via `with` expressions
+- Rendering: `ApplySyntaxTokens` calls `FormattedText.SetForegroundBrush` per token in both source and visual mode
+- Language alias table maps common info strings (cs, js, py, ts, rs, etc.) to file extensions for grammar lookup
+- Theme sync: editor theme changes map to TextMateSharp themes (Dark→DarkPlus, Light→LightPlus)
+- Unknown/missing languages gracefully fall back to plain monospace rendering
+
 ### GFM extensions roadmap
 - ~~Strikethrough (`~~text~~`)~~ — ✅ implemented in iteration 4
 - ~~Tables~~ — ✅ implemented in iteration 7
@@ -259,7 +271,7 @@ A trailing `\` is a hard break only when:
 - Motion blur during smooth scroll (ghost copies offset in scroll direction, like RaisinTerminal2)
 - Image display sizing: GFM has no sizing syntax; options include inline HTML (`<img src="url" width="300">`), Obsidian-style pipe syntax (`![alt|300](url)`), or visual drag-resize that auto-generates markup. Typora's drag-to-resize UX is the gold standard. Could also auto-downscale pasted images to reduce file size.
 - Reference-style images (`![alt][ref]` with `[ref]: url "title"` definitions)
-- Syntax highlighting in code blocks
+- ~~Syntax highlighting in code blocks~~ — ✅ implemented in iteration 21
 - Drag-and-drop
 - Toggle to show/hide hard break indicators (trailing spaces at end of lines that produce a `<br>` per CommonMark spec)
 - Text expansion / autocomplete: user-defined shorthand dictionary (e.g. `t`→"the", `des`→"design") with inline ghost text shown dimmed after the cursor. Tab to accept, any other key to dismiss. Could also offer frequency-based English word completions as you type.

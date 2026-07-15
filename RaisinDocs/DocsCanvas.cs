@@ -43,6 +43,8 @@ public partial class DocsCanvas : FrameworkElement
     private static readonly Brush _checkboxCheckedBrush;
     private static readonly Brush _imagePlaceholderBrush;
     private readonly TextMeasurer _measure = new();
+    private SyntaxHighlighter _syntaxHighlighter = new(TextMateSharp.Grammars.ThemeName.DarkPlus);
+    private readonly Dictionary<int, Brush> _syntaxBrushCache = new();
 
     static DocsCanvas()
     {
@@ -143,6 +145,12 @@ public partial class DocsCanvas : FrameworkElement
         if (canvas._linkPopup.IsOpen)
             canvas._linkPopup.ApplyTheme(canvas._palette.Background, canvas._palette.Foreground, canvas._palette.Syntax, canvas._palette.CodeBackground);
         canvas.FindBar?.ApplyTheme(canvas._palette.Background, canvas._palette.Foreground, canvas._palette.Syntax, canvas._palette.CodeBackground);
+        var tmTheme = canvas.Theme == EditorTheme.Light
+            ? TextMateSharp.Grammars.ThemeName.LightPlus
+            : TextMateSharp.Grammars.ThemeName.DarkPlus;
+        canvas._syntaxHighlighter.SetTheme(tmTheme);
+        canvas._syntaxBrushCache.Clear();
+        canvas.InvalidateLayout();
         canvas.Minimap?.InvalidateVisual();
         canvas.ThemeChanged?.Invoke(canvas, EventArgs.Empty);
     }
@@ -733,7 +741,7 @@ public partial class DocsCanvas : FrameworkElement
         _layoutDirty = false;
         _measure.EnsureMeasured(this);
 
-        _parsedBlocks ??= MarkdownParser.Parse(i => _doc.GetBlockText(i), _doc.BlockCount);
+        _parsedBlocks ??= MarkdownParser.Parse(i => _doc.GetBlockText(i), _doc.BlockCount, _syntaxHighlighter);
 
         if (IsVisual && _visualMaps == null)
         {
@@ -1478,6 +1486,12 @@ public partial class DocsCanvas : FrameworkElement
 
     private void ApplyInlineStyles(FormattedText ft, VisualLine vl, ParsedBlock parsed, string blockText)
     {
+        if (parsed.SyntaxTokens != null)
+        {
+            ApplySyntaxTokens(ft, vl, parsed.SyntaxTokens);
+            return;
+        }
+
         foreach (var run in parsed.Runs)
         {
             int runEnd = run.Start + run.Length;
@@ -1518,6 +1532,39 @@ public partial class DocsCanvas : FrameworkElement
 
         ApplyColorSpans(ft, vl, parsed, blockText);
         ApplySyntaxDimming(ft, vl, parsed, blockText);
+    }
+
+    private void ApplySyntaxTokens(FormattedText ft, VisualLine vl, IReadOnlyList<SyntaxToken> tokens)
+    {
+        int vlEnd = vl.StartOffset + vl.Length;
+        foreach (var token in tokens)
+        {
+            int tokenEnd = token.Start + token.Length;
+            if (tokenEnd <= vl.StartOffset || token.Start >= vlEnd) continue;
+
+            int localStart = Math.Max(0, token.Start - vl.StartOffset);
+            int localEnd = Math.Min(vl.Length, tokenEnd - vl.StartOffset);
+            int count = localEnd - localStart;
+            if (count <= 0) continue;
+
+            var brush = GetSyntaxBrush(token.ForegroundArgb);
+            ft.SetForegroundBrush(brush, localStart, count);
+        }
+    }
+
+    private Brush GetSyntaxBrush(int argb)
+    {
+        if (_syntaxBrushCache.TryGetValue(argb, out var cached))
+            return cached;
+
+        byte a = (byte)((argb >> 24) & 0xFF);
+        byte r = (byte)((argb >> 16) & 0xFF);
+        byte g = (byte)((argb >> 8) & 0xFF);
+        byte b = (byte)(argb & 0xFF);
+        var brush = new SolidColorBrush(Color.FromArgb(a, r, g, b));
+        brush.Freeze();
+        _syntaxBrushCache[argb] = brush;
+        return brush;
     }
 
     private void ApplyColorSpans(FormattedText ft, VisualLine vl, ParsedBlock parsed, string blockText)

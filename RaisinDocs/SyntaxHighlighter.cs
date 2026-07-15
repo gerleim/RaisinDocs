@@ -1,0 +1,187 @@
+using TextMateSharp.Grammars;
+using TextMateSharp.Registry;
+using TextMateSharp.Themes;
+
+namespace RaisinDocs;
+
+public readonly record struct SyntaxToken(int Start, int Length, int ForegroundArgb);
+
+internal class SyntaxHighlighter
+{
+    private RegistryOptions _options;
+    private Registry _registry;
+    private Theme _theme;
+    private readonly Dictionary<string, IGrammar?> _grammarCache = new();
+
+    public SyntaxHighlighter(ThemeName themeName)
+    {
+        _options = new RegistryOptions(themeName);
+        _registry = new Registry(_options);
+        _theme = _registry.GetTheme();
+    }
+
+    public void SetTheme(ThemeName themeName)
+    {
+        _options = new RegistryOptions(themeName);
+        _registry = new Registry(_options);
+        _theme = _registry.GetTheme();
+        _grammarCache.Clear();
+    }
+
+    public List<SyntaxToken>[]? Tokenize(string language, IReadOnlyList<string> lines)
+    {
+        var grammar = GetGrammar(language);
+        if (grammar == null) return null;
+
+        var result = new List<SyntaxToken>[lines.Count];
+        IStateStack? ruleStack = null;
+
+        for (int i = 0; i < lines.Count; i++)
+        {
+            var tokens = new List<SyntaxToken>();
+            string line = lines[i];
+
+            if (line.Length > 0)
+            {
+                var lineResult = grammar.TokenizeLine(line, ruleStack, TimeSpan.FromMilliseconds(500));
+                ruleStack = lineResult.RuleStack;
+
+                foreach (var token in lineResult.Tokens)
+                {
+                    int start = token.StartIndex;
+                    int end = Math.Min(token.EndIndex, line.Length);
+                    if (end <= start) continue;
+
+                    int argb = ResolveColor(token.Scopes);
+                    if (argb != 0)
+                        tokens.Add(new SyntaxToken(start, end - start, argb));
+                }
+            }
+            else
+            {
+                var lineResult = grammar.TokenizeLine(" ", ruleStack, TimeSpan.FromMilliseconds(500));
+                ruleStack = lineResult.RuleStack;
+            }
+
+            result[i] = tokens;
+        }
+
+        return result;
+    }
+
+    private int ResolveColor(IList<string> scopes)
+    {
+        int fg = 0;
+        foreach (var themeRule in _theme.Match(scopes))
+        {
+            if (themeRule.foreground > 0)
+            {
+                fg = themeRule.foreground;
+                break;
+            }
+        }
+
+        if (fg == 0) return 0;
+
+        string? hex = _theme.GetColor(fg);
+        if (hex == null) return 0;
+
+        return ParseHexColor(hex);
+    }
+
+    private static int ParseHexColor(string hex)
+    {
+        var span = hex.AsSpan();
+        if (span.Length > 0 && span[0] == '#')
+            span = span[1..];
+
+        if (span.Length == 6 && int.TryParse(span, System.Globalization.NumberStyles.HexNumber, null, out int rgb))
+            return unchecked((int)0xFF000000) | rgb;
+
+        if (span.Length == 8 && uint.TryParse(span, System.Globalization.NumberStyles.HexNumber, null, out uint argb))
+            return unchecked((int)argb);
+
+        return 0;
+    }
+
+    private IGrammar? GetGrammar(string language)
+    {
+        if (_grammarCache.TryGetValue(language, out var cached))
+            return cached;
+
+        string? ext = MapLanguageToExtension(language);
+        IGrammar? grammar = null;
+
+        if (ext != null)
+        {
+            try
+            {
+                string? scope = _options.GetScopeByExtension(ext);
+                if (scope != null)
+                    grammar = _registry.LoadGrammar(scope);
+            }
+            catch
+            {
+                // Unknown extension — fall through to null
+            }
+        }
+
+        if (grammar == null)
+        {
+            try
+            {
+                string? scope = _options.GetScopeByLanguageId(language);
+                if (scope != null)
+                    grammar = _registry.LoadGrammar(scope);
+            }
+            catch
+            {
+                // Unknown language — fall through to null
+            }
+        }
+
+        _grammarCache[language] = grammar;
+        return grammar;
+    }
+
+    private static string? MapLanguageToExtension(string language)
+    {
+        return language.ToLowerInvariant() switch
+        {
+            "csharp" or "cs" or "c#" => ".cs",
+            "javascript" or "js" => ".js",
+            "typescript" or "ts" => ".ts",
+            "python" or "py" => ".py",
+            "json" or "jsonc" => ".json",
+            "xml" => ".xml",
+            "html" or "htm" => ".html",
+            "css" => ".css",
+            "yaml" or "yml" => ".yaml",
+            "sql" => ".sql",
+            "rust" or "rs" => ".rs",
+            "go" or "golang" => ".go",
+            "java" => ".java",
+            "cpp" or "c++" => ".cpp",
+            "c" => ".c",
+            "bash" or "sh" or "shell" or "zsh" => ".sh",
+            "powershell" or "ps1" or "pwsh" => ".ps1",
+            "ruby" or "rb" => ".rb",
+            "php" => ".php",
+            "swift" => ".swift",
+            "kotlin" or "kt" => ".kt",
+            "markdown" or "md" => ".md",
+            "toml" => ".toml",
+            "lua" => ".lua",
+            "r" => ".r",
+            "scala" => ".scala",
+            "fsharp" or "fs" or "f#" => ".fs",
+            "dockerfile" => ".dockerfile",
+            "makefile" => ".makefile",
+            "perl" or "pl" => ".pl",
+            "objective-c" or "objc" => ".m",
+            "scss" => ".scss",
+            "less" => ".less",
+            _ => null,
+        };
+    }
+}

@@ -1296,6 +1296,12 @@ public partial class DocsCanvas
     private void ApplyInlineStylesVisual(FormattedText ft, VisualLine vl,
         ParsedBlock parsed, BlockVisualMap map)
     {
+        if (parsed.SyntaxTokens != null)
+        {
+            ApplySyntaxTokens(ft, vl, parsed.SyntaxTokens);
+            return;
+        }
+
         int vlEnd = vl.StartOffset + vl.Length;
         foreach (var run in parsed.Runs)
         {
