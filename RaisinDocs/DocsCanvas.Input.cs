@@ -578,6 +578,41 @@ public partial class DocsCanvas
                     }
                 }
             }
+            else if (blockKind is BlockKind.UnorderedListItem
+                or BlockKind.TaskListItemUnchecked or BlockKind.TaskListItemChecked
+                or BlockKind.Blockquote)
+            {
+                string stripped = leadingSpaces > 0 ? blockText[leadingSpaces..] : blockText;
+                string newPrefix;
+                int prefixLen;
+                if (blockKind is BlockKind.TaskListItemUnchecked or BlockKind.TaskListItemChecked)
+                {
+                    newPrefix = stripped[..2] + "[ ] ";
+                    prefixLen = 6;
+                }
+                else if (blockKind == BlockKind.Blockquote)
+                {
+                    newPrefix = "> ";
+                    prefixLen = stripped.StartsWith("> ") ? 2 : 1;
+                }
+                else
+                {
+                    newPrefix = stripped[..2];
+                    prefixLen = 2;
+                }
+
+                if (stripped[prefixLen..].Length == 0)
+                {
+                    _doc.RemoveTextAt(_doc.CursorBlock, 0, blockText.Length);
+                    _doc.CursorOffset = 0;
+                }
+                else
+                {
+                    string indent = blockText[..leadingSpaces];
+                    _doc.InsertParagraphBreak();
+                    _doc.Paste(indent + newPrefix);
+                }
+            }
             else
             {
                 _doc.InsertParagraphBreak();
