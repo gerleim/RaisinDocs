@@ -168,6 +168,30 @@ public partial class MainWindow : Window
             CloseTab(tab);
     }
 
+    private void Undo_Click(object sender, RoutedEventArgs e) =>
+        ActiveTab?.Editor.Canvas.PerformUndo();
+
+    private void Redo_Click(object sender, RoutedEventArgs e) =>
+        ActiveTab?.Editor.Canvas.PerformRedo();
+
+    private void Cut_Click(object sender, RoutedEventArgs e) =>
+        ActiveTab?.Editor.Canvas.PerformCut();
+
+    private void Copy_Click(object sender, RoutedEventArgs e) =>
+        ActiveTab?.Editor.Canvas.PerformCopy();
+
+    private void Paste_Click(object sender, RoutedEventArgs e) =>
+        ActiveTab?.Editor.Canvas.PerformPaste();
+
+    private void SelectAll_Click(object sender, RoutedEventArgs e) =>
+        ActiveTab?.Editor.Canvas.PerformSelectAll();
+
+    private void Find_Click(object sender, RoutedEventArgs e) =>
+        ActiveTab?.Editor.Canvas.PerformFind();
+
+    private void FindReplace_Click(object sender, RoutedEventArgs e) =>
+        ActiveTab?.Editor.Canvas.PerformFindReplace();
+
     private void CloseTab(DocumentTab tab)
     {
         if (tab.Editor.IsDirty)

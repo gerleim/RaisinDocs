@@ -642,6 +642,78 @@ public partial class DocsCanvas : FrameworkElement
         InvalidateLayout();
     }
 
+    public void PerformCopy()
+    {
+        if (!_doc.HasSelection) return;
+        var rect = TryGetTableRectSelection();
+        string text = rect != null ? GetTableRectSelectedText(rect.Value) : _doc.GetSelectedText();
+        var cfHtml = HtmlColorParser.ConvertToHtmlClipboard(text);
+        if (cfHtml != null)
+            ClipboardHelper.SetTextAndHtml(text, cfHtml, Logger);
+        else
+            ClipboardHelper.SetText(text, Logger);
+    }
+
+    public void PerformCut()
+    {
+        if (!_doc.HasSelection) return;
+        SealAndStopTimer();
+        var rect = TryGetTableRectSelection();
+        string text = rect != null ? GetTableRectSelectedText(rect.Value) : _doc.GetSelectedText();
+        ClipboardHelper.SetText(text, Logger);
+        _doc.BeginUndoGroup();
+        if (rect != null)
+            ClearTableRectCells(rect.Value);
+        else
+            _doc.DeleteSelection();
+        _doc.SealUndoGroup();
+        InvalidateLayout();
+    }
+
+    public void PerformPaste()
+    {
+        SealAndStopTimer();
+        string? pasteText = null;
+        bool inCodeBlock = _parsedBlocks != null
+            && _parsedBlocks[_doc.CursorBlock].Kind is BlockKind.FencedCodeLine or BlockKind.IndentedCodeLine;
+        if (!inCodeBlock)
+        {
+            string? html = ClipboardHelper.GetHtml(Logger);
+            if (html != null)
+                pasteText = HtmlColorParser.ConvertToColoredMarkdown(html);
+        }
+        pasteText ??= ClipboardHelper.GetText(Logger);
+        if (!string.IsNullOrEmpty(pasteText))
+        {
+            _doc.BeginUndoGroup();
+            var rect = TryGetTableRectSelection();
+            if (rect != null)
+            {
+                ClearTableRectCells(rect.Value);
+                MoveCursorToRectStart(rect.Value);
+            }
+            else if (_doc.HasSelection)
+            {
+                _doc.DeleteSelection();
+            }
+            if (!TryPasteIntoTableCells(pasteText))
+                _doc.Paste(pasteText);
+            _doc.SealUndoGroup();
+            InvalidateLayout();
+        }
+    }
+
+    public void PerformSelectAll()
+    {
+        SealAndStopTimer();
+        _doc.SelectAll();
+        InvalidateVisual();
+    }
+
+    public void PerformFind() => OpenFind(showReplace: false);
+
+    public void PerformFindReplace() => OpenFind(showReplace: true);
+
     private double GetEffectiveLineHeight(VisualLine vl)
     {
         double h = _measure.GetLineHeight(vl.BlockKind);

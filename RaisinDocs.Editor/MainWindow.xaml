@@ -89,6 +89,19 @@
                 <Separator />
                 <MenuItem Header="Close _Tab" Click="CloseTab_Click" InputGestureText="Ctrl+W" />
             </MenuItem>
+            <MenuItem Header="_Edit">
+                <MenuItem Header="_Undo" Click="Undo_Click" InputGestureText="Ctrl+Z" />
+                <MenuItem Header="_Redo" Click="Redo_Click" InputGestureText="Ctrl+Y" />
+                <Separator />
+                <MenuItem Header="Cu_t" Click="Cut_Click" InputGestureText="Ctrl+X" />
+                <MenuItem Header="_Copy" Click="Copy_Click" InputGestureText="Ctrl+C" />
+                <MenuItem Header="_Paste" Click="Paste_Click" InputGestureText="Ctrl+V" />
+                <Separator />
+                <MenuItem Header="Select _All" Click="SelectAll_Click" InputGestureText="Ctrl+A" />
+                <Separator />
+                <MenuItem Header="_Find..." Click="Find_Click" InputGestureText="Ctrl+F" />
+                <MenuItem Header="Find and _Replace..." Click="FindReplace_Click" InputGestureText="Ctrl+H" />
+            </MenuItem>
         </Menu>
         <TabControl x:Name="TabControl" SelectionChanged="TabControl_SelectionChanged" />
     </DockPanel>
