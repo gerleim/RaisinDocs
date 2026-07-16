@@ -120,7 +120,7 @@ internal class SyntaxHighlighter
                 if (scope != null)
                     grammar = _registry.LoadGrammar(scope);
             }
-            catch
+            catch (Exception)
             {
                 // Unknown extension — fall through to null
             }
@@ -134,7 +134,7 @@ internal class SyntaxHighlighter
                 if (scope != null)
                     grammar = _registry.LoadGrammar(scope);
             }
-            catch
+            catch (Exception)
             {
                 // Unknown language — fall through to null
             }

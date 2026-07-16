@@ -801,7 +801,7 @@ public partial class DocsCanvas
         {
             BlockKind.UnorderedListItem => 2,
             BlockKind.TaskListItemUnchecked or BlockKind.TaskListItemChecked => 2,
-            BlockKind.OrderedListItem => MarkdownParser.GetOrderedListPrefixLength(text.AsSpan().TrimStart().ToString()),
+            BlockKind.OrderedListItem => MarkdownParser.GetOrderedListPrefixLength(text.TrimStart()),
             BlockKind.Blockquote => 2,
             _ => 4,
         };

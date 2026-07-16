@@ -13,7 +13,7 @@
 
 `FindInlineColorCloseStart` (MarkdownParser.cs:1731) requires `close + 3 == text.Length` — the close tag must be at the very end of the block text. Trailing text after the close tag causes the function to return -1, so the same-block match scenario described here cannot occur.
 
-### C2 — GetFenceInfo uses full info string as language
+### ~~C2 — GetFenceInfo uses full info string as language~~
 - **File:** `MarkdownParser.cs:878–879`
 - **Severity:** Low — affects uncommon syntax
 - **Status:** [x] Fixed
@@ -22,19 +22,19 @@
 
 Fix: `var lang = infoString.Trim().Split(' ', 2)[0];`.
 
-### C3 — SyntaxHighlighter bare catch blocks
+### ~~C3 — SyntaxHighlighter bare catch blocks~~
 - **File:** `SyntaxHighlighter.cs:128, 140`
 - **Severity:** Low — defensive but overly broad
-- **Status:** [ ] Open
+- **Status:** [x] Fixed
 
-`GetGrammar` uses bare `catch { }` which swallows all exception types including `OutOfMemoryException`. These should catch a more specific type (e.g., `Exception` at minimum, or the specific exception TextMateSharp throws for unknown grammars).
+`GetGrammar` uses bare `catch { }` which swallows all exception types including `OutOfMemoryException`. Changed to `catch (Exception)` to let fatal CLR exceptions propagate.
 
-### L1 — Minor allocation in GetIndentStep
+### ~~L1 — Minor allocation in GetIndentStep~~
 - **File:** `DocsCanvas.Input.cs:804`
 - **Severity:** Low — unnecessary intermediate allocation
-- **Status:** [ ] Open
+- **Status:** [x] Fixed
 
-`text.AsSpan().TrimStart().ToString()` creates an intermediate `ReadOnlySpan<char>` before calling `.ToString()`. Equivalent to just `text.TrimStart()`.
+`text.AsSpan().TrimStart().ToString()` creates an intermediate `ReadOnlySpan<char>` before calling `.ToString()`. Simplified to `text.TrimStart()`.
 
 ---
 
