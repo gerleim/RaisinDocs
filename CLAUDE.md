@@ -21,6 +21,14 @@ dotnet test Tests/RaisinDocs.Tests/RaisinDocs.Tests.csproj --filter "FullyQualif
 # UI tests
 dotnet test Tests/RaisinDocs.Tests.UI/RaisinDocs.Tests.UI.csproj
 
+# Run editor
+dotnet run --project RaisinDocs.Editor/RaisinDocs.Editor.csproj
+dotnet run --project RaisinDocs.Editor/RaisinDocs.Editor.csproj -- path/to/file.md
+
+# Run viewer
+dotnet run --project RaisinDocs.Viewer/RaisinDocs.Viewer.csproj
+dotnet run --project RaisinDocs.Viewer/RaisinDocs.Viewer.csproj -- path/to/file.md
+
 # Run test app
 dotnet run --project RaisinDocs.TestApp/RaisinDocs.TestApp.csproj
 ```
@@ -40,7 +48,9 @@ dotnet build RaisinDocs.slnx -p:UseProjectReferences=false
 ### Projects
 
 - **RaisinDocs** — The editor control library (DocsCanvas, Document)
-- **RaisinDocs.TestApp** — WPF app hosting DocsCanvas in AvalonDock with dark theme
+- **RaisinDocs.Editor** — Standalone tabbed markdown editor app. Dark theme, session persistence, File menu (New/Open/Save/SaveAs/Close). Accepts a file path as command-line argument.
+- **RaisinDocs.Viewer** — Read-only markdown viewer app. DarkBlue theme, visual mode only, minimap enabled. Accepts a file path as command-line argument.
+- **RaisinDocs.TestApp** — WPF app hosting DocsCanvas in AvalonDock with dark theme (development sandbox)
 - **Tests/RaisinDocs.Tests** — xUnit v3 + FluentAssertions tests for the Document model
 - **Tests/RaisinDocs.Tests.UI** — xUnit UI tests (DocsCanvas rendering/layout)
 
