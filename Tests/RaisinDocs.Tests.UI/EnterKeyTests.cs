@@ -148,4 +148,151 @@ public class EnterKeyTests
         canvas.TestGetBlockText(0).Should().Be("asd\\");
         canvas.TestGetBlockText(1).Should().Be("");
     }
+
+    // --- Enter auto-continuation: bullet lists ---
+
+    [StaFact]
+    public void Enter_BulletDash_ContinuesWithPrefix()
+    {
+        var canvas = CreateCanvas("- item");
+        canvas.TestSetCursor(0, 6);
+        canvas.TestHandleEnter();
+
+        canvas.TestGetBlockText(0).Should().Be("- item");
+        canvas.TestGetBlockText(1).Should().Be("- ");
+        canvas.TestCursorBlock.Should().Be(1);
+        canvas.TestCursorOffset.Should().Be(2);
+    }
+
+    [StaFact]
+    public void Enter_BulletStar_ContinuesWithPrefix()
+    {
+        var canvas = CreateCanvas("* item");
+        canvas.TestSetCursor(0, 6);
+        canvas.TestHandleEnter();
+
+        canvas.TestGetBlockText(0).Should().Be("* item");
+        canvas.TestGetBlockText(1).Should().Be("* ");
+        canvas.TestCursorBlock.Should().Be(1);
+        canvas.TestCursorOffset.Should().Be(2);
+    }
+
+    [StaFact]
+    public void Enter_EmptyBullet_ClearsPrefix()
+    {
+        var canvas = CreateCanvas("- ");
+        canvas.TestSetCursor(0, 2);
+        canvas.TestHandleEnter();
+
+        canvas.TestGetBlockText(0).Should().Be("");
+        canvas.TestCursorBlock.Should().Be(0);
+        canvas.TestCursorOffset.Should().Be(0);
+    }
+
+    // --- Enter auto-continuation: task lists ---
+
+    [StaFact]
+    public void Enter_UncheckedTask_ContinuesUnchecked()
+    {
+        var canvas = CreateCanvas("- [ ] task");
+        canvas.TestSetCursor(0, 10);
+        canvas.TestHandleEnter();
+
+        canvas.TestGetBlockText(0).Should().Be("- [ ] task");
+        canvas.TestGetBlockText(1).Should().Be("- [ ] ");
+        canvas.TestCursorBlock.Should().Be(1);
+        canvas.TestCursorOffset.Should().Be(6);
+    }
+
+    [StaFact]
+    public void Enter_CheckedTask_ContinuesUnchecked()
+    {
+        var canvas = CreateCanvas("- [x] done");
+        canvas.TestSetCursor(0, 10);
+        canvas.TestHandleEnter();
+
+        canvas.TestGetBlockText(0).Should().Be("- [x] done");
+        canvas.TestGetBlockText(1).Should().Be("- [ ] ");
+        canvas.TestCursorBlock.Should().Be(1);
+        canvas.TestCursorOffset.Should().Be(6);
+    }
+
+    [StaFact]
+    public void Enter_EmptyTask_ClearsPrefix()
+    {
+        var canvas = CreateCanvas("- [ ] ");
+        canvas.TestSetCursor(0, 6);
+        canvas.TestHandleEnter();
+
+        canvas.TestGetBlockText(0).Should().Be("");
+        canvas.TestCursorBlock.Should().Be(0);
+        canvas.TestCursorOffset.Should().Be(0);
+    }
+
+    // --- Enter auto-continuation: blockquotes ---
+
+    [StaFact]
+    public void Enter_Blockquote_ContinuesWithPrefix()
+    {
+        var canvas = CreateCanvas("> quote");
+        canvas.TestSetCursor(0, 7);
+        canvas.TestHandleEnter();
+
+        canvas.TestGetBlockText(0).Should().Be("> quote");
+        canvas.TestGetBlockText(1).Should().Be("> ");
+        canvas.TestCursorBlock.Should().Be(1);
+        canvas.TestCursorOffset.Should().Be(2);
+    }
+
+    [StaFact]
+    public void Enter_EmptyBlockquote_ClearsPrefix()
+    {
+        var canvas = CreateCanvas("> ");
+        canvas.TestSetCursor(0, 2);
+        canvas.TestHandleEnter();
+
+        canvas.TestGetBlockText(0).Should().Be("");
+        canvas.TestCursorBlock.Should().Be(0);
+        canvas.TestCursorOffset.Should().Be(0);
+    }
+
+    [StaFact]
+    public void Enter_BareBlockquote_ClearsPrefix()
+    {
+        var canvas = CreateCanvas(">");
+        canvas.TestSetCursor(0, 1);
+        canvas.TestHandleEnter();
+
+        canvas.TestGetBlockText(0).Should().Be("");
+        canvas.TestCursorBlock.Should().Be(0);
+        canvas.TestCursorOffset.Should().Be(0);
+    }
+
+    // --- Enter auto-continuation: indented lists ---
+
+    [StaFact]
+    public void Enter_IndentedBullet_PreservesIndentation()
+    {
+        var canvas = CreateCanvas("  - nested");
+        canvas.TestSetCursor(0, 10);
+        canvas.TestHandleEnter();
+
+        canvas.TestGetBlockText(0).Should().Be("  - nested");
+        canvas.TestGetBlockText(1).Should().Be("  - ");
+        canvas.TestCursorBlock.Should().Be(1);
+        canvas.TestCursorOffset.Should().Be(4);
+    }
+
+    [StaFact]
+    public void Enter_IndentedTask_PreservesIndentation()
+    {
+        var canvas = CreateCanvas("  - [x] nested task");
+        canvas.TestSetCursor(0, 19);
+        canvas.TestHandleEnter();
+
+        canvas.TestGetBlockText(0).Should().Be("  - [x] nested task");
+        canvas.TestGetBlockText(1).Should().Be("  - [ ] ");
+        canvas.TestCursorBlock.Should().Be(1);
+        canvas.TestCursorOffset.Should().Be(8);
+    }
 }
