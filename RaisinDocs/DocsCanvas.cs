@@ -178,6 +178,8 @@ public partial class DocsCanvas : FrameworkElement
 
     public void MarkClean() => IsDirty = false;
 
+    public bool IsReadOnly { get; set; }
+
     private readonly Document _doc = new();
 
     private bool _cursorVisible = true;
@@ -628,6 +630,7 @@ public partial class DocsCanvas : FrameworkElement
 
     public void PerformUndo()
     {
+        if (IsReadOnly) return;
         _undoSealTimer.Stop();
         _doc.Undo();
         _lastAction = LastActionKind.None;
@@ -636,6 +639,7 @@ public partial class DocsCanvas : FrameworkElement
 
     public void PerformRedo()
     {
+        if (IsReadOnly) return;
         _undoSealTimer.Stop();
         _doc.Redo();
         _lastAction = LastActionKind.None;
@@ -656,6 +660,7 @@ public partial class DocsCanvas : FrameworkElement
 
     public void PerformCut()
     {
+        if (IsReadOnly) return;
         if (!_doc.HasSelection) return;
         SealAndStopTimer();
         var rect = TryGetTableRectSelection();
@@ -672,6 +677,7 @@ public partial class DocsCanvas : FrameworkElement
 
     public void PerformPaste()
     {
+        if (IsReadOnly) return;
         SealAndStopTimer();
         string? pasteText = null;
         bool inCodeBlock = _parsedBlocks != null
@@ -712,7 +718,7 @@ public partial class DocsCanvas : FrameworkElement
 
     public void PerformFind() => OpenFind(showReplace: false);
 
-    public void PerformFindReplace() => OpenFind(showReplace: true);
+    public void PerformFindReplace() => OpenFind(showReplace: !IsReadOnly);
 
     private double GetEffectiveLineHeight(VisualLine vl)
     {

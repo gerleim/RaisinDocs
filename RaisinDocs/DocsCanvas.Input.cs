@@ -229,6 +229,7 @@ public partial class DocsCanvas
     {
         base.OnTextInput(e);
         if (string.IsNullOrEmpty(e.Text)) return;
+        if (IsReadOnly) return;
 
         if (_lastAction != LastActionKind.Typing)
         {
@@ -874,6 +875,7 @@ public partial class DocsCanvas
                 handled = false;
                 break;
             case Key.Tab:
+                if (IsReadOnly) { handled = false; break; }
                 if (HandleTableTab(shift, out textChanged))
                     break;
                 HandleTabIndent(shift);
@@ -881,6 +883,7 @@ public partial class DocsCanvas
                 break;
 
             case Key.Return:
+                if (IsReadOnly) { handled = false; break; }
                 SealAndStopTimer();
                 if (HandleTableEnter(out textChanged))
                     break;
@@ -889,10 +892,12 @@ public partial class DocsCanvas
                 break;
 
             case Key.Back:
+                if (IsReadOnly) { handled = false; break; }
                 HandleBack(shift, out textChanged);
                 break;
 
             case Key.Delete:
+                if (IsReadOnly) { handled = false; break; }
                 HandleDelete(shift, out textChanged);
                 break;
 
@@ -954,6 +959,7 @@ public partial class DocsCanvas
                 break;
 
             case Key.X:
+                if (IsReadOnly) { handled = false; break; }
                 if (ctrl && _doc.HasSelection)
                 {
                     SealAndStopTimer();
@@ -974,6 +980,7 @@ public partial class DocsCanvas
                 break;
 
             case Key.V:
+                if (IsReadOnly) { handled = false; break; }
                 if (ctrl)
                 {
                     SealAndStopTimer();
@@ -1010,6 +1017,7 @@ public partial class DocsCanvas
                 break;
 
             case Key.Z:
+                if (IsReadOnly) { handled = false; break; }
                 if (ctrl)
                 {
                     _undoSealTimer.Stop();
@@ -1021,6 +1029,7 @@ public partial class DocsCanvas
                 break;
 
             case Key.Y:
+                if (IsReadOnly) { handled = false; break; }
                 if (ctrl)
                 {
                     _undoSealTimer.Stop();
@@ -1032,16 +1041,19 @@ public partial class DocsCanvas
                 break;
 
             case Key.B:
+                if (IsReadOnly) { handled = false; break; }
                 if (ctrl && !IsInFencedCode) ToggleBold();
                 else handled = false;
                 break;
 
             case Key.I:
+                if (IsReadOnly) { handled = false; break; }
                 if (ctrl && !IsInFencedCode) ToggleItalic();
                 else handled = false;
                 break;
 
             case Key.K:
+                if (IsReadOnly) { handled = false; break; }
                 if (ctrl && !IsInFencedCode) InsertLink();
                 else handled = false;
                 break;
@@ -1052,7 +1064,7 @@ public partial class DocsCanvas
                 break;
 
             case Key.H:
-                if (ctrl) OpenFind(showReplace: true);
+                if (ctrl) OpenFind(showReplace: !IsReadOnly);
                 else handled = false;
                 break;
 

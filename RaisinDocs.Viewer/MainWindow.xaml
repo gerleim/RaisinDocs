@@ -11,6 +11,27 @@
             <MenuItem Header="_File">
                 <MenuItem Header="_Open..." Click="Open_Click" InputGestureText="Ctrl+O" />
             </MenuItem>
+            <MenuItem Header="_Edit">
+                <MenuItem Header="_Find..." Click="Find_Click" InputGestureText="Ctrl+F" />
+            </MenuItem>
+            <MenuItem Header="_View" SubmenuOpened="View_SubmenuOpened">
+                <MenuItem Header="_Theme">
+                    <MenuItem x:Name="ThemeLight" Header="_Light" Click="ThemeLight_Click" IsCheckable="True" />
+                    <MenuItem x:Name="ThemeDark" Header="_Dark" Click="ThemeDark_Click" IsCheckable="True" />
+                    <MenuItem x:Name="ThemeDarkBlue" Header="Dark _Blue" Click="ThemeDarkBlue_Click" IsCheckable="True" />
+                </MenuItem>
+                <MenuItem Header="View _Mode">
+                    <MenuItem x:Name="ModeSource" Header="_Source" Click="ModeSource_Click" IsCheckable="True" />
+                    <MenuItem x:Name="ModeVisual" Header="_Visual" Click="ModeVisual_Click" IsCheckable="True" />
+                </MenuItem>
+                <MenuItem Header="_Image Preview">
+                    <MenuItem x:Name="ImageOff" Header="_Off" Click="ImageOff_Click" IsCheckable="True" />
+                    <MenuItem x:Name="ImageInline" Header="_Inline" Click="ImageInline_Click" IsCheckable="True" />
+                    <MenuItem x:Name="ImageOnHover" Header="On _Hover" Click="ImageOnHover_Click" IsCheckable="True" />
+                </MenuItem>
+                <Separator />
+                <MenuItem x:Name="MinimapMenuItem" Header="Mi_nimap" Click="Minimap_Click" IsCheckable="True" IsChecked="True" />
+            </MenuItem>
         </Menu>
         <docs:DocsEditor x:Name="Viewer" ShowToolbar="False" ShowMinimap="True" Theme="DarkBlue" />
     </DockPanel>
