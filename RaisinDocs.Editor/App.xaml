@@ -8,6 +8,91 @@
             <ResourceDictionary.MergedDictionaries>
                 <ResourceDictionary Source="pack://application:,,,/Raisin.WPF.Base;component/Themes/SharedTheme.xaml" />
             </ResourceDictionary.MergedDictionaries>
+
+            <!-- ═══ Menu System: Dark Theme ═══ -->
+
+            <Style TargetType="Menu">
+                <Setter Property="Background" Value="#252526"/>
+                <Setter Property="Foreground" Value="#D4D4D4"/>
+                <Setter Property="BorderThickness" Value="0,0,0,1"/>
+                <Setter Property="BorderBrush" Value="#333333"/>
+                <Setter Property="Padding" Value="0"/>
+                <Setter Property="FontSize" Value="12"/>
+            </Style>
+
+            <ControlTemplate x:Key="MenuTopLevelHeaderTemplate" TargetType="MenuItem">
+                <Border x:Name="Bg" Background="Transparent" Padding="8,4"
+                        SnapsToDevicePixels="True">
+                    <ContentPresenter ContentSource="Header" RecognizesAccessKey="True"
+                                      VerticalAlignment="Center"/>
+                </Border>
+                <ControlTemplate.Triggers>
+                    <Trigger Property="IsHighlighted" Value="True">
+                        <Setter TargetName="Bg" Property="Background" Value="#2A2D2E"/>
+                    </Trigger>
+                    <Trigger Property="IsSubmenuOpen" Value="True">
+                        <Setter TargetName="Bg" Property="Background" Value="#2A2D2E"/>
+                    </Trigger>
+                </ControlTemplate.Triggers>
+            </ControlTemplate>
+
+            <ControlTemplate x:Key="MenuTopLevelHeaderWithPopupTemplate" TargetType="MenuItem">
+                <Grid SnapsToDevicePixels="True">
+                    <Border x:Name="Bg" Background="Transparent" Padding="8,4">
+                        <ContentPresenter ContentSource="Header" RecognizesAccessKey="True"
+                                          VerticalAlignment="Center"/>
+                    </Border>
+                    <Popup x:Name="PART_Popup"
+                           IsOpen="{Binding IsSubmenuOpen, RelativeSource={RelativeSource TemplatedParent}}"
+                           Placement="Bottom"
+                           AllowsTransparency="True"
+                           Focusable="False"
+                           PopupAnimation="None"
+                           HorizontalOffset="-1">
+                        <Border Background="#252526"
+                                BorderBrush="#333333"
+                                BorderThickness="1"
+                                Padding="0,2">
+                            <StackPanel IsItemsHost="True"
+                                        KeyboardNavigation.DirectionalNavigation="Cycle"/>
+                        </Border>
+                    </Popup>
+                </Grid>
+                <ControlTemplate.Triggers>
+                    <Trigger Property="IsHighlighted" Value="True">
+                        <Setter TargetName="Bg" Property="Background" Value="#2A2D2E"/>
+                    </Trigger>
+                    <Trigger Property="IsSubmenuOpen" Value="True">
+                        <Setter TargetName="Bg" Property="Background" Value="#2A2D2E"/>
+                    </Trigger>
+                </ControlTemplate.Triggers>
+            </ControlTemplate>
+
+            <Style TargetType="MenuItem">
+                <Setter Property="OverridesDefaultStyle" Value="True"/>
+                <Setter Property="Foreground" Value="#D4D4D4"/>
+                <Setter Property="Template" Value="{StaticResource MenuTopLevelHeaderTemplate}"/>
+                <Style.Triggers>
+                    <Trigger Property="Role" Value="TopLevelHeader">
+                        <Setter Property="Template" Value="{StaticResource MenuTopLevelHeaderWithPopupTemplate}"/>
+                    </Trigger>
+                    <Trigger Property="Role" Value="TopLevelItem">
+                        <Setter Property="Template" Value="{StaticResource MenuTopLevelHeaderTemplate}"/>
+                    </Trigger>
+                    <Trigger Property="Role" Value="SubmenuItem">
+                        <Setter Property="Template" Value="{StaticResource DarkSubmenuItemTemplate}"/>
+                    </Trigger>
+                    <Trigger Property="Role" Value="SubmenuHeader">
+                        <Setter Property="Template" Value="{StaticResource DarkSubmenuHeaderTemplate}"/>
+                    </Trigger>
+                </Style.Triggers>
+            </Style>
+
+            <Style TargetType="ContextMenu" BasedOn="{StaticResource DarkContextMenu}"/>
+
+            <Style x:Key="{x:Static MenuItem.SeparatorStyleKey}" TargetType="Separator"
+                   BasedOn="{StaticResource DarkContextMenuSeparator}"/>
+
         </ResourceDictionary>
     </Application.Resources>
 </Application>

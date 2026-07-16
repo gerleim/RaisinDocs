@@ -7,7 +7,7 @@
         Background="#1E1E1E"
         Foreground="#D4D4D4">
     <DockPanel>
-        <Menu DockPanel.Dock="Top" Background="#2D2D2D" Foreground="#D4D4D4">
+        <Menu DockPanel.Dock="Top">
             <MenuItem Header="_File">
                 <MenuItem Header="_Open..." Click="Open_Click" InputGestureText="Ctrl+O" />
             </MenuItem>
