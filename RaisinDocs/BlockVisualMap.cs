@@ -97,7 +97,7 @@ public class BlockVisualMap
 
     internal static string? GetOwnerVisualPrefix(BlockKind kind, string blockText, int leadingSpaces = 0) => kind switch
     {
-        BlockKind.UnorderedListItem => "  • ",
+        BlockKind.UnorderedListItem => "  ● ",
         BlockKind.TaskListItemUnchecked => "  ☐ ",
         BlockKind.TaskListItemChecked => "  ☑ ",
         BlockKind.OrderedListItem => GetOrderedListVisualPrefix(blockText, leadingSpaces),
@@ -178,7 +178,7 @@ public class BlockVisualMap
             if (stripped.StartsWith("- ") || stripped.StartsWith("* "))
             {
                 ranges.Add(new HiddenRange(0, ls + 2));
-                replacementPrefix = "  • ";
+                replacementPrefix = "  ● ";
             }
         }
         else if (parsed.Kind == BlockKind.OrderedListItem)

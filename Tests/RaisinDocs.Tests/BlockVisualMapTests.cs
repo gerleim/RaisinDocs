@@ -155,7 +155,7 @@ public class BlockVisualMapTests
     public void RawToVisual_ListWithReplacementPrefix()
     {
         var map = ComputeMap("- Item");
-        map.ReplacementPrefix.Should().Be("  • ");
+        map.ReplacementPrefix.Should().Be("  ● ");
         map.RawToVisual(0).Should().Be(4);
         map.RawToVisual(1).Should().Be(4);
         map.RawToVisual(2).Should().Be(4);
@@ -857,7 +857,7 @@ public class BlockVisualMapTests
     public void LazyContinuation_UnorderedList_UsesOwnerPrefix()
     {
         var map = ComputeMapMultiBlock(["- item", "continuation"], 1);
-        map.ReplacementPrefix.Should().Be("  • ");
+        map.ReplacementPrefix.Should().Be("  ● ");
         map.IsContinuationIndent.Should().BeTrue();
         map.PrefixMeasureKind.Should().Be(BlockKind.UnorderedListItem);
     }
@@ -906,7 +906,7 @@ public class BlockVisualMapTests
     public void IndentedContinuation_UsesOwnerPrefix()
     {
         var map = ComputeMapMultiBlock(["- item", "", "  continuation"], 2);
-        map.ReplacementPrefix.Should().Be("  • ");
+        map.ReplacementPrefix.Should().Be("  ● ");
         map.IsContinuationIndent.Should().BeTrue();
     }
 
@@ -955,7 +955,7 @@ public class BlockVisualMapTests
     public void PrefixTolerance_UnorderedList_HidesLeadingSpaces()
     {
         var map = ComputeMap("  - item");
-        map.ReplacementPrefix.Should().Be("  • ");
+        map.ReplacementPrefix.Should().Be("  ● ");
         map.IsHidden(0).Should().BeTrue();
         map.IsHidden(1).Should().BeTrue();
         map.IsHidden(2).Should().BeTrue();
