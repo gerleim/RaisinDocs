@@ -1,7 +1,5 @@
 using System.ComponentModel;
 using System.IO;
-using System.Text.Json;
-using System.Text.Json.Serialization;
 using System.Windows;
 using System.Windows.Controls;
 using Microsoft.Win32;
@@ -15,13 +13,14 @@ public partial class MainWindow : Window
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "RaisinDocs", "editor-session.json");
 
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        WriteIndented = true,
-        Converters = { new JsonStringEnumConverter() },
-    };
-
+    private readonly SessionStore _sessionStore = new(SessionPath);
     private readonly List<DocumentTab> _tabs = [];
+
+    private DocsEditorState _editorState = new()
+    {
+        Theme = DocsCanvas.EditorTheme.DarkBlue,
+        ShowMinimap = true,
+    };
 
     public MainWindow()
     {
@@ -54,14 +53,7 @@ public partial class MainWindow : Window
     private DocumentTab AddTab(string? filePath = null, string text = "")
     {
         var editor = new DocsEditor();
-
-        if (ActiveTab != null)
-            editor.ApplyState(ActiveTab.Editor.GetState());
-        else
-        {
-            editor.Theme = DocsCanvas.EditorTheme.DarkBlue;
-            editor.ShowMinimap = true;
-        }
+        editor.ApplyState(ActiveTab?.Editor.GetState() ?? _editorState);
 
         editor.SetText(text);
         if (filePath != null)
@@ -224,44 +216,24 @@ public partial class MainWindow : Window
         if (ActiveTab != null)
             state.EditorState = ActiveTab.Editor.GetState();
 
-        try
-        {
-            Directory.CreateDirectory(Path.GetDirectoryName(SessionPath)!);
-            File.WriteAllText(SessionPath, JsonSerializer.Serialize(state, JsonOptions));
-        }
-        catch (IOException)
-        {
-        }
+        _sessionStore.Save(state);
     }
 
     private void RestoreSession()
     {
-        SessionState? session = null;
-        try
+        var session = _sessionStore.State;
+
+        if (session.EditorState != null)
+            _editorState = session.EditorState;
+
+        foreach (var path in session.OpenFiles)
         {
-            if (File.Exists(SessionPath))
-                session = JsonSerializer.Deserialize<SessionState>(
-                    File.ReadAllText(SessionPath), JsonOptions);
-        }
-        catch (Exception ex) when (ex is IOException or JsonException)
-        {
+            if (File.Exists(path))
+                AddTab(path, File.ReadAllText(path));
         }
 
-        if (session != null)
-        {
-            foreach (var path in session.OpenFiles)
-            {
-                if (File.Exists(path))
-                    AddTab(path, File.ReadAllText(path));
-            }
-
-            if (session.EditorState != null)
-                foreach (var tab in _tabs)
-                    tab.Editor.ApplyState(session.EditorState);
-
-            if (_tabs.Count > 0 && session.ActiveTabIndex >= 0 && session.ActiveTabIndex < _tabs.Count)
-                TabControl.SelectedItem = _tabs[session.ActiveTabIndex].TabItem;
-        }
+        if (_tabs.Count > 0 && session.ActiveTabIndex >= 0 && session.ActiveTabIndex < _tabs.Count)
+            TabControl.SelectedItem = _tabs[session.ActiveTabIndex].TabItem;
 
         if (_tabs.Count == 0)
             AddTab();
@@ -338,12 +310,5 @@ public partial class MainWindow : Window
         public DocsEditor Editor { get; } = editor;
         public TextBlock HeaderText { get; } = headerText;
         public string? FilePath { get; set; }
-    }
-
-    private class SessionState
-    {
-        public List<string> OpenFiles { get; set; } = [];
-        public int ActiveTabIndex { get; set; }
-        public DocsEditorState? EditorState { get; set; }
     }
 }
