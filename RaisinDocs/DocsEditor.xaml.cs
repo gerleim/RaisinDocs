@@ -26,7 +26,7 @@ public partial class DocsEditor : UserControl
 
     public static readonly DependencyProperty ShowMinimapProperty =
         DependencyProperty.Register(nameof(ShowMinimap), typeof(bool), typeof(DocsEditor),
-            new PropertyMetadata(false));
+            new PropertyMetadata(false, OnShowMinimapChanged));
 
     public static readonly DependencyProperty IsToolbarCollapsedProperty =
         DependencyProperty.Register(nameof(IsToolbarCollapsed), typeof(bool), typeof(DocsEditor),
@@ -55,6 +55,7 @@ public partial class DocsEditor : UserControl
         };
 
         PART_Canvas.Minimap = PART_Minimap;
+        PART_Canvas.IsMinimapVisible = ShowMinimap;
         PART_Minimap.Canvas = PART_Canvas;
         PART_Minimap.ScrollRequested += offset => PART_Canvas.SetScrollOffsetDirect(offset);
         PART_Minimap.SmoothScrollRequested += offset => PART_Canvas.SmoothScrollTo(offset);
@@ -172,6 +173,13 @@ public partial class DocsEditor : UserControl
         PART_Canvas.SetHardBreak(state.HardBreak);
         ShowMinimap = state.ShowMinimap;
         IsToolbarCollapsed = state.IsToolbarCollapsed;
+    }
+
+    private static void OnShowMinimapChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        var editor = (DocsEditor)d;
+        editor.PART_Canvas.IsMinimapVisible = (bool)e.NewValue;
+        editor.PART_Canvas.FormattingBar?.UpdateMinimapButton();
     }
 
     private static void OnDocumentBasePathChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)

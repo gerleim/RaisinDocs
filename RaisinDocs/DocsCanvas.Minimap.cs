@@ -11,7 +11,7 @@ public partial class DocsCanvas
     // --- Minimap support ---
 
     internal MinimapScrollbar? Minimap { get; set; }
-    internal bool IsMinimapVisible => Minimap?.Visibility == Visibility.Visible;
+    internal bool IsMinimapVisible { get; set; }
 
     public void ToggleMinimap()
     {

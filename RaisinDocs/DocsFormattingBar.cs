@@ -428,6 +428,7 @@ public class DocsFormattingBar : Control
         bar.UpdateThemeButton();
         bar.UpdateEditModeButton();
         bar.UpdateImagePreviewButton();
+        bar.UpdateMinimapButton();
     }
 
     private void OnFormattingChanged(object? sender, EventArgs e) => UpdateButtonStates();
@@ -526,7 +527,7 @@ public class DocsFormattingBar : Control
         menu.IsOpen = true;
     }
 
-    private void UpdateMinimapButton()
+    internal void UpdateMinimapButton()
     {
         if (_minimapButton == null || Canvas == null) return;
         var visible = Canvas.IsMinimapVisible;
