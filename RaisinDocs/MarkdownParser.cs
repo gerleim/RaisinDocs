@@ -878,7 +878,7 @@ public static class MarkdownParser
         while (count < trimmed.Length && trimmed[count] == '`') count++;
         var infoString = trimmed[count..];
         if (infoString.Contains('`')) return (0, null);
-        var lang = infoString.Trim();
+        var lang = infoString.Trim().Split(' ', 2)[0];
         return (count, lang.Length > 0 ? lang : null);
     }
 
