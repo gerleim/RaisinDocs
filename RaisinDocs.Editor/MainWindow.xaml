@@ -6,6 +6,78 @@
         Width="1024" Height="768"
         Background="#1E1E1E"
         Foreground="#D4D4D4">
+    <Window.Resources>
+        <Style TargetType="docs:DocsFormattingBar"
+               BasedOn="{StaticResource {x:Type docs:DocsFormattingBar}}">
+            <Setter Property="Background" Value="#2D2D2D" />
+            <Setter Property="Foreground" Value="#D4D4D4" />
+            <Setter Property="BorderBrush" Value="#3F3F3F" />
+            <Setter Property="BorderThickness" Value="0,0,0,1" />
+        </Style>
+        <Style TargetType="TabControl">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TabControl">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                            </Grid.RowDefinitions>
+                            <Border Background="#252526" Padding="4,4,0,0">
+                                <TabPanel IsItemsHost="True" />
+                            </Border>
+                            <ContentPresenter Grid.Row="1" ContentSource="SelectedContent" />
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style TargetType="TabItem">
+            <Setter Property="Foreground" Value="#969696" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TabItem">
+                        <Border x:Name="Border"
+                                Background="#2D2D30"
+                                Padding="10,5,4,5"
+                                Margin="0,0,1,0">
+                            <ContentPresenter ContentSource="Header" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Border" Property="Background" Value="#3E3E42" />
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="Border" Property="Background" Value="#1E1E1E" />
+                                <Setter Property="Foreground" Value="#D4D4D4" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="TabCloseButton" TargetType="Button">
+            <Setter Property="Focusable" Value="False" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Margin" Value="6,0,0,0" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bg" Background="Transparent" CornerRadius="3" Padding="3,1">
+                            <TextBlock x:Name="X" Text="&#xD7;" FontSize="12" Foreground="#808080" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bg" Property="Background" Value="#4E4E4E" />
+                                <Setter TargetName="X" Property="Foreground" Value="#D4D4D4" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
     <DockPanel>
         <Menu DockPanel.Dock="Top" Background="#2D2D2D" Foreground="#D4D4D4">
             <MenuItem Header="_File">
@@ -14,28 +86,24 @@
                 <Separator />
                 <MenuItem Header="_Save" Click="Save_Click" InputGestureText="Ctrl+S" />
                 <MenuItem Header="Save _As..." Click="SaveAs_Click" InputGestureText="Ctrl+Shift+S" />
+                <Separator />
+                <MenuItem Header="Close _Tab" Click="CloseTab_Click" InputGestureText="Ctrl+W" />
             </MenuItem>
         </Menu>
-        <docs:DocsEditor x:Name="Editor" ShowMinimap="True" Theme="DarkBlue">
-            <docs:DocsEditor.Resources>
-                <Style TargetType="docs:DocsFormattingBar"
-                       BasedOn="{StaticResource {x:Type docs:DocsFormattingBar}}">
-                    <Setter Property="Background" Value="#2D2D2D" />
-                    <Setter Property="Foreground" Value="#D4D4D4" />
-                    <Setter Property="BorderBrush" Value="#3F3F3F" />
-                    <Setter Property="BorderThickness" Value="0,0,0,1" />
-                </Style>
-            </docs:DocsEditor.Resources>
-        </docs:DocsEditor>
+        <TabControl x:Name="TabControl" SelectionChanged="TabControl_SelectionChanged" />
     </DockPanel>
     <Window.InputBindings>
         <KeyBinding Key="N" Modifiers="Control" Command="{x:Static ApplicationCommands.New}" />
         <KeyBinding Key="O" Modifiers="Control" Command="{x:Static ApplicationCommands.Open}" />
         <KeyBinding Key="S" Modifiers="Control" Command="{x:Static ApplicationCommands.Save}" />
+        <KeyBinding Key="S" Modifiers="Control+Shift" Command="{x:Static ApplicationCommands.SaveAs}" />
+        <KeyBinding Key="W" Modifiers="Control" Command="{x:Static ApplicationCommands.Close}" />
     </Window.InputBindings>
     <Window.CommandBindings>
         <CommandBinding Command="{x:Static ApplicationCommands.New}" Executed="New_Click" />
         <CommandBinding Command="{x:Static ApplicationCommands.Open}" Executed="Open_Click" />
         <CommandBinding Command="{x:Static ApplicationCommands.Save}" Executed="Save_Click" />
+        <CommandBinding Command="{x:Static ApplicationCommands.SaveAs}" Executed="SaveAs_Click" />
+        <CommandBinding Command="{x:Static ApplicationCommands.Close}" Executed="CloseTab_Click" />
     </Window.CommandBindings>
 </Window>
