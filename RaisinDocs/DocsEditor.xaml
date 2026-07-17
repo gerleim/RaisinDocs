@@ -13,16 +13,24 @@
                                 Visibility="{Binding ShowToolbar, RelativeSource={RelativeSource AncestorType=local:DocsEditor}, Converter={StaticResource BoolToVis}}" />
         <Grid x:Name="PART_Grid">
             <Grid.ColumnDefinitions>
+                <ColumnDefinition x:Name="PART_TocColumn" Width="200" MinWidth="100" MaxWidth="500" />
+                <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
-            <local:DocsCanvas x:Name="PART_Canvas" Grid.Column="0"
+            <local:TocPanel x:Name="PART_Toc" Grid.Column="0"
+                            Visibility="{Binding ShowToc, RelativeSource={RelativeSource AncestorType=local:DocsEditor}, Converter={StaticResource BoolToVis}}" />
+            <GridSplitter x:Name="PART_TocSplitter" Grid.Column="1"
+                          Width="3" HorizontalAlignment="Center" VerticalAlignment="Stretch"
+                          Background="Transparent"
+                          Visibility="{Binding ShowToc, RelativeSource={RelativeSource AncestorType=local:DocsEditor}, Converter={StaticResource BoolToVis}}" />
+            <local:DocsCanvas x:Name="PART_Canvas" Grid.Column="2"
                               Theme="{Binding Theme, RelativeSource={RelativeSource AncestorType=local:DocsEditor}, Mode=TwoWay}" />
-            <local:MinimapScrollbar x:Name="PART_Minimap" Grid.Column="1"
+            <local:MinimapScrollbar x:Name="PART_Minimap" Grid.Column="3"
                                     Margin="2,0,2,0"
                                     Visibility="{Binding ShowMinimap, RelativeSource={RelativeSource AncestorType=local:DocsEditor}, Converter={StaticResource BoolToVis}}" />
-            <ScrollBar x:Name="PART_ScrollBar" Grid.Column="2"
+            <ScrollBar x:Name="PART_ScrollBar" Grid.Column="4"
                        Orientation="Vertical"
                        Minimum="0"
                        Visibility="Collapsed"

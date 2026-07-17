@@ -1087,6 +1087,16 @@ public partial class DocsCanvas
                 else handled = false;
                 break;
 
+            case Key.T:
+                if (ctrl)
+                {
+                    ToggleToc();
+                    e.Handled = true;
+                    return;
+                }
+                else handled = false;
+                break;
+
             case Key.M:
                 if (ctrl)
                 {

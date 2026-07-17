@@ -324,6 +324,13 @@
 
                             <Border Style="{StaticResource SeparatorLine}" />
 
+                            <ToggleButton x:Name="PART_Toc" Style="{StaticResource FormattingToggle}"
+                                          ToolTip="Table of Contents (Ctrl+T)">
+                                <Path x:Name="PART_TocIcon"
+                                      Width="14" Height="14" Stretch="Uniform"
+                                      Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=local:DocsFormattingBar}}" />
+                            </ToggleButton>
+
                             <ToggleButton x:Name="PART_Minimap" Style="{StaticResource FormattingToggle}"
                                           ToolTip="Minimap">
                                 <Grid Width="14" Height="14">

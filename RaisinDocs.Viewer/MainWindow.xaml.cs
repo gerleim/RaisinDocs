@@ -113,6 +113,7 @@ public partial class MainWindow : Window
         ImageInline.IsChecked = preview == DocsCanvas.ImagePreviewMode.Inline;
         ImageOnHover.IsChecked = preview == DocsCanvas.ImagePreviewMode.OnHover;
 
+        TocMenuItem.IsChecked = Viewer.ShowToc;
         MinimapMenuItem.IsChecked = Viewer.ShowMinimap;
     }
 
@@ -148,6 +149,12 @@ public partial class MainWindow : Window
 
     private void ZoomReset_Click(object sender, RoutedEventArgs e) =>
         Viewer.Canvas.ZoomReset();
+
+    private void Toc_Click(object sender, RoutedEventArgs e)
+    {
+        Viewer.Canvas.ToggleToc();
+        TocMenuItem.IsChecked = Viewer.ShowToc;
+    }
 
     private void Minimap_Click(object sender, RoutedEventArgs e)
     {

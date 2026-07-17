@@ -8,6 +8,8 @@ public class DocsEditorState
     public DocsCanvas.SoftBreakMode SoftBreak { get; set; } = DocsCanvas.SoftBreakMode.Relaxed;
     public DocsCanvas.HardBreakStyle HardBreak { get; set; } = DocsCanvas.HardBreakStyle.Backslash;
     public bool ShowMinimap { get; set; }
+    public bool ShowToc { get; set; }
+    public double TocWidth { get; set; } = 200;
     public bool IsToolbarCollapsed { get; set; }
     public double ZoomLevel { get; set; } = 1.0;
 }

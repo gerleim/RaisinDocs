@@ -145,6 +145,7 @@ public partial class DocsCanvas : FrameworkElement
         if (canvas._linkPopup.IsOpen)
             canvas._linkPopup.ApplyTheme(canvas._palette.Background, canvas._palette.Foreground, canvas._palette.Syntax, canvas._palette.CodeBackground);
         canvas.FindBar?.ApplyTheme(canvas._palette.Background, canvas._palette.Foreground, canvas._palette.Syntax, canvas._palette.CodeBackground);
+        canvas.TocPanel?.ApplyTheme(canvas._palette.Background, canvas._palette.Foreground, canvas._palette.Syntax, canvas._palette.CodeBackground);
         var tmTheme = canvas.Theme == EditorTheme.Light
             ? TextMateSharp.Grammars.ThemeName.LightPlus
             : TextMateSharp.Grammars.ThemeName.DarkPlus;

@@ -200,6 +200,19 @@ public partial class MainWindow : Window
     private void FindReplace_Click(object sender, RoutedEventArgs e) =>
         ActiveTab?.Editor.Canvas.PerformFindReplace();
 
+    private void View_SubmenuOpened(object sender, RoutedEventArgs e)
+    {
+        var editor = ActiveTab?.Editor;
+        TocMenuItem.IsChecked = editor?.ShowToc ?? false;
+        MinimapMenuItem.IsChecked = editor?.ShowMinimap ?? false;
+    }
+
+    private void Toc_Click(object sender, RoutedEventArgs e) =>
+        ActiveTab?.Editor.Canvas.ToggleToc();
+
+    private void Minimap_Click(object sender, RoutedEventArgs e) =>
+        ActiveTab?.Editor.Canvas.ToggleMinimap();
+
     private void CloseTab(DocumentTab tab)
     {
         if (tab.Editor.IsDirty)

@@ -28,6 +28,10 @@ public partial class DocsEditor : UserControl
         DependencyProperty.Register(nameof(ShowMinimap), typeof(bool), typeof(DocsEditor),
             new PropertyMetadata(false, OnShowMinimapChanged));
 
+    public static readonly DependencyProperty ShowTocProperty =
+        DependencyProperty.Register(nameof(ShowToc), typeof(bool), typeof(DocsEditor),
+            new PropertyMetadata(false, OnShowTocChanged));
+
     public static readonly DependencyProperty IsToolbarCollapsedProperty =
         DependencyProperty.Register(nameof(IsToolbarCollapsed), typeof(bool), typeof(DocsEditor),
             new FrameworkPropertyMetadata(false, FrameworkPropertyMetadataOptions.BindsTwoWayByDefault));
@@ -39,6 +43,7 @@ public partial class DocsEditor : UserControl
     public event EventHandler? FormattingChanged;
 
     private bool _updatingScrollBar;
+    private double _savedTocWidth = 200;
 
     public DocsEditor()
     {
@@ -60,10 +65,23 @@ public partial class DocsEditor : UserControl
         PART_Minimap.ScrollRequested += offset => PART_Canvas.SetScrollOffsetDirect(offset);
         PART_Minimap.SmoothScrollRequested += offset => PART_Canvas.SmoothScrollTo(offset);
 
+        PART_Canvas.TocPanel = PART_Toc;
+        PART_Canvas.IsTocVisible = ShowToc;
+        PART_Toc.Canvas = PART_Canvas;
+        PART_Toc.NavigateRequested += blockIndex =>
+        {
+            PART_Canvas.NavigateToBlock(blockIndex);
+            PART_Canvas.Focus();
+        };
+        PART_Canvas.InitTocTheme();
+        UpdateTocColumnWidth(ShowToc);
+
         PART_Canvas.ScrollStateChanged += UpdateScrollBar;
+        PART_Canvas.ScrollStateChanged += RefreshToc;
+        PART_Canvas.ContentChanged += (_, _) => RefreshToc();
 
         var findBar = new FindBarController(PART_Canvas);
-        Grid.SetColumn(findBar.Element, 0);
+        Grid.SetColumn(findBar.Element, 2);
         PART_Grid.Children.Add(findBar.Element);
         PART_Canvas.FindBar = findBar;
 
@@ -133,6 +151,12 @@ public partial class DocsEditor : UserControl
         set => SetValue(ShowMinimapProperty, value);
     }
 
+    public bool ShowToc
+    {
+        get => (bool)GetValue(ShowTocProperty);
+        set => SetValue(ShowTocProperty, value);
+    }
+
     public bool IsToolbarCollapsed
     {
         get => (bool)GetValue(IsToolbarCollapsedProperty);
@@ -161,6 +185,8 @@ public partial class DocsEditor : UserControl
         SoftBreak = PART_Canvas.CurrentSoftBreak,
         HardBreak = PART_Canvas.CurrentHardBreak,
         ShowMinimap = ShowMinimap,
+        ShowToc = ShowToc,
+        TocWidth = ShowToc ? PART_TocColumn.Width.Value : _savedTocWidth,
         IsToolbarCollapsed = IsToolbarCollapsed,
         ZoomLevel = PART_Canvas.ZoomLevel,
     };
@@ -173,6 +199,9 @@ public partial class DocsEditor : UserControl
         PART_Canvas.SetSoftBreak(state.SoftBreak);
         PART_Canvas.SetHardBreak(state.HardBreak);
         ShowMinimap = state.ShowMinimap;
+        if (state.TocWidth > 0)
+            _savedTocWidth = state.TocWidth;
+        ShowToc = state.ShowToc;
         IsToolbarCollapsed = state.IsToolbarCollapsed;
         PART_Canvas.SetZoom(state.ZoomLevel);
     }
@@ -182,6 +211,39 @@ public partial class DocsEditor : UserControl
         var editor = (DocsEditor)d;
         editor.PART_Canvas.IsMinimapVisible = (bool)e.NewValue;
         editor.PART_Canvas.FormattingBar?.UpdateMinimapButton();
+    }
+
+    private static void OnShowTocChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        var editor = (DocsEditor)d;
+        bool visible = (bool)e.NewValue;
+        editor.PART_Canvas.IsTocVisible = visible;
+        editor.PART_Canvas.FormattingBar?.UpdateTocButton();
+        editor.UpdateTocColumnWidth(visible);
+        if (visible)
+            editor.PART_Toc.Refresh();
+    }
+
+    private void UpdateTocColumnWidth(bool visible)
+    {
+        if (visible)
+        {
+            PART_TocColumn.MinWidth = 100;
+            PART_TocColumn.MaxWidth = 500;
+            PART_TocColumn.Width = new GridLength(_savedTocWidth);
+        }
+        else
+        {
+            _savedTocWidth = PART_TocColumn.Width.Value;
+            PART_TocColumn.MinWidth = 0;
+            PART_TocColumn.MaxWidth = 0;
+            PART_TocColumn.Width = new GridLength(0);
+        }
+    }
+
+    private void RefreshToc()
+    {
+        if (ShowToc) PART_Toc.Refresh();
     }
 
     private static void OnDocumentBasePathChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)

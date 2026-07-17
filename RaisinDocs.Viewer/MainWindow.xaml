@@ -3,6 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:docs="clr-namespace:RaisinDocs;assembly=RaisinDocs"
         Title="RaisinDocs Viewer"
+        Icon="Assets/app.ico"
         Width="1024" Height="768"
         Background="#1E1E1E"
         Foreground="#D4D4D4"
@@ -35,6 +36,7 @@
                 <MenuItem Header="Zoom _Out" Click="ZoomOut_Click" InputGestureText="Ctrl+-" />
                 <MenuItem Header="_Reset Zoom" Click="ZoomReset_Click" InputGestureText="Ctrl+0" />
                 <Separator />
+                <MenuItem x:Name="TocMenuItem" Header="Table of _Contents" Click="Toc_Click" IsCheckable="True" InputGestureText="Ctrl+T" />
                 <MenuItem x:Name="MinimapMenuItem" Header="Mi_nimap" Click="Minimap_Click" IsCheckable="True" IsChecked="True" />
             </MenuItem>
         </Menu>

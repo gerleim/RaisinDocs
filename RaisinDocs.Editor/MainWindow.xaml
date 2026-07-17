@@ -3,6 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:docs="clr-namespace:RaisinDocs;assembly=RaisinDocs"
         Title="RaisinDocs Editor"
+        Icon="Assets/app.ico"
         Width="1024" Height="768"
         Background="#1E1E1E"
         Foreground="#D4D4D4"
@@ -102,6 +103,10 @@
                 <Separator />
                 <MenuItem Header="_Find..." Click="Find_Click" InputGestureText="Ctrl+F" />
                 <MenuItem Header="Find and _Replace..." Click="FindReplace_Click" InputGestureText="Ctrl+H" />
+            </MenuItem>
+            <MenuItem Header="_View" SubmenuOpened="View_SubmenuOpened">
+                <MenuItem x:Name="TocMenuItem" Header="Table of _Contents" Click="Toc_Click" IsCheckable="True" InputGestureText="Ctrl+T" />
+                <MenuItem x:Name="MinimapMenuItem" Header="Mi_nimap" Click="Minimap_Click" IsCheckable="True" />
             </MenuItem>
         </Menu>
         <TabControl x:Name="TabControl" SelectionChanged="TabControl_SelectionChanged" />

@@ -123,6 +123,9 @@ public class DocsFormattingBar : Control
     private static readonly Geometry IconHardBreaks = Geometry.Parse(
         "M1,4 H10 M1,10 H10 M12,1 V7 M10.5,2.5 L12,1 L13.5,2.5");
 
+    private static readonly Geometry IconToc = Geometry.Parse(
+        "M1,2 H5 M7,2 H15 M1,5.5 H5 M7,5.5 H13 M1,9 H5 M7,9 H14 M1,12.5 H5 M7,12.5 H11");
+
     static DocsFormattingBar()
     {
         IconOff.Freeze();
@@ -147,6 +150,7 @@ public class DocsFormattingBar : Control
         IconTable.Freeze();
         IconReflow.Freeze();
         IconHardBreaks.Freeze();
+        IconToc.Freeze();
 
         DefaultStyleKeyProperty.OverrideMetadata(typeof(DocsFormattingBar),
             new FrameworkPropertyMetadata(typeof(DocsFormattingBar)));
@@ -197,6 +201,8 @@ public class DocsFormattingBar : Control
     private Button? _imagePreviewArrow;
     private Border? _imagePreviewBorder;
     private Path? _imagePreviewIcon;
+    private ToggleButton? _tocButton;
+    private Path? _tocIcon;
     private ToggleButton? _minimapButton;
     private Path? _minimapIcon;
     private Path? _minimapLines;
@@ -358,6 +364,20 @@ public class DocsFormattingBar : Control
         }
         UpdateThemeButton();
 
+        _tocButton = GetTemplateChild("PART_Toc") as ToggleButton;
+        _tocIcon = GetTemplateChild("PART_TocIcon") as Path;
+        if (_tocIcon != null) _tocIcon.Data = IconToc;
+        if (_tocButton != null)
+        {
+            _tocButton.Click += (_, _) =>
+            {
+                Canvas?.ToggleToc();
+                Canvas?.Focus();
+                UpdateTocButton();
+            };
+        }
+        UpdateTocButton();
+
         _minimapButton = GetTemplateChild("PART_Minimap") as ToggleButton;
         _minimapIcon = GetTemplateChild("PART_MinimapIcon") as Path;
         _minimapLines = GetTemplateChild("PART_MinimapLines") as Path;
@@ -428,6 +448,7 @@ public class DocsFormattingBar : Control
         bar.UpdateThemeButton();
         bar.UpdateEditModeButton();
         bar.UpdateImagePreviewButton();
+        bar.UpdateTocButton();
         bar.UpdateMinimapButton();
     }
 
@@ -525,6 +546,12 @@ public class DocsFormattingBar : Control
         menu.PlacementTarget = _imagePreviewBorder;
         menu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
         menu.IsOpen = true;
+    }
+
+    internal void UpdateTocButton()
+    {
+        if (_tocButton == null || Canvas == null) return;
+        SetCheckedSilent(_tocButton, Canvas.IsTocVisible);
     }
 
     internal void UpdateMinimapButton()
@@ -845,6 +872,10 @@ public class DocsFormattingBar : Control
                     return new Path { Width = 14, Height = 14, Stretch = Stretch.Uniform, Data = IconCrescent, Fill = CrescentBrush };
                 return MakePathIcon(theme == DocsCanvas.EditorTheme.Dark ? IconMoon : IconSun);
             });
+        Map(_tocButton, "Contents",
+            () => { Canvas?.ToggleToc(); Canvas?.Focus(); UpdateTocButton(); },
+            () => Canvas?.IsTocVisible ?? false,
+            () => MakePathIcon(IconToc));
         Map(_minimapButton, "Minimap",
             () => { Canvas?.ToggleMinimap(); Canvas?.Focus(); UpdateMinimapButton(); },
             () => Canvas?.IsMinimapVisible ?? false,
@@ -882,6 +913,7 @@ public class DocsFormattingBar : Control
         Add(_imagePreviewButton, () => { Canvas?.CycleImagePreview(); UpdateImagePreviewButton(); }, _imagePreviewBorder);
         Add(_imagePreviewArrow, () => ShowImagePreviewMenu(), _imagePreviewBorder);
         Add(_themeButton, () => { Canvas?.ToggleTheme(); UpdateThemeButton(); });
+        Add(_tocButton, () => { Canvas?.ToggleToc(); UpdateTocButton(); });
         Add(_minimapButton, () => { Canvas?.ToggleMinimap(); UpdateMinimapButton(); });
         Add(_moreButton, () => ShowOverflowMenu());
         Add(_collapseButton, () => IsCollapsed = true);
