@@ -871,7 +871,7 @@ public partial class DocsCanvas
                 }
 
                 bool isHeader = parsed.Kind == BlockKind.TableHeaderRow;
-                double fontSize = TextMeasurer.GetBlockFontSize(parsed.Kind);
+                double fontSize = _measure.GetBlockFontSize(parsed.Kind);
                 var cellTypeface = isHeader ? TextMeasurer.BoldTypeface : TextMeasurer.GetBlockBaseTypeface(parsed.Kind);
 
                 var ft = new FormattedText(cellText, CultureInfo.InvariantCulture,

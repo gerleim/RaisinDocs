@@ -429,6 +429,49 @@ public partial class DocsCanvas : FrameworkElement
         _hardBreak = style;
     }
 
+    public double ZoomLevel => _measure.ZoomFactor;
+
+    public void SetZoom(double factor, double anchorViewportY = -1)
+    {
+        factor = Math.Clamp(factor, 0.5, 3.0);
+        factor = Math.Round(factor, 2);
+        if (Math.Abs(_measure.ZoomFactor - factor) < 0.001) return;
+
+        ComputeLayout();
+
+        double anchorDocY;
+        if (anchorViewportY >= 0)
+        {
+            anchorDocY = _scroll.Offset + anchorViewportY;
+        }
+        else
+        {
+            int vli = CursorToVisualLineIndex();
+            double cursorY = _lineYPositions.Count > vli ? _lineYPositions[vli] : 0;
+            double viewTop = _scroll.Offset;
+            double viewBottom = viewTop + ActualHeight;
+            if (cursorY >= viewTop && cursorY <= viewBottom)
+                anchorViewportY = cursorY - viewTop;
+            else
+                anchorViewportY = ActualHeight / 2;
+            anchorDocY = viewTop + anchorViewportY;
+        }
+
+        double relativePos = _totalContentHeight > 0 ? anchorDocY / _totalContentHeight : 0;
+
+        _measure.SetZoomFactor(factor);
+        InvalidateLayout();
+        ComputeLayout();
+
+        double newAnchorDocY = relativePos * _totalContentHeight;
+        _scroll.Offset = newAnchorDocY - anchorViewportY;
+        _scroll.Clamp();
+    }
+
+    public void ZoomIn(double anchorViewportY = -1) => SetZoom(_measure.ZoomFactor + 0.1, anchorViewportY);
+    public void ZoomOut(double anchorViewportY = -1) => SetZoom(_measure.ZoomFactor - 0.1, anchorViewportY);
+    public void ZoomReset() => SetZoom(1.0);
+
     public void ToggleShowWhitespace()
     {
         _showWhitespace = !_showWhitespace;
@@ -1207,7 +1250,7 @@ public partial class DocsCanvas : FrameworkElement
             string lineText = blockText.Substring(vl.StartOffset, vl.Length);
             var ft = new FormattedText(lineText, CultureInfo.InvariantCulture,
                 FlowDirection.LeftToRight, TextMeasurer.GetBlockBaseTypeface(vl.BlockKind),
-                TextMeasurer.GetBlockFontSize(vl.BlockKind), _palette.Foreground, _measure.DpiScale);
+                _measure.GetBlockFontSize(vl.BlockKind), _palette.Foreground, _measure.DpiScale);
             ApplyInlineStyles(ft, vl, parsed, blockText);
             var geom = ft.BuildHighlightGeometry(new Point(0, 0), 0, localOff);
             return x + (geom != null ? geom.Bounds.Right : ft.WidthIncludingTrailingWhitespace);
@@ -1420,7 +1463,7 @@ public partial class DocsCanvas : FrameworkElement
                 {
                     string blockText = _doc.GetBlockText(vl.BlockIndex);
                     var parsed = _parsedBlocks![vl.BlockIndex];
-                    double fontSize = TextMeasurer.GetBlockFontSize(parsed.Kind);
+                    double fontSize = _measure.GetBlockFontSize(parsed.Kind);
                     var baseTypeface = TextMeasurer.GetBlockBaseTypeface(parsed.Kind);
                     var map = IsVisual ? _visualMaps?[vl.BlockIndex] : null;
 
@@ -1529,14 +1572,14 @@ public partial class DocsCanvas : FrameworkElement
         {
             DrawVisualLineWithImages(dc, vl, group.JoinedText, group.JoinedParsed,
                 group.JoinedMap, lineY, effectiveScroll,
-                TextMeasurer.GetBlockFontSize(BlockKind.Paragraph), TextMeasurer.GetBlockBaseTypeface(BlockKind.Paragraph));
+                _measure.GetBlockFontSize(BlockKind.Paragraph), TextMeasurer.GetBlockBaseTypeface(BlockKind.Paragraph));
             return;
         }
 
         string displayText = BuildJoinedDisplayString(group, vl.StartOffset, vl.Length);
         if (displayText.Length == 0) return;
 
-        double fontSize = TextMeasurer.GetBlockFontSize(BlockKind.Paragraph);
+        double fontSize = _measure.GetBlockFontSize(BlockKind.Paragraph);
         var baseTypeface = TextMeasurer.GetBlockBaseTypeface(BlockKind.Paragraph);
 
         var ft = new FormattedText(displayText, CultureInfo.InvariantCulture,
@@ -1713,7 +1756,7 @@ public partial class DocsCanvas : FrameworkElement
         {
             var altFt = new FormattedText(altText,
                 CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
-                TextMeasurer.NormalTypeface, 11, _palette.Syntax, _measure.DpiScale);
+                TextMeasurer.NormalTypeface, Math.Round(11 * _measure.ZoomFactor), _palette.Syntax, _measure.DpiScale);
             altFt.MaxTextWidth = Math.Max(1, w);
             altFt.MaxTextHeight = Math.Max(1, h);
             dc.DrawText(altFt, new Point(x + 2, y + 2));

@@ -11,6 +11,14 @@ public partial class DocsCanvas
     protected override void OnMouseWheel(MouseWheelEventArgs e)
     {
         base.OnMouseWheel(e);
+        if ((Keyboard.Modifiers & ModifierKeys.Control) != 0)
+        {
+            double anchorY = e.GetPosition(this).Y;
+            if (e.Delta > 0) ZoomIn(anchorY);
+            else if (e.Delta < 0) ZoomOut(anchorY);
+            e.Handled = true;
+            return;
+        }
         ComputeLayout();
         _scroll.HandleWheel(e.Delta);
         e.Handled = true;
@@ -1088,6 +1096,24 @@ public partial class DocsCanvas
                     RaiseFormattingChanged();
                     return;
                 }
+                else handled = false;
+                break;
+
+            case Key.OemPlus:
+            case Key.Add:
+                if (ctrl) ZoomIn();
+                else handled = false;
+                break;
+
+            case Key.OemMinus:
+            case Key.Subtract:
+                if (ctrl) ZoomOut();
+                else handled = false;
+                break;
+
+            case Key.D0:
+            case Key.NumPad0:
+                if (ctrl) ZoomReset();
                 else handled = false;
                 break;
 

@@ -16,6 +16,16 @@ internal class TextMeasurer
     private const double _codeFontSize = 14;
     internal const double ListIndent = 20;
 
+    internal double ZoomFactor { get; private set; } = 1.0;
+
+    internal void SetZoomFactor(double factor)
+    {
+        ZoomFactor = factor;
+        _charWidthCache.Clear();
+        _lineHeights.Clear();
+        _measured = false;
+    }
+
     private double _dpiScale = 1.0;
     internal double DpiScale => _dpiScale;
     private bool _measured;
@@ -52,7 +62,7 @@ internal class TextMeasurer
         _measured = true;
     }
 
-    internal static double GetBlockFontSize(BlockKind kind) => kind switch
+    internal double GetBlockFontSize(BlockKind kind) => ZoomFactor * kind switch
     {
         BlockKind.Heading1 => _headingFontSizes[0],
         BlockKind.Heading2 => _headingFontSizes[1],
@@ -108,7 +118,7 @@ internal class TextMeasurer
         },
     };
 
-    internal static int GetStyleKey(BlockKind blockKind, InlineStyle style)
+    internal int GetStyleKey(BlockKind blockKind, InlineStyle style)
     {
         if (blockKind is BlockKind.FencedCodeLine or BlockKind.IndentedCodeLine)
             return 1 * 100 + (int)GetBlockFontSize(blockKind);

@@ -162,6 +162,7 @@ public partial class DocsEditor : UserControl
         HardBreak = PART_Canvas.CurrentHardBreak,
         ShowMinimap = ShowMinimap,
         IsToolbarCollapsed = IsToolbarCollapsed,
+        ZoomLevel = PART_Canvas.ZoomLevel,
     };
 
     public void ApplyState(DocsEditorState state)
@@ -173,6 +174,7 @@ public partial class DocsEditor : UserControl
         PART_Canvas.SetHardBreak(state.HardBreak);
         ShowMinimap = state.ShowMinimap;
         IsToolbarCollapsed = state.IsToolbarCollapsed;
+        PART_Canvas.SetZoom(state.ZoomLevel);
     }
 
     private static void OnShowMinimapChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)

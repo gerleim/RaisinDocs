@@ -9,4 +9,5 @@ public class DocsEditorState
     public DocsCanvas.HardBreakStyle HardBreak { get; set; } = DocsCanvas.HardBreakStyle.Backslash;
     public bool ShowMinimap { get; set; }
     public bool IsToolbarCollapsed { get; set; }
+    public double ZoomLevel { get; set; } = 1.0;
 }
