@@ -46,7 +46,7 @@ internal class ScrollController
 
     internal void CancelSmooth() => _smoother.Cancel();
 
-    internal void HandleWheel(int delta)
+    internal void HandleWheel(double delta)
     {
         if (_smoother.IsAnimating)
         {

@@ -20,7 +20,8 @@ public partial class DocsCanvas
             return;
         }
         ComputeLayout();
-        _scroll.HandleWheel(e.Delta);
+        double scaledDelta = e.Delta * _measure.ZoomFactor;
+        _scroll.HandleWheel(scaledDelta);
         e.Handled = true;
     }
 
