@@ -8,6 +8,14 @@ namespace RaisinDocs.Viewer;
 
 public partial class MainWindow : Window
 {
+    private static readonly HashSet<string> AcceptedExtensions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".md", ".markdown", ".mdown", ".mkd", ".mkdn", ".txt"
+    };
+
+    private const string FileFilter =
+        "Markdown files|*.md;*.markdown;*.mdown;*.mkd;*.mkdn|Text files|*.txt|All files|*.*";
+
     public MainWindow()
     {
         InitializeComponent();
@@ -30,7 +38,7 @@ public partial class MainWindow : Window
 
     private void Open_Click(object sender, RoutedEventArgs e)
     {
-        var dlg = new OpenFileDialog { Filter = "Markdown files|*.md|All files|*.*" };
+        var dlg = new OpenFileDialog { Filter = FileFilter };
         if (dlg.ShowDialog(this) != true) return;
         OpenFile(dlg.FileName);
     }
@@ -53,6 +61,29 @@ public partial class MainWindow : Window
             MessageBox.Show(this, $"Could not open file:\n{ex.Message}", "RaisinDocs Viewer",
                 MessageBoxButton.OK, MessageBoxImage.Error);
         }
+    }
+
+    protected override void OnDragOver(DragEventArgs e)
+    {
+        if (e.Data.GetDataPresent(DataFormats.FileDrop)
+            && e.Data.GetData(DataFormats.FileDrop) is string[] files
+            && files.Any(f => AcceptedExtensions.Contains(Path.GetExtension(f))))
+        {
+            e.Effects = DragDropEffects.Copy;
+        }
+        else
+        {
+            e.Effects = DragDropEffects.None;
+        }
+        e.Handled = true;
+    }
+
+    protected override void OnDrop(DragEventArgs e)
+    {
+        if (e.Data.GetData(DataFormats.FileDrop) is not string[] files) return;
+        var file = files.FirstOrDefault(f => AcceptedExtensions.Contains(Path.GetExtension(f)));
+        if (file != null)
+            TryOpenFileFromPath(file);
     }
 
     private void OpenFile(string path)
@@ -108,6 +139,15 @@ public partial class MainWindow : Window
 
     private void ImageOnHover_Click(object sender, RoutedEventArgs e) =>
         Viewer.Canvas.SetImagePreview(DocsCanvas.ImagePreviewMode.OnHover);
+
+    private void ZoomIn_Click(object sender, RoutedEventArgs e) =>
+        Viewer.Canvas.ZoomIn();
+
+    private void ZoomOut_Click(object sender, RoutedEventArgs e) =>
+        Viewer.Canvas.ZoomOut();
+
+    private void ZoomReset_Click(object sender, RoutedEventArgs e) =>
+        Viewer.Canvas.ZoomReset();
 
     private void Minimap_Click(object sender, RoutedEventArgs e)
     {

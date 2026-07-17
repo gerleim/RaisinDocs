@@ -9,6 +9,14 @@ namespace RaisinDocs.Editor;
 
 public partial class MainWindow : Window
 {
+    private static readonly HashSet<string> AcceptedExtensions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".md", ".markdown", ".mdown", ".mkd", ".mkdn", ".txt"
+    };
+
+    private const string FileFilter =
+        "Markdown files|*.md;*.markdown;*.mdown;*.mkd;*.mkdn|Text files|*.txt|All files|*.*";
+
     private static readonly string SessionPath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "RaisinDocs", "editor-session.json");
@@ -122,7 +130,7 @@ public partial class MainWindow : Window
 
     private void Open_Click(object sender, RoutedEventArgs e)
     {
-        var dlg = new OpenFileDialog { Filter = "Markdown files|*.md|All files|*.*" };
+        var dlg = new OpenFileDialog { Filter = FileFilter };
         if (dlg.ShowDialog(this) != true) return;
 
         var existing = _tabs.Find(t =>
@@ -152,7 +160,7 @@ public partial class MainWindow : Window
         var tab = ActiveTab;
         if (tab == null) return;
 
-        var dlg = new SaveFileDialog { Filter = "Markdown files|*.md|All files|*.*" };
+        var dlg = new SaveFileDialog { Filter = FileFilter };
         if (tab.FilePath != null)
         {
             dlg.InitialDirectory = Path.GetDirectoryName(tab.FilePath)!;
@@ -224,6 +232,31 @@ public partial class MainWindow : Window
         }
         SaveSession();
         base.OnClosing(e);
+    }
+
+    protected override void OnDragOver(DragEventArgs e)
+    {
+        if (e.Data.GetDataPresent(DataFormats.FileDrop)
+            && e.Data.GetData(DataFormats.FileDrop) is string[] files
+            && files.Any(f => AcceptedExtensions.Contains(Path.GetExtension(f))))
+        {
+            e.Effects = DragDropEffects.Copy;
+        }
+        else
+        {
+            e.Effects = DragDropEffects.None;
+        }
+        e.Handled = true;
+    }
+
+    protected override void OnDrop(DragEventArgs e)
+    {
+        if (e.Data.GetData(DataFormats.FileDrop) is not string[] files) return;
+        foreach (var file in files)
+        {
+            if (AcceptedExtensions.Contains(Path.GetExtension(file)))
+                TryOpenFileFromPath(file);
+        }
     }
 
     private void SaveSession()

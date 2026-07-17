@@ -5,7 +5,8 @@
         Title="RaisinDocs Editor"
         Width="1024" Height="768"
         Background="#1E1E1E"
-        Foreground="#D4D4D4">
+        Foreground="#D4D4D4"
+        AllowDrop="True">
     <Window.Resources>
         <Style TargetType="docs:DocsFormattingBar"
                BasedOn="{StaticResource {x:Type docs:DocsFormattingBar}}">
