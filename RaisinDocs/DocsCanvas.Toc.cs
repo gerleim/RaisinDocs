@@ -60,8 +60,18 @@ public partial class DocsCanvas
         _doc.CursorOffset = 0;
         _doc.CollapseSelection();
         ComputeLayout();
-        EnsureCursorVisible();
+        ScrollBlockToTop(blockIndex);
         InvalidateVisual();
+    }
+
+    private void ScrollBlockToTop(int blockIndex)
+    {
+        _scroll.StopWheelCoast();
+        _scroll.CancelSmooth();
+        if (_visualLines.Count == 0) return;
+        int vli = CursorToVisualLineIndex();
+        _scroll.Offset = _lineYPositions[vli] - _padding;
+        _scroll.Clamp();
     }
 
     private static string StripHeadingPrefix(string text, int level)
