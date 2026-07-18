@@ -45,18 +45,19 @@ partial class DocsCanvas
         _pageBreakLayoutVersion = _layoutVersion;
         _pageBreakYs.Clear();
 
-        if (_visualLines.Count == 0) return;
+        if (_parsedBlocks == null || _visualLines.Count == 0) return;
 
-        double pageContentH = DefaultPageHeight - DocsPaginator.MarginY * 2;
-        double pageTopY = _lineYPositions[0];
-
-        for (int i = 0; i < _visualLines.Count; i++)
+        for (int bi = 0; bi < _parsedBlocks.Count; bi++)
         {
-            double lineBottom = _lineYPositions[i] + GetEffectiveLineHeight(_visualLines[i]) - pageTopY;
-            if (lineBottom > pageContentH && i > 0)
+            if (_parsedBlocks[bi].Kind != BlockKind.PageBreak) continue;
+
+            for (int vi = 0; vi < _visualLines.Count; vi++)
             {
-                _pageBreakYs.Add(_lineYPositions[i]);
-                pageTopY = _lineYPositions[i];
+                if (_visualLines[vi].BlockIndex > bi)
+                {
+                    _pageBreakYs.Add(_lineYPositions[vi]);
+                    break;
+                }
             }
         }
     }
@@ -203,36 +204,39 @@ partial class DocsCanvas
                 return [0];
 
             var pages = new List<int> { 0 };
-            double pageTopY = _lineYs[0];
 
-            for (int i = 0; i < _lines.Count; i++)
+            if (_canvas._parsedBlocks != null)
             {
-                double lineBottom = _lineYs[i] + GetLineHeight(i) - pageTopY;
-                if (lineBottom > _contentHeight && i > pages[^1])
+                var breakAfter = new HashSet<int>();
+                for (int bi = 0; bi < _canvas._parsedBlocks.Count; bi++)
                 {
-                    int breakAt = FindBestBreak(pages[^1], i);
-                    pages.Add(breakAt);
-                    pageTopY = _lineYs[breakAt];
+                    if (_canvas._parsedBlocks[bi].Kind == BlockKind.PageBreak)
+                        breakAfter.Add(bi);
+                }
+
+                if (breakAfter.Count > 0)
+                {
+                    int prevBlockIndex = _lines[0].BlockIndex;
+                    for (int i = 1; i < _lines.Count; i++)
+                    {
+                        int bi = _lines[i].BlockIndex;
+                        if (bi != prevBlockIndex)
+                        {
+                            for (int b = prevBlockIndex; b < bi; b++)
+                            {
+                                if (breakAfter.Contains(b))
+                                {
+                                    pages.Add(i);
+                                    break;
+                                }
+                            }
+                            prevBlockIndex = bi;
+                        }
+                    }
                 }
             }
+
             return pages;
-        }
-
-        private int FindBestBreak(int pageStart, int overflowLine)
-        {
-            if (_canvas._parsedBlocks == null) return overflowLine;
-
-            var parsed = _canvas._parsedBlocks[_lines[overflowLine].BlockIndex];
-            if (parsed.Table != null)
-            {
-                for (int i = overflowLine - 1; i > pageStart; i--)
-                {
-                    var p = _canvas._parsedBlocks[_lines[i].BlockIndex];
-                    if (p.Table != parsed.Table)
-                        return i + 1;
-                }
-            }
-            return overflowLine;
         }
 
         public override DocumentPage GetPage(int pageNumber)

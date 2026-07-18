@@ -54,6 +54,7 @@ public enum BlockKind
     ThematicBreak,
     SetextUnderline,
     IndentedCodeLine,
+    PageBreak,
 }
 
 public enum ColumnAlignment { Left, Center, Right }
@@ -90,7 +91,7 @@ public record class ParsedBlock
     public bool IsTableSeparator { get; init; }
     public bool IsSkippedInVisual => IsFenceDelimiter || IsTableSeparator || Kind == BlockKind.LinkDefinition
         || Kind == BlockKind.ThemeDefinition || Kind == BlockKind.ColorDivOpen || Kind == BlockKind.ColorDivClose
-        || Kind == BlockKind.SetextUnderline;
+        || Kind == BlockKind.SetextUnderline || Kind == BlockKind.PageBreak;
     public IReadOnlyList<InlineImage>? Images { get; init; }
     public IReadOnlyList<InlineLink>? Links { get; init; }
     public IReadOnlyList<EmphasisMarker>? EmphasisMarkers { get; init; }
@@ -207,6 +208,16 @@ public static class MarkdownParser
                     if (inner.TrimEnd().EndsWith(CommentClose))
                         break;
                 }
+                continue;
+            }
+
+            if (IsPageBreak(text))
+            {
+                result.Add(new ParsedBlock
+                {
+                    Kind = BlockKind.PageBreak,
+                    Runs = [new StyledRun(0, text.Length, InlineStyle.Normal)],
+                });
                 continue;
             }
 
@@ -1725,6 +1736,10 @@ public static class MarkdownParser
     private const string CommentClose = "-->";
     private const string DivOpen = "<!--@div ";
     private const string DivClose = "<!--/@div-->";
+    private const string PageBreakTag = "<!--@pagebreak-->";
+
+    internal static bool IsPageBreak(string text) =>
+        text.AsSpan().Trim().Equals(PageBreakTag, StringComparison.OrdinalIgnoreCase);
 
     internal static bool IsThemeBlock(string text)
     {

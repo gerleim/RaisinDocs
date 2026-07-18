@@ -19,145 +19,75 @@ public class PageBreakTests
         return canvas;
     }
 
-    private static string GenerateLines(int count)
-    {
-        var lines = new string[count];
-        for (int i = 0; i < count; i++)
-            lines[i] = $"Line {i + 1}: This is some text content for testing page breaks.";
-        return string.Join("\n", lines);
-    }
-
     [StaFact]
-    public void PageBreaks_ShortDocument_NoBreaks()
+    public void NoPageBreakTag_NoBreaks()
     {
-        var canvas = CreateCanvas("Hello\nWorld");
+        var canvas = CreateCanvas("Hello\nWorld\nLine 3");
         var breaks = canvas.TestGetPageBreakYs();
         breaks.Should().BeEmpty();
     }
 
     [StaFact]
-    public void PageBreaks_LongDocument_FirstBreakIsPage2()
+    public void SinglePageBreakTag_OneBreak()
     {
-        var canvas = CreateCanvas(GenerateLines(100));
+        var canvas = CreateCanvas("Line 1\n<!--@pagebreak-->\nLine 2");
         var breaks = canvas.TestGetPageBreakYs();
-
-        breaks.Should().NotBeEmpty("a 100-line document should have at least one page break");
-        breaks.Count.Should().BeGreaterThanOrEqualTo(1);
-
-        // First break should be at a reasonable Y position (well past the start)
-        breaks[0].Should().BeGreaterThan(100, "first break should not be near the top of the document");
+        breaks.Should().HaveCount(1);
     }
 
     [StaFact]
-    public void PageBreaks_BreaksAreWellSpaced()
+    public void PageBreakTag_BreakYIsAtNextContent()
     {
-        var canvas = CreateCanvas(GenerateLines(200));
+        var canvas = CreateCanvas("Line 1\n<!--@pagebreak-->\nLine 2");
         var breaks = canvas.TestGetPageBreakYs();
-
-        breaks.Should().HaveCountGreaterThanOrEqualTo(2);
-
-        for (int i = 1; i < breaks.Count; i++)
-        {
-            double gap = breaks[i] - breaks[i - 1];
-            gap.Should().BeGreaterThan(100, "page breaks should be well-spaced, not close together");
-        }
+        breaks.Should().HaveCount(1);
+        breaks[0].Should().BeGreaterThan(0, "break should be at a positive Y position");
     }
 
     [StaFact]
-    public void PageBreaks_FirstBreakPosition_MatchesPageContentHeight()
+    public void MultiplePageBreakTags_MultipleBreaks()
     {
-        var canvas = CreateCanvas(GenerateLines(100));
+        var canvas = CreateCanvas("Line 1\n<!--@pagebreak-->\nLine 2\n<!--@pagebreak-->\nLine 3");
         var breaks = canvas.TestGetPageBreakYs();
-
-        breaks.Should().NotBeEmpty();
-
-        // The first break should be around DefaultPageHeight - 2*MarginY = 1056 - 120 = 936
-        // plus the initial padding of 10, so approximately 946
-        double expectedApprox = 936 + 10; // pageContentH + _padding
-        breaks[0].Should().BeInRange(expectedApprox - 100, expectedApprox + 100,
-            "first break should be near the end of one page of content");
+        breaks.Should().HaveCount(2);
+        breaks[1].Should().BeGreaterThan(breaks[0]);
     }
 
     [StaFact]
-    public void PageBreaks_VisualMode_FirstBreakIsPage2()
+    public void PageBreakTag_CaseInsensitive()
+    {
+        var canvas = CreateCanvas("Line 1\n<!--@PageBreak-->\nLine 2");
+        var breaks = canvas.TestGetPageBreakYs();
+        breaks.Should().HaveCount(1);
+    }
+
+    [StaFact]
+    public void PageBreakTag_WithLeadingTrailingWhitespace()
+    {
+        var canvas = CreateCanvas("Line 1\n  <!--@pagebreak-->  \nLine 2");
+        var breaks = canvas.TestGetPageBreakYs();
+        breaks.Should().HaveCount(1);
+    }
+
+    [StaFact]
+    public void PageBreakTag_VisualMode_StillDetected()
     {
         var canvas = new DocsCanvas();
-        canvas.SetText(GenerateLines(100));
+        canvas.SetText("Line 1\n<!--@pagebreak-->\nLine 2");
         canvas.TestSetEditMode(DocsCanvas.EditMode.Visual);
         canvas.Measure(new Size(CanvasWidth, CanvasHeight));
         canvas.Arrange(new Rect(0, 0, CanvasWidth, CanvasHeight));
         canvas.TestComputeLayout();
         var breaks = canvas.TestGetPageBreakYs();
-
-        breaks.Should().NotBeEmpty("100 lines in visual mode should produce page breaks");
-        breaks[0].Should().BeGreaterThan(100, "first break should not be near the top");
+        breaks.Should().HaveCount(1);
     }
 
     [StaFact]
-    public void PageBreaks_VisualMode_WithHeadings()
+    public void PageBreakTag_BeforeTable_BreaksBeforeTable()
     {
-        var lines = new List<string>();
-        lines.Add("# Heading 1");
-        lines.Add("");
-        for (int i = 0; i < 30; i++)
-        {
-            lines.Add($"Paragraph {i + 1} text here.");
-            lines.Add("");
-        }
-        lines.Add("## Heading 2");
-        lines.Add("");
-        for (int i = 0; i < 30; i++)
-        {
-            lines.Add($"More text paragraph {i + 1}.");
-            lines.Add("");
-        }
-
-        var canvas = new DocsCanvas();
-        canvas.SetText(string.Join("\n", lines));
-        canvas.TestSetEditMode(DocsCanvas.EditMode.Visual);
-        canvas.Measure(new Size(CanvasWidth, CanvasHeight));
-        canvas.Arrange(new Rect(0, 0, CanvasWidth, CanvasHeight));
-        canvas.TestComputeLayout();
-
+        var text = "Summary\n\n<!--@pagebreak-->\n\n| Col1 | Col2 |\n| --- | --- |\n| A | B |";
+        var canvas = CreateCanvas(text);
         var breaks = canvas.TestGetPageBreakYs();
-
-        breaks.Should().NotBeEmpty(
-            $"total content height = {canvas.TestTotalContentHeight}, visual lines = {canvas.TestVisualLineCount}");
-        breaks[0].Should().BeGreaterThan(200,
-            "first break should be well past the start even with headings");
-    }
-
-    [StaFact]
-    public void PageBreaks_ConsecutiveBreaks_HaveIncreasingYValues()
-    {
-        var canvas = CreateCanvas(GenerateLines(300));
-        var breaks = canvas.TestGetPageBreakYs();
-
-        breaks.Should().HaveCountGreaterThanOrEqualTo(3);
-
-        for (int i = 1; i < breaks.Count; i++)
-            breaks[i].Should().BeGreaterThan(breaks[i - 1]);
-    }
-
-    [StaFact]
-    public void PageBreaks_AfterLayoutAtDifferentWidth_StillCorrect()
-    {
-        var canvas = CreateCanvas(GenerateLines(100));
-
-        var breaksBefore = canvas.TestGetPageBreakYs();
-        breaksBefore.Should().NotBeEmpty();
-        double firstBreakBefore = breaksBefore[0];
-
-        canvas.TestComputeLayoutAtWidth(400);
-
-        var breaksAtPrintWidth = canvas.TestGetPageBreakYs();
-        breaksAtPrintWidth.Should().NotBeEmpty();
-
-        canvas.TestComputeLayout();
-
-        var breaksAfter = canvas.TestGetPageBreakYs();
-        breaksAfter.Should().NotBeEmpty();
-        breaksAfter[0].Should().BeApproximately(firstBreakBefore, 1.0,
-            "page breaks should be restored after layout returns to screen width");
+        breaks.Should().HaveCount(1);
     }
 }
