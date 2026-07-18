@@ -1,3 +1,4 @@
+using System.Net;
 using System.Text;
 using RaisinDocs;
 
@@ -201,7 +202,7 @@ public static class HtmlEmitter
     {
         // First block should be the fence delimiter
         var firstBlock = blocks[start];
-        string? language = firstBlock.CodeLanguage != null ? ProcessBackslashEscapes(firstBlock.CodeLanguage) : null;
+        string? language = firstBlock.CodeLanguage != null ? ResolveEntities(ProcessBackslashEscapes(firstBlock.CodeLanguage)) : null;
 
         // Determine opening fence indentation (strip up to this many spaces from content)
         int fenceIndent = 0;
@@ -520,9 +521,9 @@ public static class HtmlEmitter
         {
             foreach (var img in images)
             {
-                string alt = HtmlEncode(ProcessBackslashEscapes(img.AltText));
-                string url = HtmlEncode(ProcessBackslashEscapes(img.Url));
-                string titleAttr = img.Title != null ? $" title=\"{HtmlEncode(ProcessBackslashEscapes(img.Title))}\"" : "";
+                string alt = HtmlEncode(ResolveEntities(ProcessBackslashEscapes(img.AltText)));
+                string url = HtmlEncode(PercentEncodeUrl(ResolveEntities(ProcessBackslashEscapes(img.Url))));
+                string titleAttr = img.Title != null ? $" title=\"{HtmlEncodeAttribute(ResolveEntities(ProcessBackslashEscapes(img.Title)))}\"" : "";
                 replacements.Add((img.Start, img.Start + img.Length, $"<img src=\"{url}\" alt=\"{alt}\"{titleAttr} />"));
             }
         }
@@ -531,9 +532,9 @@ public static class HtmlEmitter
         {
             foreach (var link in links)
             {
-                string url = HtmlEncode(ProcessBackslashEscapes(link.Url));
-                string titleAttr = link.Title != null ? $" title=\"{HtmlEncode(ProcessBackslashEscapes(link.Title))}\"" : "";
-                string linkText = HtmlEncode(ProcessBackslashEscapes(link.Text));
+                string url = HtmlEncode(PercentEncodeUrl(ResolveEntities(ProcessBackslashEscapes(link.Url))));
+                string titleAttr = link.Title != null ? $" title=\"{HtmlEncodeAttribute(ResolveEntities(ProcessBackslashEscapes(link.Title)))}\"" : "";
+                string linkText = HtmlEncode(ResolveEntities(ProcessBackslashEscapes(link.Text)));
                 replacements.Add((link.Start, link.Start + link.Length, $"<a href=\"{url}\"{titleAttr}>{linkText}</a>"));
             }
         }
@@ -604,7 +605,20 @@ public static class HtmlEmitter
                 if (currentStyle != null) OpenTag(sb, currentStyle.Value);
             }
 
-            sb.Append(HtmlEncode(text[(pos - offset)..(pos - offset + 1)]));
+            // Entity resolution (not inside code spans)
+            int ci = pos - offset;
+            if (style != InlineStyle.Code && ci < text.Length && text[ci] == '&')
+            {
+                int entityEnd = TryResolveEntity(text, ci, out string? decoded);
+                if (entityEnd > ci && decoded != null)
+                {
+                    sb.Append(HtmlEncode(decoded));
+                    pos = offset + entityEnd;
+                    continue;
+                }
+            }
+
+            sb.Append(HtmlEncode(text[ci..(ci + 1)]));
             pos++;
         }
 
@@ -753,6 +767,63 @@ public static class HtmlEmitter
             else break;
         }
         return text[i..];
+    }
+
+    static int TryResolveEntity(string text, int start, out string? decoded)
+    {
+        decoded = null;
+        if (start >= text.Length || text[start] != '&') return start;
+
+        // Find semicolon within 32 chars (CommonMark limit)
+        int maxEnd = Math.Min(start + 32, text.Length);
+        int semi = -1;
+        for (int i = start + 1; i < maxEnd; i++)
+        {
+            if (text[i] == ';') { semi = i; break; }
+            if (text[i] == '&' || text[i] == ' ' || text[i] == '\n') break;
+        }
+        if (semi < 0) return start;
+
+        string entity = text[start..(semi + 1)];
+
+        // Numeric character reference
+        if (entity.Length >= 4 && entity[1] == '#')
+        {
+            int codePoint = -1;
+            if (entity[2] == 'x' || entity[2] == 'X')
+            {
+                // Hex: &#x...; or &#X...;
+                var hex = entity[3..^1];
+                if (hex.Length > 0 && hex.Length <= 6 && int.TryParse(hex, System.Globalization.NumberStyles.HexNumber, null, out codePoint))
+                { }
+                else return start;
+            }
+            else
+            {
+                // Decimal: &#...;
+                var dec = entity[2..^1];
+                if (dec.Length > 0 && dec.Length <= 7 && int.TryParse(dec, out codePoint))
+                { }
+                else return start;
+            }
+
+            // CommonMark: 0, surrogates, and > 0x10FFFF → U+FFFD
+            if (codePoint == 0 || (codePoint >= 0xD800 && codePoint <= 0xDFFF) || codePoint > 0x10FFFF)
+                decoded = "�";
+            else
+                decoded = char.ConvertFromUtf32(codePoint);
+            return semi + 1;
+        }
+
+        // Named entity — use WebUtility.HtmlDecode
+        string result = WebUtility.HtmlDecode(entity);
+        if (result != entity)
+        {
+            decoded = result;
+            return semi + 1;
+        }
+
+        return start;
     }
 
     static int TryMatchInlineHtml(string text, int start)
@@ -904,6 +975,49 @@ public static class HtmlEmitter
             else
             {
                 sb.Append(text[i]);
+            }
+        }
+        return sb.ToString();
+    }
+
+    static string ResolveEntities(string text)
+    {
+        if (!text.Contains('&')) return text;
+        var sb = new StringBuilder(text.Length);
+        for (int i = 0; i < text.Length; i++)
+        {
+            if (text[i] == '&')
+            {
+                int end = TryResolveEntity(text, i, out string? decoded);
+                if (end > i && decoded != null)
+                {
+                    sb.Append(decoded);
+                    i = end - 1;
+                    continue;
+                }
+            }
+            sb.Append(text[i]);
+        }
+        return sb.ToString();
+    }
+
+    static string PercentEncodeUrl(string url)
+    {
+        var sb = new StringBuilder(url.Length);
+        for (int i = 0; i < url.Length; i++)
+        {
+            char c = url[i];
+            if (c > 0x7E || (c < 0x20 && c != '\t'))
+            {
+                string chunk = char.IsHighSurrogate(c) && i + 1 < url.Length && char.IsLowSurrogate(url[i + 1])
+                    ? url.Substring(i++, 2)
+                    : c.ToString();
+                foreach (byte b in Encoding.UTF8.GetBytes(chunk))
+                    sb.Append($"%{b:X2}");
+            }
+            else
+            {
+                sb.Append(c);
             }
         }
         return sb.ToString();
