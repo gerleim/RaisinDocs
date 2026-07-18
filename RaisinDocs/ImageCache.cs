@@ -23,6 +23,25 @@ public class ImageCache
         return null;
     }
 
+    internal void TestInject(string url, string? basePath, double pixelWidth, double pixelHeight)
+    {
+        string key = ResolveKey(url, basePath);
+        var wb = new System.Windows.Media.Imaging.WriteableBitmap(1, 1, 96, 96,
+            System.Windows.Media.PixelFormats.Bgra32, null);
+        var png = new PngBitmapEncoder();
+        png.Frames.Add(BitmapFrame.Create(wb));
+        var ms = new MemoryStream();
+        png.Save(ms);
+        ms.Position = 0;
+        var bmp = new BitmapImage();
+        bmp.BeginInit();
+        bmp.StreamSource = ms;
+        bmp.CacheOption = BitmapCacheOption.OnLoad;
+        bmp.EndInit();
+        bmp.Freeze();
+        _cache[key] = new CacheEntry(bmp, pixelWidth, pixelHeight);
+    }
+
     public void RequestLoad(string url, string? basePath, Action onLoaded)
     {
         string key = ResolveKey(url, basePath);

@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 
 namespace RaisinDocs;
 
@@ -36,6 +37,7 @@ public partial class DocsCanvas
     internal int MinimapLineCount => _visualLines.Count;
     internal double MinimapScrollOffset => _scroll.EffectiveOffset;
     internal double MinimapTotalHeight => _totalContentHeight;
+    internal IReadOnlyList<double> MinimapCanvasLineYPositions => _lineYPositions;
     internal Color MinimapBackground => ((SolidColorBrush)_palette.Background).Color;
     internal Color MinimapForeground => ((SolidColorBrush)_palette.Foreground).Color;
     internal Color MinimapCodeBackground => ((SolidColorBrush)_palette.CodeBackground).Color;
@@ -48,6 +50,62 @@ public partial class DocsCanvas
         if (_visualLines == null || index < 0 || index >= _visualLines.Count)
             return BlockKind.Paragraph;
         return _visualLines[index].BlockKind;
+    }
+
+    internal double MinimapBaseLineHeight
+    {
+        get
+        {
+            if (_visualLines == null || _visualLines.Count == 0) return 0;
+            return _measure.GetLineHeight(BlockKind.Paragraph);
+        }
+    }
+
+    internal (BitmapSource Image, double Width, double Height)? GetMinimapLineImage(int index)
+    {
+        if (_visualLines == null || index < 0 || index >= _visualLines.Count)
+            return null;
+        var vl = _visualLines[index];
+        if (vl.OverrideHeight <= 0) return null;
+
+        BlockVisualMap? map = null;
+        if (vl.Group != null)
+            map = vl.Group.JoinedMap;
+        else if (IsVisual && _visualMaps != null && vl.BlockIndex < _visualMaps.Count)
+            map = _visualMaps[vl.BlockIndex];
+
+        if (map?.Images == null) return null;
+
+        int vlEnd = vl.StartOffset + vl.Length;
+        foreach (var img in map.Images)
+        {
+            if (img.Start >= vl.StartOffset && img.Start < vlEnd)
+            {
+                var cached = _imageCache.Get(img.Url, DocumentBasePath, _layoutMaxWidth);
+                if (cached != null)
+                    return (cached.Value.Image, cached.Value.Width, cached.Value.Height);
+            }
+        }
+
+        if (!IsVisual && _imagePreview == ImagePreviewMode.Inline
+            && _parsedBlocks != null && vl.BlockIndex < _parsedBlocks.Count)
+        {
+            var images = _parsedBlocks[vl.BlockIndex].Images;
+            if (images != null)
+            {
+                foreach (var img in images)
+                {
+                    if (img.Start >= vl.StartOffset && img.Start < vlEnd)
+                    {
+                        var cached = _imageCache.Get(img.Url, DocumentBasePath, _layoutMaxWidth);
+                        if (cached != null)
+                            return (cached.Value.Image, cached.Value.Width, cached.Value.Height);
+                    }
+                }
+            }
+        }
+
+        return null;
     }
 
     internal void GetMinimapLineInfo(int index, out string text, out BlockKind kind)

@@ -51,11 +51,13 @@ public class MinimapScrollbar : FrameworkElement
     private int _cachedVersion;
     private int _cachedFirstLine;
     private int _cachedVisibleCount;
+    private int _cachedSubPixelOff;
     private Color _cachedBg, _cachedFg, _cachedCodeBg;
     private double[]? _lineYPos;
     private double _totalMinimapH;
     private int _heightTableVersion = -1;
     private readonly List<MinimapTableCell> _tableCells = new();
+    private readonly Dictionary<BitmapSource, (byte[] Pixels, int Width, int Height)> _thumbCache = new();
 
     internal DocsCanvas? Canvas { get; set; }
 
@@ -68,9 +70,55 @@ public class MinimapScrollbar : FrameworkElement
     private double _hoverY;
     private double _dragStartY;
     private double _dragStartScroll;
+    private double _dragPixelToScroll;
 
     internal event Action<double>? ScrollRequested;
     internal event Action<double>? SmoothScrollRequested;
+
+    internal double TestVpTop => _vpTop;
+    internal double TestVpHeight => _vpHeight;
+    internal double TestTotalMinimapH => _totalMinimapH;
+    internal double TestMinimapScroll => _minimapScroll;
+
+    internal void TestUpdateViewport()
+    {
+        if (Canvas == null) return;
+        int totalLines = Canvas.MinimapLineCount;
+        _totalLines = totalLines;
+        if (totalLines == 0) return;
+        int version = Canvas.MinimapLayoutVersion;
+        RebuildHeightTable(totalLines, version);
+        ComputeViewport(ActualHeight);
+    }
+
+    private void ComputeViewport(double h)
+    {
+        if (Canvas == null || _totalLines == 0) return;
+
+        double totalMinimapH = _totalMinimapH;
+        double effectiveScroll = Canvas.MinimapScrollOffset;
+        double totalContentH = Canvas.MinimapTotalHeight;
+        double canvasH = Canvas.ActualHeight;
+        double maxScroll = Math.Max(0, totalContentH - canvasH);
+
+        double scale = totalContentH > 0 ? totalMinimapH / totalContentH : 1;
+        double vpContentTop = effectiveScroll * scale;
+        _vpHeight = Math.Max(CharHeight, canvasH * scale);
+
+        double scrollFrac = maxScroll > 0 ? Math.Clamp(effectiveScroll / maxScroll, 0, 1) : 0;
+
+        if (totalMinimapH <= h)
+        {
+            _minimapScroll = 0;
+            _vpTop = vpContentTop;
+        }
+        else
+        {
+            double viewableRange = totalMinimapH - h;
+            _minimapScroll = scrollFrac * viewableRange;
+            _vpTop = vpContentTop - _minimapScroll;
+        }
+    }
 
     protected override void OnRender(DrawingContext dc)
     {
@@ -92,6 +140,8 @@ public class MinimapScrollbar : FrameworkElement
         int version = Canvas.MinimapLayoutVersion;
         RebuildHeightTable(totalLines, version);
 
+        ComputeViewport(h);
+
         double totalMinimapH = _totalMinimapH;
         double effectiveScroll = Canvas.MinimapScrollOffset;
         double totalContentH = Canvas.MinimapTotalHeight;
@@ -99,10 +149,6 @@ public class MinimapScrollbar : FrameworkElement
         double maxScroll = Math.Max(0, totalContentH - canvasH);
 
         double scrollFrac = maxScroll > 0 ? Math.Clamp(effectiveScroll / maxScroll, 0, 1) : 0;
-        double vpFrac = totalContentH > 0 ? canvasH / totalContentH : 1;
-
-        _vpHeight = Math.Max(CharHeight, vpFrac * totalMinimapH);
-        double vpContentTop = scrollFrac * (totalMinimapH - _vpHeight);
 
         int firstLine;
         int visibleCount;
@@ -110,16 +156,11 @@ public class MinimapScrollbar : FrameworkElement
 
         if (totalMinimapH <= h)
         {
-            _minimapScroll = 0;
             firstLine = 0;
             visibleCount = totalLines;
-            _vpTop = vpContentTop;
         }
         else
         {
-            double viewableRange = totalMinimapH - h;
-            _minimapScroll = scrollFrac * viewableRange;
-            _vpTop = vpContentTop - _minimapScroll;
             firstLine = FindFirstLine(_minimapScroll);
             subPixelOff = _minimapScroll - _lineYPos![firstLine];
 
@@ -135,17 +176,20 @@ public class MinimapScrollbar : FrameworkElement
 
         double canvasTextWidth = Canvas.MinimapCanvasTextWidth;
 
+        int subPixelInt = (int)subPixelOff;
         if (_bitmap == null
             || _bitmap.PixelWidth != (int)w || _bitmap.PixelHeight != (int)h
             || version != _cachedVersion
             || firstLine != _cachedFirstLine
             || visibleCount != _cachedVisibleCount
+            || subPixelInt != _cachedSubPixelOff
             || bg != _cachedBg || fg != _cachedFg || codeBg != _cachedCodeBg)
         {
             RebuildBitmap((int)w, (int)h, firstLine, visibleCount, subPixelOff, bg, fg, codeBg, canvasTextWidth);
             _cachedVersion = version;
             _cachedFirstLine = firstLine;
             _cachedVisibleCount = visibleCount;
+            _cachedSubPixelOff = subPixelInt;
             _cachedBg = bg;
             _cachedFg = fg;
             _cachedCodeBg = codeBg;
@@ -214,6 +258,23 @@ public class MinimapScrollbar : FrameworkElement
                     _pixelBuf[off] = (byte)(fg.B * ruleAlpha + _pixelBuf[off] * (1 - ruleAlpha));
                     _pixelBuf[off + 1] = (byte)(fg.G * ruleAlpha + _pixelBuf[off + 1] * (1 - ruleAlpha));
                     _pixelBuf[off + 2] = (byte)(fg.R * ruleAlpha + _pixelBuf[off + 2] * (1 - ruleAlpha));
+                }
+                continue;
+            }
+
+            var imageInfo = Canvas!.GetMinimapLineImage(lineIdx);
+            if (imageInfo != null)
+            {
+                double lineH3 = _lineYPos[lineIdx + 1] - _lineYPos[lineIdx];
+                double lineY3 = (_lineYPos[lineIdx] - firstLineYPos) - subPixelOff;
+                int imgPy0 = (int)lineY3;
+                int imgPyEnd = (int)(lineY3 + lineH3);
+                if (imgPyEnd > 0 && imgPy0 < h)
+                {
+                    var (bmpSrc, imgW, imgH) = imageInfo.Value;
+                    double imgXScale = (w - 2.0) / canvasTextWidth;
+                    int imgPxEnd = Math.Min(w, (int)(1 + imgW * imgXScale));
+                    RenderImageThumbnail(bmpSrc, 1, imgPxEnd, imgPy0, imgPyEnd, w, h);
                 }
                 continue;
             }
@@ -315,6 +376,89 @@ public class MinimapScrollbar : FrameworkElement
             }
     }
 
+    private void RenderImageThumbnail(BitmapSource src, int px0, int px1, int py0, int pyEnd, int w, int h)
+    {
+        int destW = px1 - px0;
+        int destH = pyEnd - py0;
+        if (destW <= 0 || destH <= 0) return;
+
+        if (!_thumbCache.TryGetValue(src, out var thumb))
+        {
+            int srcW = src.PixelWidth;
+            int srcH = src.PixelHeight;
+            if (srcW <= 0 || srcH <= 0) return;
+
+            const int maxThumbW = 120;
+            const int maxThumbH = 200;
+            BitmapSource readable = src;
+            if (srcW > maxThumbW || srcH > maxThumbH)
+            {
+                double scale = Math.Min((double)maxThumbW / srcW, (double)maxThumbH / srcH);
+                var scaled = new TransformedBitmap(src, new ScaleTransform(scale, scale));
+                scaled.Freeze();
+                readable = scaled;
+            }
+
+            if (readable.Format != PixelFormats.Bgra32 && readable.Format != PixelFormats.Pbgra32)
+            {
+                var converted = new FormatConvertedBitmap(readable, PixelFormats.Bgra32, null, 0);
+                converted.Freeze();
+                readable = converted;
+            }
+
+            int tw = readable.PixelWidth;
+            int th = readable.PixelHeight;
+            var pixels = new byte[tw * th * 4];
+            readable.CopyPixels(pixels, tw * 4, 0);
+            thumb = (pixels, tw, th);
+            _thumbCache[src] = thumb;
+        }
+
+        int thumbW = thumb.Width;
+        int thumbH = thumb.Height;
+        var srcPixels = thumb.Pixels;
+        int srcStride = thumbW * 4;
+
+        for (int dy = 0; dy < destH; dy++)
+        {
+            int outY = py0 + dy;
+            if (outY < 0 || outY >= h) continue;
+            int sy = (int)((double)dy / destH * thumbH);
+            if (sy >= thumbH) sy = thumbH - 1;
+
+            for (int dx = 0; dx < destW; dx++)
+            {
+                int outX = px0 + dx;
+                if (outX < 0 || outX >= w) continue;
+                int sx = (int)((double)dx / destW * thumbW);
+                if (sx >= thumbW) sx = thumbW - 1;
+
+                int srcOff = sy * srcStride + sx * 4;
+                byte sB = srcPixels[srcOff];
+                byte sG = srcPixels[srcOff + 1];
+                byte sR = srcPixels[srcOff + 2];
+                byte sA = srcPixels[srcOff + 3];
+
+                if (sA == 0) continue;
+
+                int dstOff = (outY * w + outX) * 4;
+                if (sA == 255)
+                {
+                    _pixelBuf[dstOff] = sB;
+                    _pixelBuf[dstOff + 1] = sG;
+                    _pixelBuf[dstOff + 2] = sR;
+                }
+                else
+                {
+                    double a = sA / 255.0;
+                    _pixelBuf[dstOff] = (byte)(sB * a + _pixelBuf[dstOff] * (1 - a));
+                    _pixelBuf[dstOff + 1] = (byte)(sG * a + _pixelBuf[dstOff + 1] * (1 - a));
+                    _pixelBuf[dstOff + 2] = (byte)(sR * a + _pixelBuf[dstOff + 2] * (1 - a));
+                }
+            }
+        }
+    }
+
     private void RenderTextGlyphs(string text, double startX, double lineY, double scale,
         double baseAdvance, bool isCode, byte fgB, byte fgG, byte fgR,
         IReadOnlyList<ColorSpan>? colorSpans, int spanRawBase,
@@ -401,29 +545,22 @@ public class MinimapScrollbar : FrameworkElement
         }
     }
 
-    private static double GetLineHeight(BlockKind kind) => kind switch
-    {
-        BlockKind.Heading1 => CharHeight * 2.0,
-        BlockKind.Heading2 => CharHeight * 1.625,
-        BlockKind.Heading3 => CharHeight * 1.375,
-        BlockKind.Heading4 => CharHeight * 1.125,
-        _ => CharHeight,
-    };
-
     private void RebuildHeightTable(int totalLines, int version)
     {
         if (_lineYPos != null && _heightTableVersion == version && _lineYPos.Length == totalLines + 1)
             return;
 
+        _thumbCache.Clear();
+        var canvasLineYs = Canvas!.MinimapCanvasLineYPositions;
+        double totalContentH = Canvas.MinimapTotalHeight;
+        double baseLineH = Canvas.MinimapBaseLineHeight;
+        double scale = baseLineH > 0 ? CharHeight / baseLineH : 1;
+
         _lineYPos = new double[totalLines + 1];
-        double y = 0;
-        for (int i = 0; i < totalLines; i++)
-        {
-            _lineYPos[i] = y;
-            y += GetLineHeight(Canvas!.GetMinimapLineKind(i));
-        }
-        _lineYPos[totalLines] = y;
-        _totalMinimapH = y;
+        for (int i = 0; i < totalLines && i < canvasLineYs.Count; i++)
+            _lineYPos[i] = canvasLineYs[i] * scale;
+        _lineYPos[totalLines] = totalContentH * scale;
+        _totalMinimapH = totalContentH * scale;
         _heightTableVersion = version;
     }
 
@@ -654,15 +791,9 @@ public class MinimapScrollbar : FrameworkElement
         if (_isDragging)
         {
             double deltaY = y - _dragStartY;
-            double h = ActualHeight;
-            double range = h - _vpHeight;
-            if (range <= 0) return;
-
-            double maxScroll = Canvas != null
-                ? Math.Max(0, Canvas.MinimapTotalHeight - Canvas.ActualHeight)
-                : 0;
-            double newOffset = _dragStartScroll + deltaY / range * maxScroll;
+            double newOffset = _dragStartScroll + deltaY * _dragPixelToScroll;
             ScrollRequested?.Invoke(newOffset);
+            InvalidateVisual();
             return;
         }
 
@@ -679,19 +810,21 @@ public class MinimapScrollbar : FrameworkElement
             _isDragging = true;
             _dragStartY = y;
             _dragStartScroll = Canvas?.MinimapScrollOffset ?? 0;
+            double screenRange = ActualHeight - _vpHeight;
+            double maxScroll = Canvas != null
+                ? Math.Max(0, Canvas.MinimapTotalHeight - Canvas.ActualHeight)
+                : 0;
+            _dragPixelToScroll = screenRange > 0 ? maxScroll / screenRange : 0;
             CaptureMouse();
             e.Handled = true;
         }
         else if (Canvas != null)
         {
-            double totalMinimapH = _totalMinimapH;
-            double clickContent = y + _minimapScroll;
-            double targetFrac = totalMinimapH > _vpHeight
-                ? (clickContent - _vpHeight / 2) / (totalMinimapH - _vpHeight)
-                : 0;
-            targetFrac = Math.Clamp(targetFrac, 0, 1);
-            double maxScroll = Math.Max(0, Canvas.MinimapTotalHeight - Canvas.ActualHeight);
-            SmoothScrollRequested?.Invoke(targetFrac * maxScroll);
+            double totalContentH = Canvas.MinimapTotalHeight;
+            double scale = totalContentH > 0 ? _totalMinimapH / totalContentH : 1;
+            double minimapContentY = y + _minimapScroll - _vpHeight / 2;
+            double canvasY = scale > 0 ? minimapContentY / scale : 0;
+            SmoothScrollRequested?.Invoke(canvasY);
             e.Handled = true;
         }
     }
