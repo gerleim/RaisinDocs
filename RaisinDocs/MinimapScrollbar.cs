@@ -262,24 +262,29 @@ public class MinimapScrollbar : FrameworkElement
                 continue;
             }
 
+            double textOnlyH = 0;
             var imageInfo = Canvas!.GetMinimapLineImage(lineIdx);
             if (imageInfo != null)
             {
+                var (bmpSrc, imgW, imgH, yOffset) = imageInfo.Value;
                 double lineH3 = _lineYPos[lineIdx + 1] - _lineYPos[lineIdx];
                 double lineY3 = (_lineYPos[lineIdx] - firstLineYPos) - subPixelOff;
-                int imgPy0 = (int)lineY3;
+                double baseLineH = Canvas.MinimapBaseLineHeight;
+                double mmScale = baseLineH > 0 ? CharHeight / baseLineH : 1;
+                double imgOffsetMm = yOffset * mmScale;
+                int imgPy0 = (int)(lineY3 + imgOffsetMm);
                 int imgPyEnd = (int)(lineY3 + lineH3);
                 if (imgPyEnd > 0 && imgPy0 < h)
                 {
-                    var (bmpSrc, imgW, imgH) = imageInfo.Value;
                     double imgXScale = (w - 2.0) / canvasTextWidth;
                     int imgPxEnd = Math.Min(w, (int)(1 + imgW * imgXScale));
                     RenderImageThumbnail(bmpSrc, 1, imgPxEnd, imgPy0, imgPyEnd, w, h);
                 }
-                continue;
+                if (yOffset > 0) textOnlyH = imgOffsetMm;
+                else continue;
             }
 
-            double lineH = _lineYPos[lineIdx + 1] - _lineYPos[lineIdx];
+            double lineH = textOnlyH > 0 ? textOnlyH : _lineYPos[lineIdx + 1] - _lineYPos[lineIdx];
             double scale = lineH / CharHeight;
             double lineY = (_lineYPos[lineIdx] - firstLineYPos) - subPixelOff;
             int py0 = Math.Max(0, (int)lineY);

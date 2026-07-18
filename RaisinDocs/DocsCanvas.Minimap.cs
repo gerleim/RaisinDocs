@@ -61,7 +61,7 @@ public partial class DocsCanvas
         }
     }
 
-    internal (BitmapSource Image, double Width, double Height)? GetMinimapLineImage(int index)
+    internal (BitmapSource Image, double Width, double Height, double YOffset)? GetMinimapLineImage(int index)
     {
         if (_visualLines == null || index < 0 || index >= _visualLines.Count)
             return null;
@@ -74,16 +74,17 @@ public partial class DocsCanvas
         else if (IsVisual && _visualMaps != null && vl.BlockIndex < _visualMaps.Count)
             map = _visualMaps[vl.BlockIndex];
 
-        if (map?.Images == null) return null;
-
-        int vlEnd = vl.StartOffset + vl.Length;
-        foreach (var img in map.Images)
+        if (map?.Images != null)
         {
-            if (img.Start >= vl.StartOffset && img.Start < vlEnd)
+            int vlEnd = vl.StartOffset + vl.Length;
+            foreach (var img in map.Images)
             {
-                var cached = _imageCache.Get(img.Url, DocumentBasePath, _layoutMaxWidth);
-                if (cached != null)
-                    return (cached.Value.Image, cached.Value.Width, cached.Value.Height);
+                if (img.Start >= vl.StartOffset && img.Start < vlEnd)
+                {
+                    var cached = _imageCache.Get(img.Url, DocumentBasePath, _layoutMaxWidth);
+                    if (cached != null)
+                        return (cached.Value.Image, cached.Value.Width, cached.Value.Height, 0);
+                }
             }
         }
 
@@ -93,13 +94,15 @@ public partial class DocsCanvas
             var images = _parsedBlocks[vl.BlockIndex].Images;
             if (images != null)
             {
+                int vlEnd = vl.StartOffset + vl.Length;
+                double textLineH = _measure.GetLineHeight(vl.BlockKind);
                 foreach (var img in images)
                 {
                     if (img.Start >= vl.StartOffset && img.Start < vlEnd)
                     {
                         var cached = _imageCache.Get(img.Url, DocumentBasePath, _layoutMaxWidth);
                         if (cached != null)
-                            return (cached.Value.Image, cached.Value.Width, cached.Value.Height);
+                            return (cached.Value.Image, cached.Value.Width, cached.Value.Height, textLineH);
                     }
                 }
             }
