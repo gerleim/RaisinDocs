@@ -89,6 +89,8 @@
                 <MenuItem Header="_Save" Click="Save_Click" InputGestureText="Ctrl+S" />
                 <MenuItem Header="Save _As..." Click="SaveAs_Click" InputGestureText="Ctrl+Shift+S" />
                 <Separator />
+                <MenuItem Header="_Print..." Click="Print_Click" InputGestureText="Ctrl+P" />
+                <Separator />
                 <MenuItem Header="Close _Tab" Click="CloseTab_Click" InputGestureText="Ctrl+W" />
             </MenuItem>
             <MenuItem Header="_Edit">
@@ -117,6 +119,7 @@
         <KeyBinding Key="S" Modifiers="Control" Command="{x:Static ApplicationCommands.Save}" />
         <KeyBinding Key="S" Modifiers="Control+Shift" Command="{x:Static ApplicationCommands.SaveAs}" />
         <KeyBinding Key="W" Modifiers="Control" Command="{x:Static ApplicationCommands.Close}" />
+        <KeyBinding Key="P" Modifiers="Control" Command="{x:Static ApplicationCommands.Print}" />
     </Window.InputBindings>
     <Window.CommandBindings>
         <CommandBinding Command="{x:Static ApplicationCommands.New}" Executed="New_Click" />
@@ -124,5 +127,6 @@
         <CommandBinding Command="{x:Static ApplicationCommands.Save}" Executed="Save_Click" />
         <CommandBinding Command="{x:Static ApplicationCommands.SaveAs}" Executed="SaveAs_Click" />
         <CommandBinding Command="{x:Static ApplicationCommands.Close}" Executed="CloseTab_Click" />
+        <CommandBinding Command="{x:Static ApplicationCommands.Print}" Executed="Print_Click" />
     </Window.CommandBindings>
 </Window>

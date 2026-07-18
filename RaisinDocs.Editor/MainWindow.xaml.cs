@@ -176,6 +176,9 @@ public partial class MainWindow : Window
             CloseTab(tab);
     }
 
+    private void Print_Click(object sender, RoutedEventArgs e) =>
+        ActiveTab?.Editor.Print();
+
     private void Undo_Click(object sender, RoutedEventArgs e) =>
         ActiveTab?.Editor.Canvas.PerformUndo();
 

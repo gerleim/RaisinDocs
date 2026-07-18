@@ -171,6 +171,8 @@ public partial class DocsEditor : UserControl
 
     public DocsCanvas Canvas => PART_Canvas;
 
+    public void Print() => PART_Canvas.Print();
+
     public string GetText() => PART_Canvas.GetText();
 
     public void SetText(string text) => PART_Canvas.SetText(text);
