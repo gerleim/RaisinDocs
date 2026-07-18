@@ -509,6 +509,7 @@ public partial class DocsCanvas : FrameworkElement
         _imagePreview = mode;
         InvalidateLayout();
     }
+    internal ImageCache TestImageCache => _imageCache;
     internal void TestComputeLayout() => ComputeLayout();
     internal void TestInsert(string text)
     {
@@ -1544,6 +1545,9 @@ public partial class DocsCanvas : FrameworkElement
                 }
             }
         }
+
+        if (_showPageBreaks)
+            DrawPageBreaks(dc, effectiveScroll, viewTop, viewBottom);
 
         if (_cursorVisible && IsFocused && _visualLines.Count > 0)
         {

@@ -190,6 +190,7 @@ public partial class DocsEditor : UserControl
         ShowToc = ShowToc,
         TocWidth = ShowToc ? PART_TocColumn.Width.Value : _savedTocWidth,
         IsToolbarCollapsed = IsToolbarCollapsed,
+        ShowPageBreaks = PART_Canvas.ShowPageBreaks,
         ZoomLevel = PART_Canvas.ZoomLevel,
     };
 
@@ -205,6 +206,7 @@ public partial class DocsEditor : UserControl
             _savedTocWidth = state.TocWidth;
         ShowToc = state.ShowToc;
         IsToolbarCollapsed = state.IsToolbarCollapsed;
+        PART_Canvas.SetShowPageBreaks(state.ShowPageBreaks);
         PART_Canvas.SetZoom(state.ZoomLevel);
     }
 
