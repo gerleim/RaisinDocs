@@ -573,6 +573,24 @@ public static class HtmlEmitter
                 continue;
             }
 
+            // Check for raw inline HTML (pass through verbatim)
+            int ti = pos - offset;
+            if (ti < text.Length && text[ti] == '<')
+            {
+                var rawStyle = GetStyleAt(runs, pos);
+                if (rawStyle == InlineStyle.Normal || rawStyle == InlineStyle.Image)
+                {
+                    int htmlEnd = TryMatchInlineHtml(text, ti);
+                    if (htmlEnd > ti)
+                    {
+                        if (currentStyle != null) { CloseTag(sb, currentStyle.Value); currentStyle = null; }
+                        sb.Append(text[ti..htmlEnd]);
+                        pos = offset + htmlEnd;
+                        continue;
+                    }
+                }
+            }
+
             // Determine style at this position
             var style = GetStyleAt(runs, pos);
             if (style == InlineStyle.Image || style == InlineStyle.Link)
@@ -735,6 +753,141 @@ public static class HtmlEmitter
             else break;
         }
         return text[i..];
+    }
+
+    static int TryMatchInlineHtml(string text, int start)
+    {
+        if (start + 1 >= text.Length) return start;
+        char next = text[start + 1];
+
+        // Closing tag: </tagname\s*>
+        if (next == '/')
+        {
+            if (start + 2 >= text.Length || !char.IsAsciiLetter(text[start + 2])) return start;
+            int i = start + 3;
+            while (i < text.Length && (char.IsAsciiLetterOrDigit(text[i]) || text[i] == '-')) i++;
+            while (i < text.Length && text[i] == ' ') i++;
+            if (i < text.Length && text[i] == '>') return i + 1;
+            return start;
+        }
+
+        // Comment: <!-- ... -->
+        if (next == '!' && start + 3 < text.Length && text[start + 2] == '-' && text[start + 3] == '-')
+        {
+            // Minimal comments <!--> and <!---->
+            int i = start + 4;
+            if (i <= text.Length && text.AsSpan(start).StartsWith("<!-->".AsSpan()))
+                return start + 5 <= text.Length ? start + 5 : start;
+            if (i <= text.Length && text.AsSpan(start).StartsWith("<!--->".AsSpan()))
+                return start + 6 <= text.Length ? start + 6 : start;
+            // Standard comment: find -->
+            while (i < text.Length - 2)
+            {
+                if (text[i] == '-' && text[i + 1] == '-' && text[i + 2] == '>')
+                    return i + 3;
+                i++;
+            }
+            return start;
+        }
+
+        // CDATA: <![CDATA[ ... ]]>
+        if (next == '!' && start + 8 < text.Length && text.AsSpan(start, 9).SequenceEqual("<![CDATA[".AsSpan()))
+        {
+            int i = start + 9;
+            while (i < text.Length - 2)
+            {
+                if (text[i] == ']' && text[i + 1] == ']' && text[i + 2] == '>')
+                    return i + 3;
+                i++;
+            }
+            return start;
+        }
+
+        // Declaration: <![A-Z] ... >
+        if (next == '!' && start + 2 < text.Length && char.IsAsciiLetterUpper(text[start + 2]))
+        {
+            int i = start + 3;
+            while (i < text.Length && text[i] != '>') i++;
+            if (i < text.Length) return i + 1;
+            return start;
+        }
+
+        // Processing instruction: <? ... ?>
+        if (next == '?')
+        {
+            int i = start + 2;
+            while (i < text.Length - 1)
+            {
+                if (text[i] == '?' && text[i + 1] == '>')
+                    return i + 2;
+                i++;
+            }
+            return start;
+        }
+
+        // Open tag: <tagname (attributes)* \s* /? >
+        if (!char.IsAsciiLetter(next)) return start;
+        int p = start + 2;
+        while (p < text.Length && (char.IsAsciiLetterOrDigit(text[p]) || text[p] == '-')) p++;
+
+        // Consume attributes
+        while (p < text.Length)
+        {
+            // Skip whitespace
+            int ws = p;
+            while (p < text.Length && (text[p] == ' ' || text[p] == '\t' || text[p] == '\n')) p++;
+            if (p >= text.Length) return start;
+
+            if (text[p] == '>') return p + 1;
+            if (text[p] == '/' && p + 1 < text.Length && text[p + 1] == '>') return p + 2;
+
+            // Must have whitespace before attribute
+            if (p == ws) return start;
+
+            // Attribute name: [a-zA-Z_:][a-zA-Z0-9_.:-]*
+            if (!char.IsAsciiLetter(text[p]) && text[p] != '_' && text[p] != ':') return start;
+            p++;
+            while (p < text.Length && (char.IsAsciiLetterOrDigit(text[p]) || text[p] == '_' || text[p] == '.' || text[p] == ':' || text[p] == '-'))
+                p++;
+
+            // Optional value
+            int beforeEq = p;
+            while (p < text.Length && text[p] == ' ') p++;
+            if (p < text.Length && text[p] == '=')
+            {
+                p++;
+                while (p < text.Length && text[p] == ' ') p++;
+                if (p >= text.Length) return start;
+
+                if (text[p] == '"')
+                {
+                    p++;
+                    while (p < text.Length && text[p] != '"') p++;
+                    if (p >= text.Length) return start;
+                    p++;
+                }
+                else if (text[p] == '\'')
+                {
+                    p++;
+                    while (p < text.Length && text[p] != '\'') p++;
+                    if (p >= text.Length) return start;
+                    p++;
+                }
+                else
+                {
+                    // Unquoted value
+                    if (text[p] == ' ' || text[p] == '"' || text[p] == '\'' || text[p] == '=' || text[p] == '<' || text[p] == '>' || text[p] == '`')
+                        return start;
+                    while (p < text.Length && text[p] != ' ' && text[p] != '"' && text[p] != '\'' && text[p] != '=' && text[p] != '<' && text[p] != '>' && text[p] != '`')
+                        p++;
+                }
+            }
+            else
+            {
+                p = beforeEq; // backtrack — no value, just boolean attribute
+            }
+        }
+        return start;
     }
 
     static string ProcessBackslashEscapes(string text)
