@@ -138,6 +138,7 @@ public static class MarkdownParser
 
         var result = new List<ParsedBlock>(blockCount);
         int fenceLen = 0;
+        char fenceChar = '\0';
         string? fenceLanguage = null;
 
         for (int i = 0; i < blockCount; i++)
@@ -148,6 +149,7 @@ public static class MarkdownParser
             if (fenceLen == 0 && fenceInfo.Count > 0)
             {
                 fenceLen = fenceInfo.Count;
+                fenceChar = fenceInfo.Char;
                 fenceLanguage = fenceInfo.Language;
                 result.Add(new ParsedBlock
                 {
@@ -161,7 +163,7 @@ public static class MarkdownParser
 
             if (fenceLen > 0)
             {
-                bool isClosing = fenceInfo.Count >= fenceLen;
+                bool isClosing = fenceInfo.Count >= fenceLen && fenceInfo.Char == fenceChar && fenceInfo.Language == null;
                 if (isClosing)
                     fenceLen = 0;
                 result.Add(new ParsedBlock
@@ -293,12 +295,13 @@ public static class MarkdownParser
         Dictionary<string, (string Url, string? Title)>? defs = null;
         Dictionary<string, RgbColor>? theme = null;
         int fenceLen = 0;
+        char fenceC = '\0';
         for (int i = 0; i < blockCount; i++)
         {
             string text = getBlockText(i);
-            int backticks = GetFenceBacktickCount(text);
-            if (fenceLen == 0 && backticks > 0) { fenceLen = backticks; continue; }
-            if (fenceLen > 0) { if (backticks >= fenceLen) fenceLen = 0; continue; }
+            var fi = GetFenceInfo(text);
+            if (fenceLen == 0 && fi.Count > 0) { fenceLen = fi.Count; fenceC = fi.Char; continue; }
+            if (fenceLen > 0) { if (fi.Count >= fenceLen && fi.Char == fenceC && fi.Language == null) fenceLen = 0; continue; }
 
             if (TryParseLinkDefinition(text, out string? label, out string? url, out string? title))
             {
@@ -864,22 +867,27 @@ public static class MarkdownParser
         return cells;
     }
 
-    public static bool IsFenceLine(string text) => GetFenceBacktickCount(text) > 0;
+    public static bool IsFenceLine(string text) => GetFenceInfo(text).Count > 0;
 
     public static int GetFenceBacktickCount(string text) => GetFenceInfo(text).Count;
 
-    internal static (int Count, string? Language) GetFenceInfo(string text)
+    internal static (int Count, string? Language, char Char) GetFenceInfo(string text)
     {
         var (chars, cols) = MeasureLeadingWhitespace(text);
-        if (cols >= 4) return (0, null);
+        if (cols >= 4) return (0, null, '\0');
         var trimmed = chars > 0 ? text[chars..] : text;
-        if (!trimmed.StartsWith("```")) return (0, null);
+
+        char fenceChar;
+        if (trimmed.StartsWith("```")) fenceChar = '`';
+        else if (trimmed.StartsWith("~~~")) fenceChar = '~';
+        else return (0, null, '\0');
+
         int count = 0;
-        while (count < trimmed.Length && trimmed[count] == '`') count++;
+        while (count < trimmed.Length && trimmed[count] == fenceChar) count++;
         var infoString = trimmed[count..];
-        if (infoString.Contains('`')) return (0, null);
+        if (fenceChar == '`' && infoString.Contains('`')) return (0, null, '\0');
         var lang = infoString.Trim().Split(' ', 2)[0];
-        return (count, lang.Length > 0 ? lang : null);
+        return (count, lang.Length > 0 ? lang : null, fenceChar);
     }
 
     internal static BlockKind ClassifyBlock(string text) => ClassifyBlock(text, out _, out _);
@@ -895,17 +903,17 @@ public static class MarkdownParser
         leadingColumns = cols;
         if (chars > 0) text = text[chars..];
 
-        if (text.StartsWith("######") && text.Length > 6 && text[6] == ' ')
+        if (text.StartsWith("######") && (text.Length == 6 || text[6] == ' '))
             return BlockKind.Heading6;
-        if (text.StartsWith("#####") && text.Length > 5 && text[5] == ' ')
+        if (text.StartsWith("#####") && !text.StartsWith("######") && (text.Length == 5 || text[5] == ' '))
             return BlockKind.Heading5;
-        if (text.StartsWith("####") && text.Length > 4 && text[4] == ' ')
+        if (text.StartsWith("####") && !text.StartsWith("#####") && (text.Length == 4 || text[4] == ' '))
             return BlockKind.Heading4;
-        if (text.StartsWith("###") && text.Length > 3 && text[3] == ' ')
+        if (text.StartsWith("###") && !text.StartsWith("####") && (text.Length == 3 || text[3] == ' '))
             return BlockKind.Heading3;
-        if (text.StartsWith("##") && text.Length > 2 && text[2] == ' ')
+        if (text.StartsWith("##") && !text.StartsWith("###") && (text.Length == 2 || text[2] == ' '))
             return BlockKind.Heading2;
-        if (text.StartsWith("#") && text.Length > 1 && text[1] == ' ')
+        if (text.StartsWith("#") && !text.StartsWith("##") && (text.Length == 1 || text[1] == ' '))
             return BlockKind.Heading1;
 
         if (IsThematicBreak(text))
@@ -924,7 +932,7 @@ public static class MarkdownParser
         if (GetOrderedListPrefixLength(text) > 0)
             return BlockKind.OrderedListItem;
 
-        if (text.StartsWith("> ") || text == ">")
+        if (text.StartsWith(">"))
             return BlockKind.Blockquote;
 
         leadingSpaces = 0;
@@ -1021,6 +1029,7 @@ public static class MarkdownParser
 
         int end = GetContentEnd(blockText);
         if (end == 0) return false;
+
         if (blockText[end - 1] != '\\') return false;
 
         int count = 0;
@@ -1068,6 +1077,7 @@ public static class MarkdownParser
         var styles = new InlineStyle[text.Length];
 
         MarkCodeSpans(text, styles);
+        MarkBackslashEscapes(text, styles);
         images = MarkImages(text, styles, defs);
         links = MarkLinks(text, styles, defs);
         links = MarkAutolinks(text, styles, links);
@@ -1076,6 +1086,25 @@ public static class MarkdownParser
 
         return BuildRuns(styles);
     }
+
+    private static void MarkBackslashEscapes(string text, InlineStyle[] styles)
+    {
+        for (int i = 0; i < text.Length - 1; i++)
+        {
+            if (styles[i] != InlineStyle.Normal) continue;
+            if (text[i] == '\\' && IsAsciiPunctuation(text[i + 1]))
+            {
+                styles[i] = InlineStyle.Bold; // backslash: hidden in emitter
+                styles[i + 1] = InlineStyle.Image; // escaped char: skipped by subsequent parsers, shown as Normal
+                i++;
+            }
+        }
+    }
+
+    private static bool IsAsciiPunctuation(char c) =>
+        c is '!' or '"' or '#' or '$' or '%' or '&' or '\'' or '(' or ')' or '*' or '+' or ','
+        or '-' or '.' or '/' or ':' or ';' or '<' or '=' or '>' or '?' or '@' or '[' or '\\'
+        or ']' or '^' or '_' or '`' or '{' or '|' or '}' or '~';
 
     private static void MarkCodeSpans(string text, InlineStyle[] styles)
     {
@@ -1123,7 +1152,7 @@ public static class MarkdownParser
     {
         List<InlineImage>? images = null;
         int i = 0;
-        while (i <= text.Length - 5) // minimum: ![](x)
+        while (i <= text.Length - 4) // minimum: ![x] (shortcut reference)
         {
             if (text[i] != '!' || styles[i] != InlineStyle.Normal ||
                 i + 1 >= text.Length || text[i + 1] != '[')
@@ -1134,7 +1163,7 @@ public static class MarkdownParser
 
             int altStart = i + 2;
             int bracketClose = FindMatchingBracket(text, altStart);
-            if (bracketClose < 0 || bracketClose + 1 >= text.Length)
+            if (bracketClose < 0)
             {
                 i++;
                 continue;
@@ -1145,7 +1174,7 @@ public static class MarkdownParser
             string? title;
             int end;
 
-            if (text[bracketClose + 1] == '(')
+            if (bracketClose + 1 < text.Length && text[bracketClose + 1] == '(')
             {
                 int parenOpen = bracketClose + 2;
                 int parenClose = ParseDestinationAndTitle(text, parenOpen, out url, out title);
@@ -1175,7 +1204,7 @@ public static class MarkdownParser
     {
         List<InlineLink>? links = null;
         int i = 0;
-        while (i <= text.Length - 4) // minimum: [](x)
+        while (i <= text.Length - 3) // minimum: [x] (shortcut reference)
         {
             if (text[i] != '[' || styles[i] != InlineStyle.Normal)
             {
@@ -1191,7 +1220,7 @@ public static class MarkdownParser
 
             int textStart = i + 1;
             int bracketClose = FindMatchingBracket(text, textStart);
-            if (bracketClose < 0 || bracketClose + 1 >= text.Length)
+            if (bracketClose < 0)
             {
                 i++;
                 continue;
@@ -1203,7 +1232,7 @@ public static class MarkdownParser
             int end;
             string? refLabel = null;
 
-            if (text[bracketClose + 1] == '(')
+            if (bracketClose + 1 < text.Length && text[bracketClose + 1] == '(')
             {
                 int parenOpen = bracketClose + 2;
                 int parenClose = ParseDestinationAndTitle(text, parenOpen, out url, out title);
@@ -1399,30 +1428,45 @@ public static class MarkdownParser
         Dictionary<string, (string Url, string? Title)>? defs, out string url, out string? title, out int end, out string refLabel)
     {
         url = ""; title = null; end = 0; refLabel = "";
-        if (defs == null || bracketClose + 1 >= text.Length || text[bracketClose + 1] != '[')
-            return false;
+        if (defs == null) return false;
 
-        int refStart = bracketClose + 2;
-        string label;
-
-        if (refStart < text.Length && text[refStart] == ']')
+        // Full reference [text][ref] or collapsed reference [text][]
+        if (bracketClose + 1 < text.Length && text[bracketClose + 1] == '[')
         {
-            label = fallbackLabel;
-            end = refStart + 1;
-        }
-        else
-        {
-            int refClose = text.IndexOf(']', refStart);
-            if (refClose < 0) return false;
-            label = text[refStart..refClose];
-            end = refClose + 1;
+            int refStart = bracketClose + 2;
+            string label;
+
+            if (refStart < text.Length && text[refStart] == ']')
+            {
+                label = fallbackLabel;
+                end = refStart + 1;
+            }
+            else
+            {
+                int refClose = text.IndexOf(']', refStart);
+                if (refClose < 0) return false;
+                label = text[refStart..refClose];
+                end = refClose + 1;
+            }
+
+            if (!defs.TryGetValue(label, out var def)) return false;
+            url = def.Url;
+            title = def.Title;
+            refLabel = label;
+            return true;
         }
 
-        if (!defs.TryGetValue(label, out var def)) return false;
-        url = def.Url;
-        title = def.Title;
-        refLabel = label;
-        return true;
+        // Shortcut reference [text]
+        if (defs.TryGetValue(fallbackLabel, out var shortcutDef))
+        {
+            url = shortcutDef.Url;
+            title = shortcutDef.Title;
+            end = bracketClose + 1;
+            refLabel = fallbackLabel;
+            return true;
+        }
+
+        return false;
     }
 
     private static int FindMatchingBracket(string text, int from)
@@ -1540,14 +1584,15 @@ public static class MarkdownParser
     {
         markers = null;
 
-        var delimiters = new List<(int Pos, int Count, bool CanOpen, bool CanClose)>();
+        var delimiters = new List<(int Pos, int Count, bool CanOpen, bool CanClose, char Char)>();
         int i = 0;
         while (i < text.Length)
         {
-            if (styles[i] != InlineStyle.Normal || text[i] != '*') { i++; continue; }
+            if (styles[i] != InlineStyle.Normal || (text[i] != '*' && text[i] != '_')) { i++; continue; }
 
+            char dc = text[i];
             int start = i;
-            while (i < text.Length && text[i] == '*' && styles[i] == InlineStyle.Normal) i++;
+            while (i < text.Length && text[i] == dc && styles[i] == InlineStyle.Normal) i++;
             int count = i - start;
 
             char before = start > 0 ? text[start - 1] : ' ';
@@ -1557,7 +1602,19 @@ public static class MarkdownParser
             bool rightFlanking = !char.IsWhiteSpace(before)
                 && (!char.IsPunctuation(before) || char.IsWhiteSpace(after) || char.IsPunctuation(after));
 
-            delimiters.Add((start, count, leftFlanking, rightFlanking));
+            bool canOpen, canClose;
+            if (dc == '*')
+            {
+                canOpen = leftFlanking;
+                canClose = rightFlanking;
+            }
+            else // '_'
+            {
+                canOpen = leftFlanking && (!rightFlanking || char.IsPunctuation(before));
+                canClose = rightFlanking && (!leftFlanking || char.IsPunctuation(after));
+            }
+
+            delimiters.Add((start, count, canOpen, canClose, dc));
         }
 
         for (int ci = 0; ci < delimiters.Count; ci++)
@@ -1569,6 +1626,7 @@ public static class MarkdownParser
             {
                 var opener = delimiters[oi];
                 if (!opener.CanOpen || opener.Count == 0) continue;
+                if (opener.Char != closer.Char) continue;
 
                 if ((opener.CanClose || closer.CanOpen) && (opener.Count + closer.Count) % 3 == 0
                     && opener.Count % 3 != 0 && closer.Count % 3 != 0)

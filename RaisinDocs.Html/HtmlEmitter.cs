@@ -1,5 +1,4 @@
 using System.Text;
-using System.Web;
 using RaisinDocs;
 
 namespace RaisinDocs.Html;
@@ -122,7 +121,7 @@ public static class HtmlEmitter
         if (innerBlocks.Count > 0)
             AppendInlineHtml(sb, content, innerBlocks[0], 0, options);
         else
-            sb.Append(HttpUtility.HtmlEncode(content));
+            sb.Append(HtmlEncode(content));
         sb.Append($"</h{level}>\n");
         return index + 1;
     }
@@ -147,25 +146,47 @@ public static class HtmlEmitter
         sb.Append("<p>");
         int i = start;
         bool first = true;
+        bool prevHadBreak = false;
         while (i < blocks.Count && blocks[i].Kind == BlockKind.Paragraph)
         {
             // Stop at blank lines
             if (string.IsNullOrWhiteSpace(lines[i]))
                 break;
 
-            if (!first)
+            if (!first && !prevHadBreak)
                 sb.Append('\n');
             first = false;
 
             var block = blocks[i];
             var text = lines[i];
-            bool hardBreak = MarkdownParser.IsTrailingHardBreak(block, text);
-            string content = hardBreak ? text[..^1] : text;
-            AppendInlineHtml(sb, content, block, 0, options);
 
-            if (hardBreak)
+            // Determine if there's a following line in this paragraph
+            bool hasNextLine = (i + 1) < blocks.Count
+                && blocks[i + 1].Kind == BlockKind.Paragraph
+                && !string.IsNullOrWhiteSpace(lines[i + 1])
+                && (i + 1 >= blocks.Count - 1 || blocks[i + 2].Kind != BlockKind.SetextUnderline);
+
+            // Hard breaks only apply when there's a continuation line
+            bool hardBreak = hasNextLine && MarkdownParser.IsTrailingHardBreak(block, text);
+            bool trailingSpaces = hasNextLine && !hardBreak && text.Length >= 2 && text[^1] == ' ' && text[^2] == ' ';
+            string content;
+            if (hardBreak) content = text[..^1];
+            else if (trailingSpaces) content = text.TrimEnd();
+            else content = text;
+
+            // CommonMark: strip leading/trailing whitespace from paragraph lines
+            int leadingSpaces = 0;
+            while (leadingSpaces < content.Length && content[leadingSpaces] == ' ') leadingSpaces++;
+            content = content.TrimStart();
+            if (!hardBreak && !trailingSpaces)
+                content = content.TrimEnd();
+
+            AppendInlineHtml(sb, content, block, leadingSpaces, options);
+
+            if (hardBreak || trailingSpaces)
                 sb.Append("<br />\n");
 
+            prevHadBreak = hardBreak || trailingSpaces;
             i++;
 
             // Stop if next block is a setext underline (belongs to this paragraph as heading)
@@ -180,10 +201,16 @@ public static class HtmlEmitter
     {
         // First block should be the fence delimiter
         var firstBlock = blocks[start];
-        string? language = firstBlock.CodeLanguage;
+        string? language = firstBlock.CodeLanguage != null ? ProcessBackslashEscapes(firstBlock.CodeLanguage) : null;
+
+        // Determine opening fence indentation (strip up to this many spaces from content)
+        int fenceIndent = 0;
+        string fenceLine = lines[start];
+        while (fenceIndent < fenceLine.Length && fenceLine[fenceIndent] == ' ' && fenceIndent < 3)
+            fenceIndent++;
 
         if (language != null)
-            sb.Append($"<pre><code class=\"language-{HttpUtility.HtmlAttributeEncode(language)}\">");
+            sb.Append($"<pre><code class=\"language-{HtmlEncodeAttribute(language)}\">");
         else
             sb.Append("<pre><code>");
 
@@ -202,7 +229,8 @@ public static class HtmlEmitter
             if (blocks[i].Kind != BlockKind.FencedCodeLine)
                 break;
 
-            sb.Append(HttpUtility.HtmlEncode(lines[i]));
+            string contentLine = fenceIndent > 0 ? RemoveIndent(lines[i], fenceIndent) : lines[i];
+            sb.Append(HtmlEncode(contentLine));
             sb.Append('\n');
             i++;
         }
@@ -214,15 +242,23 @@ public static class HtmlEmitter
     static int RenderIndentedCode(StringBuilder sb, List<ParsedBlock> blocks, List<string> lines, int start)
     {
         sb.Append("<pre><code>");
+        // Collect content lines, then strip leading/trailing blank lines
+        var contentLines = new List<string>();
         int i = start;
         while (i < blocks.Count && blocks[i].Kind == BlockKind.IndentedCodeLine)
         {
-            string text = lines[i];
-            // Remove the 4-space indent
-            string content = RemoveIndent(text, 4);
-            sb.Append(HttpUtility.HtmlEncode(content));
-            sb.Append('\n');
+            string content = RemoveIndent(lines[i], 4);
+            contentLines.Add(content);
             i++;
+        }
+        while (contentLines.Count > 0 && string.IsNullOrWhiteSpace(contentLines[^1]))
+            contentLines.RemoveAt(contentLines.Count - 1);
+        while (contentLines.Count > 0 && string.IsNullOrWhiteSpace(contentLines[0]))
+            contentLines.RemoveAt(0);
+        foreach (var line in contentLines)
+        {
+            sb.Append(HtmlEncode(line));
+            sb.Append('\n');
         }
         sb.Append("</code></pre>\n");
         return i;
@@ -268,7 +304,7 @@ public static class HtmlEmitter
             if (innerBlocks.Count > 0)
                 AppendInlineHtml(sb, content, innerBlocks[0], 0, options);
             else
-                sb.Append(HttpUtility.HtmlEncode(content));
+                sb.Append(HtmlEncode(content));
             sb.Append("</li>\n");
             i++;
         }
@@ -293,7 +329,7 @@ public static class HtmlEmitter
             if (innerBlocks.Count > 0)
                 AppendInlineHtml(sb, content, innerBlocks[0], 0, options);
             else
-                sb.Append(HttpUtility.HtmlEncode(content));
+                sb.Append(HtmlEncode(content));
             sb.Append("</li>\n");
             i++;
         }
@@ -317,7 +353,7 @@ public static class HtmlEmitter
             if (innerBlocks.Count > 0)
                 AppendInlineHtml(sb, content, innerBlocks[0], 0, options);
             else
-                sb.Append(HttpUtility.HtmlEncode(content));
+                sb.Append(HtmlEncode(content));
             sb.Append("</li>\n");
             i++;
         }
@@ -350,7 +386,7 @@ public static class HtmlEmitter
                 var (cs, ce) = cells[c].TrimContent(lines[start]);
                 string cellText = lines[start][cs..ce];
                 sb.Append($"<th{alignAttr}>");
-                sb.Append(HttpUtility.HtmlEncode(cellText));
+                sb.Append(HtmlEncode(cellText));
                 sb.Append("</th>\n");
             }
         }
@@ -385,7 +421,7 @@ public static class HtmlEmitter
                         var (cs, ce) = row.Cells[c].TrimContent(lines[i]);
                         string cellText = lines[i][cs..ce];
                         sb.Append($"<td{alignAttr}>");
-                        sb.Append(HttpUtility.HtmlEncode(cellText));
+                        sb.Append(HtmlEncode(cellText));
                         sb.Append("</td>\n");
                     }
                 }
@@ -417,12 +453,24 @@ public static class HtmlEmitter
         // Build a set of hidden ranges (delimiter characters to skip)
         var hidden = new HashSet<int>();
 
-        // Emphasis markers (*, **, ***, ~~)
+        // Emphasis markers (*, **, ***, ~~, _)
         if (emphMarkers != null)
         {
             foreach (var m in emphMarkers)
                 for (int j = m.Start; j < m.Start + m.Length; j++)
                     hidden.Add(j);
+        }
+
+        // Backslash escapes: the backslash is marked as Bold by MarkBackslashEscapes
+        foreach (var run in runs)
+        {
+            if (run.Style == InlineStyle.Bold && run.Length == 1)
+            {
+                int bsPos = run.Start;
+                int bsTi = bsPos - offset;
+                if (bsTi >= 0 && bsTi < text.Length && text[bsTi] == '\\')
+                    hidden.Add(bsPos);
+            }
         }
 
         // Code span delimiters: find backtick boundaries within Code runs
@@ -472,9 +520,9 @@ public static class HtmlEmitter
         {
             foreach (var img in images)
             {
-                string alt = HttpUtility.HtmlEncode(img.AltText);
-                string url = HttpUtility.HtmlEncode(img.Url);
-                string titleAttr = img.Title != null ? $" title=\"{HttpUtility.HtmlEncode(img.Title)}\"" : "";
+                string alt = HtmlEncode(ProcessBackslashEscapes(img.AltText));
+                string url = HtmlEncode(ProcessBackslashEscapes(img.Url));
+                string titleAttr = img.Title != null ? $" title=\"{HtmlEncode(ProcessBackslashEscapes(img.Title))}\"" : "";
                 replacements.Add((img.Start, img.Start + img.Length, $"<img src=\"{url}\" alt=\"{alt}\"{titleAttr} />"));
             }
         }
@@ -483,9 +531,9 @@ public static class HtmlEmitter
         {
             foreach (var link in links)
             {
-                string url = HttpUtility.HtmlEncode(link.Url);
-                string titleAttr = link.Title != null ? $" title=\"{HttpUtility.HtmlEncode(link.Title)}\"" : "";
-                string linkText = HttpUtility.HtmlEncode(link.Text);
+                string url = HtmlEncode(ProcessBackslashEscapes(link.Url));
+                string titleAttr = link.Title != null ? $" title=\"{HtmlEncode(ProcessBackslashEscapes(link.Title))}\"" : "";
+                string linkText = HtmlEncode(ProcessBackslashEscapes(link.Text));
                 replacements.Add((link.Start, link.Start + link.Length, $"<a href=\"{url}\"{titleAttr}>{linkText}</a>"));
             }
         }
@@ -538,7 +586,7 @@ public static class HtmlEmitter
                 if (currentStyle != null) OpenTag(sb, currentStyle.Value);
             }
 
-            sb.Append(HttpUtility.HtmlEncode(text[(pos - offset)..(pos - offset + 1)]));
+            sb.Append(HtmlEncode(text[(pos - offset)..(pos - offset + 1)]));
             pos++;
         }
 
@@ -687,5 +735,51 @@ public static class HtmlEmitter
             else break;
         }
         return text[i..];
+    }
+
+    static string ProcessBackslashEscapes(string text)
+    {
+        if (!text.Contains('\\')) return text;
+        var sb = new StringBuilder(text.Length);
+        for (int i = 0; i < text.Length; i++)
+        {
+            if (text[i] == '\\' && i + 1 < text.Length && IsAsciiPunctuation(text[i + 1]))
+            {
+                sb.Append(text[i + 1]);
+                i++;
+            }
+            else
+            {
+                sb.Append(text[i]);
+            }
+        }
+        return sb.ToString();
+    }
+
+    static bool IsAsciiPunctuation(char c) =>
+        c is '!' or '"' or '#' or '$' or '%' or '&' or '\'' or '(' or ')' or '*' or '+' or ','
+        or '-' or '.' or '/' or ':' or ';' or '<' or '=' or '>' or '?' or '@' or '[' or '\\'
+        or ']' or '^' or '_' or '`' or '{' or '|' or '}' or '~';
+
+    static string HtmlEncode(string text)
+    {
+        var sb = new StringBuilder(text.Length);
+        foreach (char c in text)
+        {
+            switch (c)
+            {
+                case '&': sb.Append("&amp;"); break;
+                case '<': sb.Append("&lt;"); break;
+                case '>': sb.Append("&gt;"); break;
+                case '"': sb.Append("&quot;"); break;
+                default: sb.Append(c); break;
+            }
+        }
+        return sb.ToString();
+    }
+
+    static string HtmlEncodeAttribute(string text)
+    {
+        return HtmlEncode(text);
     }
 }

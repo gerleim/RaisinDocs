@@ -37,7 +37,7 @@ public class SyntaxHighlightingTests
     [Fact]
     public void GetFenceInfo_ExtractsLanguage()
     {
-        var (count, lang) = MarkdownParser.GetFenceInfo("```csharp");
+        var (count, lang, _) = MarkdownParser.GetFenceInfo("```csharp");
         count.Should().Be(3);
         lang.Should().Be("csharp");
     }
@@ -45,7 +45,7 @@ public class SyntaxHighlightingTests
     [Fact]
     public void GetFenceInfo_TrimsWhitespace()
     {
-        var (count, lang) = MarkdownParser.GetFenceInfo("```  python  ");
+        var (count, lang, _) = MarkdownParser.GetFenceInfo("```  python  ");
         count.Should().Be(3);
         lang.Should().Be("python");
     }
@@ -53,7 +53,7 @@ public class SyntaxHighlightingTests
     [Fact]
     public void GetFenceInfo_NullLanguage_WhenEmpty()
     {
-        var (count, lang) = MarkdownParser.GetFenceInfo("```");
+        var (count, lang, _) = MarkdownParser.GetFenceInfo("```");
         count.Should().Be(3);
         lang.Should().BeNull();
     }
@@ -61,7 +61,7 @@ public class SyntaxHighlightingTests
     [Fact]
     public void GetFenceInfo_RejectsBacktickInInfoString()
     {
-        var (count, _) = MarkdownParser.GetFenceInfo("```foo`bar");
+        var (count, _, _) = MarkdownParser.GetFenceInfo("```foo`bar");
         count.Should().Be(0);
     }
 

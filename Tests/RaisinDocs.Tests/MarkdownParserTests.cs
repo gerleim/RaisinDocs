@@ -76,10 +76,10 @@ public class MarkdownParserTests
     }
 
     [Fact]
-    public void HashAlone_IsParagraph()
+    public void HashAlone_IsHeading()
     {
         var result = ParseBlocks("#");
-        result[0].Kind.Should().Be(BlockKind.Paragraph);
+        result[0].Kind.Should().Be(BlockKind.Heading1);
     }
 
     [Fact]
@@ -1144,10 +1144,10 @@ public class MarkdownParserTests
     }
 
     [Fact]
-    public void GreaterThan_WithoutSpace_IsParagraph()
+    public void GreaterThan_WithoutSpace_IsBlockquote()
     {
         var result = ParseBlocks(">nospace");
-        result[0].Kind.Should().Be(BlockKind.Paragraph);
+        result[0].Kind.Should().Be(BlockKind.Blockquote);
     }
 
     // --- Multiple blocks ---
