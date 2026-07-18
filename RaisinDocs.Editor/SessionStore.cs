@@ -9,6 +9,7 @@ internal class SessionState
     public List<string> OpenFiles { get; set; } = [];
     public int ActiveTabIndex { get; set; }
     public DocsEditorState? EditorState { get; set; }
+    public List<string> RecentFiles { get; set; } = [];
 }
 
 internal class SessionStore : DurableJsonStore<SessionState>

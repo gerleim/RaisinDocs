@@ -21,8 +21,11 @@ public partial class MainWindow : Window
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "RaisinDocs", "editor-session.json");
 
+    private const int MaxRecentFiles = 10;
+
     private readonly SessionStore _sessionStore = new(SessionPath);
     private readonly List<DocumentTab> _tabs = [];
+    private readonly List<string> _recentFiles = [];
 
     private DocsEditorState _editorState = new()
     {
@@ -208,6 +211,7 @@ public partial class MainWindow : Window
         var editor = ActiveTab?.Editor;
         TocMenuItem.IsChecked = editor?.ShowToc ?? false;
         MinimapMenuItem.IsChecked = editor?.ShowMinimap ?? false;
+        PageBreaksMenuItem.IsChecked = editor?.Canvas.ShowPageBreaks ?? false;
     }
 
     private void Toc_Click(object sender, RoutedEventArgs e) =>
@@ -215,6 +219,13 @@ public partial class MainWindow : Window
 
     private void Minimap_Click(object sender, RoutedEventArgs e) =>
         ActiveTab?.Editor.Canvas.ToggleMinimap();
+
+    private void PageBreaks_Click(object sender, RoutedEventArgs e)
+    {
+        var canvas = ActiveTab?.Editor.Canvas;
+        if (canvas != null)
+            canvas.SetShowPageBreaks(!canvas.ShowPageBreaks);
+    }
 
     private void CloseTab(DocumentTab tab)
     {
@@ -275,6 +286,31 @@ public partial class MainWindow : Window
         }
     }
 
+    private void AddRecentFile(string path)
+    {
+        _recentFiles.RemoveAll(f => string.Equals(f, path, StringComparison.OrdinalIgnoreCase));
+        _recentFiles.Insert(0, path);
+        if (_recentFiles.Count > MaxRecentFiles)
+            _recentFiles.RemoveRange(MaxRecentFiles, _recentFiles.Count - MaxRecentFiles);
+    }
+
+    private void RecentFiles_SubmenuOpened(object sender, RoutedEventArgs e)
+    {
+        RecentFilesMenuItem.Items.Clear();
+        if (_recentFiles.Count == 0)
+        {
+            RecentFilesMenuItem.Items.Add(new MenuItem { Header = "(empty)", IsEnabled = false });
+            return;
+        }
+        foreach (var path in _recentFiles)
+        {
+            var item = new MenuItem { Header = path.Replace("_", "__") };
+            var captured = path;
+            item.Click += (_, _) => TryOpenFileFromPath(captured);
+            RecentFilesMenuItem.Items.Add(item);
+        }
+    }
+
     private void SaveSession()
     {
         var state = new SessionState
@@ -284,6 +320,7 @@ public partial class MainWindow : Window
                 .Select(t => t.FilePath!)
                 .ToList(),
             ActiveTabIndex = ActiveTab != null ? _tabs.IndexOf(ActiveTab) : 0,
+            RecentFiles = new List<string>(_recentFiles),
         };
 
         if (ActiveTab != null)
@@ -298,6 +335,8 @@ public partial class MainWindow : Window
 
         if (session.EditorState != null)
             _editorState = session.EditorState;
+
+        _recentFiles.AddRange(session.RecentFiles);
 
         foreach (var path in session.OpenFiles)
         {
@@ -336,6 +375,8 @@ public partial class MainWindow : Window
 
     private void OpenFileInTab(string path)
     {
+        AddRecentFile(path);
+
         if (_tabs.Count == 1 && _tabs[0].FilePath == null && !_tabs[0].Editor.IsDirty)
         {
             var tab = _tabs[0];
@@ -357,6 +398,7 @@ public partial class MainWindow : Window
         tab.Editor.DocumentBasePath = Path.GetDirectoryName(path)!;
         File.WriteAllText(path, tab.Editor.GetText());
         tab.Editor.MarkClean();
+        AddRecentFile(path);
         UpdateTabHeader(tab);
         UpdateTitle();
     }

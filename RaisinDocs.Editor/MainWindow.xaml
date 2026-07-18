@@ -89,6 +89,10 @@
                 <MenuItem Header="_Save" Click="Save_Click" InputGestureText="Ctrl+S" />
                 <MenuItem Header="Save _As..." Click="SaveAs_Click" InputGestureText="Ctrl+Shift+S" />
                 <Separator />
+                <MenuItem x:Name="RecentFilesMenuItem" Header="_Recent Files" SubmenuOpened="RecentFiles_SubmenuOpened">
+                    <MenuItem Header="(empty)" IsEnabled="False" />
+                </MenuItem>
+                <Separator />
                 <MenuItem Header="_Print..." Click="Print_Click" InputGestureText="Ctrl+P" />
                 <Separator />
                 <MenuItem Header="Close _Tab" Click="CloseTab_Click" InputGestureText="Ctrl+W" />
@@ -109,6 +113,7 @@
             <MenuItem Header="_View" SubmenuOpened="View_SubmenuOpened">
                 <MenuItem x:Name="TocMenuItem" Header="Table of _Contents" Click="Toc_Click" IsCheckable="True" InputGestureText="Ctrl+T" />
                 <MenuItem x:Name="MinimapMenuItem" Header="Mi_nimap" Click="Minimap_Click" IsCheckable="True" />
+                <MenuItem x:Name="PageBreaksMenuItem" Header="_Page Breaks" Click="PageBreaks_Click" IsCheckable="True" />
             </MenuItem>
         </Menu>
         <TabControl x:Name="TabControl" SelectionChanged="TabControl_SelectionChanged" />
