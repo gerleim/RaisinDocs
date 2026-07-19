@@ -256,5 +256,6 @@ public partial class DocsEditor : UserControl
     {
         var editor = (DocsEditor)d;
         editor.PART_Canvas.DocumentBasePath = (string?)e.NewValue;
+        editor.PART_Canvas.OnDocumentBasePathChanged();
     }
 }

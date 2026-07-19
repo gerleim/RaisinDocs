@@ -10,11 +10,16 @@ internal sealed class SpellCheckService : IDisposable
 {
     private WordList? _wordList;
     private readonly HashSet<string> _userDictionary = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> _projectDictionary = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _sessionIgnores = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, bool> _cache = new(StringComparer.OrdinalIgnoreCase);
     private string? _userDictionaryPath;
+    private string? _projectDictionaryPath;
+
+    public const string ProjectDictionaryFileName = "custom-dictionary.txt";
 
     public bool IsLoaded => _wordList is not null;
+    public bool HasProjectDictionary => _projectDictionaryPath is not null;
 
     public void LoadEmbeddedDictionary()
     {
@@ -35,6 +40,7 @@ internal sealed class SpellCheckService : IDisposable
         if (_wordList is null) return true;
         if (_sessionIgnores.Contains(word)) return true;
         if (_userDictionary.Contains(word)) return true;
+        if (_projectDictionary.Contains(word)) return true;
 
         if (_cache.TryGetValue(word, out var cached))
             return cached;
@@ -65,7 +71,61 @@ internal sealed class SpellCheckService : IDisposable
             _cache.Remove(word);
     }
 
+    public void LoadProjectDictionary(string? basePath)
+    {
+        _projectDictionary.Clear();
+        _projectDictionaryPath = null;
+        _cache.Clear();
+
+        if (string.IsNullOrEmpty(basePath)) return;
+
+        var path = FindProjectDictionary(basePath);
+        if (path is null) return;
+
+        _projectDictionaryPath = path;
+        foreach (var line in File.ReadLines(path))
+        {
+            var trimmed = line.Trim();
+            if (trimmed.Length > 0 && !trimmed.StartsWith('#'))
+                _projectDictionary.Add(trimmed);
+        }
+    }
+
+    public void AddToProjectDictionary(string word)
+    {
+        if (_projectDictionaryPath is null) return;
+        if (_projectDictionary.Add(word))
+        {
+            _cache.Remove(word);
+            SaveProjectDictionary();
+        }
+    }
+
     public void ClearCache() => _cache.Clear();
+
+    private static string? FindProjectDictionary(string basePath)
+    {
+        var dir = basePath;
+        while (dir is not null)
+        {
+            var candidate = Path.Combine(dir, ProjectDictionaryFileName);
+            if (File.Exists(candidate))
+                return candidate;
+
+            if (Directory.Exists(Path.Combine(dir, ".git")))
+                return null;
+
+            dir = Path.GetDirectoryName(dir);
+        }
+        return null;
+    }
+
+    private void SaveProjectDictionary()
+    {
+        if (_projectDictionaryPath is null) return;
+        File.WriteAllLines(_projectDictionaryPath,
+            _projectDictionary.OrderBy(w => w, StringComparer.OrdinalIgnoreCase));
+    }
 
     private void LoadUserDictionary()
     {

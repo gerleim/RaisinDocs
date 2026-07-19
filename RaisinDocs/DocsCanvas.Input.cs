@@ -1200,9 +1200,14 @@ public partial class DocsCanvas
 
         bool hasItems = false;
 
+        if (_spellCheckEnabled)
+            hasItems = AddSpellCheckMenuItems(menu, position);
+
         bool hasBg = _doc.HasSelection ? SelectionHasBackground() : CursorHasBackground();
         if (hasBg)
         {
+            if (hasItems)
+                menu.Items.Add(new Separator());
             var clearBackground = new MenuItem { Header = "Clear background" };
             ApplyMenuItemStyle(clearBackground);
             clearBackground.Click += (_, _) =>

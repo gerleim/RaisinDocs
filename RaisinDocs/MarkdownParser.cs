@@ -1150,11 +1150,13 @@ public static class MarkdownParser
 
         var styles = new InlineStyle[text.Length];
 
-        MarkCodeSpans(text, styles);
+        MarkCodeSpansAndHtml(text, styles);
         MarkBackslashEscapes(text, styles);
+        links = MarkAngleBracketAutolinks(text, styles);
         images = MarkImages(text, styles, defs);
-        links = MarkLinks(text, styles, defs);
+        links = MarkLinks(text, styles, defs, links);
         links = MarkAutolinks(text, styles, links);
+        links?.Sort((a, b) => a.Start.CompareTo(b.Start));
         MarkStrikethrough(text, styles);
         MarkEmphasis(text, styles, out emphasisMarkers);
 
@@ -1285,23 +1287,32 @@ public static class MarkdownParser
         return -1;
     }
 
-    private static void MarkCodeSpans(string text, InlineStyle[] styles)
+    private static void MarkCodeSpansAndHtml(string text, InlineStyle[] styles)
     {
         int i = 0;
         while (i < text.Length)
         {
+            if (text[i] == '<' && styles[i] == InlineStyle.Normal)
+            {
+                int end = TryMatchInlineHtmlTag(text, i);
+                if (end > 0)
+                {
+                    for (int j = i; j < end; j++)
+                        styles[j] = InlineStyle.Link;
+                    i = end;
+                    continue;
+                }
+                int abEnd = TryMatchAngleBracketAutolink(text, i);
+                if (abEnd > 0)
+                {
+                    i = abEnd;
+                    continue;
+                }
+            }
+
             if (text[i] == '`')
             {
                 int start = i;
-                // Check if preceded by odd number of backslashes (escaped opener)
-                int bs = 0;
-                while (start - 1 - bs >= 0 && text[start - 1 - bs] == '\\') bs++;
-                if (bs % 2 != 0)
-                {
-                    i++;
-                    continue;
-                }
-
                 int backtickCount = 0;
                 while (i < text.Length && text[i] == '`') { backtickCount++; i++; }
 
@@ -1318,6 +1329,33 @@ public static class MarkdownParser
                 i++;
             }
         }
+    }
+
+    private static int TryMatchAngleBracketAutolink(string text, int start)
+    {
+        int closeAngle = text.IndexOf('>', start + 1);
+        if (closeAngle < 0 || closeAngle == start + 1) return -1;
+        for (int j = start + 1; j < closeAngle; j++)
+        {
+            char c = text[j];
+            if (c == '<' || c == ' ' || c == '\t') return -1;
+        }
+        var inner = text.AsSpan(start + 1, closeAngle - start - 1);
+        int colonPos = inner.IndexOf(':');
+        if (colonPos >= 2 && colonPos <= 32)
+        {
+            bool schemeValid = char.IsAsciiLetter(inner[0]);
+            for (int j = 1; j < colonPos && schemeValid; j++)
+            {
+                char sc = inner[j];
+                if (!char.IsAsciiLetterOrDigit(sc) && sc != '+' && sc != '-' && sc != '.') schemeValid = false;
+            }
+            if (schemeValid && inner.Length > colonPos + 1)
+                return closeAngle + 1;
+        }
+        if (IsEmailAutolink(inner))
+            return closeAngle + 1;
+        return -1;
     }
 
     private static int FindClosingBackticks(string text, int searchFrom, int count)
@@ -1388,9 +1426,8 @@ public static class MarkdownParser
     }
 
     private static List<InlineLink>? MarkLinks(string text, InlineStyle[] styles,
-        Dictionary<string, (string Url, string? Title)>? defs = null)
+        Dictionary<string, (string Url, string? Title)>? defs = null, List<InlineLink>? links = null)
     {
-        List<InlineLink>? links = null;
 
         // Collect opener positions ([ characters with Normal style, not preceded by image !)
         var openers = new List<int>();
@@ -1477,6 +1514,18 @@ public static class MarkdownParser
                 active[oi] = false;
 
             ci = end - 1;
+        }
+        return links;
+    }
+
+    private static List<InlineLink>? MarkAngleBracketAutolinks(string text, InlineStyle[] styles)
+    {
+        List<InlineLink>? links = null;
+        for (int i = 0; i < text.Length; i++)
+        {
+            if (styles[i] != InlineStyle.Normal || text[i] != '<') continue;
+            links = TryAngleBracketAutolink(text, styles, links, i, out int abEnd);
+            if (abEnd > i) { i = abEnd - 1; }
         }
         return links;
     }

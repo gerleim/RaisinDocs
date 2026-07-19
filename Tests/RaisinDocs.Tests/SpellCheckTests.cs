@@ -194,6 +194,27 @@ public class ExtractCheckableWordsTests
         var words = MarkdownParser.ExtractCheckableWords(text, parsed);
         words.Select(w => w.Word).Should().BeEquivalentTo(["todo", "item"]);
     }
+
+    [Fact]
+    public void ColorTag_SkipsTagSyntax_ChecksContent()
+    {
+        var words = ExtractWords("<!--@bg:orange-->nott corect<!--/@bg-->");
+        words.Select(w => w.Word).Should().BeEquivalentTo(["nott", "corect"]);
+    }
+
+    [Fact]
+    public void InlineFgColorTag_SkipsTagSyntax_ChecksContent()
+    {
+        var words = ExtractWords("<!--@fg:red-->misspeled<!--/@fg--> word");
+        words.Select(w => w.Word).Should().BeEquivalentTo(["misspeled", "word"]);
+    }
+
+    [Fact]
+    public void HtmlComment_IsSkipped()
+    {
+        var words = ExtractWords("hello <!-- some comment --> world");
+        words.Select(w => w.Word).Should().BeEquivalentTo(["hello", "world"]);
+    }
 }
 
 public class SpellCheckServiceTests
@@ -260,5 +281,78 @@ public class SpellCheckServiceTests
         svc.LoadEmbeddedDictionary();
         svc.Check("Hello").Should().BeTrue();
         svc.Check("hello").Should().BeTrue();
+    }
+
+    [Fact]
+    public void ProjectDictionary_WordPassesCheck()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "RaisinSpellTest_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            File.WriteAllText(Path.Combine(dir, SpellCheckService.ProjectDictionaryFileName),
+                "DocsCanvas\nRaisinDocs\n");
+
+            using var svc = new SpellCheckService();
+            svc.LoadEmbeddedDictionary();
+            svc.Check("DocsCanvas").Should().BeFalse();
+
+            svc.LoadProjectDictionary(dir);
+            svc.HasProjectDictionary.Should().BeTrue();
+            svc.Check("DocsCanvas").Should().BeTrue();
+            svc.Check("RaisinDocs").Should().BeTrue();
+        }
+        finally
+        {
+            Directory.Delete(dir, true);
+        }
+    }
+
+    [Fact]
+    public void ProjectDictionary_CommentsAreIgnored()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "RaisinSpellTest_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            File.WriteAllText(Path.Combine(dir, SpellCheckService.ProjectDictionaryFileName),
+                "# Project terms\nDocsCanvas\n");
+
+            using var svc = new SpellCheckService();
+            svc.LoadEmbeddedDictionary();
+            svc.LoadProjectDictionary(dir);
+            svc.Check("DocsCanvas").Should().BeTrue();
+        }
+        finally
+        {
+            Directory.Delete(dir, true);
+        }
+    }
+
+    [Fact]
+    public void ProjectDictionary_NullBasePath_NoError()
+    {
+        using var svc = new SpellCheckService();
+        svc.LoadEmbeddedDictionary();
+        svc.LoadProjectDictionary(null);
+        svc.HasProjectDictionary.Should().BeFalse();
+    }
+
+    [Fact]
+    public void ProjectDictionary_NoFile_NoError()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "RaisinSpellTest_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            using var svc = new SpellCheckService();
+            svc.LoadEmbeddedDictionary();
+            svc.LoadProjectDictionary(dir);
+            svc.HasProjectDictionary.Should().BeFalse();
+        }
+        finally
+        {
+            Directory.Delete(dir, true);
+        }
     }
 }

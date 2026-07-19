@@ -177,7 +177,11 @@ public partial class DocsCanvas : FrameworkElement
 
     public event EventHandler? IsDirtyChanged;
 
-    public void MarkClean() => IsDirty = false;
+    public void MarkClean()
+    {
+        _doc.MarkClean();
+        IsDirty = false;
+    }
 
     public bool IsReadOnly { get; set; }
 
@@ -300,8 +304,10 @@ public partial class DocsCanvas : FrameworkElement
     public void SetText(string text)
     {
         _doc.SetText(text);
+        _doc.MarkClean();
         IsDirty = false;
         InvalidateLayout();
+        OnContentChangedForSpellCheck();
     }
 
     public void ToggleTheme() => SetCurrentValue(ThemeProperty, Theme switch
@@ -792,7 +798,6 @@ public partial class DocsCanvas : FrameworkElement
         _parsedBlocks = null;
         _visualMaps = null;
         _blockToGroup = null;
-        _blockSpellingErrors = null;
         InvalidateSearchOnContentChange();
         InvalidateVisual();
     }

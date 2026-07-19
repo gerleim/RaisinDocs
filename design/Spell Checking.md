@@ -254,11 +254,13 @@ Within checkable blocks, skip the ranges listed in Word Extraction above.
 - `DocsEditorState` serialization, `DocsEditor` GetState/ApplyState integration
 - New partial class: `DocsCanvas.SpellCheck.cs`
 
-### Phase 3: Context menu + user dictionary
-- Right-click hit-testing against `SpellingError` ranges
-- Context menu with suggestions, Ignore All, Add to Dictionary
-- User dictionary file persistence
-- `DocsEditorState` serialization
+### Phase 3: Context menu + user dictionary ✅
+- Right-click hit-testing via `FindSpellingErrorAt` (reuses `HitTestToPosition`)
+- Context menu with up to 5 bold suggestions, "Ignore All", "Add to Dictionary"
+- Suggestion click replaces word via undoable `ReplaceWord` (BeginUndoGroup/SealUndoGroup)
+- Ignore All clears from cache and rechecks all blocks
+- Add to Dictionary persists to `%APPDATA%/Raisin/RaisinDocs/user-dictionary.txt`
+- Integrates with existing context menu (spell items appear above "Clear background")
 
 ### Phase 4: Polish
 - Performance tuning: word cache size, recheck batch limits

@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Threading;
 
@@ -34,12 +35,21 @@ public partial class DocsCanvas
         InvalidateVisual();
     }
 
+    internal void OnDocumentBasePathChanged()
+    {
+        if (_spellCheckService is null) return;
+        _spellCheckService.LoadProjectDictionary(DocumentBasePath);
+        if (_spellCheckEnabled)
+            RecheckAllBlocks();
+    }
+
     private void EnsureSpellCheckInitialized()
     {
         if (_spellCheckService is not null) return;
 
         _spellCheckService = new SpellCheckService();
         _spellCheckService.LoadEmbeddedDictionary();
+        _spellCheckService.LoadProjectDictionary(DocumentBasePath);
 
         _spellErrorPen = new Pen(Brushes.Red, 0.75);
         _spellErrorPen.Freeze();
@@ -55,8 +65,7 @@ public partial class DocsCanvas
     {
         if (!_spellCheckEnabled || _spellCheckService is null) return;
 
-        for (int i = 0; i < _doc.BlockCount; i++)
-            _dirtySpellBlocks.Add(i);
+        _dirtySpellBlocks.Add(_doc.CursorBlock);
 
         _spellCheckTimer?.Stop();
         _spellCheckTimer?.Start();
@@ -71,8 +80,9 @@ public partial class DocsCanvas
 
         if (_blockSpellingErrors is null || _blockSpellingErrors.Count != _doc.BlockCount)
         {
-            _blockSpellingErrors = new List<IReadOnlyList<SpellingError>?>(
-                Enumerable.Repeat<IReadOnlyList<SpellingError>?>(null, _doc.BlockCount));
+            RecheckAllBlocks();
+            InvalidateVisual();
+            return;
         }
 
         foreach (var blockIdx in _dirtySpellBlocks)
@@ -250,6 +260,113 @@ public partial class DocsCanvas
         }
         geometry.Freeze();
         dc.DrawGeometry(null, _spellErrorPen, geometry);
+    }
+
+    private SpellingError? FindSpellingErrorAt(int blockIndex, int charOffset)
+    {
+        if (_blockSpellingErrors is null || blockIndex >= _blockSpellingErrors.Count) return null;
+        var errors = _blockSpellingErrors[blockIndex];
+        if (errors is null) return null;
+
+        foreach (var err in errors)
+        {
+            if (charOffset >= err.StartOffset && charOffset < err.StartOffset + err.Length)
+                return err;
+        }
+        return null;
+    }
+
+    private bool AddSpellCheckMenuItems(ContextMenu menu, Point position)
+    {
+        if (_spellCheckService is null || _blockSpellingErrors is null) return false;
+
+        HitTestToPosition(position, out int blockIndex, out int charOffset);
+        var error = FindSpellingErrorAt(blockIndex, charOffset);
+        if (error is null) return false;
+
+        var err = error.Value;
+        var suggestions = _spellCheckService.Suggest(err.Word);
+
+        if (suggestions.Count > 0)
+        {
+            foreach (var suggestion in suggestions)
+            {
+                var item = new MenuItem { Header = suggestion, FontWeight = FontWeights.Bold };
+                ApplyMenuItemStyle(item);
+                var capturedSuggestion = suggestion;
+                var capturedBlock = blockIndex;
+                var capturedErr = err;
+                item.Click += (_, _) =>
+                {
+                    ReplaceWord(capturedBlock, capturedErr.StartOffset, capturedErr.Length, capturedSuggestion);
+                    Focus();
+                };
+                menu.Items.Add(item);
+            }
+        }
+        else
+        {
+            var noSuggestions = new MenuItem { Header = "(no suggestions)", IsEnabled = false };
+            ApplyMenuItemStyle(noSuggestions);
+            menu.Items.Add(noSuggestions);
+        }
+
+        menu.Items.Add(new Separator());
+
+        var ignoreItem = new MenuItem { Header = "Ignore All" };
+        ApplyMenuItemStyle(ignoreItem);
+        var wordToIgnore = err.Word;
+        ignoreItem.Click += (_, _) =>
+        {
+            _spellCheckService.IgnoreAll(wordToIgnore);
+            RecheckAllBlocks();
+            InvalidateVisual();
+            Focus();
+        };
+        menu.Items.Add(ignoreItem);
+
+        var addItem = new MenuItem { Header = "Add to Dictionary" };
+        ApplyMenuItemStyle(addItem);
+        var wordToAdd = err.Word;
+        addItem.Click += (_, _) =>
+        {
+            _spellCheckService.AddToUserDictionary(wordToAdd);
+            RecheckAllBlocks();
+            InvalidateVisual();
+            Focus();
+        };
+        menu.Items.Add(addItem);
+
+        if (_spellCheckService.HasProjectDictionary)
+        {
+            var addProjectItem = new MenuItem { Header = "Add to Project Dictionary" };
+            ApplyMenuItemStyle(addProjectItem);
+            var wordForProject = err.Word;
+            addProjectItem.Click += (_, _) =>
+            {
+                _spellCheckService.AddToProjectDictionary(wordForProject);
+                RecheckAllBlocks();
+                InvalidateVisual();
+                Focus();
+            };
+            menu.Items.Add(addProjectItem);
+        }
+
+        return true;
+    }
+
+    private void ReplaceWord(int blockIndex, int offset, int length, string replacement)
+    {
+        _doc.BeginUndoGroup();
+        _doc.RemoveTextAt(blockIndex, offset, length);
+        _doc.InsertTextAt(blockIndex, offset, replacement);
+        _doc.CursorBlock = blockIndex;
+        _doc.CursorOffset = offset + replacement.Length;
+        _doc.AnchorBlock = blockIndex;
+        _doc.AnchorOffset = offset + replacement.Length;
+        _doc.SealUndoGroup();
+        InvalidateLayout();
+        EnsureCursorVisible();
     }
 
     internal SpellCheckService? TestSpellCheckService => _spellCheckService;
