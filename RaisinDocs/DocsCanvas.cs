@@ -656,7 +656,7 @@ public partial class DocsCanvas : FrameworkElement
 
         _doc.ContentChanged += () =>
         {
-            IsDirty = true;
+            IsDirty = !_doc.IsClean;
             ContentChanged?.Invoke(this, EventArgs.Empty);
             OnContentChangedForSpellCheck();
         };
@@ -676,7 +676,7 @@ public partial class DocsCanvas : FrameworkElement
     {
         _undoSealTimer.Stop();
         _undoSealTimer.Start();
-        IsDirty = true;
+        IsDirty = !_doc.IsClean;
         ContentChanged?.Invoke(this, EventArgs.Empty);
     }
 

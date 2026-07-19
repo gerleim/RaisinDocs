@@ -23,6 +23,7 @@ public class Document
     private readonly Stack<DocumentSnapshot> _undoStack = new();
     private readonly Stack<DocumentSnapshot> _redoStack = new();
     private DocumentSnapshot? _currentGroupStart;
+    private DocumentSnapshot? _cleanSnapshot;
 
     public bool CanUndo => _currentGroupStart != null || _undoStack.Count > 0;
     public bool CanRedo => _redoStack.Count > 0;
@@ -58,6 +59,10 @@ public class Document
         }
         return false;
     }
+
+    public void MarkClean() => _cleanSnapshot = CaptureSnapshot();
+
+    public bool IsClean => _cleanSnapshot != null && !HasContentChanged(_cleanSnapshot);
 
     public void BeginUndoGroup()
     {

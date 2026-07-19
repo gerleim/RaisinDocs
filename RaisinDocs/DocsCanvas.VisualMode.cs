@@ -96,7 +96,7 @@ public partial class DocsCanvas
         _doc.InsertTextAt(vl.BlockIndex, 3, newChar.ToString());
         _doc.SealUndoGroup();
 
-        IsDirty = true;
+        IsDirty = !_doc.IsClean;
         InvalidateLayout();
         return true;
     }
