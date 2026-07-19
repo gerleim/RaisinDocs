@@ -1180,6 +1180,16 @@ public static class MarkdownParser
         or '-' or '.' or '/' or ':' or ';' or '<' or '=' or '>' or '?' or '@' or '[' or '\\'
         or ']' or '^' or '_' or '`' or '{' or '|' or '}' or '~';
 
+    private static bool IsUnicodePunctuation(char c) =>
+        IsAsciiPunctuation(c) || char.GetUnicodeCategory(c) is
+            System.Globalization.UnicodeCategory.ConnectorPunctuation or
+            System.Globalization.UnicodeCategory.DashPunctuation or
+            System.Globalization.UnicodeCategory.ClosePunctuation or
+            System.Globalization.UnicodeCategory.FinalQuotePunctuation or
+            System.Globalization.UnicodeCategory.InitialQuotePunctuation or
+            System.Globalization.UnicodeCategory.OtherPunctuation or
+            System.Globalization.UnicodeCategory.OpenPunctuation;
+
     private static void MarkRawHtmlInline(string text, InlineStyle[] styles)
     {
         for (int i = 0; i < text.Length; i++)
@@ -1791,9 +1801,9 @@ public static class MarkdownParser
             char before = start > 0 ? text[start - 1] : ' ';
             char after = i < text.Length ? text[i] : ' ';
             bool leftFlanking = !char.IsWhiteSpace(after)
-                && (!char.IsPunctuation(after) || char.IsWhiteSpace(before) || char.IsPunctuation(before));
+                && (!IsUnicodePunctuation(after) || char.IsWhiteSpace(before) || IsUnicodePunctuation(before));
             bool rightFlanking = !char.IsWhiteSpace(before)
-                && (!char.IsPunctuation(before) || char.IsWhiteSpace(after) || char.IsPunctuation(after));
+                && (!IsUnicodePunctuation(before) || char.IsWhiteSpace(after) || IsUnicodePunctuation(after));
 
             bool canOpen, canClose;
             if (dc == '*')
@@ -1803,8 +1813,8 @@ public static class MarkdownParser
             }
             else // '_'
             {
-                canOpen = leftFlanking && (!rightFlanking || char.IsPunctuation(before));
-                canClose = rightFlanking && (!leftFlanking || char.IsPunctuation(after));
+                canOpen = leftFlanking && (!rightFlanking || IsUnicodePunctuation(before));
+                canClose = rightFlanking && (!leftFlanking || IsUnicodePunctuation(after));
             }
 
             delimiters.Add((start, count, canOpen, canClose, dc));
@@ -2688,16 +2698,26 @@ public static class MarkdownParser
                 ranges.Add((run.Start, run.Start + run.Length));
         }
 
-        if (parsed.ColorSpans is { } spans)
-        {
-            foreach (var span in spans)
-                ranges.Add((span.Start, span.Start + span.Length));
-        }
-
+        SkipHtmlComments(text, ranges);
         SkipBlockPrefix(text, parsed, ranges);
 
         ranges.Sort((a, b) => a.Start.CompareTo(b.Start));
         return ranges;
+    }
+
+    private static void SkipHtmlComments(string text, List<(int Start, int End)> ranges)
+    {
+        int i = 0;
+        while (i < text.Length - 3)
+        {
+            int start = text.IndexOf("<!--", i, StringComparison.Ordinal);
+            if (start < 0) break;
+            int end = text.IndexOf("-->", start + 4, StringComparison.Ordinal);
+            if (end < 0) break;
+            end += 3;
+            ranges.Add((start, end));
+            i = end;
+        }
     }
 
     private static void SkipBlockPrefix(string text, ParsedBlock parsed, List<(int Start, int End)> ranges)

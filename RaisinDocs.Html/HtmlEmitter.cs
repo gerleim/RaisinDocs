@@ -510,9 +510,10 @@ public static class HtmlEmitter
         }
 
         // Backslash escapes: the backslash is marked as Bold by MarkBackslashEscapes
+        // (may become BoldItalic if emphasis overlaps the backslash position)
         foreach (var run in runs)
         {
-            if (run.Style == InlineStyle.Bold && run.Length == 1)
+            if ((run.Style == InlineStyle.Bold || run.Style == InlineStyle.BoldItalic) && run.Length == 1)
             {
                 int bsPos = run.Start;
                 int bsTi = bsPos - offset;
@@ -658,8 +659,17 @@ public static class HtmlEmitter
             // Emit emphasis close tags at this position
             if (emphClose.TryGetValue(pos, out int closeLen))
             {
+                if (currentStyle != null) { CloseTag(sb, currentStyle.Value); currentStyle = null; }
                 while (closeLen >= 2) { sb.Append("</strong>"); closeLen -= 2; }
                 if (closeLen == 1) sb.Append("</em>");
+            }
+
+            // Emit emphasis open tags at this position (before hidden skip,
+            // since nested openers may overlap with delimiter chars)
+            if (emphOpen.TryGetValue(pos, out int openLen))
+            {
+                while (openLen >= 2) { sb.Append("<strong>"); openLen -= 2; }
+                if (openLen == 1) sb.Append("<em>");
             }
 
             // Skip hidden (delimiter) characters
@@ -667,13 +677,6 @@ public static class HtmlEmitter
             {
                 pos++;
                 continue;
-            }
-
-            // Emit emphasis open tags at this position
-            if (emphOpen.TryGetValue(pos, out int openLen))
-            {
-                while (openLen >= 2) { sb.Append("<strong>"); openLen -= 2; }
-                if (openLen == 1) sb.Append("<em>");
             }
 
             // Check for raw inline HTML (pass through verbatim)
