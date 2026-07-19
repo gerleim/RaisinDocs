@@ -509,16 +509,14 @@ public static class HtmlEmitter
                     hidden.Add(j);
         }
 
-        // Backslash escapes: the backslash is marked as Bold by MarkBackslashEscapes
-        // (may become BoldItalic if emphasis overlaps the backslash position)
-        foreach (var run in runs)
+        // Backslash escapes: the escaped char has InlineStyle.Image sentinel
+        for (int bi = 0; bi < text.Length - 1; bi++)
         {
-            if ((run.Style == InlineStyle.Bold || run.Style == InlineStyle.BoldItalic) && run.Length == 1)
+            if (text[bi] == '\\' && IsAsciiPunctuation(text[bi + 1]))
             {
-                int bsPos = run.Start;
-                int bsTi = bsPos - offset;
-                if (bsTi >= 0 && bsTi < text.Length && text[bsTi] == '\\')
-                    hidden.Add(bsPos);
+                var nextStyle = GetStyleAt(runs, bi + 1 + offset);
+                if (nextStyle == InlineStyle.Image)
+                    hidden.Add(bi + offset);
             }
         }
 
