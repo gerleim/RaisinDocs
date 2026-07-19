@@ -258,14 +258,33 @@ public static class HtmlEmitter
     static int RenderIndentedCode(StringBuilder sb, List<ParsedBlock> blocks, List<string> lines, int start)
     {
         sb.Append("<pre><code>");
-        // Collect content lines, then strip leading/trailing blank lines
         var contentLines = new List<string>();
         int i = start;
-        while (i < blocks.Count && blocks[i].Kind == BlockKind.IndentedCodeLine)
+        while (i < blocks.Count)
         {
-            string content = RemoveIndent(lines[i], 4);
-            contentLines.Add(content);
-            i++;
+            if (blocks[i].Kind == BlockKind.IndentedCodeLine)
+            {
+                string content = RemoveIndent(lines[i], 4);
+                contentLines.Add(content);
+                i++;
+            }
+            else if (blocks[i].Kind == BlockKind.Paragraph && string.IsNullOrWhiteSpace(lines[i]))
+            {
+                int lookahead = i + 1;
+                while (lookahead < blocks.Count && blocks[lookahead].Kind == BlockKind.Paragraph
+                       && string.IsNullOrWhiteSpace(lines[lookahead]))
+                    lookahead++;
+                if (lookahead < blocks.Count && blocks[lookahead].Kind == BlockKind.IndentedCodeLine)
+                {
+                    for (int k = i; k < lookahead; k++)
+                        contentLines.Add("");
+                    i = lookahead;
+                }
+                else
+                    break;
+            }
+            else
+                break;
         }
         while (contentLines.Count > 0 && string.IsNullOrWhiteSpace(contentLines[^1]))
             contentLines.RemoveAt(contentLines.Count - 1);
@@ -730,8 +749,14 @@ public static class HtmlEmitter
 
     static string StripBlockquotePrefix(string text)
     {
-        if (text.StartsWith("> ")) return text[2..];
-        if (text.StartsWith(">")) return text[1..];
+        int indent = 0;
+        while (indent < text.Length && indent < 3 && text[indent] == ' ') indent++;
+        if (indent < text.Length && text[indent] == '>')
+        {
+            int after = indent + 1;
+            if (after < text.Length && text[after] == ' ') after++;
+            return text[after..];
+        }
         return text;
     }
 

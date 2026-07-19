@@ -1942,7 +1942,7 @@ public class MarkdownParserTests
     [Fact]
     public void RefLink_FullForm()
     {
-        var result = ParseBlocks("[click here][docs]", "[docs]: https://example.com");
+        var result = ParseBlocks("[click here][docs]", "", "[docs]: https://example.com");
         result[0].Links.Should().HaveCount(1);
         var link = result[0].Links![0];
         link.Text.Should().Be("click here");
@@ -1952,7 +1952,7 @@ public class MarkdownParserTests
     [Fact]
     public void RefLink_CollapsedForm()
     {
-        var result = ParseBlocks("[docs][]", "[docs]: https://example.com");
+        var result = ParseBlocks("[docs][]", "", "[docs]: https://example.com");
         result[0].Links.Should().HaveCount(1);
         result[0].Links![0].Text.Should().Be("docs");
         result[0].Links![0].Url.Should().Be("https://example.com");
@@ -1961,7 +1961,7 @@ public class MarkdownParserTests
     [Fact]
     public void RefLink_CaseInsensitive()
     {
-        var result = ParseBlocks("[click][DOCS]", "[docs]: https://example.com");
+        var result = ParseBlocks("[click][DOCS]", "", "[docs]: https://example.com");
         result[0].Links.Should().HaveCount(1);
         result[0].Links![0].Url.Should().Be("https://example.com");
     }
@@ -1976,7 +1976,7 @@ public class MarkdownParserTests
     [Fact]
     public void RefLink_WithTitle()
     {
-        var result = ParseBlocks("[click][docs]", "[docs]: https://example.com \"Example\"");
+        var result = ParseBlocks("[click][docs]", "", "[docs]: https://example.com \"Example\"");
         result[0].Links.Should().HaveCount(1);
         result[0].Links![0].Title.Should().Be("Example");
     }
@@ -1984,7 +1984,7 @@ public class MarkdownParserTests
     [Fact]
     public void RefImage_FullForm()
     {
-        var result = ParseBlocks("![screenshot][img1]", "[img1]: ./image.png");
+        var result = ParseBlocks("![screenshot][img1]", "", "[img1]: ./image.png");
         result[0].Images.Should().HaveCount(1);
         result[0].Images![0].AltText.Should().Be("screenshot");
         result[0].Images![0].Url.Should().Be("./image.png");
@@ -1993,7 +1993,7 @@ public class MarkdownParserTests
     [Fact]
     public void RefImage_CollapsedForm()
     {
-        var result = ParseBlocks("![logo][]", "[logo]: ./logo.png");
+        var result = ParseBlocks("![logo][]", "", "[logo]: ./logo.png");
         result[0].Images.Should().HaveCount(1);
         result[0].Images![0].AltText.Should().Be("logo");
         result[0].Images![0].Url.Should().Be("./logo.png");
@@ -2002,7 +2002,7 @@ public class MarkdownParserTests
     [Fact]
     public void RefLink_MultipleDefinitions()
     {
-        var result = ParseBlocks("[a][d1] and [b][d2]", "[d1]: https://a.com", "[d2]: https://b.com");
+        var result = ParseBlocks("[a][d1] and [b][d2]", "", "[d1]: https://a.com", "[d2]: https://b.com");
         result[0].Links.Should().HaveCount(2);
         result[0].Links![0].Url.Should().Be("https://a.com");
         result[0].Links![1].Url.Should().Be("https://b.com");
@@ -2018,7 +2018,7 @@ public class MarkdownParserTests
     [Fact]
     public void RefLink_FirstDefinitionWins()
     {
-        var result = ParseBlocks("[click][docs]", "[docs]: https://first.com", "[docs]: https://second.com");
+        var result = ParseBlocks("[click][docs]", "", "[docs]: https://first.com", "[docs]: https://second.com");
         result[0].Links.Should().HaveCount(1);
         result[0].Links![0].Url.Should().Be("https://first.com");
     }
@@ -2040,7 +2040,7 @@ public class MarkdownParserTests
     [Fact]
     public void LinkDefinition_AngleBracketUrl()
     {
-        var result = ParseBlocks("[click][docs]", "[docs]: <https://example.com>");
+        var result = ParseBlocks("[click][docs]", "", "[docs]: <https://example.com>");
         result[0].Links.Should().HaveCount(1);
         result[0].Links![0].Url.Should().Be("https://example.com");
     }
@@ -2048,7 +2048,7 @@ public class MarkdownParserTests
     [Fact]
     public void RefLink_StyleCoverage()
     {
-        var result = ParseBlocks("[text][ref]", "[ref]: https://example.com");
+        var result = ParseBlocks("[text][ref]", "", "[ref]: https://example.com");
         result[0].Runs.Should().HaveCount(1);
         result[0].Runs[0].Style.Should().Be(InlineStyle.Link);
     }
@@ -2056,7 +2056,7 @@ public class MarkdownParserTests
     [Fact]
     public void LinkDefinition_TitleWithEscapedQuote()
     {
-        var result = ParseBlocks("[click][docs]", "[docs]: https://example.com \"foo \\\"bar\\\" baz\"");
+        var result = ParseBlocks("[click][docs]", "", "[docs]: https://example.com \"foo \\\"bar\\\" baz\"");
         result[0].Links.Should().HaveCount(1);
         result[0].Links![0].Url.Should().Be("https://example.com");
     }

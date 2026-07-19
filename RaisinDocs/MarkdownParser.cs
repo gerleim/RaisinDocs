@@ -149,7 +149,7 @@ public static class MarkdownParser
             string text = getBlockText(i);
             var fenceInfo = GetFenceInfo(text);
 
-            if (fenceLen == 0 && fenceInfo.Count > 0)
+            if (fenceLen == 0 && fenceInfo.Count > 0 && htmlBlockType == 0)
             {
                 fenceLen = fenceInfo.Count;
                 fenceChar = fenceInfo.Char;
@@ -184,14 +184,22 @@ public static class MarkdownParser
             // HTML block continuation
             if (htmlBlockType > 0)
             {
-                result.Add(new ParsedBlock
+                if (htmlBlockType >= 6 && string.IsNullOrWhiteSpace(text))
                 {
-                    Kind = BlockKind.HtmlBlock,
-                    Runs = [new StyledRun(0, text.Length, InlineStyle.Normal)],
-                });
-                if (IsHtmlBlockEnd(text, htmlBlockType))
                     htmlBlockType = 0;
-                continue;
+                    // blank line terminates type 6/7 but is not part of the block
+                }
+                else
+                {
+                    result.Add(new ParsedBlock
+                    {
+                        Kind = BlockKind.HtmlBlock,
+                        Runs = [new StyledRun(0, text.Length, InlineStyle.Normal)],
+                    });
+                    if (IsHtmlBlockEnd(text, htmlBlockType))
+                        htmlBlockType = 0;
+                    continue;
+                }
             }
 
             if (IsThemeBlock(text))
@@ -276,6 +284,10 @@ public static class MarkdownParser
 
             // HTML block start (after custom comment checks)
             int hbType = GetHtmlBlockType(text);
+            // Type 7 cannot interrupt a paragraph (blank lines break paragraphs)
+            if (hbType == 7 && result.Count > 0 && result[^1].Kind == BlockKind.Paragraph
+                && !string.IsNullOrWhiteSpace(getBlockText(i - 1)))
+                hbType = 0;
             if (hbType > 0)
             {
                 result.Add(new ParsedBlock
@@ -288,7 +300,9 @@ public static class MarkdownParser
                 continue;
             }
 
-            if (TryParseLinkDefinition(text, out _, out _, out _))
+            bool prevIsParagraph = result.Count > 0 && result[^1].Kind == BlockKind.Paragraph
+                                   && !string.IsNullOrWhiteSpace(getBlockText(i - 1));
+            if (!prevIsParagraph && TryParseLinkDefinition(text, out _, out _, out _))
             {
                 result.Add(new ParsedBlock
                 {
@@ -336,17 +350,28 @@ public static class MarkdownParser
         Dictionary<string, RgbColor>? theme = null;
         int fenceLen = 0;
         char fenceC = '\0';
+        bool prevIsParagraph = false;
         for (int i = 0; i < blockCount; i++)
         {
             string text = getBlockText(i);
             var fi = GetFenceInfo(text);
-            if (fenceLen == 0 && fi.Count > 0) { fenceLen = fi.Count; fenceC = fi.Char; continue; }
-            if (fenceLen > 0) { if (fi.Count >= fenceLen && fi.Char == fenceC && fi.Language == null) fenceLen = 0; continue; }
+            if (fenceLen == 0 && fi.Count > 0) { fenceLen = fi.Count; fenceC = fi.Char; prevIsParagraph = false; continue; }
+            if (fenceLen > 0) { if (fi.Count >= fenceLen && fi.Char == fenceC && fi.Language == null) fenceLen = 0; prevIsParagraph = false; continue; }
 
-            if (TryParseLinkDefinition(text, out string? label, out string? url, out string? title))
+            if (!prevIsParagraph && TryParseLinkDefinition(text, out string? label, out string? url, out string? title))
             {
                 defs ??= new(StringComparer.OrdinalIgnoreCase);
                 defs.TryAdd(label!, (url!, title));
+                prevIsParagraph = false;
+            }
+            else if (string.IsNullOrWhiteSpace(text))
+            {
+                prevIsParagraph = false;
+            }
+            else
+            {
+                var bk = ClassifyBlock(text);
+                prevIsParagraph = bk == BlockKind.Paragraph;
             }
 
             string? themeText = null;
@@ -513,10 +538,13 @@ public static class MarkdownParser
             url = text[urlStart..afterColon];
         }
 
-        if (string.IsNullOrEmpty(url)) return false;
+        if (url == null) return false;
+        if (url.Length == 0 && text[afterColon - 1] != '>') return false;
 
-        while (afterColon < text.Length && text[afterColon] == ' ') afterColon++;
+        int beforeTitle = afterColon;
+        while (afterColon < text.Length && text[afterColon] is ' ' or '\t') afterColon++;
         if (afterColon >= text.Length) return true;
+        if (afterColon == beforeTitle) return false;
 
         char q = text[afterColon];
         char qClose = q == '"' ? '"' : q == '\'' ? '\'' : q == '(' ? ')' : '\0';
@@ -531,6 +559,10 @@ public static class MarkdownParser
         }
         if (titleEnd >= text.Length) return false;
         title = text[titleStart..titleEnd];
+
+        int afterTitle = titleEnd + 1;
+        while (afterTitle < text.Length && text[afterTitle] is ' ' or '\t') afterTitle++;
+        if (afterTitle < text.Length) return false;
 
         return true;
     }
@@ -630,11 +662,11 @@ public static class MarkdownParser
         if (i >= text.Length) return false;
         char ch = text[i];
         if (ch is not '=' and not '-') return false;
-        for (int j = i; j < text.Length; j++)
-        {
-            if (text[j] != ch && text[j] != ' ') return false;
-        }
-        if (i >= text.Length || text[i] != ch) return false;
+        int j = i;
+        while (j < text.Length && text[j] == ch) j++;
+        if (j == i) return false;
+        while (j < text.Length && text[j] is ' ' or '\t') j++;
+        if (j < text.Length) return false;
         underlineChar = ch;
         return true;
     }
@@ -752,7 +784,7 @@ public static class MarkdownParser
             while (j < blocks.Count)
             {
                 string jText = getBlockText(j);
-                if (jText.Length == 0)
+                if (string.IsNullOrWhiteSpace(jText))
                 {
                     j++;
                     continue;
@@ -943,23 +975,23 @@ public static class MarkdownParser
         leadingColumns = cols;
         if (chars > 0) text = text[chars..];
 
-        if (text.StartsWith("######") && (text.Length == 6 || text[6] == ' '))
+        if (text.StartsWith("######") && (text.Length == 6 || text[6] is ' ' or '\t'))
             return BlockKind.Heading6;
-        if (text.StartsWith("#####") && !text.StartsWith("######") && (text.Length == 5 || text[5] == ' '))
+        if (text.StartsWith("#####") && !text.StartsWith("######") && (text.Length == 5 || text[5] is ' ' or '\t'))
             return BlockKind.Heading5;
-        if (text.StartsWith("####") && !text.StartsWith("#####") && (text.Length == 4 || text[4] == ' '))
+        if (text.StartsWith("####") && !text.StartsWith("#####") && (text.Length == 4 || text[4] is ' ' or '\t'))
             return BlockKind.Heading4;
-        if (text.StartsWith("###") && !text.StartsWith("####") && (text.Length == 3 || text[3] == ' '))
+        if (text.StartsWith("###") && !text.StartsWith("####") && (text.Length == 3 || text[3] is ' ' or '\t'))
             return BlockKind.Heading3;
-        if (text.StartsWith("##") && !text.StartsWith("###") && (text.Length == 2 || text[2] == ' '))
+        if (text.StartsWith("##") && !text.StartsWith("###") && (text.Length == 2 || text[2] is ' ' or '\t'))
             return BlockKind.Heading2;
-        if (text.StartsWith("#") && !text.StartsWith("##") && (text.Length == 1 || text[1] == ' '))
+        if (text.StartsWith("#") && !text.StartsWith("##") && (text.Length == 1 || text[1] is ' ' or '\t'))
             return BlockKind.Heading1;
 
         if (IsThematicBreak(text))
             return BlockKind.ThematicBreak;
 
-        if (text.StartsWith("- ") || text.StartsWith("* "))
+        if (text.Length >= 2 && text[0] is '-' or '*' && text[1] is ' ' or '\t')
         {
             if (text.Length >= 6 && text[2] == '[' && text[4] == ']' && text[5] == ' ')
             {
@@ -1820,7 +1852,7 @@ public static class MarkdownParser
         // Type 1: <pre, <script, <style, <textarea (case-insensitive)
         foreach (var tag in _htmlBlockType1Tags)
         {
-            if (line.Length > tag.Length + 1
+            if (line.Length >= tag.Length + 1
                 && line[1..].StartsWith(tag.AsSpan(), StringComparison.OrdinalIgnoreCase))
             {
                 int afterTag = 1 + tag.Length;
