@@ -576,6 +576,9 @@ public partial class DocsCanvas : FrameworkElement
     }
     internal string TestGetBlockText(int block) => _doc.GetBlockText(block);
     internal int TestBlockCount => _doc.BlockCount;
+    internal int TestGetVisualLineBlockIndex(int vi) => _visualLines[vi].BlockIndex;
+    internal BlockKind TestGetVisualLineBlockKind(int vi) => _visualLines[vi].BlockKind;
+    internal double TestGetLineYPosition(int vi) => _lineYPositions[vi];
     internal void TestUndo() { _doc.Undo(); InvalidateLayout(); }
     internal (int StartCol, int EndCol, int StartBlock, int EndBlock)?
         TestTryGetTableRectSelection()
@@ -645,7 +648,12 @@ public partial class DocsCanvas : FrameworkElement
             _lastAction = LastActionKind.None;
         };
 
-        _doc.ContentChanged += () => { IsDirty = true; ContentChanged?.Invoke(this, EventArgs.Empty); };
+        _doc.ContentChanged += () =>
+        {
+            IsDirty = true;
+            ContentChanged?.Invoke(this, EventArgs.Empty);
+            OnContentChangedForSpellCheck();
+        };
 
         Loaded += (_, _) =>
         {
@@ -784,6 +792,7 @@ public partial class DocsCanvas : FrameworkElement
         _parsedBlocks = null;
         _visualMaps = null;
         _blockToGroup = null;
+        _blockSpellingErrors = null;
         InvalidateSearchOnContentChange();
         InvalidateVisual();
     }
@@ -1545,6 +1554,9 @@ public partial class DocsCanvas : FrameworkElement
                 }
             }
         }
+
+        if (_spellCheckEnabled)
+            DrawSpellingErrors(dc, effectiveScroll, viewTop, viewBottom);
 
         if (_showPageBreaks)
             DrawPageBreaks(dc, effectiveScroll, viewTop, viewBottom);

@@ -114,6 +114,7 @@
                 <MenuItem x:Name="TocMenuItem" Header="Table of _Contents" Click="Toc_Click" IsCheckable="True" InputGestureText="Ctrl+T" />
                 <MenuItem x:Name="MinimapMenuItem" Header="Mi_nimap" Click="Minimap_Click" IsCheckable="True" />
                 <MenuItem x:Name="PageBreaksMenuItem" Header="_Page Breaks" Click="PageBreaks_Click" IsCheckable="True" />
+                <MenuItem x:Name="SpellCheckMenuItem" Header="_Spell Check" Click="SpellCheck_Click" IsCheckable="True" />
             </MenuItem>
         </Menu>
         <TabControl x:Name="TabControl" SelectionChanged="TabControl_SelectionChanged" />

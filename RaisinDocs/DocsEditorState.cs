@@ -12,5 +12,6 @@ public class DocsEditorState
     public double TocWidth { get; set; } = 200;
     public bool IsToolbarCollapsed { get; set; }
     public bool ShowPageBreaks { get; set; }
+    public bool SpellCheckEnabled { get; set; }
     public double ZoomLevel { get; set; } = 1.0;
 }

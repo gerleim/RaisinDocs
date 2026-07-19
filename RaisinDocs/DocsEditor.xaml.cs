@@ -191,6 +191,7 @@ public partial class DocsEditor : UserControl
         TocWidth = ShowToc ? PART_TocColumn.Width.Value : _savedTocWidth,
         IsToolbarCollapsed = IsToolbarCollapsed,
         ShowPageBreaks = PART_Canvas.ShowPageBreaks,
+        SpellCheckEnabled = PART_Canvas.SpellCheckEnabled,
         ZoomLevel = PART_Canvas.ZoomLevel,
     };
 
@@ -207,6 +208,7 @@ public partial class DocsEditor : UserControl
         ShowToc = state.ShowToc;
         IsToolbarCollapsed = state.IsToolbarCollapsed;
         PART_Canvas.SetShowPageBreaks(state.ShowPageBreaks);
+        PART_Canvas.SetSpellCheckEnabled(state.SpellCheckEnabled);
         PART_Canvas.SetZoom(state.ZoomLevel);
     }
 

@@ -21,6 +21,11 @@
   <ItemGroup>
     <PackageReference Include="TextMateSharp" Version="2.0.4" />
     <PackageReference Include="TextMateSharp.Grammars" Version="2.0.4" />
+    <PackageReference Include="WeCantSpell.Hunspell" Version="7.0.1" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Dictionaries\en_US.dic" />
+    <EmbeddedResource Include="Dictionaries\en_US.aff" />
   </ItemGroup>
 
 </Project>

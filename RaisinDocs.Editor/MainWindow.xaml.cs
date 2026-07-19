@@ -212,6 +212,7 @@ public partial class MainWindow : Window
         TocMenuItem.IsChecked = editor?.ShowToc ?? false;
         MinimapMenuItem.IsChecked = editor?.ShowMinimap ?? false;
         PageBreaksMenuItem.IsChecked = editor?.Canvas.ShowPageBreaks ?? false;
+        SpellCheckMenuItem.IsChecked = editor?.Canvas.SpellCheckEnabled ?? false;
     }
 
     private void Toc_Click(object sender, RoutedEventArgs e) =>
@@ -225,6 +226,13 @@ public partial class MainWindow : Window
         var canvas = ActiveTab?.Editor.Canvas;
         if (canvas != null)
             canvas.SetShowPageBreaks(!canvas.ShowPageBreaks);
+    }
+
+    private void SpellCheck_Click(object sender, RoutedEventArgs e)
+    {
+        var canvas = ActiveTab?.Editor.Canvas;
+        if (canvas != null)
+            canvas.SetSpellCheckEnabled(!canvas.SpellCheckEnabled);
     }
 
     private void CloseTab(DocumentTab tab)

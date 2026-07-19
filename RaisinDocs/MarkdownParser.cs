@@ -109,6 +109,7 @@ public record class ParsedBlock
     public int OwnerBlock { get; init; } = -1;
     public string? CodeLanguage { get; init; }
     public IReadOnlyList<SyntaxToken>? SyntaxTokens { get; init; }
+    public IReadOnlyList<SpellingError>? SpellingErrors { get; init; }
 
     public bool HasStyleAt(int offset, InlineStyle targetStyle)
     {
@@ -517,6 +518,7 @@ public static class MarkdownParser
         if (bracketClose + 1 >= text.Length || text[bracketClose + 1] != ':') return false;
 
         label = text[labelStart..bracketClose];
+        if (LabelContainsUnescapedBracket(label)) return false;
         int afterColon = bracketClose + 2;
 
         while (afterColon < text.Length && text[afterColon] == ' ') afterColon++;
@@ -1178,6 +1180,101 @@ public static class MarkdownParser
         or '-' or '.' or '/' or ':' or ';' or '<' or '=' or '>' or '?' or '@' or '[' or '\\'
         or ']' or '^' or '_' or '`' or '{' or '|' or '}' or '~';
 
+    private static void MarkRawHtmlInline(string text, InlineStyle[] styles)
+    {
+        for (int i = 0; i < text.Length; i++)
+        {
+            if (styles[i] != InlineStyle.Normal || text[i] != '<') continue;
+            int end = TryMatchInlineHtmlTag(text, i);
+            if (end < 0) continue;
+            for (int j = i; j < end; j++)
+                styles[j] = InlineStyle.Link;
+            i = end - 1;
+        }
+    }
+
+    private static int TryMatchInlineHtmlTag(string text, int start)
+    {
+        int i = start + 1;
+        if (i >= text.Length) return -1;
+
+        if (text[i] == '/')
+        {
+            i++;
+            if (i >= text.Length || !char.IsAsciiLetter(text[i])) return -1;
+            while (i < text.Length && (char.IsAsciiLetterOrDigit(text[i]) || text[i] == '-'))
+                i++;
+            while (i < text.Length && text[i] is ' ' or '\t') i++;
+            if (i < text.Length && text[i] == '>') return i + 1;
+            return -1;
+        }
+
+        if (text[i] == '!' && i + 1 < text.Length)
+        {
+            if (text[i + 1] == '-' && i + 2 < text.Length && text[i + 2] == '-')
+            {
+                int closeIdx = text.IndexOf("-->", i + 3, StringComparison.Ordinal);
+                return closeIdx >= 0 ? closeIdx + 3 : -1;
+            }
+            if (char.IsAsciiLetterUpper(text[i + 1]))
+            {
+                int close = text.IndexOf('>', i + 2);
+                return close >= 0 ? close + 1 : -1;
+            }
+            if (text[i + 1] == '[' && i + 8 < text.Length && text.AsSpan(i + 2, 6).SequenceEqual("CDATA["))
+            {
+                int close = text.IndexOf("]]>", i + 8, StringComparison.Ordinal);
+                return close >= 0 ? close + 3 : -1;
+            }
+            return -1;
+        }
+
+        if (text[i] == '?')
+        {
+            int close = text.IndexOf("?>", i + 1, StringComparison.Ordinal);
+            return close >= 0 ? close + 2 : -1;
+        }
+
+        if (!char.IsAsciiLetter(text[i])) return -1;
+        i++;
+        while (i < text.Length && (char.IsAsciiLetterOrDigit(text[i]) || text[i] == '-'))
+            i++;
+        while (i < text.Length && text[i] is ' ' or '\t') i++;
+
+        while (i < text.Length && (char.IsAsciiLetter(text[i]) || text[i] == '_' || text[i] == ':'))
+        {
+            i++;
+            while (i < text.Length && (char.IsAsciiLetterOrDigit(text[i]) || text[i] is '-' or '.' or '_' or ':'))
+                i++;
+            while (i < text.Length && text[i] is ' ' or '\t') i++;
+            if (i < text.Length && text[i] == '=')
+            {
+                i++;
+                while (i < text.Length && text[i] is ' ' or '\t') i++;
+                if (i >= text.Length) return -1;
+                if (text[i] == '\'' || text[i] == '"')
+                {
+                    char q = text[i]; i++;
+                    while (i < text.Length && text[i] != q) i++;
+                    if (i >= text.Length) return -1;
+                    i++;
+                }
+                else
+                {
+                    while (i < text.Length && text[i] != ' ' && text[i] != '\t' &&
+                           text[i] != '"' && text[i] != '\'' && text[i] != '=' &&
+                           text[i] != '<' && text[i] != '>' && text[i] != '`')
+                        i++;
+                }
+            }
+            while (i < text.Length && text[i] is ' ' or '\t') i++;
+        }
+
+        if (i < text.Length && text[i] == '/') i++;
+        if (i < text.Length && text[i] == '>') return i + 1;
+        return -1;
+    }
+
     private static void MarkCodeSpans(string text, InlineStyle[] styles)
     {
         int i = 0;
@@ -1243,7 +1340,7 @@ public static class MarkdownParser
             }
 
             int altStart = i + 2;
-            int bracketClose = FindMatchingBracket(text, altStart);
+            int bracketClose = FindMatchingBracket(text, altStart, styles);
             if (bracketClose < 0)
             {
                 i++;
@@ -1293,14 +1390,9 @@ public static class MarkdownParser
                 continue;
             }
 
-            if (i > 0 && text[i - 1] == '!' && styles[i - 1] == InlineStyle.Image)
-            {
-                i++;
-                continue;
-            }
 
             int textStart = i + 1;
-            int bracketClose = FindMatchingBracket(text, textStart);
+            int bracketClose = FindMatchingBracket(text, textStart, styles);
             if (bracketClose < 0)
             {
                 i++;
@@ -1317,8 +1409,15 @@ public static class MarkdownParser
             {
                 int parenOpen = bracketClose + 2;
                 int parenClose = ParseDestinationAndTitle(text, parenOpen, out url, out title);
-                if (parenClose < 0) { i++; continue; }
-                end = parenClose + 1;
+                if (parenClose >= 0)
+                {
+                    end = parenClose + 1;
+                }
+                else if (TryResolveReference(text, bracketClose, linkText, defs, out url!, out title, out end, out var resolvedLabel2))
+                {
+                    refLabel = resolvedLabel2;
+                }
+                else { i++; continue; }
             }
             else if (TryResolveReference(text, bracketClose, linkText, defs, out url!, out title, out end, out var resolvedLabel))
             {
@@ -1528,6 +1627,7 @@ public static class MarkdownParser
                 int refClose = text.IndexOf(']', refStart);
                 if (refClose < 0) return false;
                 label = text[refStart..refClose];
+                if (LabelContainsUnescapedBracket(label)) return false;
                 end = refClose + 1;
             }
 
@@ -1551,16 +1651,27 @@ public static class MarkdownParser
         return false;
     }
 
-    private static int FindMatchingBracket(string text, int from)
+    private static int FindMatchingBracket(string text, int from, InlineStyle[]? styles = null)
     {
         int depth = 1;
         for (int i = from; i < text.Length; i++)
         {
+            if (styles != null && styles[i] != InlineStyle.Normal) continue;
             if (text[i] == '\\' && i + 1 < text.Length) { i++; continue; }
             if (text[i] == '[') depth++;
             else if (text[i] == ']') { depth--; if (depth == 0) return i; }
         }
         return -1;
+    }
+
+    private static bool LabelContainsUnescapedBracket(string label)
+    {
+        for (int i = 0; i < label.Length; i++)
+        {
+            if (label[i] == '\\' && i + 1 < label.Length) { i++; continue; }
+            if (label[i] == '[') return true;
+        }
+        return false;
     }
 
     private static int ParseDestinationAndTitle(string text, int from, out string url, out string? title)
@@ -2516,4 +2627,152 @@ public static class MarkdownParser
         ["yellow"] = new(255, 255, 0),
         ["yellowgreen"] = new(154, 205, 50),
     };
+
+    private static readonly HashSet<BlockKind> _nonCheckableBlocks = new()
+    {
+        BlockKind.FencedCodeLine,
+        BlockKind.IndentedCodeLine,
+        BlockKind.HtmlBlock,
+        BlockKind.LinkDefinition,
+        BlockKind.ThemeDefinition,
+        BlockKind.ColorDivOpen,
+        BlockKind.ColorDivClose,
+        BlockKind.ThematicBreak,
+        BlockKind.SetextUnderline,
+        BlockKind.TableSeparatorRow,
+        BlockKind.PageBreak,
+    };
+
+    internal static List<(int Offset, string Word)> ExtractCheckableWords(string text, ParsedBlock parsed)
+    {
+        if (_nonCheckableBlocks.Contains(parsed.Kind))
+            return [];
+
+        var skipRanges = BuildSkipRanges(text, parsed);
+        var words = new List<(int Offset, string Word)>();
+        int i = 0;
+
+        while (i < text.Length)
+        {
+            if (!IsWordChar(text[i]))
+            {
+                i++;
+                continue;
+            }
+
+            int start = i;
+            while (i < text.Length && IsWordChar(text[i]))
+                i++;
+
+            if (IsInSkipRange(start, i - start, skipRanges))
+                continue;
+
+            var word = text[start..i];
+
+            if (ShouldSkipWord(word))
+                continue;
+
+            words.Add((start, word));
+        }
+
+        return words;
+    }
+
+    private static List<(int Start, int End)> BuildSkipRanges(string text, ParsedBlock parsed)
+    {
+        var ranges = new List<(int Start, int End)>();
+
+        foreach (var run in parsed.Runs)
+        {
+            if (run.Style is InlineStyle.Code or InlineStyle.Image or InlineStyle.Link)
+                ranges.Add((run.Start, run.Start + run.Length));
+        }
+
+        if (parsed.ColorSpans is { } spans)
+        {
+            foreach (var span in spans)
+                ranges.Add((span.Start, span.Start + span.Length));
+        }
+
+        SkipBlockPrefix(text, parsed, ranges);
+
+        ranges.Sort((a, b) => a.Start.CompareTo(b.Start));
+        return ranges;
+    }
+
+    private static void SkipBlockPrefix(string text, ParsedBlock parsed, List<(int Start, int End)> ranges)
+    {
+        switch (parsed.Kind)
+        {
+            case BlockKind.Heading1:
+            case BlockKind.Heading2:
+            case BlockKind.Heading3:
+            case BlockKind.Heading4:
+            case BlockKind.Heading5:
+            case BlockKind.Heading6:
+                int h = 0;
+                while (h < text.Length && text[h] == '#') h++;
+                while (h < text.Length && text[h] == ' ') h++;
+                if (h > 0) ranges.Add((0, h));
+                break;
+
+            case BlockKind.Blockquote:
+                int q = 0;
+                while (q < text.Length && (text[q] == '>' || text[q] == ' ')) q++;
+                if (q > 0) ranges.Add((0, q));
+                break;
+
+            case BlockKind.UnorderedListItem:
+            case BlockKind.OrderedListItem:
+            case BlockKind.TaskListItemChecked:
+            case BlockKind.TaskListItemUnchecked:
+                if (parsed.ContentColumn > 0)
+                    ranges.Add((0, Math.Min(parsed.ContentColumn, text.Length)));
+                break;
+        }
+    }
+
+    private static bool IsInSkipRange(int start, int length, List<(int Start, int End)> ranges)
+    {
+        foreach (var (rs, re) in ranges)
+        {
+            if (start >= rs && start + length <= re)
+                return true;
+        }
+        return false;
+    }
+
+    private static bool IsWordChar(char c) =>
+        char.IsLetterOrDigit(c) || c == '\'' || c == '’';
+
+    private static bool ShouldSkipWord(string word)
+    {
+        if (word.Length <= 1)
+            return true;
+
+        bool allCaps = true;
+        bool hasDigit = false;
+        bool hasLetter = false;
+
+        foreach (var c in word)
+        {
+            if (char.IsDigit(c)) hasDigit = true;
+            else if (char.IsLetter(c))
+            {
+                hasLetter = true;
+                if (!char.IsUpper(c)) allCaps = false;
+            }
+        }
+
+        if (hasDigit)
+            return true;
+
+        if (!hasLetter)
+            return true;
+
+        if (allCaps && word.Length <= 5)
+            return true;
+
+        return false;
+    }
 }
