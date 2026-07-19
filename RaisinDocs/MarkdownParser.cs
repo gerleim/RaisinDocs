@@ -1367,10 +1367,11 @@ public static class MarkdownParser
         int colonPos = inner.IndexOf(':');
         if (colonPos >= 2 && colonPos <= 32)
         {
-            bool schemeValid = true;
-            for (int j = 0; j < colonPos; j++)
+            bool schemeValid = char.IsAsciiLetter(inner[0]);
+            for (int j = 1; j < colonPos && schemeValid; j++)
             {
-                if (!char.IsAsciiLetter(inner[j])) { schemeValid = false; break; }
+                char sc = inner[j];
+                if (!char.IsAsciiLetterOrDigit(sc) && sc != '+' && sc != '-' && sc != '.') schemeValid = false;
             }
             if (schemeValid && inner.Length > colonPos + 1)
             {

@@ -532,10 +532,33 @@ public static class HtmlEmitter
         {
             foreach (var link in links)
             {
-                string url = HtmlEncode(PercentEncodeUrl(ResolveEntities(ProcessBackslashEscapes(link.Url))));
+                // Skip bare-URL autolinks (GFM extension, not in CommonMark base spec)
+                if (!link.IsAngleBracket && link.Url.Length > 0 && link.Text == link.Url && link.Title == null && link.RefLabel == null)
+                    continue;
+
+                string url;
+                if (link.IsAngleBracket)
+                    url = HtmlEncode(PercentEncodeUrl(link.Url));
+                else
+                    url = HtmlEncode(PercentEncodeUrl(ResolveEntities(ProcessBackslashEscapes(link.Url))));
                 string titleAttr = link.Title != null ? $" title=\"{HtmlEncodeAttribute(ResolveEntities(ProcessBackslashEscapes(link.Title)))}\"" : "";
-                string linkText = HtmlEncode(ResolveEntities(ProcessBackslashEscapes(link.Text)));
-                replacements.Add((link.Start, link.Start + link.Length, $"<a href=\"{url}\"{titleAttr}>{linkText}</a>"));
+                var linkTextSb = new StringBuilder();
+                if (link.IsAngleBracket)
+                {
+                    linkTextSb.Append(HtmlEncode(link.Text));
+                }
+                else
+                {
+                    var linkTextBlocks = MarkdownParser.Parse(_ => link.Text, 1);
+                    if (linkTextBlocks.Count > 0)
+                    {
+                        var innerBlock = linkTextBlocks[0] with { Links = null };
+                        AppendInlineHtml(linkTextSb, link.Text, innerBlock, 0, options);
+                    }
+                    else
+                        linkTextSb.Append(HtmlEncode(link.Text));
+                }
+                replacements.Add((link.Start, link.Start + link.Length, $"<a href=\"{url}\"{titleAttr}>{linkTextSb}</a>"));
             }
         }
 
@@ -578,8 +601,8 @@ public static class HtmlEmitter
             int ti = pos - offset;
             if (ti < text.Length && text[ti] == '<')
             {
-                var rawStyle = GetStyleAt(runs, pos);
-                if (rawStyle == InlineStyle.Normal || rawStyle == InlineStyle.Image)
+                var htmlStyle = GetStyleAt(runs, pos);
+                if (htmlStyle == InlineStyle.Normal)
                 {
                     int htmlEnd = TryMatchInlineHtml(text, ti);
                     if (htmlEnd > ti)
@@ -593,7 +616,8 @@ public static class HtmlEmitter
             }
 
             // Determine style at this position
-            var style = GetStyleAt(runs, pos);
+            var rawStyle = GetStyleAt(runs, pos);
+            var style = rawStyle;
             if (style == InlineStyle.Image || style == InlineStyle.Link)
                 style = InlineStyle.Normal;
 
@@ -605,9 +629,9 @@ public static class HtmlEmitter
                 if (currentStyle != null) OpenTag(sb, currentStyle.Value);
             }
 
-            // Entity resolution (not inside code spans)
+            // Entity resolution (not inside code spans or escaped characters)
             int ci = pos - offset;
-            if (style != InlineStyle.Code && ci < text.Length && text[ci] == '&')
+            if (style != InlineStyle.Code && rawStyle != InlineStyle.Image && ci < text.Length && text[ci] == '&')
             {
                 int entityEnd = TryResolveEntity(text, ci, out string? decoded);
                 if (entityEnd > ci && decoded != null)
@@ -1007,7 +1031,7 @@ public static class HtmlEmitter
         for (int i = 0; i < url.Length; i++)
         {
             char c = url[i];
-            if (c > 0x7E || (c < 0x20 && c != '\t'))
+            if (c > 0x7E || char.IsHighSurrogate(c))
             {
                 string chunk = char.IsHighSurrogate(c) && i + 1 < url.Length && char.IsLowSurrogate(url[i + 1])
                     ? url.Substring(i++, 2)
@@ -1015,13 +1039,31 @@ public static class HtmlEmitter
                 foreach (byte b in Encoding.UTF8.GetBytes(chunk))
                     sb.Append($"%{b:X2}");
             }
-            else
+            else if (c == '%' && i + 2 < url.Length && IsHexDigit(url[i + 1]) && IsHexDigit(url[i + 2]))
             {
                 sb.Append(c);
+            }
+            else if (IsUrlSafe(c))
+            {
+                sb.Append(c);
+            }
+            else
+            {
+                sb.Append($"%{(int)c:X2}");
             }
         }
         return sb.ToString();
     }
+
+    static bool IsUrlSafe(char c) =>
+        (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9')
+        || c == '-' || c == '_' || c == '.' || c == '~'
+        || c == ':' || c == '/' || c == '?' || c == '#' || c == '@'
+        || c == '!' || c == '$' || c == '&' || c == '\'' || c == '(' || c == ')'
+        || c == '*' || c == '+' || c == ',' || c == ';' || c == '=';
+
+    static bool IsHexDigit(char c) =>
+        (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
 
     static bool IsAsciiPunctuation(char c) =>
         c is '!' or '"' or '#' or '$' or '%' or '&' or '\'' or '(' or ')' or '*' or '+' or ','
