@@ -134,6 +134,22 @@ public static class MarkdownParser
     public static List<ParsedBlock> Parse(Func<int, string> getBlockText, int blockCount)
         => Parse(getBlockText, blockCount, null);
 
+    public static List<ParsedBlock> Parse(Func<int, string> getBlockText, int blockCount,
+        out Dictionary<string, (string Url, string? Title)>? linkDefinitions)
+    {
+        var result = Parse(getBlockText, blockCount, null);
+        // Re-collect definitions for caller use
+        var (defs, _) = CollectDefinitions(getBlockText, blockCount);
+        linkDefinitions = defs;
+        return result;
+    }
+
+    public static ParsedBlock ParseInlineContent(string text, Dictionary<string, (string Url, string? Title)>? defs = null)
+    {
+        var runs = ParseInlines(text, out var images, out var links, out var emphMarkers, defs);
+        return new ParsedBlock { Kind = BlockKind.Paragraph, Runs = runs, Images = images, Links = links, EmphasisMarkers = emphMarkers };
+    }
+
     internal static List<ParsedBlock> Parse(Func<int, string> getBlockText, int blockCount,
         SyntaxHighlighter? highlighter)
     {
@@ -513,7 +529,7 @@ public static class MarkdownParser
         if (i >= text.Length || text[i] != '[') return false;
 
         int labelStart = i + 1;
-        int bracketClose = text.IndexOf(']', labelStart);
+        int bracketClose = FindUnescapedBracketClose(text, labelStart);
         if (bracketClose < 0 || bracketClose == labelStart) return false;
         if (bracketClose + 1 >= text.Length || text[bracketClose + 1] != ':') return false;
 
@@ -1190,7 +1206,11 @@ public static class MarkdownParser
             System.Globalization.UnicodeCategory.FinalQuotePunctuation or
             System.Globalization.UnicodeCategory.InitialQuotePunctuation or
             System.Globalization.UnicodeCategory.OtherPunctuation or
-            System.Globalization.UnicodeCategory.OpenPunctuation;
+            System.Globalization.UnicodeCategory.OpenPunctuation or
+            System.Globalization.UnicodeCategory.CurrencySymbol or
+            System.Globalization.UnicodeCategory.MathSymbol or
+            System.Globalization.UnicodeCategory.ModifierSymbol or
+            System.Globalization.UnicodeCategory.OtherSymbol;
 
     private static void MarkRawHtmlInline(string text, InlineStyle[] styles)
     {
@@ -1251,18 +1271,18 @@ public static class MarkdownParser
         i++;
         while (i < text.Length && (char.IsAsciiLetterOrDigit(text[i]) || text[i] == '-'))
             i++;
-        while (i < text.Length && text[i] is ' ' or '\t') i++;
+        while (i < text.Length && text[i] is ' ' or '\t' or '\n') i++;
 
         while (i < text.Length && (char.IsAsciiLetter(text[i]) || text[i] == '_' || text[i] == ':'))
         {
             i++;
             while (i < text.Length && (char.IsAsciiLetterOrDigit(text[i]) || text[i] is '-' or '.' or '_' or ':'))
                 i++;
-            while (i < text.Length && text[i] is ' ' or '\t') i++;
+            while (i < text.Length && text[i] is ' ' or '\t' or '\n') i++;
             if (i < text.Length && text[i] == '=')
             {
                 i++;
-                while (i < text.Length && text[i] is ' ' or '\t') i++;
+                while (i < text.Length && text[i] is ' ' or '\t' or '\n') i++;
                 if (i >= text.Length) return -1;
                 if (text[i] == '\'' || text[i] == '"')
                 {
@@ -1273,13 +1293,13 @@ public static class MarkdownParser
                 }
                 else
                 {
-                    while (i < text.Length && text[i] != ' ' && text[i] != '\t' &&
+                    while (i < text.Length && text[i] != ' ' && text[i] != '\t' && text[i] != '\n' &&
                            text[i] != '"' && text[i] != '\'' && text[i] != '=' &&
                            text[i] != '<' && text[i] != '>' && text[i] != '`')
                         i++;
                 }
             }
-            while (i < text.Length && text[i] is ' ' or '\t') i++;
+            while (i < text.Length && text[i] is ' ' or '\t' or '\n') i++;
         }
 
         if (i < text.Length && text[i] == '/') i++;
@@ -1292,6 +1312,13 @@ public static class MarkdownParser
         int i = 0;
         while (i < text.Length)
         {
+            // Backslash escape: skip escaped character (prevents it starting a code span or HTML tag)
+            if (text[i] == '\\' && i + 1 < text.Length && IsAsciiPunctuation(text[i + 1]))
+            {
+                i += 2;
+                continue;
+            }
+
             if (text[i] == '<' && styles[i] == InlineStyle.Normal)
             {
                 int end = TryMatchInlineHtmlTag(text, i);
@@ -1757,6 +1784,16 @@ public static class MarkdownParser
         return -1;
     }
 
+    private static int FindUnescapedBracketClose(string text, int from)
+    {
+        for (int i = from; i < text.Length; i++)
+        {
+            if (text[i] == '\\' && i + 1 < text.Length) { i++; continue; }
+            if (text[i] == ']') return i;
+        }
+        return -1;
+    }
+
     private static bool LabelContainsUnescapedBracket(string label)
     {
         for (int i = 0; i < label.Length; i++)
@@ -1801,7 +1838,7 @@ public static class MarkdownParser
             while (i < text.Length)
             {
                 if (text[i] == '\\' && i + 1 < text.Length) { i += 2; continue; }
-                if (text[i] == ' ') break;
+                if (text[i] == ' ' || text[i] == '\n') break;
                 if (text[i] == '(') { parenDepth++; i++; continue; }
                 if (text[i] == ')') { if (parenDepth == 0) break; parenDepth--; i++; continue; }
                 i++;
@@ -1809,8 +1846,8 @@ public static class MarkdownParser
             url = text[urlStart..i];
         }
 
-        // skip whitespace between destination and title
-        while (i < text.Length && text[i] == ' ') i++;
+        // skip whitespace between destination and title (newlines allowed)
+        while (i < text.Length && (text[i] == ' ' || text[i] == '\n')) i++;
         if (i >= text.Length) return -1;
 
         // check for closing paren (no title)
@@ -1837,7 +1874,7 @@ public static class MarkdownParser
         i++; // past closing quote
 
         // skip whitespace, expect closing paren
-        while (i < text.Length && text[i] == ' ') i++;
+        while (i < text.Length && (text[i] == ' ' || text[i] == '\n')) i++;
         if (i >= text.Length || text[i] != ')') return -1;
         return i;
     }

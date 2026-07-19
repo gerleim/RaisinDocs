@@ -8,6 +8,7 @@ namespace RaisinDocs.Html;
 public class HtmlEmitterOptions
 {
     public bool IncludeColorExtensions { get; set; } = true;
+    internal Dictionary<string, (string Url, string? Title)>? LinkDefinitions { get; set; }
 }
 
 public static class HtmlEmitter
@@ -16,7 +17,15 @@ public static class HtmlEmitter
     {
         options ??= new HtmlEmitterOptions();
         var lines = SplitLines(markdown);
-        var blocks = MarkdownParser.Parse(i => lines[i], lines.Count);
+        var multiLineDefs = ExtractMultiLineLinkDefs(lines);
+        var blocks = MarkdownParser.Parse(i => lines[i], lines.Count, out var linkDefs);
+        if (multiLineDefs != null)
+        {
+            linkDefs ??= new Dictionary<string, (string Url, string? Title)>(StringComparer.OrdinalIgnoreCase);
+            foreach (var (k, v) in multiLineDefs)
+                linkDefs.TryAdd(k, v);
+        }
+        options.LinkDefinitions = linkDefs;
         return RenderBlocks(blocks, lines, options, 0);
     }
 
@@ -38,6 +47,177 @@ public static class HtmlEmitter
         if (lines.Count > 0 && lines[^1] == "")
             lines.RemoveAt(lines.Count - 1);
         return lines;
+    }
+
+    static Dictionary<string, (string Url, string? Title)>? ExtractMultiLineLinkDefs(List<string> lines)
+    {
+        Dictionary<string, (string Url, string? Title)>? defs = null;
+        bool inFencedCode = false;
+        string? fenceMarker = null;
+
+        for (int i = 0; i < lines.Count; i++)
+        {
+            var line = lines[i];
+            var trimmed = line.TrimStart();
+
+            // Track fenced code blocks
+            if (trimmed.StartsWith("```") || trimmed.StartsWith("~~~"))
+            {
+                string marker = trimmed.StartsWith("```") ? "```" : "~~~";
+                if (inFencedCode && fenceMarker != null && trimmed.StartsWith(fenceMarker))
+                { inFencedCode = false; fenceMarker = null; continue; }
+                else if (!inFencedCode)
+                { inFencedCode = true; fenceMarker = marker; continue; }
+            }
+            if (inFencedCode) continue;
+
+            // Skip HTML blocks, headings, blockquotes
+            if (trimmed.StartsWith('#') || trimmed.StartsWith('>')) continue;
+
+            int indent = 0;
+            while (indent < line.Length && indent < 3 && line[indent] == ' ') indent++;
+            if (indent >= line.Length || line[indent] != '[') continue;
+
+            // Find end of label (handling escaped brackets and multi-line labels)
+            int labelStart = indent + 1;
+            int bracketClose = -1;
+            int labelEndLine = i;
+            string labelText = line;
+
+            // Try multi-line label: [\nfoo\n]: /url
+            for (int li = i; li < lines.Count && li < i + 4; li++)
+            {
+                string searchIn = li == i ? line : labelText + "\n" + lines[li];
+                if (li > i) labelText = searchIn;
+                for (int k = labelStart; k < searchIn.Length; k++)
+                {
+                    if (searchIn[k] == '\\' && k + 1 < searchIn.Length) { k++; continue; }
+                    if (searchIn[k] == '[') goto nextLine;
+                    if (searchIn[k] == ']') { bracketClose = k; labelEndLine = li; goto foundLabel; }
+                }
+            }
+            continue;
+            foundLabel:
+
+            if (bracketClose == labelStart) continue;
+            if (bracketClose + 1 >= labelText.Length || labelText[bracketClose + 1] != ':') continue;
+
+            string label = labelText[labelStart..bracketClose];
+            // Normalize label: collapse internal whitespace
+            label = System.Text.RegularExpressions.Regex.Replace(label.Trim(), @"\s+", " ");
+            if (string.IsNullOrWhiteSpace(label)) continue;
+
+            // Parse URL and title from remainder (may span multiple lines)
+            int afterColon = bracketClose + 2;
+            string rest = labelText[afterColon..];
+            // Gather continuation lines
+            int consumed = labelEndLine;
+            for (int li = labelEndLine + 1; li < lines.Count && li <= labelEndLine + 10; li++)
+            {
+                if (string.IsNullOrWhiteSpace(lines[li])) break;
+                // Only continue if previous rest needs more (URL missing, title open)
+                rest += "\n" + lines[li];
+                consumed = li;
+            }
+
+            if (!TryParseDefUrlTitle(rest, out string? url, out string? title, out int linesUsed))
+                continue;
+
+            int totalLinesUsed = labelEndLine - i + linesUsed;
+            // Only count as multi-line if more than 1 line consumed
+            if (totalLinesUsed <= 1) continue;
+
+            defs ??= new Dictionary<string, (string Url, string? Title)>(StringComparer.OrdinalIgnoreCase);
+            defs.TryAdd(label, (url!, title));
+
+            // Mark consumed lines as empty so the main parser skips them
+            for (int li = i; li < i + totalLinesUsed && li < lines.Count; li++)
+                lines[li] = "";
+            i += totalLinesUsed - 1;
+            continue;
+            nextLine:;
+        }
+
+        return defs;
+    }
+
+    static bool TryParseDefUrlTitle(string text, out string? url, out string? title, out int linesUsed)
+    {
+        url = null; title = null; linesUsed = 1;
+        int i = 0;
+
+        // Skip whitespace (including newlines)
+        while (i < text.Length && (text[i] == ' ' || text[i] == '\n')) i++;
+        if (i >= text.Length) return false;
+
+        // Count lines consumed by whitespace skip
+        for (int k = 0; k < i; k++)
+            if (text[k] == '\n') linesUsed++;
+
+        // Parse URL
+        int urlStart;
+        if (text[i] == '<')
+        {
+            urlStart = i + 1;
+            i++;
+            while (i < text.Length && text[i] != '>' && text[i] != '\n') { if (text[i] == '\\' && i + 1 < text.Length) i++; i++; }
+            if (i >= text.Length || text[i] != '>') return false;
+            url = text[urlStart..i];
+            i++;
+        }
+        else
+        {
+            urlStart = i;
+            while (i < text.Length && text[i] != ' ' && text[i] != '\n') i++;
+            url = text[urlStart..i];
+        }
+
+        if (url.Length == 0 && (urlStart == 0 || text[urlStart - 1] != '>')) return false;
+
+        // Skip whitespace (including one newline for title continuation)
+        int beforeTitle = i;
+        int linesBeforeTitle = linesUsed;
+        bool sawNewline = false;
+        while (i < text.Length && (text[i] == ' ' || (!sawNewline && text[i] == '\n')))
+        {
+            if (text[i] == '\n') { sawNewline = true; linesUsed++; }
+            i++;
+        }
+
+        // No title, URL only — don't consume extra lines
+        if (i >= text.Length || text[i] == '\n')
+        {
+            linesUsed = linesBeforeTitle;
+            return true;
+        }
+
+        // Parse title
+        char q = text[i];
+        char qClose = q == '"' ? '"' : q == '\'' ? '\'' : q == '(' ? ')' : '\0';
+        if (qClose == '\0')
+        {
+            // Not a valid title — revert to URL-only, don't consume extra lines
+            linesUsed = linesBeforeTitle;
+            return sawNewline; // if title was on same line, it's invalid; if newline, URL stands alone
+        }
+
+        i++; // past opening quote
+        int titleStart = i;
+        while (i < text.Length && text[i] != qClose)
+        {
+            if (text[i] == '\\' && i + 1 < text.Length) i++;
+            if (text[i] == '\n') linesUsed++;
+            i++;
+        }
+        if (i >= text.Length) return false;
+        title = text[titleStart..i];
+        i++; // past closing quote
+
+        // Rest of line must be blank
+        while (i < text.Length && text[i] == ' ') i++;
+        if (i < text.Length && text[i] != '\n') return false;
+
+        return true;
     }
 
     static string RenderBlocks(List<ParsedBlock> blocks, List<string> lines, HtmlEmitterOptions options, int depth = 0)
@@ -149,69 +329,116 @@ public static class HtmlEmitter
         if (string.IsNullOrWhiteSpace(lines[start]))
             return start + 1;
 
-        // Check if this paragraph is actually a setext heading (next line is SetextUnderline)
-        if (start + 1 < blocks.Count && blocks[start + 1].Kind == BlockKind.SetextUnderline)
+        // Check if this paragraph block sequence ends with a setext underline
+        int setextEnd = FindSetextEnd(blocks, lines, start);
+        if (setextEnd > 0)
         {
-            var underText = lines[start + 1];
+            var underText = lines[setextEnd];
             int level = underText.TrimStart().StartsWith('=') ? 1 : 2;
             sb.Append($"<h{level}>");
-            AppendInlineContent(sb, blocks[start], lines[start], options);
+            var (joinedH, _) = JoinParagraphLines(blocks, lines, start, setextEnd);
+            AppendJoinedInlineHtml(sb, joinedH, null, options);
             sb.Append($"</h{level}>\n");
-            return start + 2;
+            return setextEnd + 1;
         }
 
         sb.Append("<p>");
+        var (joined, _) = JoinParagraphLines(blocks, lines, start);
+        AppendJoinedInlineHtml(sb, joined, null, options);
+        sb.Append("</p>\n");
+
+        // Advance past consumed lines
         int i = start;
-        bool first = true;
-        bool prevHadBreak = false;
-        while (i < blocks.Count && blocks[i].Kind == BlockKind.Paragraph)
+        while (i < blocks.Count)
         {
-            // Stop at blank lines
-            if (string.IsNullOrWhiteSpace(lines[i]))
+            if (blocks[i].Kind == BlockKind.Paragraph)
+            { /* ok */ }
+            else if (blocks[i].Kind is BlockKind.Heading1 or BlockKind.Heading2)
+            {
+                if (i + 1 >= blocks.Count || blocks[i + 1].Kind != BlockKind.SetextUnderline)
+                    break;
+            }
+            else
                 break;
 
-            if (!first && !prevHadBreak)
-                sb.Append('\n');
-            first = false;
+            if (string.IsNullOrWhiteSpace(lines[i])) break;
+            i++;
+            if (i < blocks.Count && blocks[i].Kind == BlockKind.SetextUnderline) break;
+        }
+        return i;
+    }
 
-            var block = blocks[i];
+    static int FindSetextEnd(List<ParsedBlock> blocks, List<string> lines, int start)
+    {
+        int i = start;
+        while (i < blocks.Count && blocks[i].Kind == BlockKind.Paragraph && !string.IsNullOrWhiteSpace(lines[i]))
+        {
+            if (i + 1 < blocks.Count && blocks[i + 1].Kind == BlockKind.SetextUnderline)
+                return i + 1;
+            // Parser converts last paragraph before underline to Heading — check for that
+            if (i + 1 < blocks.Count && blocks[i + 1].Kind is BlockKind.Heading1 or BlockKind.Heading2
+                && i + 2 < blocks.Count && blocks[i + 2].Kind == BlockKind.SetextUnderline)
+                return i + 2;
+            i++;
+        }
+        return 0;
+    }
+
+    static (string Joined, HashSet<int>? HardBreaks) JoinParagraphLines(List<ParsedBlock> blocks, List<string> lines, int start, int endBefore = -1)
+    {
+        var joined = new StringBuilder();
+
+        int i = start;
+        while (i < blocks.Count)
+        {
+            if (blocks[i].Kind == BlockKind.Paragraph)
+            { /* ok */ }
+            else if (blocks[i].Kind is BlockKind.Heading1 or BlockKind.Heading2)
+            {
+                // Only include if followed by SetextUnderline (parser converted last paragraph line)
+                if (i + 1 >= blocks.Count || blocks[i + 1].Kind != BlockKind.SetextUnderline)
+                    break;
+            }
+            else
+                break;
+
+            if (string.IsNullOrWhiteSpace(lines[i])) break;
+            if (endBefore > 0 && i >= endBefore) break;
+            if (endBefore < 0 && i + 1 < blocks.Count && blocks[i + 1].Kind == BlockKind.SetextUnderline)
+                break;
+
             var text = lines[i];
+            bool hasNextLine;
+            if (endBefore > 0)
+                hasNextLine = i + 1 < endBefore;
+            else
+                hasNextLine = (i + 1) < blocks.Count
+                    && blocks[i + 1].Kind == BlockKind.Paragraph
+                    && !string.IsNullOrWhiteSpace(lines[i + 1])
+                    && (i + 1 >= blocks.Count - 1 || blocks[i + 2].Kind != BlockKind.SetextUnderline);
 
-            // Determine if there's a following line in this paragraph
-            bool hasNextLine = (i + 1) < blocks.Count
-                && blocks[i + 1].Kind == BlockKind.Paragraph
-                && !string.IsNullOrWhiteSpace(lines[i + 1])
-                && (i + 1 >= blocks.Count - 1 || blocks[i + 2].Kind != BlockKind.SetextUnderline);
-
-            // Hard breaks only apply when there's a continuation line
-            bool hardBreak = hasNextLine && MarkdownParser.IsTrailingHardBreak(block, text);
-            bool trailingSpaces = hasNextLine && !hardBreak && text.Length >= 2 && text[^1] == ' ' && text[^2] == ' ';
-            string content;
-            if (hardBreak) content = text[..^1];
-            else if (trailingSpaces) content = text.TrimEnd();
-            else content = text;
-
-            // CommonMark: strip leading/trailing whitespace from paragraph lines
-            int leadingSpaces = 0;
-            while (leadingSpaces < content.Length && content[leadingSpaces] == ' ') leadingSpaces++;
-            content = content.TrimStart();
-            if (!hardBreak && !trailingSpaces)
+            string content = text.TrimStart();
+            if (!hasNextLine)
                 content = content.TrimEnd();
 
-            AppendInlineHtml(sb, content, block, leadingSpaces, options);
+            joined.Append(content);
 
-            if (hardBreak || trailingSpaces)
-                sb.Append("<br />\n");
+            if (hasNextLine)
+                joined.Append('\n');
 
-            prevHadBreak = hardBreak || trailingSpaces;
             i++;
-
-            // Stop if next block is a setext underline (belongs to this paragraph as heading)
-            if (i < blocks.Count && blocks[i].Kind == BlockKind.SetextUnderline)
-                break;
         }
-        sb.Append("</p>\n");
-        return i;
+
+        return (joined.ToString(), null);
+    }
+
+    static void AppendJoinedInlineHtml(StringBuilder sb, string text, HashSet<int>? hardBreaks, HtmlEmitterOptions options)
+    {
+        if (string.IsNullOrEmpty(text))
+            return;
+
+        var block = MarkdownParser.ParseInlineContent(text, options.LinkDefinitions);
+        AppendInlineHtml(sb, text, block, 0, options, hardBreaks);
     }
 
     static int RenderHtmlBlock(StringBuilder sb, List<ParsedBlock> blocks, List<string> lines, int start)
@@ -325,12 +552,27 @@ public static class HtmlEmitter
 
         var innerLines = new List<string>();
         int i = start;
-        while (i < blocks.Count && blocks[i].Kind == BlockKind.Blockquote)
+        bool canLazyContinue = false;
+        while (i < blocks.Count)
         {
-            string text = lines[i];
-            string stripped = StripBlockquotePrefix(text);
-            innerLines.Add(stripped);
-            i++;
+            if (blocks[i].Kind == BlockKind.Blockquote)
+            {
+                string stripped = StripBlockquotePrefix(lines[i]);
+                innerLines.Add(stripped);
+                // Lazy continuation is allowed only after non-blank paragraph content
+                // (not after blank lines, code fences, headings, etc.)
+                canLazyContinue = !string.IsNullOrWhiteSpace(stripped) && !IsBlockStructureStart(stripped);
+                i++;
+            }
+            else if (blocks[i].Kind == BlockKind.Paragraph && !string.IsNullOrWhiteSpace(lines[i])
+                && innerLines.Count > 0 && canLazyContinue)
+            {
+                // Lazy continuation: paragraph line continues the blockquote content
+                innerLines.Add(lines[i]);
+                i++;
+            }
+            else
+                break;
         }
 
         var innerBlocks = MarkdownParser.Parse(idx => innerLines[idx], innerLines.Count);
@@ -488,7 +730,7 @@ public static class HtmlEmitter
         AppendInlineHtml(sb, text, block, 0, options);
     }
 
-    static void AppendInlineHtml(StringBuilder sb, string text, ParsedBlock block, int offset, HtmlEmitterOptions options)
+    static void AppendInlineHtml(StringBuilder sb, string text, ParsedBlock block, int offset, HtmlEmitterOptions options, HashSet<int>? hardBreaks = null)
     {
         if (string.IsNullOrEmpty(text))
             return;
@@ -539,15 +781,15 @@ public static class HtmlEmitter
                 int contentLen = contentEnd - contentStart;
                 if (contentLen >= 2)
                 {
-                    bool startsWithSpace = (contentStart - offset) >= 0 && (contentStart - offset) < text.Length && text[contentStart - offset] == ' ';
-                    bool endsWithSpace = (contentEnd - 1 - offset) >= 0 && (contentEnd - 1 - offset) < text.Length && text[contentEnd - 1 - offset] == ' ';
+                    bool startsWithSpace = (contentStart - offset) >= 0 && (contentStart - offset) < text.Length && text[contentStart - offset] is ' ' or '\n';
+                    bool endsWithSpace = (contentEnd - 1 - offset) >= 0 && (contentEnd - 1 - offset) < text.Length && text[contentEnd - 1 - offset] is ' ' or '\n';
                     if (startsWithSpace && endsWithSpace)
                     {
                         bool allSpaces = true;
                         for (int k = contentStart; k < contentEnd; k++)
                         {
                             int ti = k - offset;
-                            if (ti >= 0 && ti < text.Length && text[ti] != ' ')
+                            if (ti >= 0 && ti < text.Length && text[ti] is not ' ' and not '\n')
                             { allSpaces = false; break; }
                         }
                         if (!allSpaces)
@@ -683,7 +925,8 @@ public static class HtmlEmitter
             {
                 var htmlStyle = GetStyleAt(runs, pos);
                 if (htmlStyle == InlineStyle.Normal || htmlStyle == InlineStyle.Italic
-                    || htmlStyle == InlineStyle.Bold || htmlStyle == InlineStyle.BoldItalic)
+                    || htmlStyle == InlineStyle.Bold || htmlStyle == InlineStyle.BoldItalic
+                    || htmlStyle == InlineStyle.Link)
                 {
                     int htmlEnd = TryMatchInlineHtml(text, ti);
                     if (htmlEnd > ti)
@@ -721,6 +964,45 @@ public static class HtmlEmitter
                     pos = offset + entityEnd;
                     continue;
                 }
+            }
+
+            // Handle newline characters (from joined paragraph lines)
+            if (text[ci] == '\n')
+            {
+                if (currentStyle == InlineStyle.Code)
+                {
+                    sb.Append(' ');
+                }
+                else
+                {
+                    // Detect hard break: backslash or 2+ spaces before \n
+                    bool isHardBreak = false;
+                    if (ci > 0 && text[ci - 1] == '\\')
+                    {
+                        // Backslash hard break — remove the trailing backslash from output
+                        if (sb.Length > 0 && sb[^1] == '\\') sb.Length--;
+                        isHardBreak = true;
+                    }
+                    else if (ci >= 2 && text[ci - 1] == ' ' && text[ci - 2] == ' ')
+                    {
+                        // Trailing spaces hard break — remove trailing spaces from output
+                        while (sb.Length > 0 && sb[^1] == ' ') sb.Length--;
+                        isHardBreak = true;
+                    }
+
+                    if (isHardBreak)
+                    {
+                        sb.Append("<br />\n");
+                    }
+                    else
+                    {
+                        // Soft break: strip trailing spaces from preceding output
+                        while (sb.Length > 0 && sb[^1] == ' ') sb.Length--;
+                        sb.Append('\n');
+                    }
+                }
+                pos++;
+                continue;
             }
 
             sb.Append(HtmlEncode(text[ci..(ci + 1)]));
@@ -793,6 +1075,19 @@ public static class HtmlEmitter
         }
 
         return content.Trim();
+    }
+
+    static bool IsBlockStructureStart(string text)
+    {
+        var trimmed = text.TrimStart();
+        if (trimmed.Length == 0) return false;
+        // Fenced code
+        if (trimmed.StartsWith("```") || trimmed.StartsWith("~~~")) return true;
+        // ATX heading
+        if (trimmed.StartsWith('#') && (trimmed.Length == 1 || trimmed[1] == ' ' || trimmed[1] == '#')) return true;
+        // Indented code (4+ spaces)
+        if (text.Length >= 4 && text[..4] == "    ") return true;
+        return false;
     }
 
     static string StripBlockquotePrefix(string text)
@@ -1059,9 +1354,9 @@ public static class HtmlEmitter
                 else
                 {
                     // Unquoted value
-                    if (text[p] == ' ' || text[p] == '"' || text[p] == '\'' || text[p] == '=' || text[p] == '<' || text[p] == '>' || text[p] == '`')
+                    if (text[p] == ' ' || text[p] == '\n' || text[p] == '"' || text[p] == '\'' || text[p] == '=' || text[p] == '<' || text[p] == '>' || text[p] == '`')
                         return start;
-                    while (p < text.Length && text[p] != ' ' && text[p] != '"' && text[p] != '\'' && text[p] != '=' && text[p] != '<' && text[p] != '>' && text[p] != '`')
+                    while (p < text.Length && text[p] != ' ' && text[p] != '\n' && text[p] != '"' && text[p] != '\'' && text[p] != '=' && text[p] != '<' && text[p] != '>' && text[p] != '`')
                         p++;
                 }
             }
