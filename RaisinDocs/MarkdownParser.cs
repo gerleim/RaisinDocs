@@ -1009,7 +1009,7 @@ public static class MarkdownParser
         if (IsThematicBreak(text))
             return BlockKind.ThematicBreak;
 
-        if (text.Length >= 2 && text[0] is '-' or '*' && text[1] is ' ' or '\t')
+        if (text.Length >= 2 && text[0] is '-' or '*' or '+' && text[1] is ' ' or '\t')
         {
             if (text.Length >= 6 && text[2] == '[' && text[4] == ']' && text[5] == ' ')
             {

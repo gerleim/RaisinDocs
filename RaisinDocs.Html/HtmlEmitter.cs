@@ -584,22 +584,17 @@ public static class HtmlEmitter
 
     static int RenderUnorderedList(StringBuilder sb, List<ParsedBlock> blocks, List<string> lines, int start, HtmlEmitterOptions options)
     {
+        char marker = lines[start].TrimStart()[0];
+        int markerIndent = GetListMarkerIndent(lines[start]);
+        int contentIndent = GetListContentIndent(lines[start]);
+
+        var items = CollectListItems(blocks, lines, start, BlockKind.UnorderedListItem, contentIndent, out int end, out bool isLoose, marker);
+
         sb.Append("<ul>\n");
-        int i = start;
-        while (i < blocks.Count && blocks[i].Kind == BlockKind.UnorderedListItem)
-        {
-            sb.Append("<li>");
-            string content = StripListPrefix(lines[i]);
-            var innerBlocks = MarkdownParser.Parse(_ => content, 1);
-            if (innerBlocks.Count > 0)
-                AppendInlineHtml(sb, content, innerBlocks[0], 0, options);
-            else
-                sb.Append(HtmlEncode(content));
-            sb.Append("</li>\n");
-            i++;
-        }
+        foreach (var item in items)
+            RenderListItem(sb, item, isLoose, options);
         sb.Append("</ul>\n");
-        return i;
+        return end;
     }
 
     static int RenderOrderedList(StringBuilder sb, List<ParsedBlock> blocks, List<string> lines, int start, HtmlEmitterOptions options)
@@ -610,21 +605,14 @@ public static class HtmlEmitter
         else
             sb.Append("<ol>\n");
 
-        int i = start;
-        while (i < blocks.Count && blocks[i].Kind == BlockKind.OrderedListItem)
-        {
-            sb.Append("<li>");
-            string content = StripOrderedListPrefix(lines[i]);
-            var innerBlocks = MarkdownParser.Parse(_ => content, 1);
-            if (innerBlocks.Count > 0)
-                AppendInlineHtml(sb, content, innerBlocks[0], 0, options);
-            else
-                sb.Append(HtmlEncode(content));
-            sb.Append("</li>\n");
-            i++;
-        }
+        int contentIndent = GetListContentIndent(lines[start]);
+        var items = CollectListItems(blocks, lines, start, BlockKind.OrderedListItem, contentIndent, out int end, out bool isLoose);
+
+        sb.Append("<ol>\n");
+        foreach (var item in items)
+            RenderListItem(sb, item, isLoose, options);
         sb.Append("</ol>\n");
-        return i;
+        return end;
     }
 
     static int RenderTaskList(StringBuilder sb, List<ParsedBlock> blocks, List<string> lines, int start, HtmlEmitterOptions options)
@@ -1109,7 +1097,7 @@ public static class HtmlEmitter
         var trimmed = text.AsSpan();
         int spaces = 0;
         while (spaces < trimmed.Length && trimmed[spaces] == ' ') spaces++;
-        if (spaces < trimmed.Length && (trimmed[spaces] == '-' || trimmed[spaces] == '*'))
+        if (spaces < trimmed.Length && (trimmed[spaces] == '-' || trimmed[spaces] == '*' || trimmed[spaces] == '+'))
         {
             int afterMarker = spaces + 1;
             if (afterMarker < trimmed.Length && trimmed[afterMarker] == ' ')
@@ -1153,6 +1141,171 @@ public static class HtmlEmitter
         if (i > numStart && int.TryParse(text[numStart..i], out int num))
             return num;
         return 1;
+    }
+
+    static int GetListMarkerIndent(string text)
+    {
+        int i = 0;
+        while (i < text.Length && text[i] == ' ') i++;
+        return i;
+    }
+
+    static int GetListContentIndent(string text)
+    {
+        int i = 0;
+        while (i < text.Length && text[i] == ' ') i++;
+        // Skip marker
+        if (i < text.Length && (text[i] == '-' || text[i] == '*' || text[i] == '+'))
+        {
+            i++;
+        }
+        else
+        {
+            // Ordered: skip digits and delimiter
+            while (i < text.Length && char.IsDigit(text[i])) i++;
+            if (i < text.Length && (text[i] == '.' || text[i] == ')')) i++;
+        }
+        // Skip one space after marker
+        if (i < text.Length && text[i] == ' ') i++;
+        return i;
+    }
+
+    static List<List<string>> CollectListItems(List<ParsedBlock> blocks, List<string> lines, int start,
+        BlockKind itemKind, int contentIndent, out int end, out bool isLoose, char marker = '\0')
+    {
+        var items = new List<List<string>>();
+        var currentItem = new List<string>();
+        isLoose = false;
+        int i = start;
+        bool seenBlank = false;
+        int firstMarkerIndent = GetListMarkerIndent(lines[start]);
+
+        while (i < blocks.Count)
+        {
+            if (blocks[i].Kind == itemKind)
+            {
+                int thisMarkerIndent = GetListMarkerIndent(lines[i]);
+
+                // Check if same marker type for unordered lists
+                if (itemKind == BlockKind.UnorderedListItem && marker != '\0')
+                {
+                    var trimmed = lines[i].TrimStart();
+                    if (trimmed.Length > 0 && trimmed[0] != marker)
+                    {
+                        // Different marker — if at same indent level, break list
+                        if (thisMarkerIndent <= firstMarkerIndent + 1)
+                            break;
+                        // Otherwise it's a nested sublist — add as continuation
+                        if (currentItem.Count > 0 && thisMarkerIndent >= contentIndent)
+                        {
+                            currentItem.Add(lines[i][contentIndent..]);
+                            i++;
+                            continue;
+                        }
+                        break;
+                    }
+                }
+
+                // If indented beyond current content column, this is a nested sublist
+                if (currentItem.Count > 0 && thisMarkerIndent >= contentIndent)
+                {
+                    currentItem.Add(lines[i][contentIndent..]);
+                    i++;
+                    continue;
+                }
+
+                if (currentItem.Count > 0)
+                {
+                    if (seenBlank) isLoose = true;
+                    items.Add(currentItem);
+                    currentItem = new List<string>();
+                }
+                string content = itemKind == BlockKind.OrderedListItem
+                    ? StripOrderedListPrefix(lines[i])
+                    : StripListPrefix(lines[i]);
+                currentItem.Add(content);
+                contentIndent = GetListContentIndent(lines[i]);
+                seenBlank = false;
+                i++;
+            }
+            else if (blocks[i].Kind == BlockKind.Paragraph && string.IsNullOrWhiteSpace(lines[i]))
+            {
+                if (currentItem.Count > 0)
+                {
+                    currentItem.Add("");
+                    seenBlank = true;
+                }
+                i++;
+            }
+            else if (currentItem.Count > 0 && !string.IsNullOrWhiteSpace(lines[i]))
+            {
+                // Check if indented enough to be continuation
+                int lineIndent = 0;
+                while (lineIndent < lines[i].Length && lines[i][lineIndent] == ' ') lineIndent++;
+                if (lineIndent >= contentIndent)
+                {
+                    currentItem.Add(lines[i][contentIndent..]);
+                    i++;
+                }
+                else if (seenBlank)
+                    break;
+                else if (blocks[i].Kind == BlockKind.Paragraph)
+                {
+                    // Lazy continuation (only for paragraphs)
+                    currentItem.Add(lines[i]);
+                    i++;
+                }
+                else
+                    break;
+            }
+            else
+                break;
+        }
+
+        if (currentItem.Count > 0)
+            items.Add(currentItem);
+
+        // Trim trailing blank lines from last item
+        if (items.Count > 0)
+        {
+            var lastItem = items[^1];
+            while (lastItem.Count > 0 && string.IsNullOrWhiteSpace(lastItem[^1]))
+                lastItem.RemoveAt(lastItem.Count - 1);
+        }
+
+        end = i;
+        return items;
+    }
+
+    static void RenderListItem(StringBuilder sb, List<string> itemLines, bool isLoose, HtmlEmitterOptions options)
+    {
+        sb.Append("<li>");
+
+        if (!isLoose && itemLines.Count == 1)
+        {
+            // Tight single-line: inline content, no <p>
+            var innerBlocks = MarkdownParser.Parse(_ => itemLines[0], 1);
+            if (innerBlocks.Count > 0)
+                AppendInlineHtml(sb, itemLines[0], innerBlocks[0], 0, options);
+            else
+                sb.Append(HtmlEncode(itemLines[0]));
+        }
+        else
+        {
+            // Multi-line or loose: re-parse and render as blocks
+            sb.Append('\n');
+            var innerBlocks = MarkdownParser.Parse(idx => itemLines[idx], itemLines.Count, out var innerDefs);
+            var innerOptions = new HtmlEmitterOptions { LinkDefinitions = options.LinkDefinitions };
+            if (innerDefs != null)
+            {
+                innerOptions.LinkDefinitions ??= new Dictionary<string, (string Url, string? Title)>(StringComparer.OrdinalIgnoreCase);
+                foreach (var (k, v) in innerDefs)
+                    innerOptions.LinkDefinitions.TryAdd(k, v);
+            }
+            sb.Append(RenderBlocks(innerBlocks, itemLines, innerOptions));
+        }
+
+        sb.Append("</li>\n");
     }
 
     static string RemoveIndent(string text, int count)
