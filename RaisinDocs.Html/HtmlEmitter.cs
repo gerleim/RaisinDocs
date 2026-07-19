@@ -561,6 +561,25 @@ public static class HtmlEmitter
             }
         }
 
+        // Build emphasis open/close events from markers
+        // Markers are in pairs: [0]=opener, [1]=closer, [2]=opener, [3]=closer, ...
+        var emphOpen = new Dictionary<int, int>(); // position → consume (1=em, 2=strong)
+        var emphClose = new Dictionary<int, int>(); // position → consume
+        if (emphMarkers != null)
+        {
+            for (int mi = 0; mi + 1 < emphMarkers.Count; mi += 2)
+            {
+                var opener = emphMarkers[mi];
+                var closer = emphMarkers[mi + 1];
+                int openPos = opener.Start + opener.Length;
+                int closePos = closer.Start;
+                emphOpen.TryGetValue(openPos, out int existingOpen);
+                emphOpen[openPos] = existingOpen + opener.Length;
+                emphClose.TryGetValue(closePos, out int existingClose);
+                emphClose[closePos] = existingClose + closer.Length;
+            }
+        }
+
         // Collect link/image replacements sorted by position
         var replacements = new List<(int Start, int End, string Html)>();
 
@@ -568,7 +587,7 @@ public static class HtmlEmitter
         {
             foreach (var img in images)
             {
-                string alt = HtmlEncode(ResolveEntities(ProcessBackslashEscapes(img.AltText)));
+                string alt = HtmlEncode(StripInlineMarkdown(img.AltText));
                 string url = HtmlEncode(PercentEncodeUrl(ResolveEntities(ProcessBackslashEscapes(img.Url))));
                 string titleAttr = img.Title != null ? $" title=\"{HtmlEncodeAttribute(ResolveEntities(ProcessBackslashEscapes(img.Title)))}\"" : "";
                 replacements.Add((img.Start, img.Start + img.Length, $"<img src=\"{url}\" alt=\"{alt}\"{titleAttr} />"));
@@ -622,7 +641,6 @@ public static class HtmlEmitter
             // Check for replacement (link/image)
             if (replIdx < replacements.Count && pos == replacements[replIdx].Start)
             {
-                if (currentStyle != null) { CloseTag(sb, currentStyle.Value); currentStyle = null; }
                 sb.Append(replacements[replIdx].Html);
                 pos = replacements[replIdx].End;
                 replIdx++;
@@ -637,6 +655,13 @@ public static class HtmlEmitter
                 continue;
             }
 
+            // Emit emphasis close tags at this position
+            if (emphClose.TryGetValue(pos, out int closeLen))
+            {
+                while (closeLen >= 2) { sb.Append("</strong>"); closeLen -= 2; }
+                if (closeLen == 1) sb.Append("</em>");
+            }
+
             // Skip hidden (delimiter) characters
             if (hidden.Contains(pos))
             {
@@ -644,17 +669,24 @@ public static class HtmlEmitter
                 continue;
             }
 
+            // Emit emphasis open tags at this position
+            if (emphOpen.TryGetValue(pos, out int openLen))
+            {
+                while (openLen >= 2) { sb.Append("<strong>"); openLen -= 2; }
+                if (openLen == 1) sb.Append("<em>");
+            }
+
             // Check for raw inline HTML (pass through verbatim)
             int ti = pos - offset;
             if (ti < text.Length && text[ti] == '<')
             {
                 var htmlStyle = GetStyleAt(runs, pos);
-                if (htmlStyle == InlineStyle.Normal)
+                if (htmlStyle == InlineStyle.Normal || htmlStyle == InlineStyle.Italic
+                    || htmlStyle == InlineStyle.Bold || htmlStyle == InlineStyle.BoldItalic)
                 {
                     int htmlEnd = TryMatchInlineHtml(text, ti);
                     if (htmlEnd > ti)
                     {
-                        if (currentStyle != null) { CloseTag(sb, currentStyle.Value); currentStyle = null; }
                         sb.Append(text[ti..htmlEnd]);
                         pos = offset + htmlEnd;
                         continue;
@@ -662,13 +694,14 @@ public static class HtmlEmitter
                 }
             }
 
-            // Determine style at this position
+            // Determine style at this position (code/strikethrough only — emphasis handled via markers)
             var rawStyle = GetStyleAt(runs, pos);
             var style = rawStyle;
-            if (style == InlineStyle.Image || style == InlineStyle.Link)
+            if (style is InlineStyle.Italic or InlineStyle.Bold or InlineStyle.BoldItalic
+                or InlineStyle.Image or InlineStyle.Link or InlineStyle.Normal)
                 style = InlineStyle.Normal;
 
-            // Handle style transitions
+            // Handle code/strikethrough style transitions
             if (style != currentStyle)
             {
                 if (currentStyle != null) CloseTag(sb, currentStyle.Value);
@@ -693,6 +726,7 @@ public static class HtmlEmitter
             pos++;
         }
 
+        // Close any remaining code/strikethrough
         if (currentStyle != null) CloseTag(sb, currentStyle.Value);
     }
 
@@ -1036,6 +1070,143 @@ public static class HtmlEmitter
             }
         }
         return start;
+    }
+
+    static string StripInlineMarkdown(string text)
+    {
+        var sb = new StringBuilder(text.Length);
+        for (int i = 0; i < text.Length; i++)
+        {
+            if (text[i] == '\\' && i + 1 < text.Length && IsAsciiPunctuation(text[i + 1]))
+            {
+                sb.Append(text[i + 1]);
+                i++;
+            }
+            else if (text[i] == '`')
+            {
+                int ticks = 1;
+                while (i + ticks < text.Length && text[i + ticks] == '`') ticks++;
+                int closeStart = text.IndexOf(new string('`', ticks), i + ticks, StringComparison.Ordinal);
+                if (closeStart >= 0)
+                {
+                    string content = text[(i + ticks)..closeStart];
+                    sb.Append(content.Trim());
+                    i = closeStart + ticks - 1;
+                }
+                else
+                {
+                    sb.Append('`', ticks);
+                    i += ticks - 1;
+                }
+            }
+            else if (text[i] == '!' && i + 1 < text.Length && text[i + 1] == '[')
+            {
+                int bracketClose = FindClosingBracket(text, i + 2);
+                if (bracketClose >= 0)
+                {
+                    int afterBracket = bracketClose + 1;
+                    if (afterBracket < text.Length && text[afterBracket] == '(')
+                    {
+                        int parenClose = FindClosingParen(text, afterBracket + 1);
+                        if (parenClose >= 0)
+                        {
+                            sb.Append(StripInlineMarkdown(text[(i + 2)..bracketClose]));
+                            i = parenClose;
+                            continue;
+                        }
+                    }
+                    else if (afterBracket < text.Length && text[afterBracket] == '[')
+                    {
+                        int refClose = text.IndexOf(']', afterBracket + 1);
+                        if (refClose >= 0)
+                        {
+                            sb.Append(StripInlineMarkdown(text[(i + 2)..bracketClose]));
+                            i = refClose;
+                            continue;
+                        }
+                    }
+                }
+                sb.Append('!');
+            }
+            else if (text[i] == '[')
+            {
+                int bracketClose = FindClosingBracket(text, i + 1);
+                if (bracketClose >= 0)
+                {
+                    int afterBracket = bracketClose + 1;
+                    if (afterBracket < text.Length && text[afterBracket] == '(')
+                    {
+                        int parenClose = FindClosingParen(text, afterBracket + 1);
+                        if (parenClose >= 0)
+                        {
+                            sb.Append(StripInlineMarkdown(text[(i + 1)..bracketClose]));
+                            i = parenClose;
+                            continue;
+                        }
+                    }
+                    else if (afterBracket < text.Length && text[afterBracket] == '[')
+                    {
+                        int refClose = text.IndexOf(']', afterBracket + 1);
+                        if (refClose >= 0)
+                        {
+                            sb.Append(StripInlineMarkdown(text[(i + 1)..bracketClose]));
+                            i = refClose;
+                            continue;
+                        }
+                    }
+                }
+                sb.Append('[');
+            }
+            else if (text[i] is '*' or '_')
+            {
+                continue;
+            }
+            else if (text[i] == '&')
+            {
+                int semiIdx = text.IndexOf(';', i + 1);
+                if (semiIdx > i && semiIdx - i <= 32)
+                {
+                    string entity = text[i..(semiIdx + 1)];
+                    string decoded = WebUtility.HtmlDecode(entity);
+                    if (decoded != entity)
+                    {
+                        sb.Append(decoded);
+                        i = semiIdx;
+                        continue;
+                    }
+                }
+                sb.Append('&');
+            }
+            else
+            {
+                sb.Append(text[i]);
+            }
+        }
+        return sb.ToString();
+    }
+
+    static int FindClosingBracket(string text, int from)
+    {
+        int depth = 1;
+        for (int i = from; i < text.Length; i++)
+        {
+            if (text[i] == '\\' && i + 1 < text.Length) { i++; continue; }
+            if (text[i] == '[') depth++;
+            else if (text[i] == ']') { depth--; if (depth == 0) return i; }
+        }
+        return -1;
+    }
+
+    static int FindClosingParen(string text, int from)
+    {
+        int depth = 1;
+        for (int i = from; i < text.Length; i++)
+        {
+            if (text[i] == '\\' && i + 1 < text.Length) { i++; continue; }
+            if (text[i] == '(') depth++;
+            else if (text[i] == ')') { depth--; if (depth == 0) return i; }
+        }
+        return -1;
     }
 
     static string ProcessBackslashEscapes(string text)
