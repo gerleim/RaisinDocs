@@ -1391,29 +1391,43 @@ public static class MarkdownParser
         Dictionary<string, (string Url, string? Title)>? defs = null)
     {
         List<InlineLink>? links = null;
-        int i = 0;
-        while (i <= text.Length - 3) // minimum: [x] (shortcut reference)
+
+        // Collect opener positions ([ characters with Normal style, not preceded by image !)
+        var openers = new List<int>();
+        var active = new List<bool>();
+        for (int k = 0; k < text.Length; k++)
         {
-            if (text[i] != '[' || styles[i] != InlineStyle.Normal)
+            if (text[k] == '[' && styles[k] == InlineStyle.Normal)
             {
-                i++;
-                continue;
+                openers.Add(k);
+                active.Add(true);
             }
+        }
 
+        // Scan for ] closers left-to-right; match with nearest active opener
+        for (int ci = 0; ci < text.Length; ci++)
+        {
+            if (text[ci] != ']' || styles[ci] != InlineStyle.Normal) continue;
 
-            int textStart = i + 1;
-            int bracketClose = FindMatchingBracket(text, textStart, styles);
-            if (bracketClose < 0)
+            // Find nearest active opener before this ]
+            int openerIdx = -1;
+            for (int oi = openers.Count - 1; oi >= 0; oi--)
             {
-                i++;
-                continue;
+                if (openers[oi] >= ci) continue;
+                if (!active[oi]) continue;
+                openerIdx = oi;
+                break;
             }
+            if (openerIdx < 0) continue;
 
-            string linkText = text[textStart..bracketClose];
+            int openPos = openers[openerIdx];
+            int bracketClose = ci;
+            string linkText = text[(openPos + 1)..bracketClose];
             string url;
             string? title;
             int end;
             string? refLabel = null;
+            bool matched = false;
 
             if (bracketClose + 1 < text.Length && text[bracketClose + 1] == '(')
             {
@@ -1422,27 +1436,47 @@ public static class MarkdownParser
                 if (parenClose >= 0)
                 {
                     end = parenClose + 1;
+                    matched = true;
                 }
-                else if (TryResolveReference(text, bracketClose, linkText, defs, out url!, out title, out end, out var resolvedLabel2))
+                else if (TryResolveReference(text, bracketClose, linkText, defs, out url!, out title, out end, out var rl2))
                 {
-                    refLabel = resolvedLabel2;
+                    refLabel = rl2;
+                    matched = true;
                 }
-                else { i++; continue; }
+                else { url = ""; end = 0; }
             }
-            else if (TryResolveReference(text, bracketClose, linkText, defs, out url!, out title, out end, out var resolvedLabel))
+            else if (TryResolveReference(text, bracketClose, linkText, defs, out url!, out title, out end, out var rl))
             {
-                refLabel = resolvedLabel;
+                refLabel = rl;
+                matched = true;
             }
-            else { i++; continue; }
+            else { url = ""; end = 0; }
 
-            int totalLength = end - i;
+            if (!matched)
+            {
+                active[openerIdx] = false;
+                continue;
+            }
+
+            int totalLength = end - openPos;
             links ??= [];
-            links.Add(new InlineLink(i, totalLength, linkText, url, title, refLabel));
+            links.Add(new InlineLink(openPos, totalLength, linkText, url, title, refLabel));
 
-            for (int j = i; j < end; j++)
+            for (int j = openPos; j < end; j++)
                 styles[j] = InlineStyle.Link;
 
-            i = end;
+            // Deactivate all openers between this opener and the closer (links can't nest)
+            for (int oi = openerIdx; oi < openers.Count; oi++)
+            {
+                if (openers[oi] >= openPos && openers[oi] < end)
+                    active[oi] = false;
+            }
+
+            // Also deactivate all openers BEFORE this one (they can't form links containing this one)
+            for (int oi = 0; oi < openerIdx; oi++)
+                active[oi] = false;
+
+            ci = end - 1;
         }
         return links;
     }
