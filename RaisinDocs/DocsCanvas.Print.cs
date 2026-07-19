@@ -45,21 +45,65 @@ partial class DocsCanvas
         _pageBreakLayoutVersion = _layoutVersion;
         _pageBreakYs.Clear();
 
-        if (_parsedBlocks == null || _visualLines.Count == 0) return;
+        if (_visualLines.Count == 0) return;
 
-        for (int bi = 0; bi < _parsedBlocks.Count; bi++)
+        double pageContentH = DefaultPageHeight - DocsPaginator.MarginY * 2;
+        double pageTopY = _lineYPositions[0];
+        int pageStartLine = 0;
+        int prevBlockIndex = _visualLines[0].BlockIndex;
+
+        for (int i = 1; i < _visualLines.Count; i++)
         {
-            if (_parsedBlocks[bi].Kind != BlockKind.PageBreak) continue;
+            int bi = _visualLines[i].BlockIndex;
 
-            for (int vi = 0; vi < _visualLines.Count; vi++)
+            if (_parsedBlocks != null && bi > prevBlockIndex)
             {
-                if (_visualLines[vi].BlockIndex > bi)
+                bool hasExplicitBreak = false;
+                for (int b = prevBlockIndex; b < bi; b++)
                 {
-                    _pageBreakYs.Add(_lineYPositions[vi]);
-                    break;
+                    if (_parsedBlocks[b].Kind == BlockKind.PageBreak)
+                    {
+                        hasExplicitBreak = true;
+                        break;
+                    }
+                }
+                if (hasExplicitBreak)
+                {
+                    _pageBreakYs.Add(_lineYPositions[i]);
+                    pageTopY = _lineYPositions[i];
+                    pageStartLine = i;
+                    prevBlockIndex = bi;
+                    continue;
                 }
             }
+
+            double lineBottom = _lineYPositions[i] + GetEffectiveLineHeight(_visualLines[i]) - pageTopY;
+            if (lineBottom > pageContentH && i > pageStartLine)
+            {
+                int breakAt = AvoidOrphanedHeading(i, pageStartLine, _visualLines);
+                _pageBreakYs.Add(_lineYPositions[breakAt]);
+                pageTopY = _lineYPositions[breakAt];
+                pageStartLine = breakAt;
+            }
+
+            prevBlockIndex = bi;
         }
+    }
+
+    private static int AvoidOrphanedHeading(int breakAt, int pageStart, List<VisualLine> lines)
+    {
+        int candidate = breakAt;
+        while (candidate > pageStart + 1)
+        {
+            var prev = lines[candidate - 1];
+            if (prev.Length == 0)
+                candidate--;
+            else if (prev.BlockKind is >= BlockKind.Heading1 and <= BlockKind.Heading6)
+                return candidate - 1;
+            else
+                break;
+        }
+        return breakAt;
     }
 
     private void DrawPageBreaks(DrawingContext dc, double effectiveScroll,
@@ -204,40 +248,44 @@ partial class DocsCanvas
                 return [0];
 
             var pages = new List<int> { 0 };
+            double pageTopY = _lineYs[0];
 
-            if (_canvas._parsedBlocks != null)
+            for (int i = 0; i < _lines.Count; i++)
             {
-                var breakAfter = new HashSet<int>();
-                for (int bi = 0; bi < _canvas._parsedBlocks.Count; bi++)
+                if (IsExplicitPageBreakBefore(i) && i > pages[^1])
                 {
-                    if (_canvas._parsedBlocks[bi].Kind == BlockKind.PageBreak)
-                        breakAfter.Add(bi);
+                    pages.Add(i);
+                    pageTopY = _lineYs[i];
+                    continue;
                 }
 
-                if (breakAfter.Count > 0)
+                double lineBottom = _lineYs[i] + GetLineHeight(i) - pageTopY;
+                if (lineBottom > _contentHeight && i > pages[^1])
                 {
-                    int prevBlockIndex = _lines[0].BlockIndex;
-                    for (int i = 1; i < _lines.Count; i++)
-                    {
-                        int bi = _lines[i].BlockIndex;
-                        if (bi != prevBlockIndex)
-                        {
-                            for (int b = prevBlockIndex; b < bi; b++)
-                            {
-                                if (breakAfter.Contains(b))
-                                {
-                                    pages.Add(i);
-                                    break;
-                                }
-                            }
-                            prevBlockIndex = bi;
-                        }
-                    }
+                    int breakAt = FindBestBreak(pages[^1], i);
+                    pages.Add(breakAt);
+                    pageTopY = _lineYs[breakAt];
                 }
             }
-
             return pages;
         }
+
+        private bool IsExplicitPageBreakBefore(int lineIndex)
+        {
+            if (_canvas._parsedBlocks == null || lineIndex == 0) return false;
+            int bi = _lines[lineIndex].BlockIndex;
+            int prevBi = _lines[lineIndex - 1].BlockIndex;
+            for (int b = prevBi; b < bi; b++)
+            {
+                if (b < _canvas._parsedBlocks.Count
+                    && _canvas._parsedBlocks[b].Kind == BlockKind.PageBreak)
+                    return true;
+            }
+            return false;
+        }
+
+        private int FindBestBreak(int pageStart, int overflowLine)
+            => AvoidOrphanedHeading(overflowLine, pageStart, _lines);
 
         public override DocumentPage GetPage(int pageNumber)
         {
