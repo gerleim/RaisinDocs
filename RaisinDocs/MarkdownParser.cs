@@ -1185,8 +1185,17 @@ public static class MarkdownParser
         {
             if (text[i] == '`')
             {
-                int backtickCount = 0;
                 int start = i;
+                // Check if preceded by odd number of backslashes (escaped opener)
+                int bs = 0;
+                while (start - 1 - bs >= 0 && text[start - 1 - bs] == '\\') bs++;
+                if (bs % 2 != 0)
+                {
+                    i++;
+                    continue;
+                }
+
+                int backtickCount = 0;
                 while (i < text.Length && text[i] == '`') { backtickCount++; i++; }
 
                 int closeStart = FindClosingBackticks(text, i, backtickCount);

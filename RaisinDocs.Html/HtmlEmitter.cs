@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Net;
 using System.Text;
 using RaisinDocs;
@@ -119,11 +120,23 @@ public static class HtmlEmitter
         int level = block.Kind - BlockKind.Heading1 + 1;
         string content = GetHeadingContent(text);
         sb.Append($"<h{level}>");
-        // For now, render content directly — inline parsing uses raw offsets which
-        // don't map well after closing # stripping. Re-parse the content inline.
         var innerBlocks = MarkdownParser.Parse(_ => content, 1);
         if (innerBlocks.Count > 0)
-            AppendInlineHtml(sb, content, innerBlocks[0], 0, options);
+        {
+            var innerBlock = innerBlocks[0];
+            // Inherit link refs from outer parse that inner re-parse can't resolve
+            if (innerBlock.Links == null && block.Links != null)
+            {
+                int prefixLen = GetHeadingPrefixLength(text);
+                var adjustedLinks = block.Links.Select(l =>
+                    new InlineLink(l.Start - prefixLen, l.Length, l.Text, l.Url, l.Title, l.RefLabel, l.IsAngleBracket))
+                    .Where(l => l.Start >= 0 && l.Start + l.Length <= content.Length)
+                    .ToList();
+                if (adjustedLinks.Count > 0)
+                    innerBlock = innerBlock with { Links = adjustedLinks };
+            }
+            AppendInlineHtml(sb, content, innerBlock, 0, options);
+        }
         else
             sb.Append(HtmlEncode(content));
         sb.Append($"</h{level}>\n");
