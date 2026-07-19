@@ -358,6 +358,9 @@ public static class HtmlEmitter
                 if (i + 1 >= blocks.Count || blocks[i + 1].Kind != BlockKind.SetextUnderline)
                     break;
             }
+            else if (i > start && (blocks[i].Kind is BlockKind.UnorderedListItem or BlockKind.OrderedListItem)
+                && !CanListInterruptParagraph(blocks[i].Kind, lines[i]))
+            { /* empty/non-1 list item can't interrupt paragraph */ }
             else
                 break;
 
@@ -399,6 +402,9 @@ public static class HtmlEmitter
                 if (i + 1 >= blocks.Count || blocks[i + 1].Kind != BlockKind.SetextUnderline)
                     break;
             }
+            else if (i > start && (blocks[i].Kind is BlockKind.UnorderedListItem or BlockKind.OrderedListItem)
+                && !CanListInterruptParagraph(blocks[i].Kind, lines[i]))
+            { /* empty/non-1 list item can't interrupt paragraph — treat as continuation */ }
             else
                 break;
 
@@ -412,10 +418,19 @@ public static class HtmlEmitter
             if (endBefore > 0)
                 hasNextLine = i + 1 < endBefore;
             else
-                hasNextLine = (i + 1) < blocks.Count
-                    && blocks[i + 1].Kind == BlockKind.Paragraph
+            {
+                bool nextIsContinuation = (i + 1) < blocks.Count
                     && !string.IsNullOrWhiteSpace(lines[i + 1])
                     && (i + 1 >= blocks.Count - 1 || blocks[i + 2].Kind != BlockKind.SetextUnderline);
+                if (nextIsContinuation)
+                {
+                    var nextKind = blocks[i + 1].Kind;
+                    nextIsContinuation = nextKind == BlockKind.Paragraph
+                        || (nextKind is BlockKind.UnorderedListItem or BlockKind.OrderedListItem
+                            && !CanListInterruptParagraph(nextKind, lines[i + 1]));
+                }
+                hasNextLine = nextIsContinuation;
+            }
 
             string content = text.TrimStart();
             if (!hasNextLine)
@@ -605,8 +620,9 @@ public static class HtmlEmitter
         else
             sb.Append("<ol>\n");
 
+        char delimiter = GetOrderedListDelimiter(lines[start]);
         int contentIndent = GetListContentIndent(lines[start]);
-        var items = CollectListItems(blocks, lines, start, BlockKind.OrderedListItem, contentIndent, out int end, out bool isLoose);
+        var items = CollectListItems(blocks, lines, start, BlockKind.OrderedListItem, contentIndent, out int end, out bool isLoose, delimiter: delimiter);
 
         foreach (var item in items)
             RenderListItem(sb, item, isLoose, options);
@@ -1092,28 +1108,18 @@ public static class HtmlEmitter
 
     static string StripListPrefix(string text)
     {
-        // Handle `- ` or `* ` with optional leading spaces
-        var trimmed = text.AsSpan();
-        int spaces = 0;
-        while (spaces < trimmed.Length && trimmed[spaces] == ' ') spaces++;
-        if (spaces < trimmed.Length && (trimmed[spaces] == '-' || trimmed[spaces] == '*' || trimmed[spaces] == '+'))
-        {
-            int afterMarker = spaces + 1;
-            if (afterMarker < trimmed.Length && trimmed[afterMarker] == ' ')
-                return text[(afterMarker + 1)..];
-            return text[afterMarker..];
-        }
-        return text;
+        int indent = GetListContentIndent(text);
+        if (indent >= text.Length) return "";
+        var content = text[indent..];
+        return string.IsNullOrWhiteSpace(content) ? "" : content;
     }
 
     static string StripOrderedListPrefix(string text)
     {
-        int i = 0;
-        while (i < text.Length && text[i] == ' ') i++;
-        while (i < text.Length && char.IsDigit(text[i])) i++;
-        if (i < text.Length && (text[i] == '.' || text[i] == ')')) i++;
-        if (i < text.Length && text[i] == ' ') i++;
-        return text[i..];
+        int indent = GetListContentIndent(text);
+        if (indent >= text.Length) return "";
+        var content = text[indent..];
+        return string.IsNullOrWhiteSpace(content) ? "" : content;
     }
 
     static string StripTaskListPrefix(string text)
@@ -1131,6 +1137,14 @@ public static class HtmlEmitter
         return text[i..];
     }
 
+    static char GetOrderedListDelimiter(string text)
+    {
+        int i = 0;
+        while (i < text.Length && text[i] == ' ') i++;
+        while (i < text.Length && char.IsDigit(text[i])) i++;
+        return i < text.Length ? text[i] : '.';
+    }
+
     static int GetOrderedListStart(string text)
     {
         int i = 0;
@@ -1140,6 +1154,22 @@ public static class HtmlEmitter
         if (i > numStart && int.TryParse(text[numStart..i], out int num))
             return num;
         return 1;
+    }
+
+    static bool CanListInterruptParagraph(BlockKind kind, string line)
+    {
+        if (kind == BlockKind.UnorderedListItem)
+        {
+            var content = StripListPrefix(line);
+            return content.Length > 0;
+        }
+        if (kind == BlockKind.OrderedListItem)
+        {
+            if (GetOrderedListStart(line) != 1) return false;
+            var content = StripOrderedListPrefix(line);
+            return content.Length > 0;
+        }
+        return true;
     }
 
     static int GetListMarkerIndent(string text)
@@ -1164,13 +1194,22 @@ public static class HtmlEmitter
             while (i < text.Length && char.IsDigit(text[i])) i++;
             if (i < text.Length && (text[i] == '.' || text[i] == ')')) i++;
         }
-        // Skip one space after marker
-        if (i < text.Length && text[i] == ' ') i++;
+        int markerEnd = i;
+        // Skip spaces after marker to find actual content start
+        while (i < text.Length && text[i] == ' ') i++;
+        // If no content on this line (blank after marker), use marker_end + 1
+        if (i >= text.Length)
+            return markerEnd + 1;
+        int spacesAfterMarker = i - markerEnd;
+        // Rule #3: if 5+ spaces after marker (4+ from W+1 position), content is indented code
+        // and content column collapses to marker_end + 1
+        if (spacesAfterMarker >= 5)
+            return markerEnd + 1;
         return i;
     }
 
     static List<List<string>> CollectListItems(List<ParsedBlock> blocks, List<string> lines, int start,
-        BlockKind itemKind, int contentIndent, out int end, out bool isLoose, char marker = '\0')
+        BlockKind itemKind, int contentIndent, out int end, out bool isLoose, char marker = '\0', char delimiter = '\0')
     {
         var items = new List<List<string>>();
         var currentItem = new List<string>();
@@ -1205,6 +1244,24 @@ public static class HtmlEmitter
                     }
                 }
 
+                // Check if same delimiter for ordered lists
+                if (itemKind == BlockKind.OrderedListItem && delimiter != '\0')
+                {
+                    char thisDelim = GetOrderedListDelimiter(lines[i]);
+                    if (thisDelim != delimiter)
+                    {
+                        if (thisMarkerIndent <= firstMarkerIndent + 1)
+                            break;
+                        if (currentItem.Count > 0 && thisMarkerIndent >= contentIndent)
+                        {
+                            currentItem.Add(lines[i][contentIndent..]);
+                            i++;
+                            continue;
+                        }
+                        break;
+                    }
+                }
+
                 // If indented beyond current content column, this is a nested sublist
                 if (currentItem.Count > 0 && thisMarkerIndent >= contentIndent)
                 {
@@ -1213,9 +1270,9 @@ public static class HtmlEmitter
                     continue;
                 }
 
+                if (seenBlank) isLoose = true;
                 if (currentItem.Count > 0)
                 {
-                    if (seenBlank) isLoose = true;
                     items.Add(currentItem);
                     currentItem = new List<string>();
                 }
@@ -1227,16 +1284,25 @@ public static class HtmlEmitter
                 seenBlank = false;
                 i++;
             }
-            else if (blocks[i].Kind == BlockKind.Paragraph && string.IsNullOrWhiteSpace(lines[i]))
+            else if (string.IsNullOrWhiteSpace(lines[i]))
             {
                 if (currentItem.Count > 0)
                 {
+                    // If item started with blank marker (empty first line), blank line ends the item
+                    if (currentItem.Count == 1 && currentItem[0] == "")
+                    {
+                        items.Add(currentItem);
+                        currentItem = new List<string>();
+                        seenBlank = true;
+                        i++;
+                        continue;
+                    }
                     currentItem.Add("");
                     seenBlank = true;
                 }
                 i++;
             }
-            else if (currentItem.Count > 0 && !string.IsNullOrWhiteSpace(lines[i]))
+            else if (currentItem.Count > 0)
             {
                 // Check if indented enough to be continuation
                 int lineIndent = 0;
@@ -1264,12 +1330,30 @@ public static class HtmlEmitter
         if (currentItem.Count > 0)
             items.Add(currentItem);
 
-        // Trim trailing blank lines from last item
-        if (items.Count > 0)
+        // Trim leading and trailing blank lines from all items
+        foreach (var item in items)
         {
-            var lastItem = items[^1];
-            while (lastItem.Count > 0 && string.IsNullOrWhiteSpace(lastItem[^1]))
-                lastItem.RemoveAt(lastItem.Count - 1);
+            while (item.Count > 0 && string.IsNullOrWhiteSpace(item[^1]))
+                item.RemoveAt(item.Count - 1);
+            while (item.Count > 0 && string.IsNullOrWhiteSpace(item[0]))
+                item.RemoveAt(0);
+        }
+        if (!isLoose)
+        {
+            foreach (var item in items)
+            {
+                bool seenContent = false;
+                foreach (var line in item)
+                {
+                    if (string.IsNullOrWhiteSpace(line))
+                    {
+                        if (seenContent) { isLoose = true; break; }
+                    }
+                    else
+                        seenContent = true;
+                }
+                if (isLoose) break;
+            }
         }
 
         end = i;
@@ -1279,6 +1363,12 @@ public static class HtmlEmitter
     static void RenderListItem(StringBuilder sb, List<string> itemLines, bool isLoose, HtmlEmitterOptions options)
     {
         sb.Append("<li>");
+
+        if (itemLines.Count == 0 || itemLines.All(string.IsNullOrWhiteSpace))
+        {
+            sb.Append("</li>\n");
+            return;
+        }
 
         // Check if the item has only paragraph content (no sublists, code blocks, etc.)
         var innerBlocks = MarkdownParser.Parse(idx => itemLines[idx], itemLines.Count, out var innerDefs);
@@ -1304,13 +1394,53 @@ public static class HtmlEmitter
 
         if (!isLoose && !hasNonParagraph)
         {
-            // Tight: inline content, no <p> wrapping
+            // Tight, paragraph-only: inline content, no <p> wrapping
             var (joined, _) = JoinParagraphLines(innerBlocks, itemLines, 0);
             AppendJoinedInlineHtml(sb, joined, null, innerOptions);
         }
+        else if (!isLoose && hasNonParagraph)
+        {
+            // Tight with block content: paragraphs inline, other blocks rendered normally
+            bool hasEmittedInline = false;
+            int b = 0;
+            while (b < innerBlocks.Count)
+            {
+                var kind = innerBlocks[b].Kind;
+                if (kind == BlockKind.Paragraph && !string.IsNullOrWhiteSpace(itemLines[b]))
+                {
+                    var (joined, _) = JoinParagraphLines(innerBlocks, itemLines, b);
+                    AppendJoinedInlineHtml(sb, joined, null, innerOptions);
+                    hasEmittedInline = true;
+                    while (b < innerBlocks.Count && innerBlocks[b].Kind == BlockKind.Paragraph
+                        && !string.IsNullOrWhiteSpace(itemLines[b]))
+                        b++;
+                    // Only add newline if there's more content after
+                    bool hasMoreContent = false;
+                    for (int nb = b; nb < innerBlocks.Count; nb++)
+                    {
+                        if (innerBlocks[nb].Kind != BlockKind.Paragraph || !string.IsNullOrWhiteSpace(itemLines[nb]))
+                        { hasMoreContent = true; break; }
+                    }
+                    if (hasMoreContent) sb.Append('\n');
+                }
+                else if (kind == BlockKind.Paragraph || kind == BlockKind.LinkDefinition)
+                {
+                    b++;
+                }
+                else
+                {
+                    if (!hasEmittedInline)
+                        sb.Append('\n');
+                    var blockSb = new StringBuilder();
+                    b = RenderBlock(blockSb, innerBlocks, itemLines, b, innerOptions, 0);
+                    sb.Append(blockSb);
+                    hasEmittedInline = true;
+                }
+            }
+        }
         else
         {
-            // Loose or has block content: render as blocks with <p> wrapping
+            // Loose: render as blocks with <p> wrapping
             sb.Append('\n');
             sb.Append(RenderBlocks(innerBlocks, itemLines, innerOptions));
         }

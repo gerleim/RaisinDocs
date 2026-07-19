@@ -97,10 +97,10 @@ public class MarkdownParserTests
     }
 
     [Fact]
-    public void DashAlone_IsParagraph()
+    public void DashAlone_IsListItem()
     {
         var result = ParseBlocks("-");
-        result[0].Kind.Should().Be(BlockKind.Paragraph);
+        result[0].Kind.Should().Be(BlockKind.UnorderedListItem);
     }
 
     // --- Ordered list items ---
@@ -3041,6 +3041,50 @@ public class MarkdownParserTests
         blocks[0].Kind.Should().Be(BlockKind.Paragraph);
         blocks[1].Kind.Should().Be(BlockKind.PageBreak);
         blocks[2].Kind.Should().Be(BlockKind.Paragraph);
+    }
+
+    // --- NormalizeAdjacentMarkers ---
+
+    [Theory]
+    [InlineData("**5.** **N** **debounce** **timers**", "**5. N debounce timers**")]
+    [InlineData("*a* *b* *c*", "*a b c*")]
+    [InlineData("~~x~~ ~~y~~", "~~x y~~")]
+    [InlineData("`a` `b` `c`", "`a b c`")]
+    [InlineData("**bold** plain **bold**", "**bold** plain **bold**")]
+    [InlineData("no markers here", "no markers here")]
+    [InlineData("**a**  **b**", "**a b**")]
+    public void NormalizeAdjacentMarkers_CollapsesMarkers(string input, string expected)
+    {
+        MarkdownParser.NormalizeAdjacentMarkers(input).Should().Be(expected);
+    }
+
+    [Fact]
+    public void NormalizeAdjacentMarkers_DoesNotCollapseDifferentLengthMarkers()
+    {
+        MarkdownParser.NormalizeAdjacentMarkers("**a** *b*").Should().Be("**a** *b*");
+        MarkdownParser.NormalizeAdjacentMarkers("*a* **b**").Should().Be("*a* **b**");
+    }
+
+    [Fact]
+    public void NormalizeAdjacentMarkers_PreservesTripleStarMarkers()
+    {
+        MarkdownParser.NormalizeAdjacentMarkers("***a*** ***b***").Should().Be("***a*** ***b***");
+    }
+
+    [Fact]
+    public void HasAdjacentMarkers_ReturnsTrueWhenPresent()
+    {
+        MarkdownParser.HasAdjacentMarkers("**a** **b**").Should().BeTrue();
+        MarkdownParser.HasAdjacentMarkers("*a* *b*").Should().BeTrue();
+        MarkdownParser.HasAdjacentMarkers("~~x~~ ~~y~~").Should().BeTrue();
+        MarkdownParser.HasAdjacentMarkers("`a` `b`").Should().BeTrue();
+    }
+
+    [Fact]
+    public void HasAdjacentMarkers_ReturnsFalseWhenAbsent()
+    {
+        MarkdownParser.HasAdjacentMarkers("**bold** plain").Should().BeFalse();
+        MarkdownParser.HasAdjacentMarkers("no markers").Should().BeFalse();
     }
 
 }

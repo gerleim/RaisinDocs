@@ -658,7 +658,8 @@ public static class MarkdownParser
             string nextText = getBlockText(i + 1);
 
             BlockKind? headingKind = null;
-            if (nextKind is BlockKind.Paragraph or BlockKind.ThematicBreak && IsSetextUnderline(nextText, out char underlineChar))
+            if (nextKind is BlockKind.Paragraph or BlockKind.ThematicBreak or BlockKind.UnorderedListItem
+                && IsSetextUnderline(nextText, out char underlineChar))
             {
                 headingKind = underlineChar == '=' ? BlockKind.Heading1 : BlockKind.Heading2;
             }
@@ -1009,7 +1010,8 @@ public static class MarkdownParser
         if (IsThematicBreak(text))
             return BlockKind.ThematicBreak;
 
-        if (text.Length >= 2 && text[0] is '-' or '*' or '+' && text[1] is ' ' or '\t')
+        if (text.Length >= 1 && text[0] is '-' or '*' or '+' &&
+            (text.Length == 1 || text[1] is ' ' or '\t'))
         {
             if (text.Length >= 6 && text[2] == '[' && text[4] == ']' && text[5] == ' ')
             {
@@ -1089,7 +1091,7 @@ public static class MarkdownParser
         if (i == 0 || i > 9) return 0;
         if (i < text.Length && text[i] is '.' or ')')
         {
-            if (i + 1 < text.Length && text[i + 1] == ' ')
+            if (i + 1 >= text.Length || text[i + 1] == ' ')
                 return i + 2;
         }
         return 0;
@@ -1996,6 +1998,90 @@ public static class MarkdownParser
         InlineStyle.Strikethrough => 2,
         _ => 0,
     };
+
+    private static readonly string[] _inlineMarkers = ["**", "~~", "*", "`"];
+
+    public static string NormalizeAdjacentMarkers(string text)
+    {
+        foreach (var marker in _inlineMarkers)
+            text = CollapseAdjacentMarker(text, marker);
+        return text;
+    }
+
+    public static bool HasAdjacentMarkers(string text)
+    {
+        foreach (var marker in _inlineMarkers)
+        {
+            if (FindAdjacentMarker(text, marker) >= 0)
+                return true;
+        }
+        return false;
+    }
+
+    private static int FindAdjacentMarker(string text, string marker)
+    {
+        char mc = marker[0];
+        int mlen = marker.Length;
+        int minLen = mlen * 2 + 1;
+        if (text.Length < minLen) return -1;
+
+        for (int i = 0; i <= text.Length - minLen; i++)
+        {
+            if (i > 0 && text[i - 1] == mc) continue;
+            if (!IsExactMarker(text, i, mc, mlen)) continue;
+
+            int ws = i + mlen;
+            while (ws < text.Length && text[ws] == ' ') ws++;
+            if (ws == i + mlen) continue;
+
+            if (ws + mlen > text.Length) continue;
+            if (!IsExactMarker(text, ws, mc, mlen)) continue;
+
+            return i;
+        }
+        return -1;
+    }
+
+    private static string CollapseAdjacentMarker(string text, string marker)
+    {
+        char mc = marker[0];
+        int mlen = marker.Length;
+        int minLen = mlen * 2 + 1;
+        if (text.Length < minLen) return text;
+
+        StringBuilder? sb = null;
+        int lastCopy = 0;
+
+        for (int i = 0; i <= text.Length - minLen; i++)
+        {
+            if (i > 0 && text[i - 1] == mc) continue;
+            if (!IsExactMarker(text, i, mc, mlen)) continue;
+
+            int ws = i + mlen;
+            while (ws < text.Length && text[ws] == ' ') ws++;
+            if (ws == i + mlen) continue;
+
+            if (ws + mlen > text.Length) continue;
+            if (!IsExactMarker(text, ws, mc, mlen)) continue;
+
+            sb ??= new StringBuilder(text.Length);
+            sb.Append(text, lastCopy, i - lastCopy);
+            sb.Append(' ');
+            lastCopy = ws + mlen;
+            i = lastCopy - 1;
+        }
+
+        if (sb == null) return text;
+        sb.Append(text, lastCopy, text.Length - lastCopy);
+        return sb.ToString();
+    }
+
+    private static bool IsExactMarker(string text, int pos, char mc, int mlen)
+    {
+        for (int j = 0; j < mlen; j++)
+            if (text[pos + j] != mc) return false;
+        return pos + mlen >= text.Length || text[pos + mlen] != mc;
+    }
 
     private static int FindClosingDelimiter(string text, InlineStyle[] styles, int searchFrom, int count, char delimiter)
     {
