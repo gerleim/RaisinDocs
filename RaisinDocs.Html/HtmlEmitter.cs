@@ -608,7 +608,6 @@ public static class HtmlEmitter
         int contentIndent = GetListContentIndent(lines[start]);
         var items = CollectListItems(blocks, lines, start, BlockKind.OrderedListItem, contentIndent, out int end, out bool isLoose);
 
-        sb.Append("<ol>\n");
         foreach (var item in items)
             RenderListItem(sb, item, isLoose, options);
         sb.Append("</ol>\n");
@@ -1281,27 +1280,38 @@ public static class HtmlEmitter
     {
         sb.Append("<li>");
 
-        if (!isLoose && itemLines.Count == 1)
+        // Check if the item has only paragraph content (no sublists, code blocks, etc.)
+        var innerBlocks = MarkdownParser.Parse(idx => itemLines[idx], itemLines.Count, out var innerDefs);
+        var innerOptions = new HtmlEmitterOptions { LinkDefinitions = options.LinkDefinitions };
+        if (innerDefs != null)
         {
-            // Tight single-line: inline content, no <p>
-            var innerBlocks = MarkdownParser.Parse(_ => itemLines[0], 1);
-            if (innerBlocks.Count > 0)
-                AppendInlineHtml(sb, itemLines[0], innerBlocks[0], 0, options);
-            else
-                sb.Append(HtmlEncode(itemLines[0]));
+            innerOptions.LinkDefinitions ??= new Dictionary<string, (string Url, string? Title)>(StringComparer.OrdinalIgnoreCase);
+            foreach (var (k, v) in innerDefs)
+                innerOptions.LinkDefinitions.TryAdd(k, v);
+        }
+
+        bool hasNonParagraph = false;
+        for (int b = 0; b < innerBlocks.Count; b++)
+        {
+            var kind = innerBlocks[b].Kind;
+            if (kind != BlockKind.Paragraph && kind != BlockKind.SetextUnderline
+                && kind != BlockKind.LinkDefinition)
+            {
+                hasNonParagraph = true;
+                break;
+            }
+        }
+
+        if (!isLoose && !hasNonParagraph)
+        {
+            // Tight: inline content, no <p> wrapping
+            var (joined, _) = JoinParagraphLines(innerBlocks, itemLines, 0);
+            AppendJoinedInlineHtml(sb, joined, null, innerOptions);
         }
         else
         {
-            // Multi-line or loose: re-parse and render as blocks
+            // Loose or has block content: render as blocks with <p> wrapping
             sb.Append('\n');
-            var innerBlocks = MarkdownParser.Parse(idx => itemLines[idx], itemLines.Count, out var innerDefs);
-            var innerOptions = new HtmlEmitterOptions { LinkDefinitions = options.LinkDefinitions };
-            if (innerDefs != null)
-            {
-                innerOptions.LinkDefinitions ??= new Dictionary<string, (string Url, string? Title)>(StringComparer.OrdinalIgnoreCase);
-                foreach (var (k, v) in innerDefs)
-                    innerOptions.LinkDefinitions.TryAdd(k, v);
-            }
             sb.Append(RenderBlocks(innerBlocks, itemLines, innerOptions));
         }
 
