@@ -243,6 +243,9 @@ public partial class MainWindow : Window
             if (!ConfirmDiscard(tab)) return;
         }
 
+        if (tab.FilePath != null)
+            AddRecentFile(tab.FilePath);
+
         _tabs.Remove(tab);
         TabControl.Items.Remove(tab.TabItem);
 
@@ -265,6 +268,12 @@ public partial class MainWindow : Window
                 return;
             }
         }
+        foreach (var tab in _tabs)
+        {
+            if (tab.FilePath != null)
+                AddRecentFile(tab.FilePath);
+        }
+
         SaveSession();
         base.OnClosing(e);
     }
@@ -369,6 +378,13 @@ public partial class MainWindow : Window
             AddTab();
             return;
         }
+        var existing = _tabs.Find(t =>
+            string.Equals(t.FilePath, fullPath, StringComparison.OrdinalIgnoreCase));
+        if (existing != null)
+        {
+            TabControl.SelectedItem = existing.TabItem;
+            return;
+        }
         try
         {
             OpenFileInTab(fullPath);
@@ -383,8 +399,6 @@ public partial class MainWindow : Window
 
     private void OpenFileInTab(string path)
     {
-        AddRecentFile(path);
-
         if (_tabs.Count == 1 && _tabs[0].FilePath == null && !_tabs[0].Editor.IsDirty)
         {
             var tab = _tabs[0];
