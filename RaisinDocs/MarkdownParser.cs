@@ -54,6 +54,7 @@ public enum BlockKind
     ThematicBreak,
     SetextUnderline,
     IndentedCodeLine,
+    HtmlBlock,
     PageBreak,
 }
 
@@ -141,6 +142,7 @@ public static class MarkdownParser
         int fenceLen = 0;
         char fenceChar = '\0';
         string? fenceLanguage = null;
+        int htmlBlockType = 0;
 
         for (int i = 0; i < blockCount; i++)
         {
@@ -176,6 +178,19 @@ public static class MarkdownParser
                 });
                 if (isClosing)
                     fenceLanguage = null;
+                continue;
+            }
+
+            // HTML block continuation
+            if (htmlBlockType > 0)
+            {
+                result.Add(new ParsedBlock
+                {
+                    Kind = BlockKind.HtmlBlock,
+                    Runs = [new StyledRun(0, text.Length, InlineStyle.Normal)],
+                });
+                if (IsHtmlBlockEnd(text, htmlBlockType))
+                    htmlBlockType = 0;
                 continue;
             }
 
@@ -258,6 +273,20 @@ public static class MarkdownParser
 
             BlockColor? divOpenColor = hasDivOpen ? ParseDivProperties(text[..divOpenTagEnd], theme) : null;
             bool blockHasDivClose = hasDivClose;
+
+            // HTML block start (after custom comment checks)
+            int hbType = GetHtmlBlockType(text);
+            if (hbType > 0)
+            {
+                result.Add(new ParsedBlock
+                {
+                    Kind = BlockKind.HtmlBlock,
+                    Runs = [new StyledRun(0, text.Length, InlineStyle.Normal)],
+                });
+                if (!IsHtmlBlockEnd(text, hbType))
+                    htmlBlockType = hbType;
+                continue;
+            }
 
             if (TryParseLinkDefinition(text, out _, out _, out _))
             {
@@ -1754,6 +1783,158 @@ public static class MarkdownParser
         var trimmed = text.AsSpan().Trim();
         return trimmed.StartsWith(ThemeOpen.AsSpan(), StringComparison.OrdinalIgnoreCase)
                && !trimmed.EndsWith(CommentClose.AsSpan(), StringComparison.Ordinal);
+    }
+
+    private static readonly string[] _htmlBlockType1Tags = ["pre", "script", "style", "textarea"];
+
+    private static readonly string[] _htmlBlockType6Tags =
+    [
+        "address", "article", "aside", "base", "basefont", "blockquote", "body",
+        "caption", "center", "col", "colgroup", "dd", "details", "dialog", "dir",
+        "div", "dl", "dt", "fieldset", "figcaption", "figure", "footer", "form",
+        "frame", "frameset", "h1", "h2", "h3", "h4", "h5", "h6", "head", "header",
+        "hr", "html", "iframe", "legend", "li", "link", "main", "menu", "menuitem",
+        "nav", "noframes", "ol", "optgroup", "option", "p", "param", "search",
+        "section", "summary", "table", "tbody", "td", "tfoot", "th", "thead",
+        "title", "tr", "track", "ul"
+    ];
+
+    internal static int GetHtmlBlockType(string text)
+    {
+        // Up to 3 spaces of indentation allowed
+        int indent = 0;
+        while (indent < text.Length && indent < 3 && text[indent] == ' ') indent++;
+        if (indent >= text.Length || text[indent] != '<') return 0;
+
+        var line = text.AsSpan(indent);
+
+        // Type 2: <!-- (but not our custom <!--@ extensions)
+        if (line.StartsWith("<!--".AsSpan()) && !line.StartsWith("<!--@".AsSpan())) return 2;
+        // Type 3: <?
+        if (line.StartsWith("<?".AsSpan())) return 3;
+        // Type 4: <! + uppercase letter
+        if (line.Length >= 3 && line[1] == '!' && char.IsAsciiLetterUpper(line[2])) return 4;
+        // Type 5: <![CDATA[
+        if (line.StartsWith("<![CDATA[".AsSpan())) return 5;
+
+        // Type 1: <pre, <script, <style, <textarea (case-insensitive)
+        foreach (var tag in _htmlBlockType1Tags)
+        {
+            if (line.Length > tag.Length + 1
+                && line[1..].StartsWith(tag.AsSpan(), StringComparison.OrdinalIgnoreCase))
+            {
+                int afterTag = 1 + tag.Length;
+                if (afterTag >= line.Length || line[afterTag] == ' ' || line[afterTag] == '\t'
+                    || line[afterTag] == '>' || line[afterTag] == '\n')
+                    return 1;
+                // self-closing e.g. <script/>
+                if (line[afterTag] == '/' && afterTag + 1 < line.Length && line[afterTag + 1] == '>')
+                    return 1;
+            }
+        }
+
+        // Type 6: open or closing tag of block-level element
+        bool isClosing = line.Length > 2 && line[1] == '/';
+        int tagStart = isClosing ? 2 : 1;
+        int tagEnd = tagStart;
+        while (tagEnd < line.Length && char.IsAsciiLetterOrDigit(line[tagEnd])) tagEnd++;
+        if (tagEnd > tagStart)
+        {
+            var tagName = line[tagStart..tagEnd].ToString().ToLowerInvariant();
+            if (Array.IndexOf(_htmlBlockType6Tags, tagName) >= 0)
+            {
+                if (tagEnd >= line.Length) return 6;
+                char after = line[tagEnd];
+                if (after == ' ' || after == '\t' || after == '>' || after == '\n' || after == '/')
+                    return 6;
+                if (isClosing && after == '>') return 6;
+            }
+        }
+
+        // Type 7: complete open tag (not type 6) or closing tag, alone on line
+        if (IsCompleteHtmlBlockTag(line))
+            return 7;
+
+        return 0;
+    }
+
+    private static bool IsCompleteHtmlBlockTag(ReadOnlySpan<char> line)
+    {
+        if (line.Length < 3 || line[0] != '<') return false;
+
+        bool isClosing = line[1] == '/';
+        int p = isClosing ? 2 : 1;
+        if (p >= line.Length || !char.IsAsciiLetter(line[p])) return false;
+        int tagStart = p;
+        p++;
+        while (p < line.Length && (char.IsAsciiLetterOrDigit(line[p]) || line[p] == '-')) p++;
+        int tagEnd = p;
+
+        // Check it's not a type 6 tag
+        var tagName = line[tagStart..tagEnd].ToString().ToLowerInvariant();
+        if (Array.IndexOf(_htmlBlockType6Tags, tagName) >= 0) return false;
+
+        if (isClosing)
+        {
+            while (p < line.Length && (line[p] == ' ' || line[p] == '\t')) p++;
+            if (p >= line.Length || line[p] != '>') return false;
+            p++;
+        }
+        else
+        {
+            // Consume attributes
+            while (p < line.Length)
+            {
+                // Skip whitespace
+                int ws = p;
+                while (p < line.Length && (line[p] == ' ' || line[p] == '\t')) p++;
+                if (p >= line.Length) return false;
+                if (line[p] == '>') { p++; break; }
+                if (line[p] == '/' && p + 1 < line.Length && line[p + 1] == '>') { p += 2; break; }
+                if (p == ws) return false;
+                // Attribute name
+                if (!char.IsAsciiLetter(line[p]) && line[p] != '_' && line[p] != ':') return false;
+                p++;
+                while (p < line.Length && (char.IsAsciiLetterOrDigit(line[p]) || line[p] == '_' || line[p] == '.' || line[p] == ':' || line[p] == '-')) p++;
+                // Optional value
+                int beforeEq = p;
+                while (p < line.Length && (line[p] == ' ' || line[p] == '\t')) p++;
+                if (p < line.Length && line[p] == '=')
+                {
+                    p++;
+                    while (p < line.Length && (line[p] == ' ' || line[p] == '\t')) p++;
+                    if (p >= line.Length) return false;
+                    if (line[p] == '"') { p++; while (p < line.Length && line[p] != '"') p++; if (p >= line.Length) return false; p++; }
+                    else if (line[p] == '\'') { p++; while (p < line.Length && line[p] != '\'') p++; if (p >= line.Length) return false; p++; }
+                    else { while (p < line.Length && line[p] != ' ' && line[p] != '\t' && line[p] != '"' && line[p] != '\'' && line[p] != '=' && line[p] != '<' && line[p] != '>' && line[p] != '`') p++; }
+                }
+                else { p = beforeEq; }
+            }
+            if (p == 0 || (line[p - 1] != '>' && !(p >= 2 && line[p - 2] == '/' && line[p - 1] == '>')))
+                return false;
+        }
+
+        // Rest of line must be blank
+        while (p < line.Length && (line[p] == ' ' || line[p] == '\t')) p++;
+        return p >= line.Length;
+    }
+
+    internal static bool IsHtmlBlockEnd(string text, int type)
+    {
+        return type switch
+        {
+            1 => text.Contains("</pre>", StringComparison.OrdinalIgnoreCase)
+                 || text.Contains("</script>", StringComparison.OrdinalIgnoreCase)
+                 || text.Contains("</style>", StringComparison.OrdinalIgnoreCase)
+                 || text.Contains("</textarea>", StringComparison.OrdinalIgnoreCase),
+            2 => text.Contains("-->"),
+            3 => text.Contains("?>"),
+            4 => text.Contains('>'),
+            5 => text.Contains("]]>"),
+            6 => string.IsNullOrWhiteSpace(text),
+            7 => string.IsNullOrWhiteSpace(text),
+            _ => false
+        };
     }
 
     internal static bool IsColorDivOpen(string text) => TryExtractDivOpen(text, out _);

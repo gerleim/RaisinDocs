@@ -94,6 +94,9 @@ public static class HtmlEmitter
             case BlockKind.TableHeaderRow:
                 return RenderTable(sb, blocks, lines, i, options);
 
+            case BlockKind.HtmlBlock:
+                return RenderHtmlBlock(sb, blocks, lines, i);
+
             case BlockKind.SetextUnderline:
                 return i + 1;
 
@@ -195,6 +198,18 @@ public static class HtmlEmitter
                 break;
         }
         sb.Append("</p>\n");
+        return i;
+    }
+
+    static int RenderHtmlBlock(StringBuilder sb, List<ParsedBlock> blocks, List<string> lines, int start)
+    {
+        int i = start;
+        while (i < blocks.Count && blocks[i].Kind == BlockKind.HtmlBlock)
+        {
+            sb.Append(lines[i]);
+            sb.Append('\n');
+            i++;
+        }
         return i;
     }
 

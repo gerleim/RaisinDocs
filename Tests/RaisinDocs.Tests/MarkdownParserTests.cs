@@ -3010,4 +3010,37 @@ public class MarkdownParserTests
         cells[1].Start.Should().Be(5);  // after second |
     }
 
+    // --- Page break tag ---
+
+    [Fact]
+    public void PageBreakTag_ClassifiedAsPageBreak()
+    {
+        var blocks = ParseBlocks("<!--@pagebreak-->");
+        blocks[0].Kind.Should().Be(BlockKind.PageBreak);
+        blocks[0].IsSkippedInVisual.Should().BeTrue();
+    }
+
+    [Fact]
+    public void PageBreakTag_CaseInsensitive()
+    {
+        var blocks = ParseBlocks("<!--@PageBreak-->");
+        blocks[0].Kind.Should().Be(BlockKind.PageBreak);
+    }
+
+    [Fact]
+    public void PageBreakTag_WithWhitespace()
+    {
+        var blocks = ParseBlocks("  <!--@pagebreak-->  ");
+        blocks[0].Kind.Should().Be(BlockKind.PageBreak);
+    }
+
+    [Fact]
+    public void PageBreakTag_BetweenContent_PreservesNeighbors()
+    {
+        var blocks = ParseBlocks("Line 1", "<!--@pagebreak-->", "Line 2");
+        blocks[0].Kind.Should().Be(BlockKind.Paragraph);
+        blocks[1].Kind.Should().Be(BlockKind.PageBreak);
+        blocks[2].Kind.Should().Be(BlockKind.Paragraph);
+    }
+
 }
