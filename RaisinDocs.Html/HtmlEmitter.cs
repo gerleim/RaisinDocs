@@ -241,7 +241,8 @@ public static class HtmlEmitter
             if (totalLinesUsed <= 1) continue;
 
             defs ??= new Dictionary<string, (string Url, string? Title)>(StringComparer.OrdinalIgnoreCase);
-            defs.TryAdd(label, (url!, title));
+            var foldedLabel = label.ToLowerInvariant().Replace("ß", "ss");
+            defs.TryAdd(foldedLabel, (url!, title));
 
             // Mark consumed lines as empty so the main parser skips them
             for (int li = i; li < i + totalLinesUsed && li < lines.Count; li++)

@@ -396,7 +396,7 @@ public static class MarkdownParser
             if (!prevIsParagraph && TryParseLinkDefinition(text, out string? label, out string? url, out string? title))
             {
                 defs ??= new(StringComparer.OrdinalIgnoreCase);
-                defs.TryAdd(label!, (url!, title));
+                defs.TryAdd(CaseFoldLabel(label!), (url!, title));
                 prevIsParagraph = false;
             }
             else if (string.IsNullOrWhiteSpace(text))
@@ -725,6 +725,14 @@ public static class MarkdownParser
         BlockKind.UnorderedListItem or BlockKind.OrderedListItem
         or BlockKind.TaskListItemUnchecked or BlockKind.TaskListItemChecked
         or BlockKind.Blockquote;
+
+    static string CaseFoldLabel(string label)
+    {
+        var s = label.ToLowerInvariant();
+        if (s.Contains('ß'))
+            s = s.Replace("ß", "ss");
+        return s;
+    }
 
     internal static int CountLeadingSpaces(string text)
     {
@@ -1786,7 +1794,7 @@ public static class MarkdownParser
                 end = refClose + 1;
             }
 
-            if (!defs.TryGetValue(label, out var def)) return false;
+            if (!defs.TryGetValue(CaseFoldLabel(label), out var def)) return false;
             url = def.Url;
             title = def.Title;
             refLabel = label;
@@ -1794,7 +1802,7 @@ public static class MarkdownParser
         }
 
         // Shortcut reference [text]
-        if (defs.TryGetValue(fallbackLabel, out var shortcutDef))
+        if (defs.TryGetValue(CaseFoldLabel(fallbackLabel), out var shortcutDef))
         {
             url = shortcutDef.Url;
             title = shortcutDef.Title;
