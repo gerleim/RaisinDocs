@@ -298,7 +298,6 @@ public class SpellCheckServiceTests
             svc.Check("DocsCanvas").Should().BeFalse();
 
             svc.LoadProjectDictionary(dir);
-            svc.HasProjectDictionary.Should().BeTrue();
             svc.Check("DocsCanvas").Should().BeTrue();
             svc.Check("RaisinDocs").Should().BeTrue();
         }
@@ -335,11 +334,11 @@ public class SpellCheckServiceTests
         using var svc = new SpellCheckService();
         svc.LoadEmbeddedDictionary();
         svc.LoadProjectDictionary(null);
-        svc.HasProjectDictionary.Should().BeFalse();
+        svc.Check("anything").Should().BeTrue();
     }
 
     [Fact]
-    public void ProjectDictionary_NoFile_NoError()
+    public void ProjectDictionary_NoFile_SetsPathForCreation()
     {
         var dir = Path.Combine(Path.GetTempPath(), "RaisinSpellTest_" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(dir);
@@ -348,7 +347,115 @@ public class SpellCheckServiceTests
             using var svc = new SpellCheckService();
             svc.LoadEmbeddedDictionary();
             svc.LoadProjectDictionary(dir);
-            svc.HasProjectDictionary.Should().BeFalse();
+
+            svc.Check("DocsCanvas").Should().BeFalse();
+            svc.AddToProjectDictionary("DocsCanvas");
+            svc.Check("DocsCanvas").Should().BeTrue();
+            File.Exists(Path.Combine(dir, SpellCheckService.ProjectDictionaryFileName)).Should().BeTrue();
+        }
+        finally
+        {
+            Directory.Delete(dir, true);
+        }
+    }
+}
+
+public class ProjectRootFinderTests
+{
+    [Fact]
+    public void FindsRaisindocsMarker()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "RaisinRootTest_" + Guid.NewGuid().ToString("N"));
+        var sub = Path.Combine(root, "docs", "notes");
+        Directory.CreateDirectory(sub);
+        Directory.CreateDirectory(Path.Combine(root, ".raisindocs"));
+        try
+        {
+            ProjectRootFinder.FindProjectRoot(sub).Should().Be(root);
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
+    [Fact]
+    public void FindsCustomDictionaryFile()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "RaisinRootTest_" + Guid.NewGuid().ToString("N"));
+        var sub = Path.Combine(root, "docs");
+        Directory.CreateDirectory(sub);
+        File.WriteAllText(Path.Combine(root, SpellCheckService.ProjectDictionaryFileName), "");
+        try
+        {
+            ProjectRootFinder.FindProjectRoot(sub).Should().Be(root);
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
+    [Fact]
+    public void FindsGitDirectory()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "RaisinRootTest_" + Guid.NewGuid().ToString("N"));
+        var sub = Path.Combine(root, "docs");
+        Directory.CreateDirectory(sub);
+        Directory.CreateDirectory(Path.Combine(root, ".git"));
+        try
+        {
+            ProjectRootFinder.FindProjectRoot(sub).Should().Be(root);
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
+    [Fact]
+    public void RaisindocsMarkerTakesPriority()
+    {
+        var gitRoot = Path.Combine(Path.GetTempPath(), "RaisinRootTest_" + Guid.NewGuid().ToString("N"));
+        var markerRoot = Path.Combine(gitRoot, "project");
+        var sub = Path.Combine(markerRoot, "docs");
+        Directory.CreateDirectory(sub);
+        Directory.CreateDirectory(Path.Combine(gitRoot, ".git"));
+        Directory.CreateDirectory(Path.Combine(markerRoot, ".raisindocs"));
+        try
+        {
+            ProjectRootFinder.FindProjectRoot(sub).Should().Be(markerRoot);
+        }
+        finally
+        {
+            Directory.Delete(gitRoot, true);
+        }
+    }
+
+    [Fact]
+    public void NoMarker_ReturnsNull()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "RaisinRootTest_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            ProjectRootFinder.FindProjectRoot(dir).Should().BeNull();
+        }
+        finally
+        {
+            Directory.Delete(dir, true);
+        }
+    }
+
+    [Fact]
+    public void SetProjectFolder_CreatesMarkerDirectory()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "RaisinRootTest_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            ProjectRootFinder.SetProjectFolder(dir);
+            Directory.Exists(Path.Combine(dir, ".raisindocs")).Should().BeTrue();
         }
         finally
         {

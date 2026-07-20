@@ -115,6 +115,8 @@
                 <MenuItem x:Name="MinimapMenuItem" Header="Mi_nimap" Click="Minimap_Click" IsCheckable="True" />
                 <MenuItem x:Name="PageBreaksMenuItem" Header="_Page Breaks" Click="PageBreaks_Click" IsCheckable="True" />
                 <MenuItem x:Name="SpellCheckMenuItem" Header="_Spell Check" Click="SpellCheck_Click" IsCheckable="True" />
+                <Separator />
+                <MenuItem x:Name="ProjectFolderMenuItem" Header="Set Pro_ject Folder..." Click="ProjectFolder_Click" />
             </MenuItem>
         </Menu>
         <TabControl x:Name="TabControl" SelectionChanged="TabControl_SelectionChanged" />

@@ -9,12 +9,14 @@ public partial class DocsCanvas
 {
     private bool _spellCheckEnabled;
     private SpellCheckService? _spellCheckService;
+    private string? _projectFolder;
     private readonly HashSet<int> _dirtySpellBlocks = new();
     private DispatcherTimer? _spellCheckTimer;
     private List<IReadOnlyList<SpellingError>?>? _blockSpellingErrors;
     private Pen? _spellErrorPen;
 
     public bool SpellCheckEnabled => _spellCheckEnabled;
+    public string? ProjectFolder => _projectFolder;
 
     public void SetSpellCheckEnabled(bool enabled)
     {
@@ -38,9 +40,38 @@ public partial class DocsCanvas
     internal void OnDocumentBasePathChanged()
     {
         if (_spellCheckService is null) return;
-        _spellCheckService.LoadProjectDictionary(DocumentBasePath);
+        ResolveAndLoadProjectDictionary();
         if (_spellCheckEnabled)
             RecheckAllBlocks();
+    }
+
+    public void SetProjectFolder(string folder)
+    {
+        ProjectRootFinder.SetProjectFolder(folder);
+        _projectFolder = folder;
+        if (_spellCheckService is not null)
+        {
+            _spellCheckService.LoadProjectDictionary(folder);
+            if (_spellCheckEnabled)
+            {
+                RecheckAllBlocks();
+                InvalidateVisual();
+            }
+        }
+    }
+
+    private void ResolveAndLoadProjectDictionary()
+    {
+        if (DocumentBasePath is not null)
+        {
+            var root = ProjectRootFinder.FindProjectRoot(DocumentBasePath);
+            _projectFolder = root ?? DocumentBasePath;
+        }
+        else
+        {
+            _projectFolder = null;
+        }
+        _spellCheckService!.LoadProjectDictionary(_projectFolder);
     }
 
     private void EnsureSpellCheckInitialized()
@@ -49,7 +80,7 @@ public partial class DocsCanvas
 
         _spellCheckService = new SpellCheckService();
         _spellCheckService.LoadEmbeddedDictionary();
-        _spellCheckService.LoadProjectDictionary(DocumentBasePath);
+        ResolveAndLoadProjectDictionary();
 
         _spellErrorPen = new Pen(Brushes.Red, 0.75);
         _spellErrorPen.Freeze();
@@ -337,20 +368,17 @@ public partial class DocsCanvas
         };
         menu.Items.Add(addItem);
 
-        if (_spellCheckService.HasProjectDictionary)
+        var addProjectItem = new MenuItem { Header = "Add to Project Dictionary" };
+        ApplyMenuItemStyle(addProjectItem);
+        var wordForProject = err.Word;
+        addProjectItem.Click += (_, _) =>
         {
-            var addProjectItem = new MenuItem { Header = "Add to Project Dictionary" };
-            ApplyMenuItemStyle(addProjectItem);
-            var wordForProject = err.Word;
-            addProjectItem.Click += (_, _) =>
-            {
-                _spellCheckService.AddToProjectDictionary(wordForProject);
-                RecheckAllBlocks();
-                InvalidateVisual();
-                Focus();
-            };
-            menu.Items.Add(addProjectItem);
-        }
+            _spellCheckService.AddToProjectDictionary(wordForProject);
+            RecheckAllBlocks();
+            InvalidateVisual();
+            Focus();
+        };
+        menu.Items.Add(addProjectItem);
 
         return true;
     }

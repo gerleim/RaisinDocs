@@ -19,7 +19,6 @@ internal sealed class SpellCheckService : IDisposable
     public const string ProjectDictionaryFileName = "custom-dictionary.txt";
 
     public bool IsLoaded => _wordList is not null;
-    public bool HasProjectDictionary => _projectDictionaryPath is not null;
 
     public void LoadEmbeddedDictionary()
     {
@@ -71,19 +70,19 @@ internal sealed class SpellCheckService : IDisposable
             _cache.Remove(word);
     }
 
-    public void LoadProjectDictionary(string? basePath)
+    public void LoadProjectDictionary(string? projectFolder)
     {
         _projectDictionary.Clear();
         _projectDictionaryPath = null;
         _cache.Clear();
 
-        if (string.IsNullOrEmpty(basePath)) return;
+        if (string.IsNullOrEmpty(projectFolder)) return;
 
-        var path = FindProjectDictionary(basePath);
-        if (path is null) return;
+        _projectDictionaryPath = Path.Combine(projectFolder, ProjectDictionaryFileName);
 
-        _projectDictionaryPath = path;
-        foreach (var line in File.ReadLines(path))
+        if (!File.Exists(_projectDictionaryPath)) return;
+
+        foreach (var line in File.ReadLines(_projectDictionaryPath))
         {
             var trimmed = line.Trim();
             if (trimmed.Length > 0 && !trimmed.StartsWith('#'))
@@ -102,23 +101,6 @@ internal sealed class SpellCheckService : IDisposable
     }
 
     public void ClearCache() => _cache.Clear();
-
-    private static string? FindProjectDictionary(string basePath)
-    {
-        var dir = basePath;
-        while (dir is not null)
-        {
-            var candidate = Path.Combine(dir, ProjectDictionaryFileName);
-            if (File.Exists(candidate))
-                return candidate;
-
-            if (Directory.Exists(Path.Combine(dir, ".git")))
-                return null;
-
-            dir = Path.GetDirectoryName(dir);
-        }
-        return null;
-    }
 
     private void SaveProjectDictionary()
     {

@@ -213,6 +213,11 @@ public partial class MainWindow : Window
         MinimapMenuItem.IsChecked = editor?.ShowMinimap ?? false;
         PageBreaksMenuItem.IsChecked = editor?.Canvas.ShowPageBreaks ?? false;
         SpellCheckMenuItem.IsChecked = editor?.Canvas.SpellCheckEnabled ?? false;
+
+        var folder = editor?.Canvas.ProjectFolder;
+        ProjectFolderMenuItem.Header = folder is not null
+            ? $"Project Folder: {folder}"
+            : "Set Pro_ject Folder...";
     }
 
     private void Toc_Click(object sender, RoutedEventArgs e) =>
@@ -233,6 +238,24 @@ public partial class MainWindow : Window
         var canvas = ActiveTab?.Editor.Canvas;
         if (canvas != null)
             canvas.SetSpellCheckEnabled(!canvas.SpellCheckEnabled);
+    }
+
+    private void ProjectFolder_Click(object sender, RoutedEventArgs e)
+    {
+        var canvas = ActiveTab?.Editor.Canvas;
+        if (canvas is null) return;
+
+        var dlg = new OpenFolderDialog
+        {
+            Title = "Set Project Folder",
+        };
+        if (canvas.ProjectFolder is not null)
+            dlg.InitialDirectory = canvas.ProjectFolder;
+        else if (canvas.DocumentBasePath is not null)
+            dlg.InitialDirectory = canvas.DocumentBasePath;
+
+        if (dlg.ShowDialog(this) != true) return;
+        canvas.SetProjectFolder(dlg.FolderName);
     }
 
     private void CloseTab(DocumentTab tab)
