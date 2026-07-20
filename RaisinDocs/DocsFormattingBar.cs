@@ -630,6 +630,7 @@ public class DocsFormattingBar : Control
         (ReformatActions.ConvertBoxTable, "Convert box-drawing table"),
         (ReformatActions.MergeParagraphs, "Merge paragraphs"),
         (ReformatActions.CollapseBlankLines, "Collapse blank lines"),
+        (ReformatActions.NormalizeMarkers, "Normalize adjacent markers"),
         (ReformatActions.TrimWhitespace, "Trim whitespace"),
         (ReformatActions.RenumberOrderedList, "Renumber ordered list"),
     ];

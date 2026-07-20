@@ -592,7 +592,7 @@ public class Document
             }
 
             if (closeBlock < 0) continue;
-            if (closeBlock == i && closeStart == openEnd) continue;
+            if (closeBlock == i) continue;
 
             string closeText = _blocks[closeBlock].ToString();
             string beforeClose = closeText[..closeStart];
@@ -763,6 +763,42 @@ public class Document
                 AnchorOffset = Math.Max(0, Math.Min(AnchorOffset - leadingRemoved, result.Length));
         }
         return changed;
+    }
+
+    public bool NormalizeAdjacentMarkers(int startBlock, int endBlock, Func<string, string> normalize, Func<string, int>? isFenceLine = null)
+    {
+        var insideFence = BuildFenceMap(startBlock, endBlock, isFenceLine);
+        bool changed = false;
+        for (int i = startBlock; i <= endBlock; i++)
+        {
+            if (insideFence != null && insideFence.Contains(i))
+                continue;
+            string text = _blocks[i].ToString();
+            string result = normalize(text);
+            if (result == text) continue;
+
+            _blocks[i] = new StringBuilder(result);
+            changed = true;
+
+            if (CursorBlock == i)
+                CursorOffset = Math.Min(CursorOffset, result.Length);
+            if (AnchorBlock == i)
+                AnchorOffset = Math.Min(AnchorOffset, result.Length);
+        }
+        return changed;
+    }
+
+    public bool HasAdjacentMarkers(int startBlock, int endBlock, Func<string, bool> hasMarkers, Func<string, int>? isFenceLine = null)
+    {
+        var insideFence = BuildFenceMap(startBlock, endBlock, isFenceLine);
+        for (int i = startBlock; i <= endBlock; i++)
+        {
+            if (insideFence != null && insideFence.Contains(i))
+                continue;
+            if (hasMarkers(_blocks[i].ToString()))
+                return true;
+        }
+        return false;
     }
 
     public bool HasBoxDrawingTable(int startBlock, int endBlock)

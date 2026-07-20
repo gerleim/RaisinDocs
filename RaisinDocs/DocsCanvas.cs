@@ -18,6 +18,7 @@ public enum ReformatActions
     CollapseBlankLines = 4,
     TrimWhitespace = 8,
     RenumberOrderedList = 16,
+    NormalizeMarkers = 32,
 }
 
 public partial class DocsCanvas : FrameworkElement

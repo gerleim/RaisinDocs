@@ -663,16 +663,14 @@ public class DocumentTests
     }
 
     [Fact]
-    public void SplitInlineColorDivs_SameLineStartingWithTag_StripsCloseTag()
+    public void SplitInlineColorDivs_SameLineStartingWithTag_LeavesAlone()
     {
         var doc = new Document();
         doc.SetText("<!--@fg:blue-->content<!--/@fg-->");
         int eb = doc.BlockCount - 1;
         doc.SplitInlineColorDivs(0, ref eb, FindOpenEnd, FindCloseStart, OpenToDiv);
-        doc.BlockCount.Should().Be(3);
-        doc.GetBlockText(0).Should().Be("<!--@div fg:blue-->");
-        doc.GetBlockText(1).Should().Be("content");
-        doc.GetBlockText(2).Should().Be("<!--/@div-->");
+        doc.BlockCount.Should().Be(1);
+        doc.GetBlockText(0).Should().Be("<!--@fg:blue-->content<!--/@fg-->");
     }
 
     // --- ReflowBoxTable ---
@@ -868,6 +866,57 @@ public class DocumentTests
         doc.TrimWhitespace(0, doc.BlockCount - 1);
         doc.GetBlockText(0).Should().Be("hello  ");
         doc.GetBlockText(1).Should().Be("world");
+    }
+
+    // --- NormalizeAdjacentMarkers ---
+
+    [Fact]
+    public void NormalizeAdjacentMarkers_CollapsesBoldMarkers()
+    {
+        var doc = new Document();
+        doc.SetText("**5.** **N** **debounce**");
+        doc.NormalizeAdjacentMarkers(0, doc.BlockCount - 1, MarkdownParser.NormalizeAdjacentMarkers);
+        doc.GetBlockText(0).Should().Be("**5. N debounce**");
+    }
+
+    [Fact]
+    public void NormalizeAdjacentMarkers_SkipsFencedCode()
+    {
+        var doc = new Document();
+        doc.SetText("```\n**a** **b**\n```");
+        doc.NormalizeAdjacentMarkers(0, doc.BlockCount - 1, MarkdownParser.NormalizeAdjacentMarkers, IsFence)
+            .Should().BeFalse();
+        doc.GetBlockText(1).Should().Be("**a** **b**");
+    }
+
+    [Fact]
+    public void NormalizeAdjacentMarkers_ReturnsFalseWhenNoChange()
+    {
+        var doc = new Document();
+        doc.SetText("**bold** plain text");
+        doc.NormalizeAdjacentMarkers(0, doc.BlockCount - 1, MarkdownParser.NormalizeAdjacentMarkers)
+            .Should().BeFalse();
+    }
+
+    [Fact]
+    public void NormalizeAdjacentMarkers_ReturnsTrueWhenChanged()
+    {
+        var doc = new Document();
+        doc.SetText("**a** **b**");
+        doc.NormalizeAdjacentMarkers(0, doc.BlockCount - 1, MarkdownParser.NormalizeAdjacentMarkers)
+            .Should().BeTrue();
+    }
+
+    [Fact]
+    public void NormalizeAdjacentMarkers_ClampsCursorOffset()
+    {
+        var doc = new Document();
+        doc.SetText("**a** **b**");
+        doc.CursorBlock = 0;
+        doc.CursorOffset = 11;
+        doc.NormalizeAdjacentMarkers(0, doc.BlockCount - 1, MarkdownParser.NormalizeAdjacentMarkers);
+        doc.GetBlockText(0).Should().Be("**a b**");
+        doc.CursorOffset.Should().BeLessOrEqualTo(doc.GetBlockLength(0));
     }
 
     // --- HasBoxDrawingTable ---

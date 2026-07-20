@@ -124,6 +124,7 @@ public partial class DocsCanvas
             MarkdownParser.InlineOpenToDivOpen);
         changed |= _doc.Reflow(sb, eb, IsMergeableParagraph, MarkdownParser.GetFenceBacktickCount);
         eb = Math.Min(eb, _doc.BlockCount - 1);
+        changed |= _doc.NormalizeAdjacentMarkers(sb, eb, MarkdownParser.NormalizeAdjacentMarkers, MarkdownParser.GetFenceBacktickCount);
         changed |= _doc.RenumberOrderedLists(sb, eb, MarkdownParser.GetOrderedListPrefixLength, MarkdownParser.GetFenceBacktickCount);
         if (!changed)
             _doc.TrimWhitespace(sb, eb, MarkdownParser.GetFenceBacktickCount);
@@ -146,6 +147,8 @@ public partial class DocsCanvas
             actions |= ReformatActions.MergeParagraphs;
         if (_doc.HasConsecutiveBlankLines(sb, eb, MarkdownParser.GetFenceBacktickCount))
             actions |= ReformatActions.CollapseBlankLines;
+        if (_doc.HasAdjacentMarkers(sb, eb, MarkdownParser.HasAdjacentMarkers, MarkdownParser.GetFenceBacktickCount))
+            actions |= ReformatActions.NormalizeMarkers;
         if (_doc.HasTrimmableWhitespace(sb, eb, MarkdownParser.GetFenceBacktickCount))
             actions |= ReformatActions.TrimWhitespace;
         if (_doc.HasMisnumberedOrderedList(sb, eb, MarkdownParser.GetOrderedListPrefixLength, MarkdownParser.GetFenceBacktickCount))

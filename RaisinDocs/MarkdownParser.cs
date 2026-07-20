@@ -2003,6 +2003,7 @@ public static class MarkdownParser
 
     public static string NormalizeAdjacentMarkers(string text)
     {
+        text = CollapseAdjacentColorTags(text);
         foreach (var marker in _inlineMarkers)
             text = CollapseAdjacentMarker(text, marker);
         return text;
@@ -2010,12 +2011,88 @@ public static class MarkdownParser
 
     public static bool HasAdjacentMarkers(string text)
     {
+        if (HasAdjacentColorTags(text))
+            return true;
         foreach (var marker in _inlineMarkers)
         {
             if (FindAdjacentMarker(text, marker) >= 0)
                 return true;
         }
         return false;
+    }
+
+    private static bool HasAdjacentColorTags(string text)
+    {
+        if (!text.Contains("--><!--@"))
+            return false;
+        int pos = 0;
+        while (FindNextColorTag(text, ref pos, out _, out int tagEnd, out bool isOpener, out _, out _))
+        {
+            if (!isOpener && tagEnd < text.Length && text[tagEnd] == '<')
+            {
+                int nextPos = tagEnd;
+                if (FindNextColorTag(text, ref nextPos, out int nextStart, out _, out bool nextIsOpener, out _, out _)
+                    && nextIsOpener && nextStart == tagEnd)
+                    return true;
+            }
+        }
+        return false;
+    }
+
+    private static string CollapseAdjacentColorTags(string text)
+    {
+        if (!text.Contains("--><!--@"))
+            return text;
+
+        var tags = new List<(int start, int end, bool isOpener)>();
+        int scanPos = 0;
+        while (FindNextColorTag(text, ref scanPos, out int tagStart, out int tagEnd, out bool isOpener, out _, out _))
+            tags.Add((tagStart, tagEnd, isOpener));
+
+        if (tags.Count < 3) return text;
+
+        var removeRanges = new List<(int start, int end)>();
+        var openerStack = new Stack<string>();
+
+        int i = 0;
+        while (i < tags.Count)
+        {
+            if (tags[i].isOpener)
+            {
+                openerStack.Push(text[tags[i].start..tags[i].end]);
+                i++;
+            }
+            else
+            {
+                string activeOpener = openerStack.Count > 0 ? openerStack.Pop() : "";
+
+                if (i + 1 < tags.Count
+                    && tags[i + 1].isOpener
+                    && tags[i + 1].start == tags[i].end
+                    && text[tags[i + 1].start..tags[i + 1].end] == activeOpener)
+                {
+                    removeRanges.Add((tags[i].start, tags[i + 1].end));
+                    openerStack.Push(activeOpener);
+                    i += 2;
+                }
+                else
+                {
+                    i++;
+                }
+            }
+        }
+
+        if (removeRanges.Count == 0) return text;
+
+        var sb = new StringBuilder(text.Length);
+        int lastCopy = 0;
+        foreach (var (start, end) in removeRanges)
+        {
+            sb.Append(text, lastCopy, start - lastCopy);
+            lastCopy = end;
+        }
+        sb.Append(text, lastCopy, text.Length - lastCopy);
+        return sb.ToString();
     }
 
     private static int FindAdjacentMarker(string text, string marker)

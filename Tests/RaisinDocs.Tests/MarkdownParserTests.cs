@@ -3087,4 +3087,38 @@ public class MarkdownParserTests
         MarkdownParser.HasAdjacentMarkers("no markers").Should().BeFalse();
     }
 
+    [Fact]
+    public void NormalizeAdjacentMarkers_CollapsesAdjacentColorTags()
+    {
+        var input = "<!--@fg:red-->hello<!--/@--><!--@fg:red--> world<!--/@-->";
+        MarkdownParser.NormalizeAdjacentMarkers(input).Should().Be("<!--@fg:red-->hello world<!--/@-->");
+    }
+
+    [Fact]
+    public void NormalizeAdjacentMarkers_CollapsesChainedColorTags()
+    {
+        var input = "<!--@fg:white bg:#373737-->**N**<!--/@--><!--@fg:white bg:#373737--> <!--/@--><!--@fg:white bg:#373737-->**debounce**<!--/@-->";
+        var expected = "<!--@fg:white bg:#373737-->**N debounce**<!--/@-->";
+        MarkdownParser.NormalizeAdjacentMarkers(input).Should().Be(expected);
+    }
+
+    [Fact]
+    public void NormalizeAdjacentMarkers_PreservesDifferentColorTags()
+    {
+        var input = "<!--@fg:red-->hello<!--/@--><!--@fg:blue-->world<!--/@-->";
+        MarkdownParser.NormalizeAdjacentMarkers(input).Should().Be(input);
+    }
+
+    [Fact]
+    public void HasAdjacentMarkers_DetectsAdjacentColorTags()
+    {
+        MarkdownParser.HasAdjacentMarkers("<!--@fg:red-->a<!--/@--><!--@fg:red-->b<!--/@-->").Should().BeTrue();
+    }
+
+    [Fact]
+    public void HasAdjacentMarkers_FalseForNonAdjacentColorTags()
+    {
+        MarkdownParser.HasAdjacentMarkers("<!--@fg:red-->a<!--/@--> <!--@fg:red-->b<!--/@-->").Should().BeFalse();
+    }
+
 }
