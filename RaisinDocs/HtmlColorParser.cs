@@ -457,14 +457,29 @@ internal static class HtmlColorParser
     }
 
     private static string FormatTextWithStyle(List<ColoredSegment> segments)
-    {
-        if (segments.Count == 0) return "";
-        if (segments.Count == 1)
-            return WrapStyle(segments[0].Text, segments[0].Bold, segments[0].Italic);
+        => FormatTextWithStyle(segments, 0, segments.Count);
 
+    private static string FormatTextWithStyle(List<ColoredSegment> segments, int start, int count)
+    {
+        if (count == 0) return "";
+        int end = start + count;
         var sb = new StringBuilder();
-        foreach (var seg in segments)
-            sb.Append(WrapStyle(seg.Text, seg.Bold, seg.Italic));
+        int i = start;
+        while (i < end)
+        {
+            int runEnd = i + 1;
+            while (runEnd < end
+                   && segments[runEnd].Bold == segments[i].Bold
+                   && segments[runEnd].Italic == segments[i].Italic)
+                runEnd++;
+
+            var text = new StringBuilder();
+            for (int k = i; k < runEnd; k++)
+                text.Append(segments[k].Text);
+
+            sb.Append(WrapStyle(text.ToString(), segments[i].Bold, segments[i].Italic));
+            i = runEnd;
+        }
         return sb.ToString();
     }
 
@@ -475,14 +490,23 @@ internal static class HtmlColorParser
             return WrapStyle(segments[0].Text, segments[0].Bold, segments[0].Italic);
 
         var sb = new StringBuilder();
-        foreach (var seg in segments)
+        int i = 0;
+        while (i < segments.Count)
         {
+            var seg = segments[i];
             bool hasFg = seg.Foreground != null;
             bool hasBg = seg.Background != null;
 
+            int runEnd = i + 1;
+            while (runEnd < segments.Count
+                   && segments[runEnd].Foreground == seg.Foreground
+                   && segments[runEnd].Background == seg.Background)
+                runEnd++;
+
             if (!hasFg && !hasBg)
             {
-                sb.Append(WrapStyle(seg.Text, seg.Bold, seg.Italic));
+                sb.Append(FormatTextWithStyle(segments, i, runEnd - i));
+                i = runEnd;
                 continue;
             }
 
@@ -492,11 +516,13 @@ internal static class HtmlColorParser
             if (hasBg) sb.Append($"bg:{FormatColor(seg.Background!.Value)}");
             sb.Append("-->");
 
-            sb.Append(WrapStyle(seg.Text, seg.Bold, seg.Italic));
+            sb.Append(FormatTextWithStyle(segments, i, runEnd - i));
 
             if (hasFg && hasBg) sb.Append("<!--/@-->");
             else if (hasFg) sb.Append("<!--/@fg-->");
             else sb.Append("<!--/@bg-->");
+
+            i = runEnd;
         }
         return sb.ToString();
     }

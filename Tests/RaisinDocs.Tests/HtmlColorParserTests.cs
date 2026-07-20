@@ -375,7 +375,7 @@ public class HtmlColorParserTests
 
         var result = HtmlColorParser.ConvertToColoredMarkdown(cfHtml);
 
-        result.Should().Be("<!--@fg:red-->**error**<!--/@fg--><!--@fg:red-->: details<!--/@fg-->");
+        result.Should().Be("<!--@fg:red-->**error**: details<!--/@fg-->");
     }
 
     // --- Non-pre HTML (Word-style <p> elements) ---
