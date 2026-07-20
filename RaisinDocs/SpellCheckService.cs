@@ -78,7 +78,7 @@ internal sealed class SpellCheckService : IDisposable
 
         if (string.IsNullOrEmpty(projectFolder)) return;
 
-        _projectDictionaryPath = Path.Combine(projectFolder, ProjectDictionaryFileName);
+        _projectDictionaryPath = Path.Combine(projectFolder, ProjectRootFinder.MarkerDirectoryName, ProjectDictionaryFileName);
 
         if (!File.Exists(_projectDictionaryPath)) return;
 
@@ -105,6 +105,7 @@ internal sealed class SpellCheckService : IDisposable
     private void SaveProjectDictionary()
     {
         if (_projectDictionaryPath is null) return;
+        Directory.CreateDirectory(Path.GetDirectoryName(_projectDictionaryPath)!);
         File.WriteAllLines(_projectDictionaryPath,
             _projectDictionary.OrderBy(w => w, StringComparer.OrdinalIgnoreCase));
     }

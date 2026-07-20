@@ -82,7 +82,7 @@
     </Window.Resources>
     <DockPanel>
         <Menu DockPanel.Dock="Top">
-            <MenuItem Header="_File">
+            <MenuItem Header="_File" SubmenuOpened="File_SubmenuOpened">
                 <MenuItem Header="_New" Click="New_Click" InputGestureText="Ctrl+N" />
                 <MenuItem Header="_Open..." Click="Open_Click" InputGestureText="Ctrl+O" />
                 <Separator />
@@ -92,6 +92,8 @@
                 <MenuItem x:Name="RecentFilesMenuItem" Header="_Recent Files" SubmenuOpened="RecentFiles_SubmenuOpened">
                     <MenuItem Header="(empty)" IsEnabled="False" />
                 </MenuItem>
+                <Separator />
+                <MenuItem x:Name="ProjectFolderMenuItem" Header="Pro_ject Folder..." Click="ProjectFolder_Click" />
                 <Separator />
                 <MenuItem Header="_Print..." Click="Print_Click" InputGestureText="Ctrl+P" />
                 <Separator />
@@ -115,8 +117,6 @@
                 <MenuItem x:Name="MinimapMenuItem" Header="Mi_nimap" Click="Minimap_Click" IsCheckable="True" />
                 <MenuItem x:Name="PageBreaksMenuItem" Header="_Page Breaks" Click="PageBreaks_Click" IsCheckable="True" />
                 <MenuItem x:Name="SpellCheckMenuItem" Header="_Spell Check" Click="SpellCheck_Click" IsCheckable="True" />
-                <Separator />
-                <MenuItem x:Name="ProjectFolderMenuItem" Header="Set Pro_ject Folder..." Click="ProjectFolder_Click" />
             </MenuItem>
         </Menu>
         <TabControl x:Name="TabControl" SelectionChanged="TabControl_SelectionChanged" />

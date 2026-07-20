@@ -1,5 +1,4 @@
 using System.Linq;
-using System.Net;
 using System.Text;
 using RaisinDocs;
 
@@ -1660,11 +1659,11 @@ public static class HtmlEmitter
             return semi + 1;
         }
 
-        // Named entity — use WebUtility.HtmlDecode
-        string result = WebUtility.HtmlDecode(entity);
-        if (result != entity)
+        // Named entity
+        var name = entity[1..^1];
+        if (HtmlEntities.Map.TryGetValue(name, out var resolved))
         {
-            decoded = result;
+            decoded = resolved;
             return semi + 1;
         }
 
@@ -1900,9 +1899,8 @@ public static class HtmlEmitter
                 int semiIdx = text.IndexOf(';', i + 1);
                 if (semiIdx > i && semiIdx - i <= 32)
                 {
-                    string entity = text[i..(semiIdx + 1)];
-                    string decoded = WebUtility.HtmlDecode(entity);
-                    if (decoded != entity)
+                    string entityName = text[(i + 1)..semiIdx];
+                    if (HtmlEntities.Map.TryGetValue(entityName, out var decoded))
                     {
                         sb.Append(decoded);
                         i = semiIdx;

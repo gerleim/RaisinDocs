@@ -287,10 +287,11 @@ public class SpellCheckServiceTests
     public void ProjectDictionary_WordPassesCheck()
     {
         var dir = Path.Combine(Path.GetTempPath(), "RaisinSpellTest_" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(dir);
+        var markerDir = Path.Combine(dir, ".raisindocs");
+        Directory.CreateDirectory(markerDir);
         try
         {
-            File.WriteAllText(Path.Combine(dir, SpellCheckService.ProjectDictionaryFileName),
+            File.WriteAllText(Path.Combine(markerDir, SpellCheckService.ProjectDictionaryFileName),
                 "DocsCanvas\nRaisinDocs\n");
 
             using var svc = new SpellCheckService();
@@ -311,10 +312,11 @@ public class SpellCheckServiceTests
     public void ProjectDictionary_CommentsAreIgnored()
     {
         var dir = Path.Combine(Path.GetTempPath(), "RaisinSpellTest_" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(dir);
+        var markerDir = Path.Combine(dir, ".raisindocs");
+        Directory.CreateDirectory(markerDir);
         try
         {
-            File.WriteAllText(Path.Combine(dir, SpellCheckService.ProjectDictionaryFileName),
+            File.WriteAllText(Path.Combine(markerDir, SpellCheckService.ProjectDictionaryFileName),
                 "# Project terms\nDocsCanvas\n");
 
             using var svc = new SpellCheckService();
@@ -351,7 +353,7 @@ public class SpellCheckServiceTests
             svc.Check("DocsCanvas").Should().BeFalse();
             svc.AddToProjectDictionary("DocsCanvas");
             svc.Check("DocsCanvas").Should().BeTrue();
-            File.Exists(Path.Combine(dir, SpellCheckService.ProjectDictionaryFileName)).Should().BeTrue();
+            File.Exists(Path.Combine(dir, ".raisindocs", SpellCheckService.ProjectDictionaryFileName)).Should().BeTrue();
         }
         finally
         {
@@ -369,23 +371,6 @@ public class ProjectRootFinderTests
         var sub = Path.Combine(root, "docs", "notes");
         Directory.CreateDirectory(sub);
         Directory.CreateDirectory(Path.Combine(root, ".raisindocs"));
-        try
-        {
-            ProjectRootFinder.FindProjectRoot(sub).Should().Be(root);
-        }
-        finally
-        {
-            Directory.Delete(root, true);
-        }
-    }
-
-    [Fact]
-    public void FindsCustomDictionaryFile()
-    {
-        var root = Path.Combine(Path.GetTempPath(), "RaisinRootTest_" + Guid.NewGuid().ToString("N"));
-        var sub = Path.Combine(root, "docs");
-        Directory.CreateDirectory(sub);
-        File.WriteAllText(Path.Combine(root, SpellCheckService.ProjectDictionaryFileName), "");
         try
         {
             ProjectRootFinder.FindProjectRoot(sub).Should().Be(root);
@@ -460,6 +445,58 @@ public class ProjectRootFinderTests
         finally
         {
             Directory.Delete(dir, true);
+        }
+    }
+
+    [Fact]
+    public void SetProjectFolder_MergesNestedMarkerContents()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "RaisinRootTest_" + Guid.NewGuid().ToString("N"));
+        var nestedMarker = Path.Combine(root, "sub", ".raisindocs");
+        Directory.CreateDirectory(nestedMarker);
+        File.WriteAllText(Path.Combine(nestedMarker, "custom-dictionary.txt"), "DocsCanvas\nRaisinDocs\n");
+        try
+        {
+            ProjectRootFinder.SetProjectFolder(root);
+
+            var targetDict = Path.Combine(root, ".raisindocs", "custom-dictionary.txt");
+            File.Exists(targetDict).Should().BeTrue();
+            var words = File.ReadAllLines(targetDict);
+            words.Should().Contain("DocsCanvas");
+            words.Should().Contain("RaisinDocs");
+
+            Directory.Exists(nestedMarker).Should().BeFalse();
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
+    [Fact]
+    public void SetProjectFolder_MergesWithExistingDictionary()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "RaisinRootTest_" + Guid.NewGuid().ToString("N"));
+        var rootMarker = Path.Combine(root, ".raisindocs");
+        var nestedMarker = Path.Combine(root, "sub", ".raisindocs");
+        Directory.CreateDirectory(rootMarker);
+        Directory.CreateDirectory(nestedMarker);
+        File.WriteAllText(Path.Combine(rootMarker, "custom-dictionary.txt"), "ExistingWord\nDocsCanvas\n");
+        File.WriteAllText(Path.Combine(nestedMarker, "custom-dictionary.txt"), "DocsCanvas\nNewWord\n");
+        try
+        {
+            ProjectRootFinder.SetProjectFolder(root);
+
+            var words = File.ReadAllLines(Path.Combine(rootMarker, "custom-dictionary.txt"));
+            words.Should().Contain("ExistingWord");
+            words.Should().Contain("DocsCanvas");
+            words.Should().Contain("NewWord");
+
+            Directory.Exists(nestedMarker).Should().BeFalse();
+        }
+        finally
+        {
+            Directory.Delete(root, true);
         }
     }
 }

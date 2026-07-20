@@ -129,6 +129,12 @@ public partial class MainWindow : Window
         tab.HeaderText.Text = $"{name}{dirty}";
     }
 
+    private void File_SubmenuOpened(object sender, RoutedEventArgs e)
+    {
+        var folder = ActiveTab?.Editor.Canvas.ProjectFolder;
+        ProjectFolderMenuItem.InputGestureText = folder ?? "";
+    }
+
     private void New_Click(object sender, RoutedEventArgs e) => AddTab();
 
     private void Open_Click(object sender, RoutedEventArgs e)
@@ -213,11 +219,6 @@ public partial class MainWindow : Window
         MinimapMenuItem.IsChecked = editor?.ShowMinimap ?? false;
         PageBreaksMenuItem.IsChecked = editor?.Canvas.ShowPageBreaks ?? false;
         SpellCheckMenuItem.IsChecked = editor?.Canvas.SpellCheckEnabled ?? false;
-
-        var folder = editor?.Canvas.ProjectFolder;
-        ProjectFolderMenuItem.Header = folder is not null
-            ? $"Project Folder: {folder}"
-            : "Set Pro_ject Folder...";
     }
 
     private void Toc_Click(object sender, RoutedEventArgs e) =>
