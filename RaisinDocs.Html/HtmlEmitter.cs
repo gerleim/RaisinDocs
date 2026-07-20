@@ -764,8 +764,8 @@ public static class HtmlEmitter
             bool isChecked = blocks[i].Kind == BlockKind.TaskListItemChecked;
             sb.Append("<li>");
             sb.Append(isChecked
-                ? "<input type=\"checkbox\" disabled=\"\" checked=\"\" /> "
-                : "<input type=\"checkbox\" disabled=\"\" /> ");
+                ? "<input checked=\"\" disabled=\"\" type=\"checkbox\"> "
+                : "<input disabled=\"\" type=\"checkbox\"> ");
             string content = StripTaskListPrefix(lines[i]);
             var innerBlocks = MarkdownParser.Parse(_ => content, 1);
             if (innerBlocks.Count > 0)
