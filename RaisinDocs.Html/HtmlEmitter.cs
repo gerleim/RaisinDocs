@@ -27,8 +27,52 @@ public static class HtmlEmitter
             foreach (var (k, v) in multiLineDefs)
                 linkDefs.TryAdd(k, v);
         }
+        ExtractContainerLinkDefs(blocks, lines, ref linkDefs);
         options.LinkDefinitions = linkDefs;
         return RenderBlocks(blocks, lines, options, 0);
+    }
+
+    static void ExtractContainerLinkDefs(List<ParsedBlock> blocks, List<string> lines,
+        ref Dictionary<string, (string Url, string? Title)>? linkDefs)
+    {
+        int i = 0;
+        while (i < blocks.Count)
+        {
+            if (blocks[i].Kind != BlockKind.Blockquote) { i++; continue; }
+
+            var innerLines = new List<string>();
+            bool canLazy = false;
+            int j = i;
+            while (j < blocks.Count)
+            {
+                if (blocks[j].Kind == BlockKind.Blockquote)
+                {
+                    string stripped = StripBlockquotePrefix(lines[j]);
+                    innerLines.Add(stripped);
+                    canLazy = !string.IsNullOrWhiteSpace(stripped) && !IsBlockStructureStart(stripped);
+                    j++;
+                }
+                else if (blocks[j].Kind is BlockKind.Paragraph or BlockKind.IndentedCodeLine
+                    && !string.IsNullOrWhiteSpace(lines[j])
+                    && innerLines.Count > 0 && canLazy)
+                {
+                    innerLines.Add(lines[j]);
+                    j++;
+                }
+                else break;
+            }
+
+            var innerBlocks = MarkdownParser.Parse(idx => innerLines[idx], innerLines.Count, out var innerDefs);
+            if (innerDefs != null)
+            {
+                linkDefs ??= new Dictionary<string, (string Url, string? Title)>(StringComparer.OrdinalIgnoreCase);
+                foreach (var (k, v) in innerDefs)
+                    linkDefs.TryAdd(k, v);
+            }
+            ExtractContainerLinkDefs(innerBlocks, innerLines, ref linkDefs);
+
+            i = j;
+        }
     }
 
     static string ExpandTabs(string line)
