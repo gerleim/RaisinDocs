@@ -166,7 +166,25 @@ public static class MarkdownParser
             string text = getBlockText(i);
             var fenceInfo = GetFenceInfo(text);
 
+            bool suppressFence = false;
             if (fenceLen == 0 && fenceInfo.Count > 0 && htmlBlockType == 0)
+            {
+                var (_, fwsCols) = MeasureLeadingWhitespace(text);
+                if (fwsCols > 0 && fwsCols < 4)
+                {
+                    for (int k = i - 1; k >= 0; k--)
+                    {
+                        string kt = getBlockText(k);
+                        if (string.IsNullOrWhiteSpace(kt)) continue;
+                        if (IsContainerBlock(result[k].Kind) && result[k].Kind != BlockKind.Blockquote)
+                        { suppressFence = true; break; }
+                        var (_, kCols) = MeasureLeadingWhitespace(kt);
+                        if (kCols > 0) continue;
+                        break;
+                    }
+                }
+            }
+            if (fenceLen == 0 && fenceInfo.Count > 0 && htmlBlockType == 0 && !suppressFence)
             {
                 fenceLen = fenceInfo.Count;
                 fenceChar = fenceInfo.Char;
@@ -654,6 +672,19 @@ public static class MarkdownParser
             if (blocks[i].Kind != BlockKind.Paragraph || getBlockText(i).Length == 0)
                 continue;
 
+            bool inContainerScope = false;
+            for (int k = i - 1; k >= 0; k--)
+            {
+                if (string.IsNullOrWhiteSpace(getBlockText(k)))
+                    break;
+                if (IsContainerBlock(blocks[k].Kind))
+                { inContainerScope = true; break; }
+                if (blocks[k].Kind != BlockKind.Paragraph)
+                    break;
+            }
+            if (inContainerScope)
+                continue;
+
             var nextKind = blocks[i + 1].Kind;
             string nextText = getBlockText(i + 1);
 
@@ -763,6 +794,8 @@ public static class MarkdownParser
                 }
 
                 if (blocks[j].Kind is not BlockKind.Paragraph and not BlockKind.IndentedCodeLine)
+                    break;
+                if (blocks[i].Kind == BlockKind.Blockquote && blocks[j].Kind == BlockKind.IndentedCodeLine)
                     break;
 
                 blocks[j] = blocks[j] with { IsLazyContinuation = true, OwnerBlock = i };

@@ -17,6 +17,9 @@ public static class HtmlEmitter
     {
         options ??= new HtmlEmitterOptions();
         var lines = SplitLines(markdown);
+        for (int i = 0; i < lines.Count; i++)
+            if (lines[i].Contains('\t'))
+                lines[i] = ExpandTabs(lines[i]);
         var multiLineDefs = ExtractMultiLineLinkDefs(lines);
         var blocks = MarkdownParser.Parse(i => lines[i], lines.Count, out var linkDefs);
         if (multiLineDefs != null)
@@ -27,6 +30,73 @@ public static class HtmlEmitter
         }
         options.LinkDefinitions = linkDefs;
         return RenderBlocks(blocks, lines, options, 0);
+    }
+
+    static string ExpandTabs(string line)
+    {
+        var sb = new StringBuilder();
+        int col = 0;
+        int i = 0;
+
+        // Phase 1: expand tabs in leading whitespace
+        while (i < line.Length && (line[i] == ' ' || line[i] == '\t'))
+        {
+            if (line[i] == '\t')
+            {
+                int spaces = 4 - (col % 4);
+                sb.Append(' ', spaces);
+                col += spaces;
+            }
+            else
+            {
+                sb.Append(' ');
+                col++;
+            }
+            i++;
+        }
+
+        // Phase 2: if at a block marker, expand tabs after it
+        if (i < line.Length)
+        {
+            char ch = line[i];
+            bool isMarker = ch is '>' or '-' or '*' or '+';
+            if (!isMarker && char.IsDigit(ch))
+            {
+                int d = i;
+                while (d < line.Length && char.IsDigit(line[d])) d++;
+                isMarker = d < line.Length && line[d] is '.' or ')';
+                if (isMarker)
+                {
+                    while (i <= d) { sb.Append(line[i]); col++; i++; }
+                }
+            }
+            if (isMarker && !(ch is '>' or '-' or '*' or '+' && false))
+            {
+                if (ch is '>' or '-' or '*' or '+')
+                { sb.Append(line[i]); col++; i++; }
+                while (i < line.Length && (line[i] == ' ' || line[i] == '\t'))
+                {
+                    if (line[i] == '\t')
+                    {
+                        int spaces = 4 - (col % 4);
+                        sb.Append(' ', spaces);
+                        col += spaces;
+                    }
+                    else
+                    {
+                        sb.Append(' ');
+                        col++;
+                    }
+                    i++;
+                }
+            }
+        }
+
+        // Phase 3: append the rest as-is (preserving content tabs)
+        if (i < line.Length)
+            sb.Append(line, i, line.Length - i);
+
+        return sb.ToString();
     }
 
     static List<string> SplitLines(string markdown)
@@ -579,10 +649,10 @@ public static class HtmlEmitter
                 canLazyContinue = !string.IsNullOrWhiteSpace(stripped) && !IsBlockStructureStart(stripped);
                 i++;
             }
-            else if (blocks[i].Kind == BlockKind.Paragraph && !string.IsNullOrWhiteSpace(lines[i])
+            else if (blocks[i].Kind is BlockKind.Paragraph or BlockKind.IndentedCodeLine
+                && !string.IsNullOrWhiteSpace(lines[i])
                 && innerLines.Count > 0 && canLazyContinue)
             {
-                // Lazy continuation: paragraph line continues the blockquote content
                 innerLines.Add(lines[i]);
                 i++;
             }
@@ -1179,6 +1249,34 @@ public static class HtmlEmitter
         return i;
     }
 
+    static (int Count, string? Language, char Char) GetLocalFenceInfo(string text)
+    {
+        int s = 0;
+        while (s < text.Length && s < 3 && text[s] == ' ') s++;
+        if (s >= text.Length) return (0, null, '\0');
+        char fc = text[s];
+        if (fc != '`' && fc != '~') return (0, null, '\0');
+        int count = 0;
+        int p = s;
+        while (p < text.Length && text[p] == fc) { count++; p++; }
+        if (count < 3) return (0, null, '\0');
+        var info = text[p..].Trim();
+        if (fc == '`' && info.Contains('`')) return (0, null, '\0');
+        return (count, info.Length > 0 ? info : null, fc);
+    }
+
+    static bool IsListMarkerStart(string text)
+    {
+        var trimmed = text.TrimStart();
+        if (trimmed.Length == 0) return false;
+        if (trimmed[0] is '-' or '*' or '+' && (trimmed.Length == 1 || trimmed[1] is ' ' or '\t'))
+            return true;
+        int j = 0;
+        while (j < trimmed.Length && char.IsDigit(trimmed[j])) j++;
+        return j > 0 && j < trimmed.Length && trimmed[j] is '.' or ')'
+            && (j + 1 >= trimmed.Length || trimmed[j + 1] is ' ' or '\t');
+    }
+
     static int GetListContentIndent(string text)
     {
         int i = 0;
@@ -1216,6 +1314,7 @@ public static class HtmlEmitter
         isLoose = false;
         int i = start;
         bool seenBlank = false;
+        bool consumedAfterBlank = false;
         int firstMarkerIndent = GetListMarkerIndent(lines[start]);
 
         while (i < blocks.Count)
@@ -1237,6 +1336,7 @@ public static class HtmlEmitter
                         if (currentItem.Count > 0 && thisMarkerIndent >= contentIndent)
                         {
                             currentItem.Add(lines[i][contentIndent..]);
+                            if (seenBlank) consumedAfterBlank = true;
                             i++;
                             continue;
                         }
@@ -1255,6 +1355,7 @@ public static class HtmlEmitter
                         if (currentItem.Count > 0 && thisMarkerIndent >= contentIndent)
                         {
                             currentItem.Add(lines[i][contentIndent..]);
+                            if (seenBlank) consumedAfterBlank = true;
                             i++;
                             continue;
                         }
@@ -1266,11 +1367,12 @@ public static class HtmlEmitter
                 if (currentItem.Count > 0 && thisMarkerIndent >= contentIndent)
                 {
                     currentItem.Add(lines[i][contentIndent..]);
+                    if (seenBlank) consumedAfterBlank = true;
                     i++;
                     continue;
                 }
 
-                if (seenBlank) isLoose = true;
+                if (seenBlank && !consumedAfterBlank) isLoose = true;
                 if (currentItem.Count > 0)
                 {
                     items.Add(currentItem);
@@ -1282,23 +1384,25 @@ public static class HtmlEmitter
                 currentItem.Add(content);
                 contentIndent = GetListContentIndent(lines[i]);
                 seenBlank = false;
+                consumedAfterBlank = false;
                 i++;
             }
             else if (string.IsNullOrWhiteSpace(lines[i]))
             {
                 if (currentItem.Count > 0)
                 {
-                    // If item started with blank marker (empty first line), blank line ends the item
                     if (currentItem.Count == 1 && currentItem[0] == "")
                     {
                         items.Add(currentItem);
                         currentItem = new List<string>();
                         seenBlank = true;
+                        consumedAfterBlank = false;
                         i++;
                         continue;
                     }
                     currentItem.Add("");
                     seenBlank = true;
+                    consumedAfterBlank = false;
                 }
                 i++;
             }
@@ -1310,6 +1414,7 @@ public static class HtmlEmitter
                 if (lineIndent >= contentIndent)
                 {
                     currentItem.Add(lines[i][contentIndent..]);
+                    if (seenBlank) consumedAfterBlank = true;
                     i++;
                 }
                 else if (seenBlank)
@@ -1343,14 +1448,43 @@ public static class HtmlEmitter
             foreach (var item in items)
             {
                 bool seenContent = false;
+                bool pendingBlank = false;
+                bool prevWasNested = false;
+                int itemFenceLen = 0;
+                char itemFenceChar = '\0';
                 foreach (var line in item)
                 {
+                    if (itemFenceLen > 0)
+                    {
+                        var (cfc, _, cfch) = GetLocalFenceInfo(line);
+                        if (cfc >= itemFenceLen && cfch == itemFenceChar)
+                            itemFenceLen = 0;
+                        continue;
+                    }
+                    var (ofc, _, ofch) = GetLocalFenceInfo(line);
+                    if (ofc >= 3)
+                    {
+                        itemFenceLen = ofc;
+                        itemFenceChar = ofch;
+                        seenContent = true;
+                        pendingBlank = false;
+                        prevWasNested = false;
+                        continue;
+                    }
                     if (string.IsNullOrWhiteSpace(line))
                     {
-                        if (seenContent) { isLoose = true; break; }
+                        if (seenContent) pendingBlank = true;
                     }
                     else
+                    {
+                        bool isIndented = line.Length > 0 && line[0] == ' ';
+                        if (pendingBlank && (!prevWasNested || !isIndented))
+                        { isLoose = true; break; }
+
                         seenContent = true;
+                        pendingBlank = false;
+                        prevWasNested = isIndented || IsListMarkerStart(line);
+                    }
                 }
                 if (isLoose) break;
             }
