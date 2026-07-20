@@ -636,6 +636,7 @@ public static class HtmlEmitter
         sb.Append("<blockquote>\n");
 
         var innerLines = new List<string>();
+        var lazyIndices = new HashSet<int>();
         int i = start;
         bool canLazyContinue = false;
         while (i < blocks.Count)
@@ -644,8 +645,6 @@ public static class HtmlEmitter
             {
                 string stripped = StripBlockquotePrefix(lines[i]);
                 innerLines.Add(stripped);
-                // Lazy continuation is allowed only after non-blank paragraph content
-                // (not after blank lines, code fences, headings, etc.)
                 canLazyContinue = !string.IsNullOrWhiteSpace(stripped) && !IsBlockStructureStart(stripped);
                 i++;
             }
@@ -653,6 +652,7 @@ public static class HtmlEmitter
                 && !string.IsNullOrWhiteSpace(lines[i])
                 && innerLines.Count > 0 && canLazyContinue)
             {
+                lazyIndices.Add(innerLines.Count);
                 innerLines.Add(lines[i]);
                 i++;
             }
@@ -661,6 +661,17 @@ public static class HtmlEmitter
         }
 
         var innerBlocks = MarkdownParser.Parse(idx => innerLines[idx], innerLines.Count);
+
+        // Setext heading underlines cannot be lazy continuation lines (CommonMark §4.3)
+        for (int b = 0; b < innerBlocks.Count; b++)
+        {
+            if (innerBlocks[b].Kind == BlockKind.SetextUnderline && lazyIndices.Contains(b))
+            {
+                innerBlocks[b] = innerBlocks[b] with { Kind = BlockKind.Paragraph };
+                if (b > 0 && innerBlocks[b - 1].Kind is BlockKind.Heading1 or BlockKind.Heading2)
+                    innerBlocks[b - 1] = innerBlocks[b - 1] with { Kind = BlockKind.Paragraph };
+            }
+        }
         sb.Append(RenderBlocks(innerBlocks, innerLines, options, depth + 1));
 
         sb.Append("</blockquote>\n");
