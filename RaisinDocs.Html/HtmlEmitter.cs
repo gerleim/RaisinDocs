@@ -1908,7 +1908,7 @@ public static class HtmlEmitter
             else if (text[i] == '[')
             {
                 int bracketClose = FindClosingBracket(text, i + 1);
-                if (bracketClose >= 0)
+                if (bracketClose >= 0 && !ContentContainsLink(text, i + 1, bracketClose))
                 {
                     int afterBracket = bracketClose + 1;
                     if (afterBracket < text.Length && text[afterBracket] == '(')
@@ -1971,6 +1971,53 @@ public static class HtmlEmitter
             else if (text[i] == ']') { depth--; if (depth == 0) return i; }
         }
         return -1;
+    }
+
+    static bool ContentContainsLink(string text, int from, int to)
+    {
+        for (int i = from; i < to; i++)
+        {
+            if (text[i] == '\\' && i + 1 < to) { i++; continue; }
+            if (text[i] == '!' && i + 1 < to && text[i + 1] == '[')
+            {
+                int imgClose = FindClosingBracket(text, i + 2);
+                if (imgClose >= 0 && imgClose < to)
+                {
+                    int after = imgClose + 1;
+                    if (after < to && text[after] == '(')
+                    {
+                        int p = FindClosingParen(text, after + 1);
+                        if (p >= 0) { i = p; continue; }
+                    }
+                    else if (after < to && text[after] == '[')
+                    {
+                        int r = text.IndexOf(']', after + 1);
+                        if (r >= 0 && r < to) { i = r; continue; }
+                    }
+                }
+                i++;
+                continue;
+            }
+            if (text[i] == '[')
+            {
+                int close = FindClosingBracket(text, i + 1);
+                if (close >= 0 && close < to)
+                {
+                    int after = close + 1;
+                    if (after < to && text[after] == '(')
+                    {
+                        int p = FindClosingParen(text, after + 1);
+                        if (p >= 0) return true;
+                    }
+                    if (after < to && text[after] == '[')
+                    {
+                        int r = text.IndexOf(']', after + 1);
+                        if (r >= 0) return true;
+                    }
+                }
+            }
+        }
+        return false;
     }
 
     static int FindClosingParen(string text, int from)
