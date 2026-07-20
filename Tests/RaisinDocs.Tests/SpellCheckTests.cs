@@ -289,16 +289,16 @@ public class SpellCheckServiceTests
         var dir = Path.Combine(Path.GetTempPath(), "RaisinSpellTest_" + Guid.NewGuid().ToString("N"));
         var markerDir = Path.Combine(dir, ".raisindocs");
         Directory.CreateDirectory(markerDir);
+        var dictPath = Path.Combine(markerDir, RaisinDocsPaths.ProjectDictionaryFileName);
         try
         {
-            File.WriteAllText(Path.Combine(markerDir, SpellCheckService.ProjectDictionaryFileName),
-                "DocsCanvas\nRaisinDocs\n");
+            File.WriteAllText(dictPath, "DocsCanvas\nRaisinDocs\n");
 
             using var svc = new SpellCheckService();
             svc.LoadEmbeddedDictionary();
             svc.Check("DocsCanvas").Should().BeFalse();
 
-            svc.LoadProjectDictionary(dir);
+            svc.LoadProjectDictionary(dictPath);
             svc.Check("DocsCanvas").Should().BeTrue();
             svc.Check("RaisinDocs").Should().BeTrue();
         }
@@ -314,14 +314,14 @@ public class SpellCheckServiceTests
         var dir = Path.Combine(Path.GetTempPath(), "RaisinSpellTest_" + Guid.NewGuid().ToString("N"));
         var markerDir = Path.Combine(dir, ".raisindocs");
         Directory.CreateDirectory(markerDir);
+        var dictPath = Path.Combine(markerDir, RaisinDocsPaths.ProjectDictionaryFileName);
         try
         {
-            File.WriteAllText(Path.Combine(markerDir, SpellCheckService.ProjectDictionaryFileName),
-                "# Project terms\nDocsCanvas\n");
+            File.WriteAllText(dictPath, "# Project terms\nDocsCanvas\n");
 
             using var svc = new SpellCheckService();
             svc.LoadEmbeddedDictionary();
-            svc.LoadProjectDictionary(dir);
+            svc.LoadProjectDictionary(dictPath);
             svc.Check("DocsCanvas").Should().BeTrue();
         }
         finally
@@ -331,7 +331,7 @@ public class SpellCheckServiceTests
     }
 
     [Fact]
-    public void ProjectDictionary_NullBasePath_NoError()
+    public void ProjectDictionary_NullPath_NoError()
     {
         using var svc = new SpellCheckService();
         svc.LoadEmbeddedDictionary();
@@ -340,20 +340,21 @@ public class SpellCheckServiceTests
     }
 
     [Fact]
-    public void ProjectDictionary_NoFile_SetsPathForCreation()
+    public void ProjectDictionary_NoFile_CreatesOnAdd()
     {
         var dir = Path.Combine(Path.GetTempPath(), "RaisinSpellTest_" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(dir);
+        var dictPath = RaisinDocsPaths.GetProjectDictionaryPath(dir);
         try
         {
             using var svc = new SpellCheckService();
             svc.LoadEmbeddedDictionary();
-            svc.LoadProjectDictionary(dir);
+            svc.LoadProjectDictionary(dictPath);
 
             svc.Check("DocsCanvas").Should().BeFalse();
             svc.AddToProjectDictionary("DocsCanvas");
             svc.Check("DocsCanvas").Should().BeTrue();
-            File.Exists(Path.Combine(dir, ".raisindocs", SpellCheckService.ProjectDictionaryFileName)).Should().BeTrue();
+            File.Exists(dictPath).Should().BeTrue();
         }
         finally
         {
@@ -362,7 +363,7 @@ public class SpellCheckServiceTests
     }
 }
 
-public class ProjectRootFinderTests
+public class RaisinDocsPathsTests
 {
     [Fact]
     public void FindsRaisindocsMarker()
@@ -373,7 +374,7 @@ public class ProjectRootFinderTests
         Directory.CreateDirectory(Path.Combine(root, ".raisindocs"));
         try
         {
-            ProjectRootFinder.FindProjectRoot(sub).Should().Be(root);
+            RaisinDocsPaths.FindProjectRoot(sub).Should().Be(root);
         }
         finally
         {
@@ -390,7 +391,7 @@ public class ProjectRootFinderTests
         Directory.CreateDirectory(Path.Combine(root, ".git"));
         try
         {
-            ProjectRootFinder.FindProjectRoot(sub).Should().Be(root);
+            RaisinDocsPaths.FindProjectRoot(sub).Should().Be(root);
         }
         finally
         {
@@ -409,7 +410,7 @@ public class ProjectRootFinderTests
         Directory.CreateDirectory(Path.Combine(markerRoot, ".raisindocs"));
         try
         {
-            ProjectRootFinder.FindProjectRoot(sub).Should().Be(markerRoot);
+            RaisinDocsPaths.FindProjectRoot(sub).Should().Be(markerRoot);
         }
         finally
         {
@@ -424,7 +425,7 @@ public class ProjectRootFinderTests
         Directory.CreateDirectory(dir);
         try
         {
-            ProjectRootFinder.FindProjectRoot(dir).Should().BeNull();
+            RaisinDocsPaths.FindProjectRoot(dir).Should().BeNull();
         }
         finally
         {
@@ -439,7 +440,7 @@ public class ProjectRootFinderTests
         Directory.CreateDirectory(dir);
         try
         {
-            ProjectRootFinder.SetProjectFolder(dir);
+            RaisinDocsPaths.SetProjectFolder(dir);
             Directory.Exists(Path.Combine(dir, ".raisindocs")).Should().BeTrue();
         }
         finally
@@ -457,7 +458,7 @@ public class ProjectRootFinderTests
         File.WriteAllText(Path.Combine(nestedMarker, "custom-dictionary.txt"), "DocsCanvas\nRaisinDocs\n");
         try
         {
-            ProjectRootFinder.SetProjectFolder(root);
+            RaisinDocsPaths.SetProjectFolder(root);
 
             var targetDict = Path.Combine(root, ".raisindocs", "custom-dictionary.txt");
             File.Exists(targetDict).Should().BeTrue();
@@ -485,7 +486,7 @@ public class ProjectRootFinderTests
         File.WriteAllText(Path.Combine(nestedMarker, "custom-dictionary.txt"), "DocsCanvas\nNewWord\n");
         try
         {
-            ProjectRootFinder.SetProjectFolder(root);
+            RaisinDocsPaths.SetProjectFolder(root);
 
             var words = File.ReadAllLines(Path.Combine(rootMarker, "custom-dictionary.txt"));
             words.Should().Contain("ExistingWord");

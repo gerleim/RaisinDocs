@@ -2,9 +2,10 @@ using System.IO;
 
 namespace RaisinDocs;
 
-internal static class ProjectRootFinder
+internal static class RaisinDocsPaths
 {
     public const string MarkerDirectoryName = ".raisindocs";
+    public const string ProjectDictionaryFileName = "custom-dictionary.txt";
 
     public static string? FindProjectRoot(string basePath)
     {
@@ -18,6 +19,18 @@ internal static class ProjectRootFinder
             dir = Path.GetDirectoryName(dir);
         }
         return null;
+    }
+
+    public static string GetProjectDictionaryPath(string projectFolder)
+    {
+        return Path.Combine(projectFolder, MarkerDirectoryName, ProjectDictionaryFileName);
+    }
+
+    public static string? GetUserDictionaryPath()
+    {
+        var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+        if (string.IsNullOrEmpty(appData)) return null;
+        return Path.Combine(appData, "Raisin", "RaisinDocs", "user-dictionary.txt");
     }
 
     public static string SetProjectFolder(string folder)

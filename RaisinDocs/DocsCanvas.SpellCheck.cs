@@ -47,11 +47,11 @@ public partial class DocsCanvas
 
     public void SetProjectFolder(string folder)
     {
-        ProjectRootFinder.SetProjectFolder(folder);
+        RaisinDocsPaths.SetProjectFolder(folder);
         _projectFolder = folder;
         if (_spellCheckService is not null)
         {
-            _spellCheckService.LoadProjectDictionary(folder);
+            _spellCheckService.LoadProjectDictionary(RaisinDocsPaths.GetProjectDictionaryPath(folder));
             if (_spellCheckEnabled)
             {
                 RecheckAllBlocks();
@@ -64,14 +64,16 @@ public partial class DocsCanvas
     {
         if (DocumentBasePath is not null)
         {
-            var root = ProjectRootFinder.FindProjectRoot(DocumentBasePath);
+            var root = RaisinDocsPaths.FindProjectRoot(DocumentBasePath);
             _projectFolder = root ?? DocumentBasePath;
         }
         else
         {
             _projectFolder = null;
         }
-        _spellCheckService!.LoadProjectDictionary(_projectFolder);
+        var dictPath = _projectFolder is not null
+            ? RaisinDocsPaths.GetProjectDictionaryPath(_projectFolder) : null;
+        _spellCheckService!.LoadProjectDictionary(dictPath);
     }
 
     private void EnsureSpellCheckInitialized()
@@ -396,6 +398,10 @@ public partial class DocsCanvas
         InvalidateLayout();
         EnsureCursorVisible();
     }
+
+    public static string? UserDictionaryPath => RaisinDocsPaths.GetUserDictionaryPath();
+    public string? ProjectDictionaryPath => _projectFolder is not null
+        ? RaisinDocsPaths.GetProjectDictionaryPath(_projectFolder) : null;
 
     internal SpellCheckService? TestSpellCheckService => _spellCheckService;
     internal IReadOnlyList<SpellingError>? TestGetSpellingErrors(int blockIndex)

@@ -129,12 +129,6 @@ public partial class MainWindow : Window
         tab.HeaderText.Text = $"{name}{dirty}";
     }
 
-    private void File_SubmenuOpened(object sender, RoutedEventArgs e)
-    {
-        var folder = ActiveTab?.Editor.Canvas.ProjectFolder;
-        ProjectFolderMenuItem.InputGestureText = folder ?? "";
-    }
-
     private void New_Click(object sender, RoutedEventArgs e) => AddTab();
 
     private void Open_Click(object sender, RoutedEventArgs e)
@@ -241,6 +235,13 @@ public partial class MainWindow : Window
             canvas.SetSpellCheckEnabled(!canvas.SpellCheckEnabled);
     }
 
+    private void Tools_SubmenuOpened(object sender, RoutedEventArgs e)
+    {
+        var folder = ActiveTab?.Editor.Canvas.ProjectFolder;
+        ProjectFolderMenuItem.InputGestureText = folder ?? "";
+        ProjectDictionaryMenuItem.IsEnabled = folder is not null;
+    }
+
     private void ProjectFolder_Click(object sender, RoutedEventArgs e)
     {
         var canvas = ActiveTab?.Editor.Canvas;
@@ -257,6 +258,32 @@ public partial class MainWindow : Window
 
         if (dlg.ShowDialog(this) != true) return;
         canvas.SetProjectFolder(dlg.FolderName);
+    }
+
+    private void UserDictionary_Click(object sender, RoutedEventArgs e)
+    {
+        var path = DocsCanvas.UserDictionaryPath;
+        if (path is null) return;
+
+        var dir = Path.GetDirectoryName(path)!;
+        Directory.CreateDirectory(dir);
+        if (!File.Exists(path))
+            File.WriteAllText(path, "");
+
+        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(path) { UseShellExecute = true });
+    }
+
+    private void ProjectDictionary_Click(object sender, RoutedEventArgs e)
+    {
+        var path = ActiveTab?.Editor.Canvas.ProjectDictionaryPath;
+        if (path is null) return;
+
+        var dir = Path.GetDirectoryName(path)!;
+        Directory.CreateDirectory(dir);
+        if (!File.Exists(path))
+            File.WriteAllText(path, "");
+
+        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(path) { UseShellExecute = true });
     }
 
     private void CloseTab(DocumentTab tab)

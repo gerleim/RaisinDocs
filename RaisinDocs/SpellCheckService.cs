@@ -16,8 +16,6 @@ internal sealed class SpellCheckService : IDisposable
     private string? _userDictionaryPath;
     private string? _projectDictionaryPath;
 
-    public const string ProjectDictionaryFileName = "custom-dictionary.txt";
-
     public bool IsLoaded => _wordList is not null;
 
     public void LoadEmbeddedDictionary()
@@ -70,19 +68,15 @@ internal sealed class SpellCheckService : IDisposable
             _cache.Remove(word);
     }
 
-    public void LoadProjectDictionary(string? projectFolder)
+    public void LoadProjectDictionary(string? dictionaryPath)
     {
         _projectDictionary.Clear();
-        _projectDictionaryPath = null;
+        _projectDictionaryPath = dictionaryPath;
         _cache.Clear();
 
-        if (string.IsNullOrEmpty(projectFolder)) return;
+        if (dictionaryPath is null || !File.Exists(dictionaryPath)) return;
 
-        _projectDictionaryPath = Path.Combine(projectFolder, ProjectRootFinder.MarkerDirectoryName, ProjectDictionaryFileName);
-
-        if (!File.Exists(_projectDictionaryPath)) return;
-
-        foreach (var line in File.ReadLines(_projectDictionaryPath))
+        foreach (var line in File.ReadLines(dictionaryPath))
         {
             var trimmed = line.Trim();
             if (trimmed.Length > 0 && !trimmed.StartsWith('#'))
@@ -112,7 +106,7 @@ internal sealed class SpellCheckService : IDisposable
 
     private void LoadUserDictionary()
     {
-        _userDictionaryPath = GetUserDictionaryPath();
+        _userDictionaryPath = RaisinDocsPaths.GetUserDictionaryPath();
         if (_userDictionaryPath is null || !File.Exists(_userDictionaryPath)) return;
 
         foreach (var line in File.ReadLines(_userDictionaryPath))
@@ -129,13 +123,6 @@ internal sealed class SpellCheckService : IDisposable
         var dir = Path.GetDirectoryName(_userDictionaryPath)!;
         Directory.CreateDirectory(dir);
         File.WriteAllLines(_userDictionaryPath, _userDictionary.OrderBy(w => w, StringComparer.OrdinalIgnoreCase));
-    }
-
-    private static string? GetUserDictionaryPath()
-    {
-        var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-        if (string.IsNullOrEmpty(appData)) return null;
-        return Path.Combine(appData, "Raisin", "RaisinDocs", "user-dictionary.txt");
     }
 
     public void Dispose()
