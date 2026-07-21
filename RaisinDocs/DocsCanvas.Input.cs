@@ -581,6 +581,7 @@ public partial class DocsCanvas
                     string number = stripped.Substring(0, prefixLen - 2);
                     char delim = stripped[prefixLen - 2];
                     _doc.InsertParagraphBreak();
+                    StripExistingListPrefix();
                     if (int.TryParse(number, out int n))
                     {
                         _doc.Paste(indent + (n + 1).ToString() + delim + " ");
@@ -620,6 +621,7 @@ public partial class DocsCanvas
                 {
                     string indent = blockText[..leadingSpaces];
                     _doc.InsertParagraphBreak();
+                    StripExistingListPrefix();
                     _doc.Paste(indent + newPrefix);
                 }
             }
@@ -648,6 +650,23 @@ public partial class DocsCanvas
             while (trailStart > 0 && text[trailStart - 1] == ' ') trailStart--;
             _doc.RemoveTextAt(_doc.CursorBlock, trailStart, end - trailStart);
         }
+    }
+
+    private void StripExistingListPrefix()
+    {
+        string text = _doc.GetBlockText(_doc.CursorBlock);
+        var kind = MarkdownParser.ClassifyBlock(text, out int leading);
+        string stripped = leading > 0 ? text[leading..] : text;
+        int stripLen = kind switch
+        {
+            BlockKind.UnorderedListItem => leading + 2,
+            BlockKind.TaskListItemUnchecked or BlockKind.TaskListItemChecked => leading + 6,
+            BlockKind.OrderedListItem => leading + MarkdownParser.GetOrderedListPrefixLength(stripped),
+            BlockKind.Blockquote => leading + (stripped.StartsWith("> ") ? 2 : 1),
+            _ => 0,
+        };
+        if (stripLen > 0)
+            _doc.RemoveTextAt(_doc.CursorBlock, 0, stripLen);
     }
 
     private void RenumberOrderedList(int startBlock, int nextNumber, char delim)

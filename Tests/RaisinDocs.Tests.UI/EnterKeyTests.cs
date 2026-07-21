@@ -295,4 +295,97 @@ public class EnterKeyTests
         canvas.TestCursorBlock.Should().Be(1);
         canvas.TestCursorOffset.Should().Be(8);
     }
+
+    // --- Enter mid-line: strip duplicate list prefix ---
+
+    [StaFact]
+    public void Enter_BeforeInlineDash_StripsExistingPrefix()
+    {
+        var canvas = CreateCanvas("- one - two");
+        canvas.TestSetCursor(0, 6); // before "- two"
+        canvas.TestHandleEnter();
+
+        canvas.TestGetBlockText(0).Should().Be("- one ");
+        canvas.TestGetBlockText(1).Should().Be("- two");
+        canvas.TestCursorBlock.Should().Be(1);
+        canvas.TestCursorOffset.Should().Be(2);
+    }
+
+    [StaFact]
+    public void Enter_BeforeInlineStar_StripsExistingPrefix()
+    {
+        var canvas = CreateCanvas("* one * two");
+        canvas.TestSetCursor(0, 6);
+        canvas.TestHandleEnter();
+
+        canvas.TestGetBlockText(0).Should().Be("* one ");
+        canvas.TestGetBlockText(1).Should().Be("* two");
+        canvas.TestCursorBlock.Should().Be(1);
+        canvas.TestCursorOffset.Should().Be(2);
+    }
+
+    [StaFact]
+    public void Enter_BeforeInlineTaskPrefix_StripsAndReplacesUnchecked()
+    {
+        var canvas = CreateCanvas("- [ ] task1 - [x] task2");
+        canvas.TestSetCursor(0, 12); // before "- [x] task2"
+        canvas.TestHandleEnter();
+
+        canvas.TestGetBlockText(0).Should().Be("- [ ] task1 ");
+        canvas.TestGetBlockText(1).Should().Be("- [ ] task2");
+        canvas.TestCursorBlock.Should().Be(1);
+        canvas.TestCursorOffset.Should().Be(6);
+    }
+
+    [StaFact]
+    public void Enter_BeforeInlineOrderedPrefix_StripsExisting()
+    {
+        var canvas = CreateCanvas("1. first 2. second");
+        canvas.TestSetCursor(0, 9); // before "2. second"
+        canvas.TestHandleEnter();
+
+        canvas.TestGetBlockText(0).Should().Be("1. first ");
+        canvas.TestGetBlockText(1).Should().Be("2. second");
+        canvas.TestCursorBlock.Should().Be(1);
+        canvas.TestCursorOffset.Should().Be(3);
+    }
+
+    [StaFact]
+    public void Enter_BeforeInlineBlockquote_StripsExisting()
+    {
+        var canvas = CreateCanvas("> one > two");
+        canvas.TestSetCursor(0, 6); // before "> two"
+        canvas.TestHandleEnter();
+
+        canvas.TestGetBlockText(0).Should().Be("> one ");
+        canvas.TestGetBlockText(1).Should().Be("> two");
+        canvas.TestCursorBlock.Should().Be(1);
+        canvas.TestCursorOffset.Should().Be(2);
+    }
+
+    [StaFact]
+    public void Enter_BeforeInlineDashWithLeadingSpace_TrimsSpaceAndStripsPrefix()
+    {
+        var canvas = CreateCanvas("- one  - two");
+        canvas.TestSetCursor(0, 6); // before " - two"
+        canvas.TestHandleEnter();
+
+        canvas.TestGetBlockText(0).Should().Be("- one ");
+        canvas.TestGetBlockText(1).Should().Be("- two");
+        canvas.TestCursorBlock.Should().Be(1);
+        canvas.TestCursorOffset.Should().Be(2);
+    }
+
+    [StaFact]
+    public void Enter_BeforeNonListDash_KeepsAutoPrefix()
+    {
+        var canvas = CreateCanvas("- one -three");
+        canvas.TestSetCursor(0, 6); // before "-three" (no space after dash)
+        canvas.TestHandleEnter();
+
+        canvas.TestGetBlockText(0).Should().Be("- one ");
+        canvas.TestGetBlockText(1).Should().Be("- -three");
+        canvas.TestCursorBlock.Should().Be(1);
+        canvas.TestCursorOffset.Should().Be(2);
+    }
 }
