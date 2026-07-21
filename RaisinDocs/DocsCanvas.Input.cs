@@ -30,6 +30,7 @@ public partial class DocsCanvas
     protected override void OnMouseDown(MouseButtonEventArgs e)
     {
         base.OnMouseDown(e);
+        _cursorAtLineEnd = false;
 
         if (e.ChangedButton == MouseButton.Right)
         {
@@ -239,6 +240,7 @@ public partial class DocsCanvas
         base.OnTextInput(e);
         if (string.IsNullOrEmpty(e.Text)) return;
         if (IsReadOnly) return;
+        _cursorAtLineEnd = false;
 
         if (_lastAction != LastActionKind.Typing)
         {
@@ -412,13 +414,31 @@ public partial class DocsCanvas
             var vl = _visualLines[vli];
             if (vl.Group != null)
             {
-                var (bi, bo) = vl.Group.JoinedToSource(vl.StartOffset);
-                _doc.CursorBlock = bi;
-                _doc.CursorOffset = bo;
+                var (targetBi, targetBo) = vl.Group.JoinedToSource(vl.StartOffset);
+                if (_doc.CursorBlock == targetBi && _doc.CursorOffset == targetBo
+                    && vli > 0 && _visualLines[vli - 1].Group == vl.Group)
+                {
+                    var (firstBi, firstBo) = vl.Group.JoinedToSource(0);
+                    _doc.CursorBlock = firstBi;
+                    _doc.CursorOffset = firstBo;
+                }
+                else
+                {
+                    _doc.CursorBlock = targetBi;
+                    _doc.CursorOffset = targetBo;
+                }
             }
             else
             {
-                _doc.CursorOffset = vl.StartOffset;
+                if (_doc.CursorOffset == vl.StartOffset
+                    && vli > 0 && _visualLines[vli - 1].BlockIndex == vl.BlockIndex)
+                {
+                    _doc.CursorOffset = 0;
+                }
+                else
+                {
+                    _doc.CursorOffset = vl.StartOffset;
+                }
             }
         }
         if (IsVisual) HandleHomeVisual();
@@ -428,6 +448,7 @@ public partial class DocsCanvas
     private void HandleEnd(bool shift, bool ctrl)
     {
         SealAndStopTimer();
+        _cursorAtLineEnd = false;
         if (ctrl)
         {
             _doc.CursorBlock = _doc.BlockCount - 1;
@@ -437,16 +458,50 @@ public partial class DocsCanvas
         {
             int vli = CursorToVisualLineIndex();
             var vl = _visualLines[vli];
+            int endOffset = vl.StartOffset + vl.Length;
             if (vl.Group != null)
             {
-                var (bi, bo) = vl.Group.JoinedToSource(vl.StartOffset + vl.Length);
-                _doc.CursorBlock = bi;
-                _doc.CursorOffset = bo;
+                bool isWrap = vli + 1 < _visualLines.Count
+                    && _visualLines[vli + 1].Group == vl.Group;
+                if (isWrap)
+                {
+                    string text = vl.Group.JoinedText;
+                    while (endOffset > vl.StartOffset && text[endOffset - 1] == ' ')
+                        endOffset--;
+                }
+                var (targetBi, targetBo) = vl.Group.JoinedToSource(endOffset);
+                if (_doc.CursorBlock == targetBi && _doc.CursorOffset == targetBo && isWrap)
+                {
+                    var last = vl.Group.Segments[^1];
+                    _doc.CursorBlock = last.BlockIndex;
+                    _doc.CursorOffset = last.Length;
+                }
+                else
+                {
+                    _doc.CursorBlock = targetBi;
+                    _doc.CursorOffset = targetBo;
+                }
             }
             else
             {
-                _doc.CursorOffset = vl.StartOffset + vl.Length;
+                bool isWrap = vli + 1 < _visualLines.Count
+                    && _visualLines[vli + 1].BlockIndex == vl.BlockIndex;
+                if (isWrap)
+                {
+                    string text = _doc.GetBlockText(vl.BlockIndex);
+                    while (endOffset > vl.StartOffset && text[endOffset - 1] == ' ')
+                        endOffset--;
+                }
+                if (_doc.CursorOffset == endOffset && isWrap)
+                {
+                    _doc.CursorOffset = _doc.GetBlockLength(vl.BlockIndex);
+                }
+                else
+                {
+                    _doc.CursorOffset = endOffset;
+                }
             }
+            _cursorAtLineEnd = true;
         }
         if (IsVisual) HandleEndVisual();
         if (!shift) _doc.CollapseSelection();
@@ -891,6 +946,9 @@ public partial class DocsCanvas
             _altKeyAlone = false;
 
         ComputeLayout();
+
+        if (e.Key != Key.End)
+            _cursorAtLineEnd = false;
 
         switch (e.Key)
         {

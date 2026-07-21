@@ -189,6 +189,7 @@ public partial class DocsCanvas : FrameworkElement
     private readonly Document _doc = new();
 
     private bool _cursorVisible = true;
+    private bool _cursorAtLineEnd;
     private readonly DispatcherTimer _blinkTimer;
     private readonly Dictionary<Color, SolidColorBrush> _brushCache = new();
 
@@ -1225,10 +1226,20 @@ public partial class DocsCanvas : FrameworkElement
             {
                 int joined = vl.Group.SourceToJoined(_doc.CursorBlock, _doc.CursorOffset);
                 if (joined >= 0 && joined >= vl.StartOffset && joined <= vl.StartOffset + vl.Length)
+                {
+                    if (_cursorAtLineEnd && joined == vl.StartOffset && i > 0
+                        && _visualLines[i - 1].Group == vl.Group)
+                        continue;
                     return i;
+                }
             }
             else if (vl.BlockIndex == _doc.CursorBlock && vl.StartOffset <= _doc.CursorOffset)
+            {
+                if (_cursorAtLineEnd && vl.StartOffset == _doc.CursorOffset && i > 0
+                    && _visualLines[i - 1].BlockIndex == vl.BlockIndex)
+                    continue;
                 return i;
+            }
         }
         return 0;
     }
