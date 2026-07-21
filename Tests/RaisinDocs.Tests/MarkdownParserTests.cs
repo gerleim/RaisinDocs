@@ -1441,11 +1441,12 @@ public class MarkdownParserTests
     [Fact]
     public void Table_FollowedByParagraph()
     {
+        // GFM: non-pipe line after table is a lazy continuation row, not a paragraph
         var result = ParseBlocks("| A |", "| --- |", "| 1 |", "normal text");
         result[0].Kind.Should().Be(BlockKind.TableHeaderRow);
         result[1].Kind.Should().Be(BlockKind.TableSeparatorRow);
         result[2].Kind.Should().Be(BlockKind.TableDataRow);
-        result[3].Kind.Should().Be(BlockKind.Paragraph);
+        result[3].Kind.Should().Be(BlockKind.TableDataRow);
     }
 
     [Fact]
@@ -1482,10 +1483,11 @@ public class MarkdownParserTests
     [Fact]
     public void Table_TwoSeparateTables()
     {
-        var result = ParseBlocks("| A |", "| --- |", "| 1 |", "text", "| B |", "| --- |", "| 2 |");
+        // GFM: blank line separates two tables; non-pipe lines are lazy continuation rows
+        var result = ParseBlocks("| A |", "| --- |", "| 1 |", "", "| B |", "| --- |", "| 2 |");
         result[0].Kind.Should().Be(BlockKind.TableHeaderRow);
         result[0].Table.Should().NotBeSameAs(result[4].Table);
-        result[3].Kind.Should().Be(BlockKind.Paragraph);
+        result[3].Kind.Should().Be(BlockKind.Paragraph); // blank line
         result[4].Kind.Should().Be(BlockKind.TableHeaderRow);
     }
 

@@ -63,8 +63,8 @@ public class TableEditingTests
     [StaFact]
     public void RectSelection_DifferentTables_ReturnsNull()
     {
-        var canvas = CreateCanvas("| A |\n|---|\n| 1 |\ntext\n| B |\n|---|\n| 2 |");
-        // Anchor in first table (block 2), cursor in second table (block 6)
+        var canvas = CreateCanvas("| A |\n|---|\n| 1 |\n\n| B |\n|---|\n| 2 |");
+        // Anchor in first table (block 2), cursor in second table (block 5)
         canvas.TestSetSelection(2, 2, 6, 2);
         canvas.TestTryGetTableRectSelection().Should().BeNull();
     }

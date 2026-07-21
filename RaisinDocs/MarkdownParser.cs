@@ -649,9 +649,12 @@ public static class MarkdownParser
 
             int j = i + 2;
             while (j < blocks.Count && blocks[j].Kind == BlockKind.Paragraph
-                   && ContainsUnescapedPipe(getBlockText(j)))
+                   && !string.IsNullOrWhiteSpace(getBlockText(j)))
             {
-                var dataCells = ParseTableCells(getBlockText(j));
+                var lineText = getBlockText(j);
+                var dataCells = ContainsUnescapedPipe(lineText)
+                    ? ParseTableCells(lineText)
+                    : [new TableCellInfo(0, lineText.Length)];
                 blocks[j] = blocks[j] with
                 {
                     Kind = BlockKind.TableDataRow,

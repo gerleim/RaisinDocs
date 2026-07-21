@@ -787,6 +787,7 @@ public static class HtmlEmitter
     {
         var tableBlock = blocks[start];
         var tableInfo = tableBlock.Table;
+        int columnCount = tableInfo?.ColumnCount ?? 0;
 
         sb.Append("<table>\n<thead>\n<tr>\n");
 
@@ -796,19 +797,10 @@ public static class HtmlEmitter
             var cells = tableBlock.TableRow.Cells;
             for (int c = 0; c < cells.Count; c++)
             {
-                var alignment = tableInfo != null && c < tableInfo.Alignments.Count
-                    ? tableInfo.Alignments[c]
-                    : ColumnAlignment.Left;
-                string alignAttr = alignment switch
-                {
-                    ColumnAlignment.Center => " align=\"center\"",
-                    ColumnAlignment.Right => " align=\"right\"",
-                    _ => ""
-                };
-                var (cs, ce) = cells[c].TrimContent(lines[start]);
-                string cellText = lines[start][cs..ce];
+                string alignAttr = GetAlignAttr(tableInfo, c);
+                string cellText = GetCellText(cells[c], lines[start]);
                 sb.Append($"<th{alignAttr}>");
-                sb.Append(HtmlEncode(cellText));
+                AppendTableCellContent(sb, cellText, options);
                 sb.Append("</th>\n");
             }
         }
@@ -827,25 +819,20 @@ public static class HtmlEmitter
             {
                 sb.Append("<tr>\n");
                 var row = blocks[i].TableRow;
-                if (row != null)
+                int cellCount = row?.Cells.Count ?? 0;
+                int cols = Math.Min(cellCount, columnCount);
+                for (int c = 0; c < cols; c++)
                 {
-                    for (int c = 0; c < row.Cells.Count; c++)
-                    {
-                        var alignment = tableInfo != null && c < tableInfo.Alignments.Count
-                            ? tableInfo.Alignments[c]
-                            : ColumnAlignment.Left;
-                        string alignAttr = alignment switch
-                        {
-                            ColumnAlignment.Center => " align=\"center\"",
-                            ColumnAlignment.Right => " align=\"right\"",
-                            _ => ""
-                        };
-                        var (cs, ce) = row.Cells[c].TrimContent(lines[i]);
-                        string cellText = lines[i][cs..ce];
-                        sb.Append($"<td{alignAttr}>");
-                        sb.Append(HtmlEncode(cellText));
-                        sb.Append("</td>\n");
-                    }
+                    string alignAttr = GetAlignAttr(tableInfo, c);
+                    string cellText = GetCellText(row!.Cells[c], lines[i]);
+                    sb.Append($"<td{alignAttr}>");
+                    AppendTableCellContent(sb, cellText, options);
+                    sb.Append("</td>\n");
+                }
+                for (int c = cols; c < columnCount; c++)
+                {
+                    string alignAttr = GetAlignAttr(tableInfo, c);
+                    sb.Append($"<td{alignAttr}></td>\n");
                 }
                 sb.Append("</tr>\n");
                 i++;
@@ -855,6 +842,36 @@ public static class HtmlEmitter
 
         sb.Append("</table>\n");
         return i;
+    }
+
+    static string GetAlignAttr(TableInfo? tableInfo, int col)
+    {
+        var alignment = tableInfo != null && col < tableInfo.Alignments.Count
+            ? tableInfo.Alignments[col]
+            : ColumnAlignment.Left;
+        return alignment switch
+        {
+            ColumnAlignment.Center => " align=\"center\"",
+            ColumnAlignment.Right => " align=\"right\"",
+            _ => ""
+        };
+    }
+
+    static string GetCellText(TableCellInfo cell, string line)
+    {
+        var (cs, ce) = cell.TrimContent(line);
+        var text = line[cs..ce];
+        return text.Replace("\\|", "|");
+    }
+
+    static void AppendTableCellContent(StringBuilder sb, string cellText, HtmlEmitterOptions options)
+    {
+        if (string.IsNullOrEmpty(cellText)) return;
+        var cellBlocks = MarkdownParser.Parse(_ => cellText, 1);
+        if (cellBlocks.Count > 0)
+            AppendInlineContent(sb, cellBlocks[0], cellText, options);
+        else
+            sb.Append(HtmlEncode(cellText));
     }
 
     static void AppendInlineContent(StringBuilder sb, ParsedBlock block, string text, HtmlEmitterOptions options)
