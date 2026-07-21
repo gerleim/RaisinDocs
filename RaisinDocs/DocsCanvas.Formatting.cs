@@ -56,7 +56,8 @@ public partial class DocsCanvas
     public void ToggleOrderedList()
     {
         SealAndStopTimer();
-        var (sb, _, eb, _) = _doc.HasSelection
+        bool hadSelection = _doc.HasSelection;
+        var (sb, _, eb, _) = hadSelection
             ? _doc.GetOrderedSelection()
             : (_doc.CursorBlock, 0, _doc.CursorBlock, 0);
 
@@ -88,10 +89,13 @@ public partial class DocsCanvas
                     _doc.ToggleBlockPrefix(b, (b - sb + 1) + ". ");
             }
         }
-        _doc.AnchorBlock = sb;
-        _doc.AnchorOffset = 0;
-        _doc.CursorBlock = eb;
-        _doc.CursorOffset = _doc.GetBlockLength(eb);
+        if (hadSelection)
+        {
+            _doc.AnchorBlock = sb;
+            _doc.AnchorOffset = 0;
+            _doc.CursorBlock = eb;
+            _doc.CursorOffset = _doc.GetBlockLength(eb);
+        }
 
         _doc.SealUndoGroup();
         InvalidateLayout();
@@ -445,7 +449,8 @@ public partial class DocsCanvas
     private void ToggleBlockPrefixForSelection(string prefix)
     {
         SealAndStopTimer();
-        var (sb, _, eb, _) = _doc.HasSelection
+        bool hadSelection = _doc.HasSelection;
+        var (sb, _, eb, _) = hadSelection
             ? _doc.GetOrderedSelection()
             : (_doc.CursorBlock, 0, _doc.CursorBlock, 0);
 
@@ -475,10 +480,13 @@ public partial class DocsCanvas
             }
         }
 
-        _doc.AnchorBlock = sb;
-        _doc.AnchorOffset = 0;
-        _doc.CursorBlock = eb;
-        _doc.CursorOffset = _doc.GetBlockLength(eb);
+        if (hadSelection)
+        {
+            _doc.AnchorBlock = sb;
+            _doc.AnchorOffset = 0;
+            _doc.CursorBlock = eb;
+            _doc.CursorOffset = _doc.GetBlockLength(eb);
+        }
 
         _doc.SealUndoGroup();
         InvalidateLayout();
