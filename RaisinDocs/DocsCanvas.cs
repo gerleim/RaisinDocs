@@ -1941,15 +1941,18 @@ public partial class DocsCanvas : FrameworkElement
         int trailCount = blockText.Length - trailStart;
         if (trailCount == 0) return;
 
+        var measureKind = !IsVisual && parsed.Kind is BlockKind.TableHeaderRow or BlockKind.TableDataRow
+            ? BlockKind.Paragraph : parsed.Kind;
+
         double x = textX;
         int runIdx = 0;
         for (int i = vl.StartOffset; i < trailStart; i++)
         {
             var style = TextMeasurer.GetStyleAtOffset(parsed.Runs, i, ref runIdx);
-            x += _measure.MeasureCharWidth(blockText[i], parsed.Kind, style);
+            x += _measure.MeasureCharWidth(blockText[i], measureKind, style);
         }
 
-        double spaceW = _measure.MeasureCharWidth(' ', parsed.Kind, InlineStyle.Normal);
+        double spaceW = _measure.MeasureCharWidth(' ', measureKind, InlineStyle.Normal);
         double dotSize = Math.Max(2, spaceW * 0.25);
         double lineH = _measure.GetLineHeight(parsed.Kind);
         double cy = screenY + lineH / 2;
