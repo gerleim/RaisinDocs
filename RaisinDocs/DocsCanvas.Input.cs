@@ -682,6 +682,12 @@ public partial class DocsCanvas
             }
             else
             {
+                if (IsVisual && blockKind >= BlockKind.Heading1 && blockKind <= BlockKind.Heading6)
+                {
+                    var headingPrefix = Document.GetBlockPrefix(blockText);
+                    if (headingPrefix != null && _doc.CursorOffset <= headingPrefix.Length)
+                        _doc.CursorOffset = 0;
+                }
                 _doc.InsertParagraphBreak();
                 if (!isStandalone)
                     _doc.InsertParagraphBreak();
