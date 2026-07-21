@@ -12,6 +12,10 @@ public class HtmlEmitterOptions
 
 public static class HtmlEmitter
 {
+    static readonly string[] DisallowedHtmlTags = [
+        "title", "textarea", "style", "xmp", "iframe",
+        "noembed", "noframes", "script", "plaintext"
+    ];
     public static string Render(string markdown, HtmlEmitterOptions? options = null)
     {
         options ??= new HtmlEmitterOptions();
@@ -575,7 +579,7 @@ public static class HtmlEmitter
         int i = start;
         while (i < blocks.Count && blocks[i].Kind == BlockKind.HtmlBlock)
         {
-            sb.Append(lines[i]);
+            sb.Append(FilterDisallowedHtmlTags(lines[i]));
             sb.Append('\n');
             i++;
         }
@@ -1074,7 +1078,10 @@ public static class HtmlEmitter
                     int htmlEnd = TryMatchInlineHtml(text, ti);
                     if (htmlEnd > ti)
                     {
-                        sb.Append(text[ti..htmlEnd]);
+                        if (IsDisallowedHtmlTag(text, ti))
+                            sb.Append("&lt;").Append(text[(ti + 1)..htmlEnd]);
+                        else
+                            sb.Append(text[ti..htmlEnd]);
                         pos = offset + htmlEnd;
                         continue;
                     }
@@ -2127,6 +2134,50 @@ public static class HtmlEmitter
 
     static bool IsHexDigit(char c) =>
         (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
+
+    static string FilterDisallowedHtmlTags(string line)
+    {
+        int idx = line.IndexOf('<');
+        if (idx < 0) return line;
+        var sb = new StringBuilder(line.Length);
+        int pos = 0;
+        while (idx >= 0 && idx < line.Length)
+        {
+            if (IsDisallowedHtmlTag(line, idx))
+            {
+                sb.Append(line, pos, idx - pos);
+                sb.Append("&lt;");
+                pos = idx + 1;
+            }
+            idx = line.IndexOf('<', idx + 1);
+        }
+        if (pos == 0) return line;
+        sb.Append(line, pos, line.Length - pos);
+        return sb.ToString();
+    }
+
+    static bool IsDisallowedHtmlTag(string text, int start)
+    {
+        int tagStart = start + 1;
+        if (tagStart < text.Length && text[tagStart] == '/') tagStart++;
+        foreach (var tag in DisallowedHtmlTags)
+        {
+            if (tagStart + tag.Length > text.Length) continue;
+            bool match = true;
+            for (int i = 0; i < tag.Length; i++)
+            {
+                if (char.ToLowerInvariant(text[tagStart + i]) != tag[i])
+                { match = false; break; }
+            }
+            if (match)
+            {
+                int after = tagStart + tag.Length;
+                if (after >= text.Length || text[after] is ' ' or '\t' or '\n' or '>' or '/')
+                    return true;
+            }
+        }
+        return false;
+    }
 
     static bool IsAsciiPunctuation(char c) =>
         c is '!' or '"' or '#' or '$' or '%' or '&' or '\'' or '(' or ')' or '*' or '+' or ','
