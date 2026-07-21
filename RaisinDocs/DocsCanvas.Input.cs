@@ -971,9 +971,6 @@ public partial class DocsCanvas
         if (e.Key != Key.End)
             _cursorAtLineEnd = false;
 
-        if (!(ctrl && e.Key is Key.B or Key.I))
-            _pendingStyleOff = null;
-
         switch (e.Key)
         {
             case Key.F6:
@@ -1236,6 +1233,8 @@ public partial class DocsCanvas
 
         if (handled)
         {
+            if (!(ctrl && e.Key is Key.B or Key.I))
+                _pendingStyleOff = null;
             ResetBlink();
             if (textChanged)
             {

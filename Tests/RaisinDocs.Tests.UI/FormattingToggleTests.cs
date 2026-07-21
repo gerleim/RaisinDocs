@@ -175,4 +175,92 @@ public class FormattingToggleTests
         canvas.TestCursorBlock.Should().Be(1);
         canvas.TestCursorOffset.Should().Be(3);
     }
+
+    // --- Pending style-off toggle (no selection, cursor inside styled run) ---
+
+    [StaFact]
+    public void PendingBoldOff_InsideBold_TypingSplitsRun()
+    {
+        var canvas = CreateCanvas("**asd**");
+        canvas.TestSetCursor(0, 3); // between 'a' and 's'
+        canvas.ToggleBold();
+        canvas.SelectionIsBold.Should().BeFalse("pending-off should report bold as off");
+        canvas.TestTypeText("X");
+        canvas.TestGetBlockText(0).Should().Be("**a**X**sd**");
+    }
+
+    [StaFact]
+    public void PendingBoldOff_Toggle_CancelsPending()
+    {
+        var canvas = CreateCanvas("**asd**");
+        canvas.TestSetCursor(0, 3);
+        canvas.ToggleBold();
+        canvas.SelectionIsBold.Should().BeFalse();
+        canvas.ToggleBold(); // cancel
+        canvas.SelectionIsBold.Should().BeTrue("cancelling pending should restore bold");
+    }
+
+    [StaFact]
+    public void PendingBoldOff_NavigationClearsPending()
+    {
+        var canvas = CreateCanvas("**asd**");
+        canvas.TestSetCursor(0, 3);
+        canvas.ToggleBold();
+        canvas.SelectionIsBold.Should().BeFalse();
+        canvas.TestNavigate(System.Windows.Input.Key.Right);
+        canvas.SelectionIsBold.Should().BeTrue("navigation should clear pending");
+    }
+
+    [StaFact]
+    public void PendingItalicOff_InsideItalic_TypingSplitsRun()
+    {
+        var canvas = CreateCanvas("*abc*");
+        canvas.TestSetCursor(0, 2); // inside "abc"
+        canvas.ToggleItalic();
+        canvas.SelectionIsItalic.Should().BeFalse();
+        canvas.TestTypeText("X");
+        canvas.TestGetBlockText(0).Should().Be("*a*X*bc*");
+    }
+
+    [StaFact]
+    public void PendingStrikethroughOff_InsideStrikethrough_TypingSplitsRun()
+    {
+        var canvas = CreateCanvas("~~abc~~");
+        canvas.TestSetCursor(0, 3);
+        canvas.ToggleStrikethrough();
+        canvas.SelectionIsStrikethrough.Should().BeFalse();
+        canvas.TestTypeText("X");
+        canvas.TestGetBlockText(0).Should().Be("~~a~~X~~bc~~");
+    }
+
+    [StaFact]
+    public void PendingCodeOff_InsideCode_TypingSplitsRun()
+    {
+        var canvas = CreateCanvas("`abc`");
+        canvas.TestSetCursor(0, 2);
+        canvas.ToggleCodeSpan();
+        canvas.SelectionIsCode.Should().BeFalse();
+        canvas.TestTypeText("X");
+        canvas.TestGetBlockText(0).Should().Be("`a`X`bc`");
+    }
+
+    [StaFact]
+    public void PendingBoldOff_AtStartOfContent_ProducesEmptyOpenRun()
+    {
+        var canvas = CreateCanvas("**asd**");
+        canvas.TestSetCursor(0, 2); // right at start of content
+        canvas.ToggleBold();
+        canvas.TestTypeText("X");
+        canvas.TestGetBlockText(0).Should().Be("****X**asd**");
+    }
+
+    [StaFact]
+    public void PendingBoldOff_OutsideBold_InsertsNewMarkers()
+    {
+        var canvas = CreateCanvas("hello **asd**");
+        canvas.TestSetCursor(0, 3); // inside plain "hello"
+        canvas.ToggleBold();
+        // Not inside bold, so normal toggle: insert markers
+        canvas.TestGetBlockText(0).Should().Be("hel****lo **asd**");
+    }
 }

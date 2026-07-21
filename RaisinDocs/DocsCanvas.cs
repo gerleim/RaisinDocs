@@ -535,6 +535,7 @@ public partial class DocsCanvas : FrameworkElement
     }
     internal void TestNavigate(Key key, bool shift = false, bool ctrl = false)
     {
+        _pendingStyleOff = null;
         ComputeLayout();
         bool textChanged = false;
         switch (key)
