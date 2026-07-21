@@ -38,7 +38,6 @@ internal class SyntaxHighlighter
 
         for (int i = 0; i < lines.Count; i++)
         {
-            var tokens = new List<SyntaxToken>();
             string line = lines[i];
 
             if (line.Length > 0)
@@ -46,27 +45,41 @@ internal class SyntaxHighlighter
                 var lineResult = grammar.TokenizeLine(line, ruleStack, TimeSpan.FromMilliseconds(500));
                 ruleStack = lineResult.RuleStack;
 
-                foreach (var token in lineResult.Tokens)
-                {
-                    int start = token.StartIndex;
-                    int end = Math.Min(token.EndIndex, line.Length);
-                    if (end <= start) continue;
+                var tokens = TokenizeResult(lineResult, line);
 
-                    int argb = ResolveColor(token.Scopes);
-                    if (argb != 0)
-                        tokens.Add(new SyntaxToken(start, end - start, argb));
+                if (tokens.Count == 0)
+                {
+                    var freshResult = grammar.TokenizeLine(line, null, TimeSpan.FromMilliseconds(500));
+                    tokens = TokenizeResult(freshResult, line);
                 }
+
+                result[i] = tokens;
             }
             else
             {
                 var lineResult = grammar.TokenizeLine(" ", ruleStack, TimeSpan.FromMilliseconds(500));
                 ruleStack = lineResult.RuleStack;
+                result[i] = new List<SyntaxToken>();
             }
-
-            result[i] = tokens;
         }
 
         return result;
+    }
+
+    private List<SyntaxToken> TokenizeResult(ITokenizeLineResult lineResult, string line)
+    {
+        var tokens = new List<SyntaxToken>();
+        foreach (var token in lineResult.Tokens)
+        {
+            int start = token.StartIndex;
+            int end = Math.Min(token.EndIndex, line.Length);
+            if (end <= start) continue;
+
+            int argb = ResolveColor(token.Scopes);
+            if (argb != 0)
+                tokens.Add(new SyntaxToken(start, end - start, argb));
+        }
+        return tokens;
     }
 
     private int ResolveColor(IList<string> scopes)

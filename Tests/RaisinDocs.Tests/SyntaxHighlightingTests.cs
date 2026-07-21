@@ -154,6 +154,54 @@ public class SyntaxHighlightingTests
     }
 
     [Fact]
+    public void Parse_WithHighlighter_AttachesSyntaxTokens_AllContentLines()
+    {
+        var highlighter = new SyntaxHighlighter(TextMateSharp.Grammars.ThemeName.DarkPlus);
+        var lines = new[] {
+            "```c#",
+            "public void One()",
+            "public void Two()",
+            "```",
+        };
+        var blocks = MarkdownParser.Parse(i => lines[i], lines.Length, highlighter);
+
+        blocks[1].SyntaxTokens.Should().NotBeNull("line 1 should have syntax tokens");
+        blocks[1].SyntaxTokens!.Count.Should().BeGreaterThan(0, "line 1 should have coloring");
+        blocks[2].SyntaxTokens.Should().NotBeNull("line 2 should have syntax tokens");
+        blocks[2].SyntaxTokens!.Count.Should().BeGreaterThan(0, "line 2 should have coloring");
+    }
+
+    [Fact]
+    public void SyntaxHighlighter_Tokenize_MultipleLines_AllGetTokens()
+    {
+        var highlighter = new SyntaxHighlighter(TextMateSharp.Grammars.ThemeName.DarkPlus);
+        var result = highlighter.Tokenize("c#", new[] {
+            "public void One()",
+            "public void Two()",
+        });
+
+        result.Should().NotBeNull();
+        result!.Length.Should().Be(2);
+        result[0].Should().NotBeEmpty("line 1 should have tokens");
+        result[1].Should().NotBeEmpty("line 2 should have tokens");
+    }
+
+    [Fact]
+    public void SyntaxHighlighter_SingleLine_Gets_Tokens()
+    {
+        var highlighter = new SyntaxHighlighter(TextMateSharp.Grammars.ThemeName.DarkPlus);
+
+        // Each line tokenized independently (fresh ruleStack)
+        var r1 = highlighter.Tokenize("c#", new[] { "public void One()" });
+        var r2 = highlighter.Tokenize("c#", new[] { "public void Two()" });
+
+        r1.Should().NotBeNull();
+        r2.Should().NotBeNull();
+        r1![0].Should().NotBeEmpty("One() alone should have tokens");
+        r2![0].Should().NotBeEmpty("Two() alone should have tokens");
+    }
+
+    [Fact]
     public void Parse_WithHighlighter_NoTokens_WhenNoLanguage()
     {
         var highlighter = new SyntaxHighlighter(TextMateSharp.Grammars.ThemeName.DarkPlus);
