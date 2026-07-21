@@ -930,6 +930,21 @@ public static class HtmlEmitter
             }
         }
 
+        // Strikethrough delimiters: hide leading/trailing ~~ within Strikethrough runs
+        foreach (var run in runs)
+        {
+            if (run.Style == InlineStyle.Strikethrough)
+            {
+                int rs = run.Start, re = run.Start + run.Length;
+                int i = rs;
+                while (i < re && (i - offset) >= 0 && (i - offset) < text.Length && text[i - offset] == '~')
+                { hidden.Add(i); i++; }
+                int j = re - 1;
+                while (j >= rs && (j - offset) >= 0 && (j - offset) < text.Length && text[j - offset] == '~')
+                { hidden.Add(j); j--; }
+            }
+        }
+
         // Build emphasis open/close events from markers
         // Markers are in pairs: [0]=opener, [1]=closer, [2]=opener, [3]=closer, ...
         var emphOpen = new Dictionary<int, int>(); // position → consume (1=em, 2=strong)
