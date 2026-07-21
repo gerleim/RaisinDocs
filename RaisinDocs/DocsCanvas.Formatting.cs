@@ -518,6 +518,8 @@ public partial class DocsCanvas
         if (!_measure.IsMeasured) return false;
         if (!_doc.HasSelection)
         {
+            if (_pendingStyleOff?.Style == targetStyle)
+                return false;
             ComputeLayout();
             return _parsedBlocks![_doc.CursorBlock].HasStyleAt(_doc.CursorOffset, targetStyle);
         }
@@ -559,6 +561,20 @@ public partial class DocsCanvas
     {
         if (!_doc.HasSelection)
         {
+            ComputeLayout();
+            bool insideStyle = _parsedBlocks![_doc.CursorBlock]
+                .HasStyleAt(_doc.CursorOffset, targetStyle);
+
+            if (insideStyle)
+            {
+                if (_pendingStyleOff?.Style == targetStyle)
+                    _pendingStyleOff = null;
+                else
+                    _pendingStyleOff = (marker, targetStyle);
+                return;
+            }
+
+            _pendingStyleOff = null;
             int block = _doc.CursorBlock;
             int offset = _doc.CursorOffset;
             _doc.BeginUndoGroup();

@@ -31,6 +31,7 @@ public partial class DocsCanvas
     {
         base.OnMouseDown(e);
         _cursorAtLineEnd = false;
+        _pendingStyleOff = null;
 
         if (e.ChangedButton == MouseButton.Right)
         {
@@ -256,8 +257,12 @@ public partial class DocsCanvas
 
     private void InsertTextCore(string text)
     {
+        var pendingOff = _pendingStyleOff;
+        _pendingStyleOff = null;
+
         if (_doc.HasSelection)
         {
+            pendingOff = null;
             var rect = TryGetTableRectSelection();
             if (rect != null)
             {
@@ -268,11 +273,21 @@ public partial class DocsCanvas
                 _doc.DeleteSelection();
         }
 
+        if (pendingOff is { } p)
+        {
+            _doc.InsertTextAt(_doc.CursorBlock, _doc.CursorOffset, p.Marker);
+            _doc.CursorOffset += p.Marker.Length;
+        }
+
         foreach (char c in text)
         {
             if (c < ' ' && c != '\t') continue;
             _doc.Insert(c);
         }
+
+        if (pendingOff is { } pAfter)
+            _doc.InsertTextAt(_doc.CursorBlock, _doc.CursorOffset, pAfter.Marker);
+
         _doc.CollapseSelection();
 
         ResetUndoSealTimer();
@@ -955,6 +970,9 @@ public partial class DocsCanvas
 
         if (e.Key != Key.End)
             _cursorAtLineEnd = false;
+
+        if (!(ctrl && e.Key is Key.B or Key.I))
+            _pendingStyleOff = null;
 
         switch (e.Key)
         {

@@ -190,6 +190,7 @@ public partial class DocsCanvas : FrameworkElement
 
     private bool _cursorVisible = true;
     private bool _cursorAtLineEnd;
+    private (string Marker, InlineStyle Style)? _pendingStyleOff;
     private readonly DispatcherTimer _blinkTimer;
     private readonly Dictionary<Color, SolidColorBrush> _brushCache = new();
 
