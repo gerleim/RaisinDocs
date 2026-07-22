@@ -328,7 +328,8 @@
                                           ToolTip="Table of Contents (Ctrl+T)">
                                 <Path x:Name="PART_TocIcon"
                                       Width="14" Height="14" Stretch="Uniform"
-                                      Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=local:DocsFormattingBar}}" />
+                                      Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=local:DocsFormattingBar}}"
+                                      StrokeThickness="1.5" StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
                             </ToggleButton>
 
                             <ToggleButton x:Name="PART_Minimap" Style="{StaticResource FormattingToggle}"

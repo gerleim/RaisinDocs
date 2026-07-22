@@ -153,13 +153,13 @@ public class Document
         CursorOffset = _blocks[CursorBlock].Length;
     }
 
-    public void SelectWord(int block, int offset)
+    public (int Start, int End) GetWordBoundaries(int block, int offset)
     {
         string text = _blocks[block].ToString();
-        if (text.Length == 0) return;
+        if (text.Length == 0) return (0, 0);
 
         offset = Math.Min(offset, text.Length - 1);
-        if (offset < 0) return;
+        if (offset < 0) return (0, 0);
 
         bool IsWord(char c) => char.IsLetterOrDigit(c) || c == '_';
         bool wordChar = IsWord(text[offset]);
@@ -178,10 +178,18 @@ public class Document
             while (end < text.Length - 1 && !IsWord(text[end + 1]) && !char.IsWhiteSpace(text[end + 1])) end++;
         }
 
+        return (start, end + 1);
+    }
+
+    public void SelectWord(int block, int offset)
+    {
+        var (start, end) = GetWordBoundaries(block, offset);
+        if (start == end && _blocks[block].Length == 0) return;
+
         AnchorBlock = block;
         AnchorOffset = start;
         CursorBlock = block;
-        CursorOffset = end + 1;
+        CursorOffset = end;
     }
 
     public static int ComparePositions(int block1, int offset1, int block2, int offset2)

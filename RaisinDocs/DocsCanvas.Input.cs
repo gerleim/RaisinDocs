@@ -27,6 +27,11 @@ public partial class DocsCanvas
 
     // --- Mouse ---
 
+    private bool _doubleClickDrag;
+    private int _doubleClickBlock;
+    private int _doubleClickStart;
+    private int _doubleClickEnd;
+
     protected override void OnMouseDown(MouseButtonEventArgs e)
     {
         base.OnMouseDown(e);
@@ -81,6 +86,11 @@ public partial class DocsCanvas
         if (e.ClickCount == 2)
         {
             _doc.SelectWord(block, offset);
+            var (ws, we) = _doc.GetWordBoundaries(block, offset);
+            _doubleClickDrag = true;
+            _doubleClickBlock = block;
+            _doubleClickStart = ws;
+            _doubleClickEnd = we;
             CaptureMouse();
             ResetBlink();
             InvalidateVisual();
@@ -150,14 +160,37 @@ public partial class DocsCanvas
 
         ComputeLayout();
         HitTestToPosition(pos, out int block, out int offset);
-        _doc.CursorBlock = block;
-        _doc.CursorOffset = offset;
-        if (_parsedBlocks != null && IsTableRow(_parsedBlocks[_doc.CursorBlock]))
-            ClampCursorToTableCell();
+
+        if (_doubleClickDrag)
+        {
+            var (ws, we) = _doc.GetWordBoundaries(block, Math.Max(0, offset - 1));
+            int cmp = Document.ComparePositions(block, offset, _doubleClickBlock, _doubleClickStart);
+            if (cmp < 0)
+            {
+                _doc.AnchorBlock = _doubleClickBlock;
+                _doc.AnchorOffset = _doubleClickEnd;
+                _doc.CursorBlock = block;
+                _doc.CursorOffset = ws;
+            }
+            else
+            {
+                _doc.AnchorBlock = _doubleClickBlock;
+                _doc.AnchorOffset = _doubleClickStart;
+                _doc.CursorBlock = block;
+                _doc.CursorOffset = we;
+            }
+        }
         else
         {
-            SkipCursorOverHiddenRanges(forward: true);
-            ClampCursorBeforeTrailingHidden();
+            _doc.CursorBlock = block;
+            _doc.CursorOffset = offset;
+            if (_parsedBlocks != null && IsTableRow(_parsedBlocks[_doc.CursorBlock]))
+                ClampCursorToTableCell();
+            else
+            {
+                SkipCursorOverHiddenRanges(forward: true);
+                ClampCursorBeforeTrailingHidden();
+            }
         }
 
         ResetBlink();
@@ -167,6 +200,7 @@ public partial class DocsCanvas
     protected override void OnMouseUp(MouseButtonEventArgs e)
     {
         base.OnMouseUp(e);
+        _doubleClickDrag = false;
         if (IsMouseCaptured)
         {
             ReleaseMouseCapture();
