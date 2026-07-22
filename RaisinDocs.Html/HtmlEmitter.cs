@@ -7,6 +7,7 @@ namespace RaisinDocs.Html;
 public class HtmlEmitterOptions
 {
     public bool IncludeColorExtensions { get; set; } = true;
+    public bool GfmExtensions { get; set; } = true;
     internal Dictionary<string, (string Url, string? Title)>? LinkDefinitions { get; set; }
 }
 
@@ -394,7 +395,7 @@ public static class HtmlEmitter
                 return RenderTable(sb, blocks, lines, i, options);
 
             case BlockKind.HtmlBlock:
-                return RenderHtmlBlock(sb, blocks, lines, i);
+                return RenderHtmlBlock(sb, blocks, lines, i, options);
 
             case BlockKind.SetextUnderline:
                 return i + 1;
@@ -574,12 +575,12 @@ public static class HtmlEmitter
         AppendInlineHtml(sb, text, block, 0, options, hardBreaks);
     }
 
-    static int RenderHtmlBlock(StringBuilder sb, List<ParsedBlock> blocks, List<string> lines, int start)
+    static int RenderHtmlBlock(StringBuilder sb, List<ParsedBlock> blocks, List<string> lines, int start, HtmlEmitterOptions options)
     {
         int i = start;
         while (i < blocks.Count && blocks[i].Kind == BlockKind.HtmlBlock)
         {
-            sb.Append(FilterDisallowedHtmlTags(lines[i]));
+            sb.Append(options.GfmExtensions ? FilterDisallowedHtmlTags(lines[i]) : lines[i]);
             sb.Append('\n');
             i++;
         }
@@ -976,6 +977,10 @@ public static class HtmlEmitter
             {
                 var opener = emphMarkers[mi];
                 var closer = emphMarkers[mi + 1];
+                // Skip strikethrough markers — handled via style transitions + hidden set
+                if ((opener.Start - offset) >= 0 && (opener.Start - offset) < text.Length
+                    && text[opener.Start - offset] == '~')
+                    continue;
                 int openPos = opener.Start + opener.Length;
                 int closePos = closer.Start;
                 emphOpen.TryGetValue(openPos, out int existingOpen);
@@ -1007,6 +1012,9 @@ public static class HtmlEmitter
                     && link.Title == null && link.RefLabel == null
                     && (link.Text == link.Url || "http://" + link.Text == link.Url
                         || "mailto:" + link.Text == link.Url);
+
+                if (isBareAutolink && !options.GfmExtensions)
+                    continue;
 
                 string url;
                 if (link.IsAngleBracket || isBareAutolink)
@@ -1096,7 +1104,7 @@ public static class HtmlEmitter
                     int htmlEnd = TryMatchInlineHtml(text, ti);
                     if (htmlEnd > ti)
                     {
-                        if (IsDisallowedHtmlTag(text, ti))
+                        if (options.GfmExtensions && IsDisallowedHtmlTag(text, ti))
                             sb.Append("&lt;").Append(text[(ti + 1)..htmlEnd]);
                         else
                             sb.Append(text[ti..htmlEnd]);

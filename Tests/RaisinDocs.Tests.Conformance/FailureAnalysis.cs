@@ -21,7 +21,7 @@ public class FailureAnalysis
         {
             try
             {
-                var actual = HtmlEmitter.Render(ex.Markdown);
+                var actual = HtmlEmitter.Render(ex.Markdown, new HtmlEmitterOptions { GfmExtensions = false });
                 if (actual != ex.Html)
                 {
                     lines.Add($"=== Example {ex.Example} [{ex.Section}] ===");

@@ -22,7 +22,7 @@ public class ConformanceSummary
         {
             try
             {
-                var actual = HtmlEmitter.Render(ex.Markdown);
+                var actual = HtmlEmitter.Render(ex.Markdown, new HtmlEmitterOptions { GfmExtensions = false });
                 if (!sections.ContainsKey(ex.Section)) sections[ex.Section] = (0, 0);
                 if (actual == ex.Html)
                     sections[ex.Section] = (sections[ex.Section].pass + 1, sections[ex.Section].fail);

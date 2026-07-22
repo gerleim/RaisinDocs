@@ -19,7 +19,7 @@ public class CommonMarkConformanceTests
     [MemberData(nameof(SpecExamples))]
     public void CommonMark_Spec(int example, string section, string markdown, string expectedHtml)
     {
-        var actual = HtmlEmitter.Render(markdown);
+        var actual = HtmlEmitter.Render(markdown, new HtmlEmitterOptions { GfmExtensions = false });
         actual.Should().Be(expectedHtml, because: $"example {example} in section '{section}' should match");
     }
 
