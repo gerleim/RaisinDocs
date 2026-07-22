@@ -507,6 +507,13 @@ partial class DocsCanvas
                                     parsed.Kind == BlockKind.TaskListItemChecked,
                                     _padding, lineY - effectiveScroll, parsed.Kind, nestOff);
                             }
+                            else if (parsed.Kind == BlockKind.UnorderedListItem)
+                            {
+                                double nestOff = _canvas._measure.MeasureReplacementPrefix(
+                                    map.ReplacementPrefix, map.PrefixMeasureKind) - TextMeasurer.ListIndent;
+                                textX += _canvas.DrawListBullet(dc, _padding, lineY - effectiveScroll,
+                                    parsed.Kind, parsed.ListNestingLevel, nestOff);
+                            }
                             else if (map.IsContinuationIndent)
                             {
                                 textX += _canvas._measure.MeasureReplacementPrefix(

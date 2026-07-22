@@ -1527,6 +1527,13 @@ public partial class DocsCanvas : FrameworkElement
                                     textX += DrawTaskListCheckbox(dc, parsed.Kind == BlockKind.TaskListItemChecked,
                                         _padding, lineY - effectiveScroll, parsed.Kind, nestOff);
                                 }
+                                else if (parsed.Kind == BlockKind.UnorderedListItem)
+                                {
+                                    double nestOff = _measure.MeasureReplacementPrefix(map.ReplacementPrefix!, map.PrefixMeasureKind)
+                                        - TextMeasurer.ListIndent;
+                                    textX += DrawListBullet(dc, _padding, lineY - effectiveScroll,
+                                        parsed.Kind, parsed.ListNestingLevel, nestOff);
+                                }
                                 else if (map.IsContinuationIndent)
                                 {
                                     textX += _measure.MeasureReplacementPrefix(map.ReplacementPrefix!, map.PrefixMeasureKind);

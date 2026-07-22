@@ -1419,6 +1419,13 @@ public partial class DocsCanvas
                 x += DrawTaskListCheckbox(dc, parsed.Kind == BlockKind.TaskListItemChecked,
                     _padding, screenY, parsed.Kind, nestOff);
             }
+            else if (parsed.Kind == BlockKind.UnorderedListItem)
+            {
+                double nestOff = _measure.MeasureReplacementPrefix(map.ReplacementPrefix, map.PrefixMeasureKind)
+                    - TextMeasurer.ListIndent;
+                x += DrawListBullet(dc, _padding, screenY,
+                    parsed.Kind, parsed.ListNestingLevel, nestOff);
+            }
             else if (map.IsContinuationIndent)
             {
                 x += _measure.MeasureReplacementPrefix(map.ReplacementPrefix, map.PrefixMeasureKind);
@@ -1493,6 +1500,35 @@ public partial class DocsCanvas
             var pen = new Pen(_palette.Syntax, 1.2);
             pen.Freeze();
             dc.DrawRoundedRectangle(null, pen, rect, radius, radius);
+        }
+
+        return TextMeasurer.ListIndent + nestingOffset;
+    }
+
+    private double DrawListBullet(DrawingContext dc, double x, double screenY,
+        BlockKind blockKind, int nestingLevel, double nestingOffset)
+    {
+        double lineH = _measure.GetLineHeight(blockKind);
+        double bulletSize = Math.Round(lineH * 0.28);
+        double bulletX = x + nestingOffset + TextMeasurer.ListIndent - bulletSize - 4;
+        double bulletY = screenY + Math.Round((lineH - bulletSize) / 2);
+
+        int shape = nestingLevel % 3;
+        if (shape == 0)
+        {
+            dc.DrawEllipse(_palette.Syntax, null, new Point(bulletX + bulletSize / 2, bulletY + bulletSize / 2),
+                bulletSize / 2, bulletSize / 2);
+        }
+        else if (shape == 1)
+        {
+            var pen = new Pen(_palette.Syntax, 1.2);
+            pen.Freeze();
+            dc.DrawEllipse(null, pen, new Point(bulletX + bulletSize / 2, bulletY + bulletSize / 2),
+                bulletSize / 2, bulletSize / 2);
+        }
+        else
+        {
+            dc.DrawRectangle(_palette.Syntax, null, new Rect(bulletX, bulletY, bulletSize, bulletSize));
         }
 
         return TextMeasurer.ListIndent + nestingOffset;
