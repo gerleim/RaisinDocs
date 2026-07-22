@@ -1874,8 +1874,11 @@ public class MarkdownParserTests
     [Fact]
     public void AngleBracketAutolink_NotEmail_InvalidChars()
     {
+        // Angle-bracket autolink is invalid due to space, but GFM extended
+        // email autolink detects er@example.com within the text
         var result = ParseBlocks("<us er@example.com>");
-        result[0].Links.Should().BeNull();
+        result[0].Links.Should().HaveCount(1);
+        result[0].Links![0].Url.Should().Be("mailto:er@example.com");
     }
 
     [Fact]

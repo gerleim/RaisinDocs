@@ -1239,6 +1239,10 @@ public static class MarkdownParser
         }
     }
 
+    private static bool IsEmailLocalChar(char c) =>
+        char.IsAsciiLetterOrDigit(c) || c is '.' or '!' or '#' or '$' or '%' or '&' or '\''
+        or '*' or '+' or '/' or '=' or '?' or '^' or '_' or '`' or '{' or '|' or '}' or '~' or '-';
+
     private static bool IsAsciiPunctuation(char c) =>
         c is '!' or '"' or '#' or '$' or '%' or '&' or '\'' or '(' or ')' or '*' or '+' or ','
         or '-' or '.' or '/' or ':' or ';' or '<' or '=' or '>' or '?' or '@' or '[' or '\\'
@@ -1603,7 +1607,7 @@ public static class MarkdownParser
         return links;
     }
 
-    private static readonly string[] _autolinkPrefixes = ["https://", "http://", "www."];
+    private static readonly string[] _autolinkPrefixes = ["https://", "http://", "ftp://", "www."];
 
     private static List<InlineLink>? MarkAutolinks(string text, InlineStyle[] styles, List<InlineLink>? links)
     {
@@ -1656,6 +1660,50 @@ public static class MarkdownParser
 
             i = urlEnd - 1;
         }
+
+        // Email autolinks (GFM extension)
+        for (int i = 0; i < text.Length; i++)
+        {
+            if (text[i] != '@' || styles[i] != InlineStyle.Normal) continue;
+
+            // Scan backwards for local part: [a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+
+            int localStart = i;
+            while (localStart > 0 && IsEmailLocalChar(text[localStart - 1])
+                   && styles[localStart - 1] == InlineStyle.Normal)
+                localStart--;
+            if (localStart == i) continue;
+
+            // Scan forwards for domain: label(.label)+ where label = [a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?
+            int domainEnd = i + 1;
+            bool hasDot = false;
+            while (domainEnd < text.Length)
+            {
+                int labelStart = domainEnd;
+                if (!char.IsAsciiLetterOrDigit(text[labelStart])) break;
+                domainEnd = labelStart + 1;
+                while (domainEnd < text.Length && (char.IsAsciiLetterOrDigit(text[domainEnd]) || text[domainEnd] == '-'))
+                    domainEnd++;
+                // Label must not end with hyphen
+                if (text[domainEnd - 1] == '-') { domainEnd--; while (domainEnd > labelStart && text[domainEnd - 1] == '-') domainEnd--; break; }
+                if (domainEnd < text.Length && text[domainEnd] == '.') { hasDot = true; domainEnd++; }
+                else break;
+            }
+            if (!hasDot || domainEnd <= i + 1) continue;
+            // Trim trailing dot from domain
+            if (text[domainEnd - 1] == '.') domainEnd--;
+            // Last char of domain must not be - or _
+            if (text[domainEnd - 1] is '-' or '_') continue;
+            // If next char after domain is - or _, the email is invalid
+            if (domainEnd < text.Length && text[domainEnd] is '-' or '_') continue;
+
+            string emailText = text[localStart..domainEnd];
+            links ??= [];
+            links.Add(new InlineLink(localStart, domainEnd - localStart, emailText, "mailto:" + emailText, null));
+            for (int j = localStart; j < domainEnd; j++)
+                styles[j] = InlineStyle.Link;
+            i = domainEnd - 1;
+        }
+
         return links;
     }
 
@@ -1664,7 +1712,20 @@ public static class MarkdownParser
         while (end > start)
         {
             char c = text[end - 1];
-            if (c == '?' || c == '!' || c == '.' || c == ',' || c == ':' || c == ';' || c == '*' || c == '_' || c == '~' || c == '\'' || c == '"')
+            // GFM: if URL ends with ;, check for entity-like &name;
+            if (c == ';')
+            {
+                int amp = end - 2;
+                while (amp >= start && char.IsAsciiLetterOrDigit(text[amp])) amp--;
+                if (amp >= start && text[amp] == '&' && amp < end - 2)
+                {
+                    end = amp;
+                    continue;
+                }
+                end--;
+                continue;
+            }
+            if (c == '?' || c == '!' || c == '.' || c == ',' || c == ':' || c == '*' || c == '_' || c == '~' || c == '\'' || c == '"')
             {
                 end--;
                 continue;

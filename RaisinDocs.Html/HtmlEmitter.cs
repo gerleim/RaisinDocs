@@ -1003,18 +1003,19 @@ public static class HtmlEmitter
         {
             foreach (var link in links)
             {
-                // Skip bare-URL autolinks (GFM extension, not in CommonMark base spec)
-                if (!link.IsAngleBracket && link.Url.Length > 0 && link.Text == link.Url && link.Title == null && link.RefLabel == null)
-                    continue;
+                bool isBareAutolink = !link.IsAngleBracket && link.Url.Length > 0
+                    && link.Title == null && link.RefLabel == null
+                    && (link.Text == link.Url || "http://" + link.Text == link.Url
+                        || "mailto:" + link.Text == link.Url);
 
                 string url;
-                if (link.IsAngleBracket)
+                if (link.IsAngleBracket || isBareAutolink)
                     url = HtmlEncode(PercentEncodeUrl(link.Url));
                 else
                     url = HtmlEncode(PercentEncodeUrl(ResolveEntities(ProcessBackslashEscapes(link.Url))));
                 string titleAttr = link.Title != null ? $" title=\"{HtmlEncodeAttribute(ResolveEntities(ProcessBackslashEscapes(link.Title)))}\"" : "";
                 var linkTextSb = new StringBuilder();
-                if (link.IsAngleBracket)
+                if (link.IsAngleBracket || isBareAutolink)
                 {
                     linkTextSb.Append(HtmlEncode(link.Text));
                 }
