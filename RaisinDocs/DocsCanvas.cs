@@ -1522,8 +1522,10 @@ public partial class DocsCanvas : FrameworkElement
                             {
                                 if (parsed.Kind is BlockKind.TaskListItemUnchecked or BlockKind.TaskListItemChecked)
                                 {
+                                    double nestOff = _measure.MeasureReplacementPrefix(map.ReplacementPrefix!, map.PrefixMeasureKind)
+                                        - TextMeasurer.ListIndent;
                                     textX += DrawTaskListCheckbox(dc, parsed.Kind == BlockKind.TaskListItemChecked,
-                                        _padding, lineY - effectiveScroll, parsed.Kind);
+                                        _padding, lineY - effectiveScroll, parsed.Kind, nestOff);
                                 }
                                 else if (map.IsContinuationIndent)
                                 {

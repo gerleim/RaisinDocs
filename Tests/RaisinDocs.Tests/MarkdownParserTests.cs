@@ -663,6 +663,100 @@ public class MarkdownParserTests
         blocks[0].LeadingSpaces.Should().Be(2);
     }
 
+    // --- List nesting ---
+
+    [Fact]
+    public void ListNesting_TopLevel_LevelZero()
+    {
+        var blocks = ParseBlocks("- foo");
+        blocks[0].Kind.Should().Be(BlockKind.UnorderedListItem);
+        blocks[0].ListNestingLevel.Should().Be(0);
+    }
+
+    [Fact]
+    public void ListNesting_TwoLevels()
+    {
+        var blocks = ParseBlocks("- foo", "  - bar");
+        blocks[0].ListNestingLevel.Should().Be(0);
+        blocks[1].Kind.Should().Be(BlockKind.UnorderedListItem);
+        blocks[1].ListNestingLevel.Should().Be(1);
+    }
+
+    [Fact]
+    public void ListNesting_ThreeLevels_ReclassifiesIndentedCode()
+    {
+        var blocks = ParseBlocks("- foo", "  - bar", "    - baz");
+        blocks[2].Kind.Should().Be(BlockKind.UnorderedListItem);
+        blocks[2].ListNestingLevel.Should().Be(2);
+    }
+
+    [Fact]
+    public void ListNesting_FourLevels()
+    {
+        var blocks = ParseBlocks("- foo", "  - bar", "    - baz", "      - boo");
+        blocks[0].ListNestingLevel.Should().Be(0);
+        blocks[1].ListNestingLevel.Should().Be(1);
+        blocks[2].ListNestingLevel.Should().Be(2);
+        blocks[3].ListNestingLevel.Should().Be(3);
+    }
+
+    [Fact]
+    public void ListNesting_TaskListItems()
+    {
+        var blocks = ParseBlocks("- [x] foo", "  - [ ] bar");
+        blocks[0].Kind.Should().Be(BlockKind.TaskListItemChecked);
+        blocks[0].ListNestingLevel.Should().Be(0);
+        blocks[1].Kind.Should().Be(BlockKind.TaskListItemUnchecked);
+        blocks[1].ListNestingLevel.Should().Be(1);
+    }
+
+    [Fact]
+    public void ListNesting_OrderedList()
+    {
+        var blocks = ParseBlocks("1. foo", "   1. bar");
+        blocks[0].Kind.Should().Be(BlockKind.OrderedListItem);
+        blocks[0].ListNestingLevel.Should().Be(0);
+        blocks[1].Kind.Should().Be(BlockKind.OrderedListItem);
+        blocks[1].ListNestingLevel.Should().Be(1);
+    }
+
+    [Fact]
+    public void ListNesting_BlankLinePreservesContext()
+    {
+        var blocks = ParseBlocks("- foo", "", "  - bar");
+        blocks[0].ListNestingLevel.Should().Be(0);
+        blocks[2].Kind.Should().Be(BlockKind.UnorderedListItem);
+        blocks[2].ListNestingLevel.Should().Be(1);
+    }
+
+    [Fact]
+    public void ListNesting_NonListBlockClearsStack()
+    {
+        var blocks = ParseBlocks("- foo", "paragraph", "- bar");
+        blocks[2].ListNestingLevel.Should().Be(0);
+    }
+
+    [Fact]
+    public void ListNesting_MixedTypes()
+    {
+        var blocks = ParseBlocks("- foo", "  1. bar", "     - baz");
+        blocks[0].Kind.Should().Be(BlockKind.UnorderedListItem);
+        blocks[0].ListNestingLevel.Should().Be(0);
+        blocks[1].Kind.Should().Be(BlockKind.OrderedListItem);
+        blocks[1].ListNestingLevel.Should().Be(1);
+        blocks[2].Kind.Should().Be(BlockKind.UnorderedListItem);
+        blocks[2].ListNestingLevel.Should().Be(2);
+    }
+
+    [Fact]
+    public void ListNesting_BackToPreviousLevel()
+    {
+        var blocks = ParseBlocks("- a", "  - b", "- c");
+        blocks[0].ListNestingLevel.Should().Be(0);
+        blocks[1].ListNestingLevel.Should().Be(1);
+        blocks[2].ListNestingLevel.Should().Be(0);
+    }
+
     // --- Tab structural expansion ---
 
     [Theory]

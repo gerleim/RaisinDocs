@@ -501,9 +501,11 @@ partial class DocsCanvas
                         {
                             if (parsed.Kind is BlockKind.TaskListItemUnchecked or BlockKind.TaskListItemChecked)
                             {
+                                double nestOff = _canvas._measure.MeasureReplacementPrefix(
+                                    map.ReplacementPrefix, map.PrefixMeasureKind) - TextMeasurer.ListIndent;
                                 textX += _canvas.DrawTaskListCheckbox(dc,
                                     parsed.Kind == BlockKind.TaskListItemChecked,
-                                    _padding, lineY - effectiveScroll, parsed.Kind);
+                                    _padding, lineY - effectiveScroll, parsed.Kind, nestOff);
                             }
                             else if (map.IsContinuationIndent)
                             {

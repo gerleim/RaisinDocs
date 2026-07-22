@@ -1296,4 +1296,35 @@ public class BlockVisualMapTests
         map.IsHidden(18).Should().BeTrue();
         map.BuildDisplayString(text, 0, text.Length).Should().Be("bold struck");
     }
+
+    // --- List nesting indentation ---
+
+    [Fact]
+    public void ListNesting_Level0_StandardPrefix()
+    {
+        var map = ComputeMapMultiBlock(["- foo"], 0);
+        map.ReplacementPrefix.Should().Be("  ● ");
+    }
+
+    [Fact]
+    public void ListNesting_Level1_IndentedPrefix()
+    {
+        var map = ComputeMapMultiBlock(["- foo", "  - bar"], 1);
+        map.ReplacementPrefix.Should().Be("      ● ");
+    }
+
+    [Fact]
+    public void ListNesting_Level2_DoubleIndentedPrefix()
+    {
+        var map = ComputeMapMultiBlock(["- foo", "  - bar", "    - baz"], 2);
+        map.ReplacementPrefix.Should().Be("          ● ");
+    }
+
+    [Fact]
+    public void ListNesting_TaskList_Level1_IndentedPrefix()
+    {
+        var map = ComputeMapMultiBlock(["- foo", "  - [ ] bar"], 1);
+        map.ReplacementPrefix.Should().StartWith("    ");
+        map.ReplacementPrefix.Should().Contain("☐");
+    }
 }

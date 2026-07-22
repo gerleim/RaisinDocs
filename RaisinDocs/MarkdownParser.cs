@@ -104,6 +104,7 @@ public record class ParsedBlock
     public TableInfo? Table { get; init; }
     public int LeadingSpaces { get; init; }
     public int ContentColumn { get; init; }
+    public int ListNestingLevel { get; init; }
     public bool IsLazyContinuation { get; init; }
     public bool IsIndentedContinuation { get; init; }
     public int OwnerBlock { get; init; } = -1;
@@ -117,12 +118,18 @@ public record class ParsedBlock
         {
             if (offset >= run.Start && offset < run.Start + run.Length)
             {
-                if (run.Style == targetStyle)
-                    return true;
-                if (run.Style == InlineStyle.BoldItalic &&
-                    (targetStyle == InlineStyle.Bold || targetStyle == InlineStyle.Italic))
-                    return true;
-                return false;
+                if (run.Style != targetStyle &&
+                    !(run.Style == InlineStyle.BoldItalic &&
+                      (targetStyle == InlineStyle.Bold || targetStyle == InlineStyle.Italic)))
+                    return false;
+
+                if (EmphasisMarkers != null)
+                {
+                    foreach (var m in EmphasisMarkers)
+                        if (offset >= m.Start && offset < m.Start + m.Length)
+                            return false;
+                }
+                return true;
             }
         }
         return false;
@@ -370,6 +377,7 @@ public static class MarkdownParser
 
         DetectSetextHeadings(result, getBlockText);
         DetectTables(result, getBlockText);
+        DetectListNesting(result, getBlockText, defs);
         DetectContinuations(result, getBlockText);
         DetectIndentedCode(result, getBlockText, defs);
         ApplyBlockDivColors(result);
@@ -768,6 +776,115 @@ public static class MarkdownParser
             i++;
         }
         return i;
+    }
+
+    private static void DetectListNesting(List<ParsedBlock> blocks, Func<int, string> getBlockText,
+        Dictionary<string, (string Url, string? Title)>? defs)
+    {
+        // Stack tracks (contentColumn, blockIndex) for each active nesting level.
+        var stack = new List<int>();
+
+        for (int i = 0; i < blocks.Count; i++)
+        {
+            var block = blocks[i];
+            string text = getBlockText(i);
+
+            if (block.Kind is BlockKind.UnorderedListItem or BlockKind.OrderedListItem
+                or BlockKind.TaskListItemUnchecked or BlockKind.TaskListItemChecked)
+            {
+                int markerCol = block.LeadingSpaces;
+                while (stack.Count > 0 && stack[^1] > markerCol)
+                    stack.RemoveAt(stack.Count - 1);
+                blocks[i] = block with { ListNestingLevel = stack.Count };
+                stack.Add(block.ContentColumn);
+            }
+            else if (block.Kind == BlockKind.IndentedCodeLine && stack.Count > 0)
+            {
+                var (chars, cols) = MeasureLeadingWhitespace(text);
+                if (cols >= stack[^1])
+                {
+                    string stripped = chars < text.Length ? text[chars..] : "";
+                    var innerKind = ClassifyBlockContent(stripped);
+                    if (innerKind is BlockKind.UnorderedListItem or BlockKind.OrderedListItem
+                        or BlockKind.TaskListItemUnchecked or BlockKind.TaskListItemChecked)
+                    {
+                        int innerLeading = 0;
+                        var (innerChars, innerCols) = MeasureLeadingWhitespace(stripped);
+                        innerLeading = innerChars;
+                        int totalLeading = chars + innerLeading;
+                        int totalCols = cols + innerCols;
+                        string afterLeading = innerLeading > 0 ? stripped[innerLeading..] : stripped;
+                        int contentCol = totalCols + GetContentColumnForMarker(innerKind, afterLeading);
+
+                        while (stack.Count > 0 && stack[^1] > cols)
+                            stack.RemoveAt(stack.Count - 1);
+
+                        var runs = ParseInlines(text, out var imgs, out var lnks, out var emph, defs);
+                        var colorSpans = ParseInlineColorTags(text, null);
+                        blocks[i] = new ParsedBlock
+                        {
+                            Kind = innerKind,
+                            Runs = runs,
+                            Images = imgs,
+                            Links = lnks,
+                            EmphasisMarkers = emph,
+                            ColorSpans = colorSpans,
+                            LeadingSpaces = totalLeading,
+                            ContentColumn = contentCol,
+                            ListNestingLevel = stack.Count,
+                        };
+                        stack.Add(contentCol);
+                    }
+                }
+            }
+            else if (string.IsNullOrWhiteSpace(text))
+            {
+                // Blank lines don't break list context
+            }
+            else
+            {
+                if (block.Kind == BlockKind.Paragraph && stack.Count > 0)
+                {
+                    var (_, cols) = MeasureLeadingWhitespace(text);
+                    if (cols < stack[^1])
+                        stack.Clear();
+                }
+                else if (block.Kind is not BlockKind.Blockquote)
+                {
+                    stack.Clear();
+                }
+            }
+        }
+    }
+
+    private static BlockKind ClassifyBlockContent(string text)
+    {
+        if (text.Length >= 1 && text[0] is '-' or '*' or '+' &&
+            (text.Length == 1 || text[1] is ' ' or '\t'))
+        {
+            if (text.Length >= 6 && text[2] == '[' && text[4] == ']' && text[5] == ' ')
+            {
+                if (text[3] == ' ') return BlockKind.TaskListItemUnchecked;
+                if (text[3] is 'x' or 'X') return BlockKind.TaskListItemChecked;
+            }
+            return BlockKind.UnorderedListItem;
+        }
+        if (GetOrderedListPrefixLength(text) > 0)
+            return BlockKind.OrderedListItem;
+        return BlockKind.Paragraph;
+    }
+
+    private static int GetContentColumnForMarker(BlockKind kind, string textAfterLeading)
+    {
+        int markerWidth = kind switch
+        {
+            BlockKind.UnorderedListItem
+                or BlockKind.TaskListItemUnchecked
+                or BlockKind.TaskListItemChecked => 2,
+            BlockKind.OrderedListItem => GetOrderedListPrefixLength(textAfterLeading),
+            _ => 0,
+        };
+        return markerWidth;
     }
 
     private static void DetectContinuations(List<ParsedBlock> blocks, Func<int, string> getBlockText)
@@ -1219,8 +1336,8 @@ public static class MarkdownParser
         links = MarkLinks(text, styles, defs, links);
         links = MarkAutolinks(text, styles, links);
         links?.Sort((a, b) => a.Start.CompareTo(b.Start));
-        MarkStrikethrough(text, styles);
-        MarkEmphasis(text, styles, out emphasisMarkers);
+        MarkStrikethrough(text, styles, out emphasisMarkers);
+        MarkEmphasis(text, styles, ref emphasisMarkers);
 
         return BuildRuns(styles);
     }
@@ -1986,8 +2103,9 @@ public static class MarkdownParser
         return i;
     }
 
-    private static void MarkStrikethrough(string text, InlineStyle[] styles)
+    private static void MarkStrikethrough(string text, InlineStyle[] styles, out List<EmphasisMarker>? markers)
     {
+        markers = null;
         int i = 0;
         while (i <= text.Length - 4)
         {
@@ -2005,14 +2123,16 @@ public static class MarkdownParser
             {
                 for (int k = openStart; k < closeStart + 2; k++)
                     styles[k] = InlineStyle.Strikethrough;
+                markers ??= new();
+                markers.Add(new EmphasisMarker(openStart, 2));
+                markers.Add(new EmphasisMarker(closeStart, 2));
                 i = closeStart + 2;
             }
         }
     }
 
-    private static void MarkEmphasis(string text, InlineStyle[] styles, out List<EmphasisMarker>? markers)
+    private static void MarkEmphasis(string text, InlineStyle[] styles, ref List<EmphasisMarker>? markers)
     {
-        markers = null;
 
         var delimiters = new List<(int Pos, int Count, bool CanOpen, bool CanClose, char Char)>();
         int i = 0;

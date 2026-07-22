@@ -184,7 +184,17 @@ internal class TextMeasurer
     internal double MeasureReplacementPrefix(string prefix, BlockKind blockKind)
     {
         if (blockKind is BlockKind.TaskListItemUnchecked or BlockKind.TaskListItemChecked)
-            return ListIndent;
+        {
+            int nestingSpaces = 0;
+            while (nestingSpaces < prefix.Length && prefix[nestingSpaces] == ' '
+                   && nestingSpaces < prefix.Length - 4)
+                nestingSpaces++;
+            nestingSpaces = Math.Max(0, nestingSpaces - 2);
+            double extra = 0;
+            for (int i = 0; i < nestingSpaces; i++)
+                extra += MeasureCharWidth(' ', blockKind, InlineStyle.Normal);
+            return ListIndent + extra;
+        }
         double total = 0;
         for (int i = 0; i < prefix.Length; i++)
             total += MeasureCharWidth(prefix[i], blockKind, InlineStyle.Normal);

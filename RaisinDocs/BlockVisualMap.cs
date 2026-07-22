@@ -95,23 +95,34 @@ public class BlockVisualMap
         return rawOffset;
     }
 
-    internal static string? GetOwnerVisualPrefix(BlockKind kind, string blockText, int leadingSpaces = 0) => kind switch
-    {
-        BlockKind.UnorderedListItem => "  ● ",
-        BlockKind.TaskListItemUnchecked => "  ☐ ",
-        BlockKind.TaskListItemChecked => "  ☑ ",
-        BlockKind.OrderedListItem => GetOrderedListVisualPrefix(blockText, leadingSpaces),
-        _ => null,
-    };
+    internal const int SpacesPerNestingLevel = 4;
 
-    private static string? GetOrderedListVisualPrefix(string blockText, int leadingSpaces = 0)
+    internal static string NestingIndentString(int nestingLevel) =>
+        nestingLevel <= 0 ? "" : new string(' ', nestingLevel * SpacesPerNestingLevel);
+
+    internal static string? GetOwnerVisualPrefix(BlockKind kind, string blockText, int leadingSpaces = 0,
+        int nestingLevel = 0)
+    {
+        string nestIndent = NestingIndentString(nestingLevel);
+        return kind switch
+        {
+            BlockKind.UnorderedListItem => nestIndent + "  ● ",
+            BlockKind.TaskListItemUnchecked => nestIndent + "  ☐ ",
+            BlockKind.TaskListItemChecked => nestIndent + "  ☑ ",
+            BlockKind.OrderedListItem => GetOrderedListVisualPrefix(blockText, leadingSpaces, nestingLevel),
+            _ => null,
+        };
+    }
+
+    private static string? GetOrderedListVisualPrefix(string blockText, int leadingSpaces = 0,
+        int nestingLevel = 0)
     {
         var text = leadingSpaces > 0 ? blockText[leadingSpaces..] : blockText;
         int prefixLen = MarkdownParser.GetOrderedListPrefixLength(text);
         if (prefixLen <= 0) return null;
         string number = text.Substring(0, prefixLen - 2);
         char delim = text[prefixLen - 2];
-        return "  " + number + delim + " ";
+        return NestingIndentString(nestingLevel) + "  " + number + delim + " ";
     }
 
     public static BlockVisualMap Compute(ParsedBlock parsed, string blockText,
@@ -145,7 +156,8 @@ public class BlockVisualMap
                 }
             }
 
-            replacementPrefix = GetOwnerVisualPrefix(owner.Kind, ownerText, owner.LeadingSpaces);
+            replacementPrefix = GetOwnerVisualPrefix(owner.Kind, ownerText, owner.LeadingSpaces,
+                owner.ListNestingLevel);
             isContinuation = replacementPrefix != null;
             if (isContinuation)
                 prefixMeasureKind = owner.Kind;
@@ -168,7 +180,8 @@ public class BlockVisualMap
             if (blockText.Length >= ls + 6)
             {
                 ranges.Add(new HiddenRange(0, ls + 6));
-                replacementPrefix = parsed.Kind == BlockKind.TaskListItemChecked ? "  ☑ " : "  ☐ ";
+                string nestIndent = NestingIndentString(parsed.ListNestingLevel);
+                replacementPrefix = nestIndent + (parsed.Kind == BlockKind.TaskListItemChecked ? "  ☑ " : "  ☐ ");
             }
         }
         else if (parsed.Kind == BlockKind.UnorderedListItem)
@@ -178,7 +191,8 @@ public class BlockVisualMap
             if (stripped.StartsWith("- ") || stripped.StartsWith("* "))
             {
                 ranges.Add(new HiddenRange(0, ls + 2));
-                replacementPrefix = "  ● ";
+                string nestIndent = NestingIndentString(parsed.ListNestingLevel);
+                replacementPrefix = nestIndent + "  ● ";
             }
         }
         else if (parsed.Kind == BlockKind.OrderedListItem)
@@ -189,9 +203,10 @@ public class BlockVisualMap
             if (prefixLen > 0)
             {
                 ranges.Add(new HiddenRange(0, ls + prefixLen));
+                string nestIndent = NestingIndentString(parsed.ListNestingLevel);
                 string number = stripped.Substring(0, prefixLen - 2);
                 char delim = stripped[prefixLen - 2];
-                replacementPrefix = "  " + number + delim + " ";
+                replacementPrefix = nestIndent + "  " + number + delim + " ";
             }
         }
 
@@ -222,11 +237,9 @@ public class BlockVisualMap
             if (run.Style == InlineStyle.Normal) continue;
             if (run.Style is InlineStyle.Image or InlineStyle.Link) continue;
 
-            if (run.Style is InlineStyle.Code or InlineStyle.Strikethrough)
+            if (run.Style is InlineStyle.Code)
             {
-                int markerLen = run.Style == InlineStyle.Code
-                    ? CountBackticks(blockText, run.Start)
-                    : MarkdownParser.GetMarkerLength(run.Style);
+                int markerLen = CountBackticks(blockText, run.Start);
                 if (markerLen == 0) continue;
                 int runEnd = run.Start + run.Length;
                 ranges.Add(new HiddenRange(run.Start, markerLen));

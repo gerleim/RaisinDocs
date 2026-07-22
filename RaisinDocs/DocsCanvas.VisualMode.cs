@@ -86,14 +86,17 @@ public partial class DocsCanvas
         if (parsed.Kind is not (BlockKind.TaskListItemUnchecked or BlockKind.TaskListItemChecked))
             return false;
 
-        if (pos.X > _padding + TextMeasurer.ListIndent)
+        double nestOff = parsed.ListNestingLevel * BlockVisualMap.SpacesPerNestingLevel
+            * _measure.MeasureCharWidth(' ', parsed.Kind, InlineStyle.Normal);
+        if (pos.X > _padding + nestOff + TextMeasurer.ListIndent)
             return false;
 
         SealAndStopTimer();
         _doc.BeginUndoGroup();
         char newChar = parsed.Kind == BlockKind.TaskListItemChecked ? ' ' : 'x';
-        _doc.RemoveTextAt(vl.BlockIndex, 3, 1);
-        _doc.InsertTextAt(vl.BlockIndex, 3, newChar.ToString());
+        int checkCharOffset = parsed.LeadingSpaces + 3;
+        _doc.RemoveTextAt(vl.BlockIndex, checkCharOffset, 1);
+        _doc.InsertTextAt(vl.BlockIndex, checkCharOffset, newChar.ToString());
         _doc.SealUndoGroup();
 
         IsDirty = !_doc.IsClean;
@@ -1411,8 +1414,10 @@ public partial class DocsCanvas
         {
             if (parsed.Kind is BlockKind.TaskListItemUnchecked or BlockKind.TaskListItemChecked)
             {
+                double nestOff = _measure.MeasureReplacementPrefix(map.ReplacementPrefix, map.PrefixMeasureKind)
+                    - TextMeasurer.ListIndent;
                 x += DrawTaskListCheckbox(dc, parsed.Kind == BlockKind.TaskListItemChecked,
-                    _padding, screenY, parsed.Kind);
+                    _padding, screenY, parsed.Kind, nestOff);
             }
             else if (map.IsContinuationIndent)
             {
@@ -1459,12 +1464,13 @@ public partial class DocsCanvas
             DrawTextSegment(dc, blockText, segStart, vlEnd, map, parsed, fontSize, baseTypeface, x, screenY);
     }
 
-    private double DrawTaskListCheckbox(DrawingContext dc, bool isChecked, double x, double screenY, BlockKind blockKind)
+    private double DrawTaskListCheckbox(DrawingContext dc, bool isChecked, double x, double screenY,
+        BlockKind blockKind, double nestingOffset = 0)
     {
         double lineH = _measure.GetLineHeight(blockKind);
         double boxSize = Math.Round(lineH * 0.65);
         double yOffset = Math.Round((lineH - boxSize) / 2);
-        double checkboxX = x + TextMeasurer.ListIndent - boxSize - 4;
+        double checkboxX = x + nestingOffset + TextMeasurer.ListIndent - boxSize - 4;
         double checkboxY = screenY + yOffset;
         var rect = new Rect(checkboxX, checkboxY, boxSize, boxSize);
         double radius = 2.5;
@@ -1489,7 +1495,7 @@ public partial class DocsCanvas
             dc.DrawRoundedRectangle(null, pen, rect, radius, radius);
         }
 
-        return TextMeasurer.ListIndent;
+        return TextMeasurer.ListIndent + nestingOffset;
     }
 
     private double DrawTextSegment(DrawingContext dc, string blockText,
