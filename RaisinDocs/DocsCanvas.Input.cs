@@ -724,11 +724,11 @@ public partial class DocsCanvas
                 }
                 else
                 {
-                    newPrefix = stripped[..2];
-                    prefixLen = 2;
+                    prefixLen = Math.Min(2, stripped.Length);
+                    newPrefix = stripped[..prefixLen];
                 }
 
-                if (stripped[prefixLen..].Length == 0)
+                if (stripped.Length <= prefixLen || stripped[prefixLen..].Length == 0)
                 {
                     _doc.RemoveTextAt(_doc.CursorBlock, 0, blockText.Length);
                     _doc.CursorOffset = 0;
