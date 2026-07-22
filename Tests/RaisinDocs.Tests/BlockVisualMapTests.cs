@@ -1310,14 +1310,14 @@ public class BlockVisualMapTests
     public void ListNesting_Level1_IndentedPrefix()
     {
         var map = ComputeMapMultiBlock(["- foo", "  - bar"], 1);
-        map.ReplacementPrefix.Should().Be("      ● ");
+        map.ReplacementPrefix.Should().Be("      ○ ");
     }
 
     [Fact]
     public void ListNesting_Level2_DoubleIndentedPrefix()
     {
         var map = ComputeMapMultiBlock(["- foo", "  - bar", "    - baz"], 2);
-        map.ReplacementPrefix.Should().Be("          ● ");
+        map.ReplacementPrefix.Should().Be("          ■ ");
     }
 
     [Fact]

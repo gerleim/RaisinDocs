@@ -96,6 +96,10 @@ public class BlockVisualMap
     }
 
     internal const int SpacesPerNestingLevel = 4;
+    private static readonly char[] BulletChars = ['●', '○', '■'];
+
+    internal static char GetBulletChar(int nestingLevel) =>
+        BulletChars[nestingLevel % BulletChars.Length];
 
     internal static string NestingIndentString(int nestingLevel) =>
         nestingLevel <= 0 ? "" : new string(' ', nestingLevel * SpacesPerNestingLevel);
@@ -106,7 +110,7 @@ public class BlockVisualMap
         string nestIndent = NestingIndentString(nestingLevel);
         return kind switch
         {
-            BlockKind.UnorderedListItem => nestIndent + "  ● ",
+            BlockKind.UnorderedListItem => nestIndent + "  " + GetBulletChar(nestingLevel) + " ",
             BlockKind.TaskListItemUnchecked => nestIndent + "  ☐ ",
             BlockKind.TaskListItemChecked => nestIndent + "  ☑ ",
             BlockKind.OrderedListItem => GetOrderedListVisualPrefix(blockText, leadingSpaces, nestingLevel),
@@ -192,7 +196,7 @@ public class BlockVisualMap
             {
                 ranges.Add(new HiddenRange(0, ls + 2));
                 string nestIndent = NestingIndentString(parsed.ListNestingLevel);
-                replacementPrefix = nestIndent + "  ● ";
+                replacementPrefix = nestIndent + "  " + GetBulletChar(parsed.ListNestingLevel) + " ";
             }
         }
         else if (parsed.Kind == BlockKind.OrderedListItem)

@@ -664,6 +664,18 @@ public partial class DocsCanvas
         {
             string blockText = _doc.GetBlockText(_doc.CursorBlock);
             var blockKind = MarkdownParser.ClassifyBlock(blockText, out int leadingSpaces);
+            if (blockKind == BlockKind.IndentedCodeLine)
+            {
+                var (chars, _) = MarkdownParser.MeasureLeadingWhitespace(blockText);
+                string stripped = chars < blockText.Length ? blockText[chars..] : "";
+                var innerKind = MarkdownParser.ClassifyBlock(stripped);
+                if (innerKind is BlockKind.UnorderedListItem or BlockKind.OrderedListItem
+                    or BlockKind.TaskListItemUnchecked or BlockKind.TaskListItemChecked)
+                {
+                    blockKind = innerKind;
+                    leadingSpaces = chars;
+                }
+            }
             bool isStandalone = (blockKind >= BlockKind.Heading1 && blockKind <= BlockKind.Heading6)
                              || MarkdownParser.IsFenceLine(blockText)
                              || blockKind == BlockKind.ThematicBreak;
@@ -766,6 +778,18 @@ public partial class DocsCanvas
     {
         string text = _doc.GetBlockText(_doc.CursorBlock);
         var kind = MarkdownParser.ClassifyBlock(text, out int leading);
+        if (kind == BlockKind.IndentedCodeLine)
+        {
+            var (chars, _) = MarkdownParser.MeasureLeadingWhitespace(text);
+            string inner = chars < text.Length ? text[chars..] : "";
+            var innerKind = MarkdownParser.ClassifyBlock(inner);
+            if (innerKind is BlockKind.UnorderedListItem or BlockKind.OrderedListItem
+                or BlockKind.TaskListItemUnchecked or BlockKind.TaskListItemChecked)
+            {
+                kind = innerKind;
+                leading = chars;
+            }
+        }
         string stripped = leading > 0 ? text[leading..] : text;
         int stripLen = kind switch
         {
