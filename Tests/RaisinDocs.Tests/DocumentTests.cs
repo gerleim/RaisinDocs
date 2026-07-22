@@ -1768,21 +1768,84 @@ public class DocumentTests
     }
 
     [Fact]
-    public void MoveWordRight_SkipsPunctuation()
+    public void MoveWordRight_StopsAtPunctuationBoundary()
     {
         var doc = CreateDoc("foo(bar, baz)");
         doc.CursorOffset = 0;
         doc.MoveWordRight();
-        doc.CursorOffset.Should().Be(4);
+        doc.CursorOffset.Should().Be(3);
     }
 
     [Fact]
-    public void MoveWordLeft_SkipsPunctuation()
+    public void MoveWordLeft_StopsAtPunctuationBoundary()
     {
         var doc = CreateDoc("foo(bar, baz)");
         doc.CursorOffset = 13;
         doc.MoveWordLeft();
-        doc.CursorOffset.Should().Be(9);
+        doc.CursorOffset.Should().Be(12);
+    }
+
+    [Fact]
+    public void MoveWordRight_ThreeGroups_WordPunctuationWord()
+    {
+        // asd&@{qwe: word(asd) -> punct(&@{) -> word(qwe)
+        var doc = CreateDoc("asd&@{qwe");
+        doc.CursorOffset = 0;
+        doc.MoveWordRight();
+        doc.CursorOffset.Should().Be(3); // stops at &
+        doc.MoveWordRight();
+        doc.CursorOffset.Should().Be(6); // stops at q
+        doc.MoveWordRight();
+        doc.CursorOffset.Should().Be(9); // end
+    }
+
+    [Fact]
+    public void MoveWordLeft_ThreeGroups_WordPunctuationWord()
+    {
+        var doc = CreateDoc("asd&@{qwe");
+        doc.CursorOffset = 9;
+        doc.MoveWordLeft();
+        doc.CursorOffset.Should().Be(6); // stops at q
+        doc.MoveWordLeft();
+        doc.CursorOffset.Should().Be(3); // stops at &
+        doc.MoveWordLeft();
+        doc.CursorOffset.Should().Be(0); // start
+    }
+
+    [Fact]
+    public void MoveWordRight_SkipsWhitespaceBetweenWords()
+    {
+        var doc = CreateDoc("foo  bar");
+        doc.CursorOffset = 0;
+        doc.MoveWordRight();
+        doc.CursorOffset.Should().Be(5); // skips word + whitespace
+    }
+
+    [Fact]
+    public void MoveWordLeft_SkipsWhitespaceBetweenWords()
+    {
+        var doc = CreateDoc("foo  bar");
+        doc.CursorOffset = 8;
+        doc.MoveWordLeft();
+        doc.CursorOffset.Should().Be(5); // stops at start of bar
+    }
+
+    [Fact]
+    public void MoveWordRight_UnderscoreIsWordChar()
+    {
+        var doc = CreateDoc("my_var other");
+        doc.CursorOffset = 0;
+        doc.MoveWordRight();
+        doc.CursorOffset.Should().Be(7); // my_var + space
+    }
+
+    [Fact]
+    public void MoveWordLeft_UnderscoreIsWordChar()
+    {
+        var doc = CreateDoc("other my_var");
+        doc.CursorOffset = 12;
+        doc.MoveWordLeft();
+        doc.CursorOffset.Should().Be(6); // stops at start of my_var
     }
 
     // --- IndentLines / OutdentLines ---

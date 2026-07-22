@@ -417,6 +417,10 @@ public class Document
         }
     }
 
+    static int CharGroup(char c) =>
+        char.IsLetterOrDigit(c) || c == '_' ? 1 :
+        char.IsWhiteSpace(c) ? 0 : 2;
+
     public void MoveWordLeft()
     {
         var text = _blocks[CursorBlock].ToString();
@@ -426,8 +430,12 @@ public class Document
             MoveLeft();
             return;
         }
-        while (pos > 0 && !char.IsLetterOrDigit(text[pos - 1])) pos--;
-        while (pos > 0 && char.IsLetterOrDigit(text[pos - 1])) pos--;
+        while (pos > 0 && char.IsWhiteSpace(text[pos - 1])) pos--;
+        if (pos > 0)
+        {
+            int group = CharGroup(text[pos - 1]);
+            while (pos > 0 && CharGroup(text[pos - 1]) == group) pos--;
+        }
         CursorOffset = pos;
     }
 
@@ -441,8 +449,9 @@ public class Document
             MoveRight();
             return;
         }
-        while (pos < len && char.IsLetterOrDigit(text[pos])) pos++;
-        while (pos < len && !char.IsLetterOrDigit(text[pos])) pos++;
+        int group = CharGroup(text[pos]);
+        while (pos < len && CharGroup(text[pos]) == group) pos++;
+        while (pos < len && char.IsWhiteSpace(text[pos])) pos++;
         CursorOffset = pos;
     }
 
