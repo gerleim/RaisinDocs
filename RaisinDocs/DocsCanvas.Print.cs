@@ -514,6 +514,11 @@ partial class DocsCanvas
                                 textX += _canvas.DrawListBullet(dc, _padding, lineY - effectiveScroll,
                                     parsed.Kind, parsed.ListNestingLevel, nestOff);
                             }
+                            else if (parsed.Kind == BlockKind.OrderedListItem)
+                            {
+                                textX += _canvas.DrawOrderedListNumber(dc, _padding, lineY - effectiveScroll,
+                                    map.ReplacementPrefix, fontSize, parsed.ListNestingLevel);
+                            }
                             else if (map.IsContinuationIndent)
                             {
                                 textX += _canvas._measure.MeasureReplacementPrefix(

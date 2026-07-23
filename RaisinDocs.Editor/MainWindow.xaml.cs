@@ -535,6 +535,13 @@ public partial class MainWindow : Window
                         return;
                     }
 
+                    var editorState = Editor.GetState();
+                    if (!editorState.PromptOnExternalChanges)
+                    {
+                        ReloadFromDisk();
+                        return;
+                    }
+
                     var name = Path.GetFileName(FilePath);
                     var result = MessageBox.Show(owner,
                         $"'{name}' has been modified by another application.\n\nReload from disk and discard your unsaved changes?",

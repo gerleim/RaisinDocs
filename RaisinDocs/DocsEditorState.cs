@@ -14,4 +14,5 @@ public class DocsEditorState
     public bool ShowPageBreaks { get; set; }
     public bool SpellCheckEnabled { get; set; }
     public double ZoomLevel { get; set; } = 1.0;
+    public bool PromptOnExternalChanges { get; set; } = true;
 }

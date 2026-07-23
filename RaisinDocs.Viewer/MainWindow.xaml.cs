@@ -126,8 +126,7 @@ public partial class MainWindow : Window
                 }
                 catch (Exception ex)
                 {
-                    MessageBox.Show(this, $"Could not reload file:\n{ex.Message}", "RaisinDocs Viewer",
-                        MessageBoxButton.OK, MessageBoxImage.Error);
+                    Viewer.Canvas.Logger?.LogError($"Could not reload file: {ex.Message}");
                 }
                 finally
                 {

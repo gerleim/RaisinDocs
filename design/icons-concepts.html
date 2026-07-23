@@ -1,0 +1,670 @@
+<title>RaisinDocs Icon Concepts</title>
+<style>
+  :root {
+    --bg: #1a1a1e;
+    --fg: #d4d0c8;
+    --muted: #7a7770;
+    --surface: #28282e;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: "Segoe UI", system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--fg);
+    padding: 40px;
+    line-height: 1.5;
+  }
+  h1 { font-size: 1.4rem; font-weight: 600; letter-spacing: -0.02em; margin-bottom: 4px; }
+  .subtitle { color: var(--muted); font-size: 0.85rem; margin-bottom: 48px; }
+  .concept { margin-bottom: 56px; }
+  .concept h2 { font-size: 1.05rem; font-weight: 600; margin-bottom: 4px; }
+  .concept .desc { font-size: 0.82rem; color: var(--muted); margin-bottom: 20px; max-width: 640px; }
+  .icon-row { display: flex; gap: 56px; flex-wrap: wrap; margin-bottom: 20px; }
+  .icon-group h3 {
+    font-size: 0.72rem; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.08em; color: var(--muted); margin-bottom: 10px;
+  }
+  .sizes { display: flex; align-items: end; gap: 20px; }
+  .size-cell { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+  .size-cell span { font-size: 0.65rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .bg-row { display: flex; gap: 32px; flex-wrap: wrap; margin-top: 16px; }
+  .bg-group { display: flex; flex-direction: column; gap: 6px; }
+  .bg-group .label { font-size: 0.65rem; color: var(--muted); }
+  .bg-strip { display: flex; gap: 14px; align-items: center; padding: 12px 16px; border-radius: 6px; }
+  .bg-strip.dark { background: #2d2d30; }
+  .bg-strip.light { background: #f0ede8; }
+  .bg-strip.checker {
+    background: repeating-conic-gradient(#ccc 0% 25%, #fff 0% 50%) 0 0 / 16px 16px;
+    border-radius: 6px;
+  }
+  .ref-row { display: flex; gap: 20px; align-items: center; margin-bottom: 32px; }
+  .ref-row img { border-radius: 12px; }
+  .ref-label { font-size: 0.75rem; color: var(--muted); }
+</style>
+
+<h1>RaisinDocs Icon Concepts</h1>
+<p class="subtitle">Matching the Raisin family: dark purple raisin, StockRaisin2 blue background, rounded square</p>
+
+<!-- ═══════════════════════════════════════════ -->
+<!-- CONCEPT A: Teal background, raisin + page  -->
+<!-- ═══════════════════════════════════════════ -->
+<div class="concept">
+  <h2>Concept A &mdash; Raisin + tilted page</h2>
+  <p class="desc">
+    Blue background matching StockRaisin2.
+    The raisin sits behind a tilted document page with heading and text lines.
+    Editor: pen nib accent. Viewer: eye accent.
+  </p>
+  <div class="icon-row">
+    <!-- Editor -->
+    <div class="icon-group">
+      <h3>Editor</h3>
+      <div class="sizes">
+        <div class="size-cell">
+          <svg width="256" height="256" viewBox="0 0 256 256" fill="none">
+            <!-- BG -->
+            <rect width="256" height="256" rx="52" fill="#4878B8"/>
+            <rect width="256" height="256" rx="52" fill="url(#a1)" opacity="0.15"/>
+            <!-- Raisin body -->
+            <ellipse cx="108" cy="168" rx="52" ry="42" transform="rotate(-20 108 168)" fill="#4A2050"/>
+            <ellipse cx="108" cy="168" rx="52" ry="42" transform="rotate(-20 108 168)" fill="url(#a2)" opacity="0.3"/>
+            <!-- Raisin wrinkle lines -->
+            <path d="M78 152 Q95 160 82 180" stroke="#6B3570" stroke-width="3" fill="none" stroke-linecap="round"/>
+            <path d="M98 148 Q110 158 100 175" stroke="#6B3570" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+            <path d="M115 150 Q125 162 118 178" stroke="#6B3570" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+            <path d="M130 155 Q138 165 132 176" stroke="#6B3570" stroke-width="2" fill="none" stroke-linecap="round"/>
+            <!-- Document page -->
+            <g transform="translate(148,108) rotate(6)">
+              <rect x="-52" y="-68" width="104" height="136" rx="8" fill="white" opacity="0.92"/>
+              <!-- Heading line -->
+              <rect x="-36" y="-48" width="52" height="10" rx="3" fill="#4878B8" opacity="0.7"/>
+              <!-- Body lines -->
+              <rect x="-36" y="-28" width="72" height="6" rx="2" fill="#4878B8" opacity="0.3"/>
+              <rect x="-36" y="-14" width="60" height="6" rx="2" fill="#4878B8" opacity="0.2"/>
+              <rect x="-36" y="0" width="68" height="6" rx="2" fill="#4878B8" opacity="0.2"/>
+              <rect x="-36" y="14" width="48" height="6" rx="2" fill="#4878B8" opacity="0.15"/>
+              <rect x="-36" y="28" width="64" height="6" rx="2" fill="#4878B8" opacity="0.2"/>
+              <rect x="-36" y="42" width="40" height="6" rx="2" fill="#4878B8" opacity="0.15"/>
+            </g>
+            <!-- Pen nib accent -->
+            <g transform="translate(80,76) rotate(-45)">
+              <rect x="-5" y="-18" width="10" height="28" rx="2" fill="white" opacity="0.9"/>
+              <polygon points="-5,10 5,10 0,18" fill="white" opacity="0.9"/>
+              <rect x="-5" y="-18" width="10" height="5" rx="1" fill="#4878B8" opacity="0.7"/>
+            </g>
+            <defs>
+              <linearGradient id="a1" x1="0" y1="0" x2="256" y2="256"><stop stop-color="white"/><stop offset="1" stop-color="transparent"/></linearGradient>
+              <linearGradient id="a2" x1="70" y1="140" x2="140" y2="200"><stop stop-color="#6B3570"/><stop offset="1" stop-color="transparent"/></linearGradient>
+            </defs>
+          </svg>
+          <span>256</span>
+        </div>
+        <div class="size-cell">
+          <svg width="64" height="64" viewBox="0 0 256 256" fill="none">
+            <rect width="256" height="256" rx="52" fill="#4878B8"/>
+            <ellipse cx="108" cy="168" rx="52" ry="42" transform="rotate(-20 108 168)" fill="#4A2050"/>
+            <path d="M78 152 Q95 160 82 180" stroke="#6B3570" stroke-width="3" fill="none" stroke-linecap="round"/>
+            <path d="M98 148 Q110 158 100 175" stroke="#6B3570" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+            <path d="M115 150 Q125 162 118 178" stroke="#6B3570" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+            <g transform="translate(148,108) rotate(6)">
+              <rect x="-52" y="-68" width="104" height="136" rx="8" fill="white" opacity="0.92"/>
+              <rect x="-36" y="-48" width="52" height="10" rx="3" fill="#4878B8" opacity="0.7"/>
+              <rect x="-36" y="-28" width="72" height="6" rx="2" fill="#4878B8" opacity="0.3"/>
+              <rect x="-36" y="-14" width="60" height="6" rx="2" fill="#4878B8" opacity="0.2"/>
+              <rect x="-36" y="0" width="68" height="6" rx="2" fill="#4878B8" opacity="0.2"/>
+              <rect x="-36" y="14" width="48" height="6" rx="2" fill="#4878B8" opacity="0.15"/>
+            </g>
+            <g transform="translate(80,76) rotate(-45)">
+              <rect x="-5" y="-18" width="10" height="28" rx="2" fill="white" opacity="0.9"/>
+              <polygon points="-5,10 5,10 0,18" fill="white" opacity="0.9"/>
+              <rect x="-5" y="-18" width="10" height="5" rx="1" fill="#4878B8" opacity="0.7"/>
+            </g>
+          </svg>
+          <span>64</span>
+        </div>
+        <div class="size-cell">
+          <svg width="32" height="32" viewBox="0 0 256 256" fill="none">
+            <rect width="256" height="256" rx="52" fill="#4878B8"/>
+            <ellipse cx="108" cy="168" rx="52" ry="42" transform="rotate(-20 108 168)" fill="#4A2050"/>
+            <g transform="translate(148,108) rotate(6)">
+              <rect x="-52" y="-68" width="104" height="136" rx="8" fill="white" opacity="0.92"/>
+              <rect x="-36" y="-48" width="52" height="10" rx="3" fill="#4878B8" opacity="0.7"/>
+              <rect x="-36" y="-28" width="72" height="6" rx="2" fill="#4878B8" opacity="0.3"/>
+              <rect x="-36" y="-14" width="60" height="6" rx="2" fill="#4878B8" opacity="0.2"/>
+            </g>
+            <g transform="translate(80,76) rotate(-45)">
+              <rect x="-5" y="-18" width="10" height="28" rx="2" fill="white" opacity="0.9"/>
+              <polygon points="-5,10 5,10 0,18" fill="white" opacity="0.9"/>
+            </g>
+          </svg>
+          <span>32</span>
+        </div>
+        <div class="size-cell">
+          <svg width="16" height="16" viewBox="0 0 256 256" fill="none">
+            <rect width="256" height="256" rx="52" fill="#4878B8"/>
+            <ellipse cx="108" cy="168" rx="52" ry="42" transform="rotate(-20 108 168)" fill="#4A2050"/>
+            <g transform="translate(148,108) rotate(6)">
+              <rect x="-52" y="-68" width="104" height="136" rx="8" fill="white" opacity="0.92"/>
+              <rect x="-36" y="-48" width="52" height="10" rx="3" fill="#4878B8" opacity="0.7"/>
+            </g>
+          </svg>
+          <span>16</span>
+        </div>
+      </div>
+    </div>
+    <!-- Viewer -->
+    <div class="icon-group">
+      <h3>Viewer</h3>
+      <div class="sizes">
+        <div class="size-cell">
+          <svg width="256" height="256" viewBox="0 0 256 256" fill="none">
+            <rect width="256" height="256" rx="52" fill="#4878B8"/>
+            <rect width="256" height="256" rx="52" fill="url(#a3)" opacity="0.15"/>
+            <ellipse cx="108" cy="168" rx="52" ry="42" transform="rotate(-20 108 168)" fill="#4A2050"/>
+            <ellipse cx="108" cy="168" rx="52" ry="42" transform="rotate(-20 108 168)" fill="url(#a4)" opacity="0.3"/>
+            <path d="M78 152 Q95 160 82 180" stroke="#6B3570" stroke-width="3" fill="none" stroke-linecap="round"/>
+            <path d="M98 148 Q110 158 100 175" stroke="#6B3570" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+            <path d="M115 150 Q125 162 118 178" stroke="#6B3570" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+            <path d="M130 155 Q138 165 132 176" stroke="#6B3570" stroke-width="2" fill="none" stroke-linecap="round"/>
+            <g transform="translate(148,108) rotate(6)">
+              <rect x="-52" y="-68" width="104" height="136" rx="8" fill="white" opacity="0.92"/>
+              <rect x="-36" y="-48" width="52" height="10" rx="3" fill="#4878B8" opacity="0.7"/>
+              <rect x="-36" y="-28" width="72" height="6" rx="2" fill="#4878B8" opacity="0.3"/>
+              <rect x="-36" y="-14" width="60" height="6" rx="2" fill="#4878B8" opacity="0.2"/>
+              <rect x="-36" y="0" width="68" height="6" rx="2" fill="#4878B8" opacity="0.2"/>
+              <rect x="-36" y="14" width="48" height="6" rx="2" fill="#4878B8" opacity="0.15"/>
+              <rect x="-36" y="28" width="64" height="6" rx="2" fill="#4878B8" opacity="0.2"/>
+              <rect x="-36" y="42" width="40" height="6" rx="2" fill="#4878B8" opacity="0.15"/>
+            </g>
+            <!-- Eye accent -->
+            <g transform="translate(82,78)">
+              <ellipse rx="18" ry="11" fill="white" opacity="0.9"/>
+              <circle r="7" fill="#4878B8"/>
+              <circle r="4" fill="#1a1a1e"/>
+              <circle cx="-2" cy="-2" r="2" fill="rgba(255,255,255,0.7)"/>
+            </g>
+            <defs>
+              <linearGradient id="a3" x1="0" y1="0" x2="256" y2="256"><stop stop-color="white"/><stop offset="1" stop-color="transparent"/></linearGradient>
+              <linearGradient id="a4" x1="70" y1="140" x2="140" y2="200"><stop stop-color="#6B3570"/><stop offset="1" stop-color="transparent"/></linearGradient>
+            </defs>
+          </svg>
+          <span>256</span>
+        </div>
+        <div class="size-cell">
+          <svg width="64" height="64" viewBox="0 0 256 256" fill="none">
+            <rect width="256" height="256" rx="52" fill="#4878B8"/>
+            <ellipse cx="108" cy="168" rx="52" ry="42" transform="rotate(-20 108 168)" fill="#4A2050"/>
+            <path d="M78 152 Q95 160 82 180" stroke="#6B3570" stroke-width="3" fill="none" stroke-linecap="round"/>
+            <path d="M98 148 Q110 158 100 175" stroke="#6B3570" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+            <path d="M115 150 Q125 162 118 178" stroke="#6B3570" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+            <g transform="translate(148,108) rotate(6)">
+              <rect x="-52" y="-68" width="104" height="136" rx="8" fill="white" opacity="0.92"/>
+              <rect x="-36" y="-48" width="52" height="10" rx="3" fill="#4878B8" opacity="0.7"/>
+              <rect x="-36" y="-28" width="72" height="6" rx="2" fill="#4878B8" opacity="0.3"/>
+              <rect x="-36" y="-14" width="60" height="6" rx="2" fill="#4878B8" opacity="0.2"/>
+              <rect x="-36" y="0" width="68" height="6" rx="2" fill="#4878B8" opacity="0.2"/>
+              <rect x="-36" y="14" width="48" height="6" rx="2" fill="#4878B8" opacity="0.15"/>
+            </g>
+            <g transform="translate(82,78)">
+              <ellipse rx="18" ry="11" fill="white" opacity="0.9"/>
+              <circle r="7" fill="#4878B8"/>
+              <circle r="4" fill="#1a1a1e"/>
+              <circle cx="-2" cy="-2" r="2" fill="rgba(255,255,255,0.7)"/>
+            </g>
+          </svg>
+          <span>64</span>
+        </div>
+        <div class="size-cell">
+          <svg width="32" height="32" viewBox="0 0 256 256" fill="none">
+            <rect width="256" height="256" rx="52" fill="#4878B8"/>
+            <ellipse cx="108" cy="168" rx="52" ry="42" transform="rotate(-20 108 168)" fill="#4A2050"/>
+            <g transform="translate(148,108) rotate(6)">
+              <rect x="-52" y="-68" width="104" height="136" rx="8" fill="white" opacity="0.92"/>
+              <rect x="-36" y="-48" width="52" height="10" rx="3" fill="#4878B8" opacity="0.7"/>
+              <rect x="-36" y="-28" width="72" height="6" rx="2" fill="#4878B8" opacity="0.3"/>
+              <rect x="-36" y="-14" width="60" height="6" rx="2" fill="#4878B8" opacity="0.2"/>
+            </g>
+            <g transform="translate(82,78)">
+              <ellipse rx="18" ry="11" fill="white" opacity="0.9"/>
+              <circle r="7" fill="#4878B8"/>
+              <circle r="4" fill="#1a1a1e"/>
+            </g>
+          </svg>
+          <span>32</span>
+        </div>
+        <div class="size-cell">
+          <svg width="16" height="16" viewBox="0 0 256 256" fill="none">
+            <rect width="256" height="256" rx="52" fill="#4878B8"/>
+            <ellipse cx="108" cy="168" rx="52" ry="42" transform="rotate(-20 108 168)" fill="#4A2050"/>
+            <g transform="translate(148,108) rotate(6)">
+              <rect x="-52" y="-68" width="104" height="136" rx="8" fill="white" opacity="0.92"/>
+              <rect x="-36" y="-48" width="52" height="10" rx="3" fill="#4878B8" opacity="0.7"/>
+            </g>
+          </svg>
+          <span>16</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="bg-row">
+    <div class="bg-group">
+      <span class="label">Dark taskbar</span>
+      <div class="bg-strip dark">
+        <svg width="32" height="32" viewBox="0 0 256 256" fill="none"><rect width="256" height="256" rx="52" fill="#4878B8"/><ellipse cx="108" cy="168" rx="52" ry="42" transform="rotate(-20 108 168)" fill="#4A2050"/><g transform="translate(148,108) rotate(6)"><rect x="-52" y="-68" width="104" height="136" rx="8" fill="white" opacity="0.92"/><rect x="-36" y="-48" width="52" height="10" rx="3" fill="#4878B8" opacity="0.7"/><rect x="-36" y="-28" width="72" height="6" rx="2" fill="#4878B8" opacity="0.3"/></g><g transform="translate(80,76) rotate(-45)"><rect x="-5" y="-18" width="10" height="28" rx="2" fill="white" opacity="0.9"/><polygon points="-5,10 5,10 0,18" fill="white" opacity="0.9"/></g></svg>
+        <svg width="32" height="32" viewBox="0 0 256 256" fill="none"><rect width="256" height="256" rx="52" fill="#4878B8"/><ellipse cx="108" cy="168" rx="52" ry="42" transform="rotate(-20 108 168)" fill="#4A2050"/><g transform="translate(148,108) rotate(6)"><rect x="-52" y="-68" width="104" height="136" rx="8" fill="white" opacity="0.92"/><rect x="-36" y="-48" width="52" height="10" rx="3" fill="#4878B8" opacity="0.7"/><rect x="-36" y="-28" width="72" height="6" rx="2" fill="#4878B8" opacity="0.3"/></g><g transform="translate(82,78)"><ellipse rx="18" ry="11" fill="white" opacity="0.9"/><circle r="7" fill="#4878B8"/><circle r="4" fill="#1a1a1e"/></g></svg>
+      </div>
+    </div>
+    <div class="bg-group">
+      <span class="label">Light</span>
+      <div class="bg-strip light">
+        <svg width="32" height="32" viewBox="0 0 256 256" fill="none"><rect width="256" height="256" rx="52" fill="#4878B8"/><ellipse cx="108" cy="168" rx="52" ry="42" transform="rotate(-20 108 168)" fill="#4A2050"/><g transform="translate(148,108) rotate(6)"><rect x="-52" y="-68" width="104" height="136" rx="8" fill="white" opacity="0.92"/><rect x="-36" y="-48" width="52" height="10" rx="3" fill="#4878B8" opacity="0.7"/><rect x="-36" y="-28" width="72" height="6" rx="2" fill="#4878B8" opacity="0.3"/></g><g transform="translate(80,76) rotate(-45)"><rect x="-5" y="-18" width="10" height="28" rx="2" fill="white" opacity="0.9"/><polygon points="-5,10 5,10 0,18" fill="white" opacity="0.9"/></g></svg>
+        <svg width="32" height="32" viewBox="0 0 256 256" fill="none"><rect width="256" height="256" rx="52" fill="#4878B8"/><ellipse cx="108" cy="168" rx="52" ry="42" transform="rotate(-20 108 168)" fill="#4A2050"/><g transform="translate(148,108) rotate(6)"><rect x="-52" y="-68" width="104" height="136" rx="8" fill="white" opacity="0.92"/><rect x="-36" y="-48" width="52" height="10" rx="3" fill="#4878B8" opacity="0.7"/><rect x="-36" y="-28" width="72" height="6" rx="2" fill="#4878B8" opacity="0.3"/></g><g transform="translate(82,78)"><ellipse rx="18" ry="11" fill="white" opacity="0.9"/><circle r="7" fill="#4878B8"/><circle r="4" fill="#1a1a1e"/></g></svg>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════ -->
+<!-- CONCEPT B: Amber/warm, raisin holding a page   -->
+<!-- ═══════════════════════════════════════════════ -->
+<div class="concept">
+  <h2>Concept B &mdash; Raisin peeking + centered page</h2>
+  <p class="desc">
+    Blue background matching StockRaisin2. The raisin peeks from behind a large centered document.
+    Editor has a text cursor on the page; Viewer has an eye badge.
+  </p>
+  <div class="icon-row">
+    <div class="icon-group">
+      <h3>Editor</h3>
+      <div class="sizes">
+        <div class="size-cell">
+          <svg width="256" height="256" viewBox="0 0 256 256" fill="none">
+            <rect width="256" height="256" rx="52" fill="#4878B8"/>
+            <rect width="256" height="256" rx="52" fill="url(#b1)" opacity="0.12"/>
+            <!-- Raisin peeking from bottom-left -->
+            <ellipse cx="72" cy="210" rx="56" ry="44" transform="rotate(-15 72 210)" fill="#4A2050"/>
+            <ellipse cx="72" cy="210" rx="56" ry="44" transform="rotate(-15 72 210)" fill="url(#b2)" opacity="0.25"/>
+            <path d="M42 196 Q56 204 46 222" stroke="#6B3570" stroke-width="3" fill="none" stroke-linecap="round"/>
+            <path d="M60 190 Q72 200 64 216" stroke="#6B3570" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+            <path d="M78 192 Q88 203 82 218" stroke="#6B3570" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+            <path d="M96 196 Q103 205 98 216" stroke="#6B3570" stroke-width="2" fill="none" stroke-linecap="round"/>
+            <!-- Document page, centered -->
+            <rect x="60" y="28" width="136" height="176" rx="10" fill="white" opacity="0.93"/>
+            <!-- Heading -->
+            <rect x="80" y="50" width="70" height="12" rx="3" fill="#4878B8" opacity="0.65"/>
+            <!-- Divider -->
+            <rect x="80" y="72" width="96" height="2" rx="1" fill="#4878B8" opacity="0.2"/>
+            <!-- Body lines -->
+            <rect x="80" y="86" width="96" height="7" rx="2" fill="#4878B8" opacity="0.28"/>
+            <rect x="80" y="102" width="78" height="7" rx="2" fill="#4878B8" opacity="0.2"/>
+            <rect x="80" y="118" width="88" height="7" rx="2" fill="#4878B8" opacity="0.2"/>
+            <rect x="80" y="134" width="62" height="7" rx="2" fill="#4878B8" opacity="0.15"/>
+            <rect x="80" y="150" width="96" height="7" rx="2" fill="#4878B8" opacity="0.2"/>
+            <rect x="80" y="166" width="50" height="7" rx="2" fill="#4878B8" opacity="0.15"/>
+            <!-- Text cursor -->
+            <rect x="131" y="164" width="3" height="16" rx="1" fill="#4878B8" opacity="0.8"/>
+            <defs>
+              <linearGradient id="b1" x1="0" y1="0" x2="256" y2="256"><stop stop-color="white"/><stop offset="1" stop-color="transparent"/></linearGradient>
+              <linearGradient id="b2" x1="30" y1="180" x2="110" y2="240"><stop stop-color="#6B3570"/><stop offset="1" stop-color="transparent"/></linearGradient>
+            </defs>
+          </svg>
+          <span>256</span>
+        </div>
+        <div class="size-cell">
+          <svg width="64" height="64" viewBox="0 0 256 256" fill="none">
+            <rect width="256" height="256" rx="52" fill="#4878B8"/>
+            <ellipse cx="72" cy="210" rx="56" ry="44" transform="rotate(-15 72 210)" fill="#4A2050"/>
+            <path d="M42 196 Q56 204 46 222" stroke="#6B3570" stroke-width="3" fill="none" stroke-linecap="round"/>
+            <path d="M60 190 Q72 200 64 216" stroke="#6B3570" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+            <path d="M78 192 Q88 203 82 218" stroke="#6B3570" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+            <rect x="60" y="28" width="136" height="176" rx="10" fill="white" opacity="0.93"/>
+            <rect x="80" y="50" width="70" height="12" rx="3" fill="#4878B8" opacity="0.65"/>
+            <rect x="80" y="72" width="96" height="2" rx="1" fill="#4878B8" opacity="0.2"/>
+            <rect x="80" y="86" width="96" height="7" rx="2" fill="#4878B8" opacity="0.28"/>
+            <rect x="80" y="102" width="78" height="7" rx="2" fill="#4878B8" opacity="0.2"/>
+            <rect x="80" y="118" width="88" height="7" rx="2" fill="#4878B8" opacity="0.2"/>
+            <rect x="80" y="134" width="62" height="7" rx="2" fill="#4878B8" opacity="0.15"/>
+            <rect x="131" y="164" width="3" height="16" rx="1" fill="#4878B8" opacity="0.8"/>
+          </svg>
+          <span>64</span>
+        </div>
+        <div class="size-cell">
+          <svg width="32" height="32" viewBox="0 0 256 256" fill="none">
+            <rect width="256" height="256" rx="52" fill="#4878B8"/>
+            <ellipse cx="72" cy="210" rx="56" ry="44" transform="rotate(-15 72 210)" fill="#4A2050"/>
+            <rect x="60" y="28" width="136" height="176" rx="10" fill="white" opacity="0.93"/>
+            <rect x="80" y="50" width="70" height="12" rx="3" fill="#4878B8" opacity="0.65"/>
+            <rect x="80" y="86" width="96" height="7" rx="2" fill="#4878B8" opacity="0.28"/>
+            <rect x="80" y="102" width="78" height="7" rx="2" fill="#4878B8" opacity="0.2"/>
+            <rect x="80" y="118" width="88" height="7" rx="2" fill="#4878B8" opacity="0.2"/>
+            <rect x="131" y="164" width="3" height="16" rx="1" fill="#4878B8" opacity="0.8"/>
+          </svg>
+          <span>32</span>
+        </div>
+        <div class="size-cell">
+          <svg width="16" height="16" viewBox="0 0 256 256" fill="none">
+            <rect width="256" height="256" rx="52" fill="#4878B8"/>
+            <ellipse cx="72" cy="210" rx="56" ry="44" transform="rotate(-15 72 210)" fill="#4A2050"/>
+            <rect x="60" y="28" width="136" height="176" rx="10" fill="white" opacity="0.93"/>
+            <rect x="80" y="50" width="70" height="12" rx="3" fill="#4878B8" opacity="0.65"/>
+            <rect x="80" y="86" width="96" height="7" rx="2" fill="#4878B8" opacity="0.28"/>
+          </svg>
+          <span>16</span>
+        </div>
+      </div>
+    </div>
+    <!-- Viewer -->
+    <div class="icon-group">
+      <h3>Viewer</h3>
+      <div class="sizes">
+        <div class="size-cell">
+          <svg width="256" height="256" viewBox="0 0 256 256" fill="none">
+            <rect width="256" height="256" rx="52" fill="#4878B8"/>
+            <rect width="256" height="256" rx="52" fill="url(#b3)" opacity="0.12"/>
+            <ellipse cx="72" cy="210" rx="56" ry="44" transform="rotate(-15 72 210)" fill="#4A2050"/>
+            <ellipse cx="72" cy="210" rx="56" ry="44" transform="rotate(-15 72 210)" fill="url(#b4)" opacity="0.25"/>
+            <path d="M42 196 Q56 204 46 222" stroke="#6B3570" stroke-width="3" fill="none" stroke-linecap="round"/>
+            <path d="M60 190 Q72 200 64 216" stroke="#6B3570" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+            <path d="M78 192 Q88 203 82 218" stroke="#6B3570" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+            <path d="M96 196 Q103 205 98 216" stroke="#6B3570" stroke-width="2" fill="none" stroke-linecap="round"/>
+            <rect x="60" y="28" width="136" height="176" rx="10" fill="white" opacity="0.93"/>
+            <rect x="80" y="50" width="70" height="12" rx="3" fill="#4878B8" opacity="0.65"/>
+            <rect x="80" y="72" width="96" height="2" rx="1" fill="#4878B8" opacity="0.2"/>
+            <rect x="80" y="86" width="96" height="7" rx="2" fill="#4878B8" opacity="0.28"/>
+            <rect x="80" y="102" width="78" height="7" rx="2" fill="#4878B8" opacity="0.2"/>
+            <rect x="80" y="118" width="88" height="7" rx="2" fill="#4878B8" opacity="0.2"/>
+            <rect x="80" y="134" width="62" height="7" rx="2" fill="#4878B8" opacity="0.15"/>
+            <rect x="80" y="150" width="96" height="7" rx="2" fill="#4878B8" opacity="0.2"/>
+            <rect x="80" y="166" width="50" height="7" rx="2" fill="#4878B8" opacity="0.15"/>
+            <!-- Eye overlay top-right -->
+            <g transform="translate(200,52)">
+              <circle r="28" fill="#4A2050" opacity="0.85"/>
+              <ellipse rx="16" ry="10" fill="white" opacity="0.9"/>
+              <circle r="6" fill="#4878B8"/>
+              <circle r="3.5" fill="#1a1a1e"/>
+              <circle cx="-1.5" cy="-1.5" r="1.5" fill="rgba(255,255,255,0.7)"/>
+            </g>
+            <defs>
+              <linearGradient id="b3" x1="0" y1="0" x2="256" y2="256"><stop stop-color="white"/><stop offset="1" stop-color="transparent"/></linearGradient>
+              <linearGradient id="b4" x1="30" y1="180" x2="110" y2="240"><stop stop-color="#6B3570"/><stop offset="1" stop-color="transparent"/></linearGradient>
+            </defs>
+          </svg>
+          <span>256</span>
+        </div>
+        <div class="size-cell">
+          <svg width="64" height="64" viewBox="0 0 256 256" fill="none">
+            <rect width="256" height="256" rx="52" fill="#4878B8"/>
+            <ellipse cx="72" cy="210" rx="56" ry="44" transform="rotate(-15 72 210)" fill="#4A2050"/>
+            <path d="M42 196 Q56 204 46 222" stroke="#6B3570" stroke-width="3" fill="none" stroke-linecap="round"/>
+            <path d="M60 190 Q72 200 64 216" stroke="#6B3570" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+            <path d="M78 192 Q88 203 82 218" stroke="#6B3570" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+            <rect x="60" y="28" width="136" height="176" rx="10" fill="white" opacity="0.93"/>
+            <rect x="80" y="50" width="70" height="12" rx="3" fill="#4878B8" opacity="0.65"/>
+            <rect x="80" y="72" width="96" height="2" rx="1" fill="#4878B8" opacity="0.2"/>
+            <rect x="80" y="86" width="96" height="7" rx="2" fill="#4878B8" opacity="0.28"/>
+            <rect x="80" y="102" width="78" height="7" rx="2" fill="#4878B8" opacity="0.2"/>
+            <rect x="80" y="118" width="88" height="7" rx="2" fill="#4878B8" opacity="0.2"/>
+            <g transform="translate(200,52)">
+              <circle r="28" fill="#4A2050" opacity="0.85"/>
+              <ellipse rx="16" ry="10" fill="white" opacity="0.9"/>
+              <circle r="6" fill="#4878B8"/>
+              <circle r="3.5" fill="#1a1a1e"/>
+            </g>
+          </svg>
+          <span>64</span>
+        </div>
+        <div class="size-cell">
+          <svg width="32" height="32" viewBox="0 0 256 256" fill="none">
+            <rect width="256" height="256" rx="52" fill="#4878B8"/>
+            <ellipse cx="72" cy="210" rx="56" ry="44" transform="rotate(-15 72 210)" fill="#4A2050"/>
+            <rect x="60" y="28" width="136" height="176" rx="10" fill="white" opacity="0.93"/>
+            <rect x="80" y="50" width="70" height="12" rx="3" fill="#4878B8" opacity="0.65"/>
+            <rect x="80" y="86" width="96" height="7" rx="2" fill="#4878B8" opacity="0.28"/>
+            <rect x="80" y="102" width="78" height="7" rx="2" fill="#4878B8" opacity="0.2"/>
+            <g transform="translate(200,52)">
+              <circle r="28" fill="#4A2050" opacity="0.85"/>
+              <ellipse rx="16" ry="10" fill="white" opacity="0.9"/>
+              <circle r="6" fill="#4878B8"/>
+              <circle r="3.5" fill="#1a1a1e"/>
+            </g>
+          </svg>
+          <span>32</span>
+        </div>
+        <div class="size-cell">
+          <svg width="16" height="16" viewBox="0 0 256 256" fill="none">
+            <rect width="256" height="256" rx="52" fill="#4878B8"/>
+            <ellipse cx="72" cy="210" rx="56" ry="44" transform="rotate(-15 72 210)" fill="#4A2050"/>
+            <rect x="60" y="28" width="136" height="176" rx="10" fill="white" opacity="0.93"/>
+            <rect x="80" y="50" width="70" height="12" rx="3" fill="#4878B8" opacity="0.65"/>
+            <rect x="80" y="86" width="96" height="7" rx="2" fill="#4878B8" opacity="0.28"/>
+          </svg>
+          <span>16</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="bg-row">
+    <div class="bg-group">
+      <span class="label">Dark taskbar</span>
+      <div class="bg-strip dark">
+        <svg width="32" height="32" viewBox="0 0 256 256" fill="none"><rect width="256" height="256" rx="52" fill="#4878B8"/><ellipse cx="72" cy="210" rx="56" ry="44" transform="rotate(-15 72 210)" fill="#4A2050"/><rect x="60" y="28" width="136" height="176" rx="10" fill="white" opacity="0.93"/><rect x="80" y="50" width="70" height="12" rx="3" fill="#4878B8" opacity="0.65"/><rect x="80" y="86" width="96" height="7" rx="2" fill="#4878B8" opacity="0.28"/><rect x="80" y="102" width="78" height="7" rx="2" fill="#4878B8" opacity="0.2"/><rect x="131" y="164" width="3" height="16" rx="1" fill="#4878B8" opacity="0.8"/></svg>
+        <svg width="32" height="32" viewBox="0 0 256 256" fill="none"><rect width="256" height="256" rx="52" fill="#4878B8"/><ellipse cx="72" cy="210" rx="56" ry="44" transform="rotate(-15 72 210)" fill="#4A2050"/><rect x="60" y="28" width="136" height="176" rx="10" fill="white" opacity="0.93"/><rect x="80" y="50" width="70" height="12" rx="3" fill="#4878B8" opacity="0.65"/><rect x="80" y="86" width="96" height="7" rx="2" fill="#4878B8" opacity="0.28"/><rect x="80" y="102" width="78" height="7" rx="2" fill="#4878B8" opacity="0.2"/><g transform="translate(200,52)"><circle r="28" fill="#4A2050" opacity="0.85"/><ellipse rx="16" ry="10" fill="white" opacity="0.9"/><circle r="6" fill="#4878B8"/><circle r="3.5" fill="#1a1a1e"/></g></svg>
+      </div>
+    </div>
+    <div class="bg-group">
+      <span class="label">Light</span>
+      <div class="bg-strip light">
+        <svg width="32" height="32" viewBox="0 0 256 256" fill="none"><rect width="256" height="256" rx="52" fill="#4878B8"/><ellipse cx="72" cy="210" rx="56" ry="44" transform="rotate(-15 72 210)" fill="#4A2050"/><rect x="60" y="28" width="136" height="176" rx="10" fill="white" opacity="0.93"/><rect x="80" y="50" width="70" height="12" rx="3" fill="#4878B8" opacity="0.65"/><rect x="80" y="86" width="96" height="7" rx="2" fill="#4878B8" opacity="0.28"/><rect x="80" y="102" width="78" height="7" rx="2" fill="#4878B8" opacity="0.2"/><rect x="131" y="164" width="3" height="16" rx="1" fill="#4878B8" opacity="0.8"/></svg>
+        <svg width="32" height="32" viewBox="0 0 256 256" fill="none"><rect width="256" height="256" rx="52" fill="#4878B8"/><ellipse cx="72" cy="210" rx="56" ry="44" transform="rotate(-15 72 210)" fill="#4A2050"/><rect x="60" y="28" width="136" height="176" rx="10" fill="white" opacity="0.93"/><rect x="80" y="50" width="70" height="12" rx="3" fill="#4878B8" opacity="0.65"/><rect x="80" y="86" width="96" height="7" rx="2" fill="#4878B8" opacity="0.28"/><rect x="80" y="102" width="78" height="7" rx="2" fill="#4878B8" opacity="0.2"/><g transform="translate(200,52)"><circle r="28" fill="#4A2050" opacity="0.85"/><ellipse rx="16" ry="10" fill="white" opacity="0.9"/><circle r="6" fill="#4878B8"/><circle r="3.5" fill="#1a1a1e"/></g></svg>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════ -->
+<!-- CONCEPT C: Same bg color, differentiated by symbol -->
+<!-- ═══════════════════════════════════════════════════ -->
+<div class="concept">
+  <h2>Concept C &mdash; Raisin + bold markdown "#"</h2>
+  <p class="desc">
+    Blue background matching StockRaisin2. The raisin merges with a large "#" symbol.
+    Both apps share the same base; Editor adds a pen, Viewer adds an eye.
+    Closest to the bold/simple feel of StockRaisin2's arrow.
+  </p>
+  <div class="icon-row">
+    <div class="icon-group">
+      <h3>Editor</h3>
+      <div class="sizes">
+        <div class="size-cell">
+          <svg width="256" height="256" viewBox="0 0 256 256" fill="none">
+            <rect width="256" height="256" rx="52" fill="#4878B8"/>
+            <rect width="256" height="256" rx="52" fill="url(#c1)" opacity="0.12"/>
+            <!-- Raisin -->
+            <ellipse cx="128" cy="148" rx="64" ry="52" transform="rotate(-10 128 148)" fill="#4A2050"/>
+            <ellipse cx="128" cy="148" rx="64" ry="52" transform="rotate(-10 128 148)" fill="url(#c2)" opacity="0.25"/>
+            <path d="M88 130 Q105 140 92 162" stroke="#6B3570" stroke-width="3.5" fill="none" stroke-linecap="round"/>
+            <path d="M108 124 Q122 136 112 158" stroke="#6B3570" stroke-width="3" fill="none" stroke-linecap="round"/>
+            <path d="M130 122 Q142 136 134 158" stroke="#6B3570" stroke-width="3" fill="none" stroke-linecap="round"/>
+            <path d="M150 126 Q160 138 154 155" stroke="#6B3570" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+            <!-- Bold # overlaid -->
+            <g transform="translate(128,128)">
+              <rect x="-50" y="-12" width="100" height="13" rx="3" fill="white" opacity="0.85"/>
+              <rect x="-50" y="10" width="100" height="13" rx="3" fill="white" opacity="0.85"/>
+              <rect x="-22" y="-46" width="13" height="92" rx="3" fill="white" opacity="0.85" transform="rotate(-10 -15 0)"/>
+              <rect x="9" y="-46" width="13" height="92" rx="3" fill="white" opacity="0.85" transform="rotate(-10 16 0)"/>
+            </g>
+            <!-- Pen accent bottom-right -->
+            <g transform="translate(210,210) rotate(-45)">
+              <rect x="-6" y="-22" width="12" height="32" rx="2.5" fill="white" opacity="0.85"/>
+              <polygon points="-6,10 6,10 0,20" fill="white" opacity="0.85"/>
+              <rect x="-6" y="-22" width="12" height="6" rx="1.5" fill="#4878B8" opacity="0.7"/>
+            </g>
+            <defs>
+              <linearGradient id="c1" x1="0" y1="0" x2="256" y2="256"><stop stop-color="white"/><stop offset="1" stop-color="transparent"/></linearGradient>
+              <linearGradient id="c2" x1="80" y1="110" x2="170" y2="190"><stop stop-color="#6B3570"/><stop offset="1" stop-color="transparent"/></linearGradient>
+            </defs>
+          </svg>
+          <span>256</span>
+        </div>
+        <div class="size-cell">
+          <svg width="64" height="64" viewBox="0 0 256 256" fill="none">
+            <rect width="256" height="256" rx="52" fill="#4878B8"/>
+            <ellipse cx="128" cy="148" rx="64" ry="52" transform="rotate(-10 128 148)" fill="#4A2050"/>
+            <path d="M88 130 Q105 140 92 162" stroke="#6B3570" stroke-width="3.5" fill="none" stroke-linecap="round"/>
+            <path d="M108 124 Q122 136 112 158" stroke="#6B3570" stroke-width="3" fill="none" stroke-linecap="round"/>
+            <path d="M130 122 Q142 136 134 158" stroke="#6B3570" stroke-width="3" fill="none" stroke-linecap="round"/>
+            <g transform="translate(128,128)">
+              <rect x="-50" y="-12" width="100" height="13" rx="3" fill="white" opacity="0.85"/>
+              <rect x="-50" y="10" width="100" height="13" rx="3" fill="white" opacity="0.85"/>
+              <rect x="-22" y="-46" width="13" height="92" rx="3" fill="white" opacity="0.85" transform="rotate(-10 -15 0)"/>
+              <rect x="9" y="-46" width="13" height="92" rx="3" fill="white" opacity="0.85" transform="rotate(-10 16 0)"/>
+            </g>
+            <g transform="translate(210,210) rotate(-45)">
+              <rect x="-6" y="-22" width="12" height="32" rx="2.5" fill="white" opacity="0.85"/>
+              <polygon points="-6,10 6,10 0,20" fill="white" opacity="0.85"/>
+              <rect x="-6" y="-22" width="12" height="6" rx="1.5" fill="#4878B8" opacity="0.7"/>
+            </g>
+          </svg>
+          <span>64</span>
+        </div>
+        <div class="size-cell">
+          <svg width="32" height="32" viewBox="0 0 256 256" fill="none">
+            <rect width="256" height="256" rx="52" fill="#4878B8"/>
+            <ellipse cx="128" cy="148" rx="64" ry="52" transform="rotate(-10 128 148)" fill="#4A2050"/>
+            <g transform="translate(128,128)">
+              <rect x="-50" y="-12" width="100" height="13" rx="3" fill="white" opacity="0.85"/>
+              <rect x="-50" y="10" width="100" height="13" rx="3" fill="white" opacity="0.85"/>
+              <rect x="-22" y="-46" width="13" height="92" rx="3" fill="white" opacity="0.85" transform="rotate(-10 -15 0)"/>
+              <rect x="9" y="-46" width="13" height="92" rx="3" fill="white" opacity="0.85" transform="rotate(-10 16 0)"/>
+            </g>
+            <g transform="translate(210,210) rotate(-45)">
+              <rect x="-6" y="-22" width="12" height="32" rx="2.5" fill="white" opacity="0.85"/>
+              <polygon points="-6,10 6,10 0,20" fill="white" opacity="0.85"/>
+            </g>
+          </svg>
+          <span>32</span>
+        </div>
+        <div class="size-cell">
+          <svg width="16" height="16" viewBox="0 0 256 256" fill="none">
+            <rect width="256" height="256" rx="52" fill="#4878B8"/>
+            <ellipse cx="128" cy="148" rx="64" ry="52" transform="rotate(-10 128 148)" fill="#4A2050"/>
+            <g transform="translate(128,128)">
+              <rect x="-50" y="-12" width="100" height="13" rx="3" fill="white" opacity="0.85"/>
+              <rect x="-50" y="10" width="100" height="13" rx="3" fill="white" opacity="0.85"/>
+              <rect x="-22" y="-46" width="13" height="92" rx="3" fill="white" opacity="0.85" transform="rotate(-10 -15 0)"/>
+              <rect x="9" y="-46" width="13" height="92" rx="3" fill="white" opacity="0.85" transform="rotate(-10 16 0)"/>
+            </g>
+          </svg>
+          <span>16</span>
+        </div>
+      </div>
+    </div>
+    <!-- Viewer -->
+    <div class="icon-group">
+      <h3>Viewer</h3>
+      <div class="sizes">
+        <div class="size-cell">
+          <svg width="256" height="256" viewBox="0 0 256 256" fill="none">
+            <rect width="256" height="256" rx="52" fill="#4878B8"/>
+            <rect width="256" height="256" rx="52" fill="url(#c3)" opacity="0.12"/>
+            <ellipse cx="128" cy="148" rx="64" ry="52" transform="rotate(-10 128 148)" fill="#4A2050"/>
+            <ellipse cx="128" cy="148" rx="64" ry="52" transform="rotate(-10 128 148)" fill="url(#c4)" opacity="0.25"/>
+            <path d="M88 130 Q105 140 92 162" stroke="#6B3570" stroke-width="3.5" fill="none" stroke-linecap="round"/>
+            <path d="M108 124 Q122 136 112 158" stroke="#6B3570" stroke-width="3" fill="none" stroke-linecap="round"/>
+            <path d="M130 122 Q142 136 134 158" stroke="#6B3570" stroke-width="3" fill="none" stroke-linecap="round"/>
+            <path d="M150 126 Q160 138 154 155" stroke="#6B3570" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+            <g transform="translate(128,128)">
+              <rect x="-50" y="-12" width="100" height="13" rx="3" fill="white" opacity="0.85"/>
+              <rect x="-50" y="10" width="100" height="13" rx="3" fill="white" opacity="0.85"/>
+              <rect x="-22" y="-46" width="13" height="92" rx="3" fill="white" opacity="0.85" transform="rotate(-10 -15 0)"/>
+              <rect x="9" y="-46" width="13" height="92" rx="3" fill="white" opacity="0.85" transform="rotate(-10 16 0)"/>
+            </g>
+            <!-- Eye accent bottom-right -->
+            <g transform="translate(210,210)">
+              <circle r="28" fill="#4A2050" opacity="0.85"/>
+              <ellipse rx="16" ry="10" fill="white" opacity="0.9"/>
+              <circle r="6" fill="#4878B8"/>
+              <circle r="3.5" fill="#1a1a1e"/>
+              <circle cx="-1.5" cy="-1.5" r="1.5" fill="rgba(255,255,255,0.7)"/>
+            </g>
+            <defs>
+              <linearGradient id="c3" x1="0" y1="0" x2="256" y2="256"><stop stop-color="white"/><stop offset="1" stop-color="transparent"/></linearGradient>
+              <linearGradient id="c4" x1="80" y1="110" x2="170" y2="190"><stop stop-color="#6B3570"/><stop offset="1" stop-color="transparent"/></linearGradient>
+            </defs>
+          </svg>
+          <span>256</span>
+        </div>
+        <div class="size-cell">
+          <svg width="64" height="64" viewBox="0 0 256 256" fill="none">
+            <rect width="256" height="256" rx="52" fill="#4878B8"/>
+            <ellipse cx="128" cy="148" rx="64" ry="52" transform="rotate(-10 128 148)" fill="#4A2050"/>
+            <path d="M88 130 Q105 140 92 162" stroke="#6B3570" stroke-width="3.5" fill="none" stroke-linecap="round"/>
+            <path d="M108 124 Q122 136 112 158" stroke="#6B3570" stroke-width="3" fill="none" stroke-linecap="round"/>
+            <path d="M130 122 Q142 136 134 158" stroke="#6B3570" stroke-width="3" fill="none" stroke-linecap="round"/>
+            <g transform="translate(128,128)">
+              <rect x="-50" y="-12" width="100" height="13" rx="3" fill="white" opacity="0.85"/>
+              <rect x="-50" y="10" width="100" height="13" rx="3" fill="white" opacity="0.85"/>
+              <rect x="-22" y="-46" width="13" height="92" rx="3" fill="white" opacity="0.85" transform="rotate(-10 -15 0)"/>
+              <rect x="9" y="-46" width="13" height="92" rx="3" fill="white" opacity="0.85" transform="rotate(-10 16 0)"/>
+            </g>
+            <g transform="translate(210,210)">
+              <circle r="28" fill="#4A2050" opacity="0.85"/>
+              <ellipse rx="16" ry="10" fill="white" opacity="0.9"/>
+              <circle r="6" fill="#4878B8"/>
+              <circle r="3.5" fill="#1a1a1e"/>
+            </g>
+          </svg>
+          <span>64</span>
+        </div>
+        <div class="size-cell">
+          <svg width="32" height="32" viewBox="0 0 256 256" fill="none">
+            <rect width="256" height="256" rx="52" fill="#4878B8"/>
+            <ellipse cx="128" cy="148" rx="64" ry="52" transform="rotate(-10 128 148)" fill="#4A2050"/>
+            <g transform="translate(128,128)">
+              <rect x="-50" y="-12" width="100" height="13" rx="3" fill="white" opacity="0.85"/>
+              <rect x="-50" y="10" width="100" height="13" rx="3" fill="white" opacity="0.85"/>
+              <rect x="-22" y="-46" width="13" height="92" rx="3" fill="white" opacity="0.85" transform="rotate(-10 -15 0)"/>
+              <rect x="9" y="-46" width="13" height="92" rx="3" fill="white" opacity="0.85" transform="rotate(-10 16 0)"/>
+            </g>
+            <g transform="translate(210,210)">
+              <circle r="28" fill="#4A2050" opacity="0.85"/>
+              <ellipse rx="16" ry="10" fill="white" opacity="0.9"/>
+              <circle r="6" fill="#4878B8"/>
+              <circle r="3.5" fill="#1a1a1e"/>
+            </g>
+          </svg>
+          <span>32</span>
+        </div>
+        <div class="size-cell">
+          <svg width="16" height="16" viewBox="0 0 256 256" fill="none">
+            <rect width="256" height="256" rx="52" fill="#4878B8"/>
+            <ellipse cx="128" cy="148" rx="64" ry="52" transform="rotate(-10 128 148)" fill="#4A2050"/>
+            <g transform="translate(128,128)">
+              <rect x="-50" y="-12" width="100" height="13" rx="3" fill="white" opacity="0.85"/>
+              <rect x="-50" y="10" width="100" height="13" rx="3" fill="white" opacity="0.85"/>
+              <rect x="-22" y="-46" width="13" height="92" rx="3" fill="white" opacity="0.85" transform="rotate(-10 -15 0)"/>
+              <rect x="9" y="-46" width="13" height="92" rx="3" fill="white" opacity="0.85" transform="rotate(-10 16 0)"/>
+            </g>
+          </svg>
+          <span>16</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="bg-row">
+    <div class="bg-group">
+      <span class="label">Dark taskbar</span>
+      <div class="bg-strip dark">
+        <svg width="32" height="32" viewBox="0 0 256 256" fill="none"><rect width="256" height="256" rx="52" fill="#4878B8"/><ellipse cx="128" cy="148" rx="64" ry="52" transform="rotate(-10 128 148)" fill="#4A2050"/><g transform="translate(128,128)"><rect x="-50" y="-12" width="100" height="13" rx="3" fill="white" opacity="0.85"/><rect x="-50" y="10" width="100" height="13" rx="3" fill="white" opacity="0.85"/><rect x="-22" y="-46" width="13" height="92" rx="3" fill="white" opacity="0.85" transform="rotate(-10 -15 0)"/><rect x="9" y="-46" width="13" height="92" rx="3" fill="white" opacity="0.85" transform="rotate(-10 16 0)"/></g><g transform="translate(210,210) rotate(-45)"><rect x="-6" y="-22" width="12" height="32" rx="2.5" fill="white" opacity="0.85"/><polygon points="-6,10 6,10 0,20" fill="white" opacity="0.85"/></g></svg>
+        <svg width="32" height="32" viewBox="0 0 256 256" fill="none"><rect width="256" height="256" rx="52" fill="#4878B8"/><ellipse cx="128" cy="148" rx="64" ry="52" transform="rotate(-10 128 148)" fill="#4A2050"/><g transform="translate(128,128)"><rect x="-50" y="-12" width="100" height="13" rx="3" fill="white" opacity="0.85"/><rect x="-50" y="10" width="100" height="13" rx="3" fill="white" opacity="0.85"/><rect x="-22" y="-46" width="13" height="92" rx="3" fill="white" opacity="0.85" transform="rotate(-10 -15 0)"/><rect x="9" y="-46" width="13" height="92" rx="3" fill="white" opacity="0.85" transform="rotate(-10 16 0)"/></g><g transform="translate(210,210)"><circle r="28" fill="#4A2050" opacity="0.85"/><ellipse rx="16" ry="10" fill="white" opacity="0.9"/><circle r="6" fill="#4878B8"/><circle r="3.5" fill="#1a1a1e"/></g></svg>
+      </div>
+    </div>
+    <div class="bg-group">
+      <span class="label">Light</span>
+      <div class="bg-strip light">
+        <svg width="32" height="32" viewBox="0 0 256 256" fill="none"><rect width="256" height="256" rx="52" fill="#4878B8"/><ellipse cx="128" cy="148" rx="64" ry="52" transform="rotate(-10 128 148)" fill="#4A2050"/><g transform="translate(128,128)"><rect x="-50" y="-12" width="100" height="13" rx="3" fill="white" opacity="0.85"/><rect x="-50" y="10" width="100" height="13" rx="3" fill="white" opacity="0.85"/><rect x="-22" y="-46" width="13" height="92" rx="3" fill="white" opacity="0.85" transform="rotate(-10 -15 0)"/><rect x="9" y="-46" width="13" height="92" rx="3" fill="white" opacity="0.85" transform="rotate(-10 16 0)"/></g><g transform="translate(210,210) rotate(-45)"><rect x="-6" y="-22" width="12" height="32" rx="2.5" fill="white" opacity="0.85"/><polygon points="-6,10 6,10 0,20" fill="white" opacity="0.85"/></g></svg>
+        <svg width="32" height="32" viewBox="0 0 256 256" fill="none"><rect width="256" height="256" rx="52" fill="#4878B8"/><ellipse cx="128" cy="148" rx="64" ry="52" transform="rotate(-10 128 148)" fill="#4A2050"/><g transform="translate(128,128)"><rect x="-50" y="-12" width="100" height="13" rx="3" fill="white" opacity="0.85"/><rect x="-50" y="10" width="100" height="13" rx="3" fill="white" opacity="0.85"/><rect x="-22" y="-46" width="13" height="92" rx="3" fill="white" opacity="0.85" transform="rotate(-10 -15 0)"/><rect x="9" y="-46" width="13" height="92" rx="3" fill="white" opacity="0.85" transform="rotate(-10 16 0)"/></g><g transform="translate(210,210)"><circle r="28" fill="#4A2050" opacity="0.85"/><ellipse rx="16" ry="10" fill="white" opacity="0.9"/><circle r="6" fill="#4878B8"/><circle r="3.5" fill="#1a1a1e"/></g></svg>
+      </div>
+    </div>
+  </div>
+</div>

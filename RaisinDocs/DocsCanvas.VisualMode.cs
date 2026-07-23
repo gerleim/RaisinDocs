@@ -1541,7 +1541,7 @@ public partial class DocsCanvas
     private double DrawOrderedListNumber(DrawingContext dc, double x, double screenY,
         string replacementPrefix, double fontSize, int nestingLevel)
     {
-        double totalIndent = TextMeasurer.ListIndent * (nestingLevel + 1);
+        double totalIndent = _measure.ListIndent * (nestingLevel + 1);
         string trimmed = replacementPrefix.TrimStart();
         string numberText = trimmed.TrimEnd();
         var ft = new FormattedText(numberText, CultureInfo.InvariantCulture,

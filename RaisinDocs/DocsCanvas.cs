@@ -1530,7 +1530,7 @@ public partial class DocsCanvas : FrameworkElement
                                 else if (parsed.Kind == BlockKind.UnorderedListItem)
                                 {
                                     double nestOff = _measure.MeasureReplacementPrefix(map.ReplacementPrefix!, map.PrefixMeasureKind)
-                                        - TextMeasurer.ListIndent;
+                                        - _measure.ListIndent;
                                     textX += DrawListBullet(dc, _padding, lineY - effectiveScroll,
                                         parsed.Kind, parsed.ListNestingLevel, nestOff);
                                 }
