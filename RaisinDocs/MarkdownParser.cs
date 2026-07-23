@@ -811,13 +811,9 @@ public static class MarkdownParser
                     if (innerKind is BlockKind.UnorderedListItem or BlockKind.OrderedListItem
                         or BlockKind.TaskListItemUnchecked or BlockKind.TaskListItemChecked)
                     {
-                        int innerLeading = 0;
                         var (innerChars, innerCols) = MeasureLeadingWhitespace(stripped);
-                        innerLeading = innerChars;
-                        int totalLeading = chars + innerLeading;
-                        int totalCols = cols + innerCols;
-                        string afterLeading = innerLeading > 0 ? stripped[innerLeading..] : stripped;
-                        int contentCol = totalCols + GetContentColumnForMarker(innerKind, afterLeading);
+                        int totalLeading = chars + innerChars;
+                        int contentCol = cols + GetContentColumn(innerKind, stripped, innerChars, innerCols);
 
                         while (stack.Count > 0 && stack[^1] > cols)
                             stack.RemoveAt(stack.Count - 1);
@@ -891,19 +887,6 @@ public static class MarkdownParser
         if (GetOrderedListPrefixLength(text) > 0)
             return BlockKind.OrderedListItem;
         return BlockKind.Paragraph;
-    }
-
-    private static int GetContentColumnForMarker(BlockKind kind, string textAfterLeading)
-    {
-        int markerWidth = kind switch
-        {
-            BlockKind.UnorderedListItem
-                or BlockKind.TaskListItemUnchecked
-                or BlockKind.TaskListItemChecked => 2,
-            BlockKind.OrderedListItem => GetOrderedListPrefixLength(textAfterLeading),
-            _ => 0,
-        };
-        return markerWidth;
     }
 
     private static void DetectContinuations(List<ParsedBlock> blocks, Func<int, string> getBlockText)

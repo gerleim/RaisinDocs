@@ -191,13 +191,14 @@ For every `Paragraph` block, an inner loop walks backward through all preceding 
 
 **Fix:** Track `containerInRun` incrementally in the forward loop — reset on blank/non-paragraph/non-container, set on container block, carry forward through paragraphs. Inner loop removed.
 
-### M2 — `GetContentColumnForMarker` hardcodes marker widths
+### ~~M2 — `GetContentColumnForMarker` hardcodes marker widths~~
 - **File:** `MarkdownParser.cs:895–906` vs correct `GetContentColumn` at `1214–1246`
 - **Severity:** Low
+- **Status:** [x] Fixed
 
 `GetContentColumnForMarker` hardcodes marker width as 2 for unordered items instead of scanning actual trailing whitespace (as `GetContentColumn` does). Lists with extra indentation after the marker get the wrong content column in nested-list detection.
 
-**Fix:** Share the whitespace-scanning logic from `GetContentColumn`.
+**Fix:** Replaced `GetContentColumnForMarker` call with `GetContentColumn` and removed the now-unused method.
 
 ### M3 — `DetectListNesting` drops theme dictionary
 - **File:** `MarkdownParser.cs:781–782, 825`
