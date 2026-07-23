@@ -678,22 +678,22 @@ public static class MarkdownParser
 
     private static void DetectSetextHeadings(List<ParsedBlock> blocks, Func<int, string> getBlockText)
     {
+        bool containerInRun = false;
         for (int i = 0; i < blocks.Count - 1; i++)
         {
-            if (blocks[i].Kind != BlockKind.Paragraph || getBlockText(i).Length == 0)
-                continue;
+            var kind = blocks[i].Kind;
+            var text = getBlockText(i);
 
-            bool inContainerScope = false;
-            for (int k = i - 1; k >= 0; k--)
+            if (kind != BlockKind.Paragraph || text.Length == 0)
             {
-                if (string.IsNullOrWhiteSpace(getBlockText(k)))
-                    break;
-                if (IsContainerBlock(blocks[k].Kind))
-                { inContainerScope = true; break; }
-                if (blocks[k].Kind != BlockKind.Paragraph)
-                    break;
+                if (string.IsNullOrWhiteSpace(text) || !IsContainerBlock(kind))
+                    containerInRun = false;
+                else
+                    containerInRun = true;
+                continue;
             }
-            if (inContainerScope)
+
+            if (containerInRun)
                 continue;
 
             var nextKind = blocks[i + 1].Kind;
@@ -711,6 +711,7 @@ public static class MarkdownParser
 
             blocks[i] = blocks[i] with { Kind = headingKind.Value };
             blocks[i + 1] = blocks[i + 1] with { Kind = BlockKind.SetextUnderline };
+            containerInRun = false;
             i++;
         }
     }

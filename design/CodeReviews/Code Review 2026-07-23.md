@@ -182,13 +182,14 @@ Used to build `<img>` `alt` text. Every `*` and `_` character is unconditionally
 
 **Fix:** Parse emphasis markers via `ParseInlineContent`, build a set of delimiter positions, and only skip `*`/`_` at those positions.
 
-### M1 — O(n²) backward scan in `DetectSetextHeadings`
+### ~~M1 — O(n²) backward scan in `DetectSetextHeadings`~~
 - **File:** `MarkdownParser.cs:686–697`
 - **Severity:** Low (performance)
+- **Status:** [x] Fixed
 
 For every `Paragraph` block, an inner loop walks backward through all preceding blocks to determine `inContainerScope`. A long unbroken paragraph spanning N consecutive lines makes this O(N²).
 
-**Fix:** Track `inContainerScope` incrementally in the forward loop.
+**Fix:** Track `containerInRun` incrementally in the forward loop — reset on blank/non-paragraph/non-container, set on container block, carry forward through paragraphs. Inner loop removed.
 
 ### M2 — `GetContentColumnForMarker` hardcodes marker widths
 - **File:** `MarkdownParser.cs:895–906` vs correct `GetContentColumn` at `1214–1246`
