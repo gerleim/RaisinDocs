@@ -56,6 +56,15 @@ The Viewer's equivalent code (`Viewer/MainWindow.xaml.cs:113–131`) correctly w
 
 **Fix:** Add `catch (Exception)` with logging, matching the Viewer pattern.
 
+### ~~I2b — FileChangeWatcher misses atomic file replacements~~
+- **File:** `FileChangeWatcher.cs`
+- **Severity:** High
+- **Status:** [x] Fixed
+
+`FileSystemWatcher` cannot detect `File.Move` with overwrite on Windows — a known NTFS/kernel limitation (`ReadDirectoryChangesW` does not decompose atomic rename-replace into separate events for the target filename). Tools that use atomic writes (write temp → rename over original) — including Claude Code and many editors — are invisible to FSW.
+
+**Fix:** Add a 1.5s polling timer that checks `File.GetLastWriteTimeUtc`. FSW still provides instant detection for normal writes; the poll catches atomic replacements. This is the hybrid approach used by VS Code and JetBrains IDEs.
+
 ### ~~I3 — SaveToFile triggers own-write detection~~
 - **File:** `RaisinDocs.Editor/MainWindow.xaml.cs:475–484`
 - **Severity:** Medium
