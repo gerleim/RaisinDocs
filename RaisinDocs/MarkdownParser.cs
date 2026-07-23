@@ -3189,6 +3189,13 @@ public static class MarkdownParser
             if (IsInSkipRange(start, i - start, skipRanges))
                 continue;
 
+            while (start < i && text[start] is '\'' or '’')
+                start++;
+            while (i > start && text[i - 1] is '\'' or '’')
+                i--;
+            if (start >= i)
+                continue;
+
             var word = text[start..i];
 
             if (ShouldSkipWord(word))

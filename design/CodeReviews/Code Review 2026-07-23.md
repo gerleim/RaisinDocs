@@ -209,13 +209,14 @@ When an `IndentedCodeLine` is reclassified as a nested list item, `ParseInlineCo
 
 **Fix:** Added `theme` parameter to `DetectListNesting` and passed it through to `ParseInlineColorTags`.
 
-### M4 — Spell check word extraction includes leading/trailing quotes
+### ~~M4 — Spell check word extraction includes leading/trailing quotes~~
 - **File:** `MarkdownParser.cs:3291–3292`
 - **Severity:** Low
+- **Status:** [x] Fixed
 
 `IsWordChar` treats `'`/`'` as word characters unconditionally. For `'hello'` (single-quoted word), the extracted token is `'hello'` (8 chars including quotes), which fails dictionary lookup — producing a spurious misspelling squiggle on correctly-spelled words.
 
-**Fix:** Only treat `'`/`'` as a word character when interior to a word (preceded and followed by a letter/digit).
+**Fix:** Trim leading/trailing `'`/`'` from extracted words before dictionary lookup, adjusting the offset accordingly.
 
 ### H7 — `&& false` dead code in `ExpandTabs`
 - **File:** `HtmlEmitter.cs:121`
