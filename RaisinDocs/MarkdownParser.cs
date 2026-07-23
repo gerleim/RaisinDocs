@@ -1270,7 +1270,9 @@ public static class MarkdownParser
         if (i == 0 || i > 9) return 0;
         if (i < text.Length && text[i] is '.' or ')')
         {
-            if (i + 1 >= text.Length || text[i + 1] == ' ')
+            if (i + 1 >= text.Length)
+                return i + 1;
+            if (text[i + 1] == ' ')
                 return i + 2;
         }
         return 0;
