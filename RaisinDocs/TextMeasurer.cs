@@ -14,7 +14,8 @@ internal class TextMeasurer
     private static readonly double[] _headingFontSizes = [32, 26, 22, 18, 16, 14];
     internal const double BaseFontSize = 16;
     private const double _codeFontSize = 14;
-    internal const double ListIndent = 20;
+    private const double _baseListIndent = 20;
+    internal double ListIndent => _baseListIndent * ZoomFactor;
 
     internal double ZoomFactor { get; private set; } = 1.0;
 
@@ -23,6 +24,7 @@ internal class TextMeasurer
         ZoomFactor = factor;
         _charWidthCache.Clear();
         _lineHeights.Clear();
+        _baselines.Clear();
         _measured = false;
     }
 
@@ -37,6 +39,7 @@ internal class TextMeasurer
     private GlyphTypeface? _monoGlyph;
     private readonly Dictionary<(char, int), double> _charWidthCache = new();
     private readonly Dictionary<BlockKind, double> _lineHeights = new();
+    private readonly Dictionary<BlockKind, double> _baselines = new();
 
     internal void EnsureMeasured(Visual visual)
     {
@@ -57,6 +60,7 @@ internal class TextMeasurer
                 FlowDirection.LeftToRight, GetBlockBaseTypeface(kind), fontSize,
                 Brushes.Black, _dpiScale);
             _lineHeights[kind] = ft.Height;
+            _baselines[kind] = ft.Baseline;
         }
 
         _measured = true;
@@ -138,6 +142,13 @@ internal class TextMeasurer
         return _lineHeights.TryGetValue(kind, out double h) ? h : _lineHeights[BlockKind.Paragraph];
     }
 
+    internal double GetBaseline(BlockKind kind)
+    {
+        return _baselines.TryGetValue(kind, out double b) ? b : _baselines[BlockKind.Paragraph];
+    }
+
+    internal double CapsHeightRatio => _normalGlyph?.CapsHeight ?? 0.7;
+
     internal double MeasureCharWidth(char ch, BlockKind blockKind, InlineStyle style)
     {
         int key = GetStyleKey(blockKind, style);
@@ -183,21 +194,23 @@ internal class TextMeasurer
 
     internal double MeasureReplacementPrefix(string prefix, BlockKind blockKind)
     {
-        if (blockKind is BlockKind.TaskListItemUnchecked or BlockKind.TaskListItemChecked)
+        if (blockKind is BlockKind.TaskListItemUnchecked or BlockKind.TaskListItemChecked
+            or BlockKind.UnorderedListItem or BlockKind.OrderedListItem)
         {
-            int nestingSpaces = 0;
-            while (nestingSpaces < prefix.Length && prefix[nestingSpaces] == ' '
-                   && nestingSpaces < prefix.Length - 4)
-                nestingSpaces++;
-            nestingSpaces = Math.Max(0, nestingSpaces - 2);
-            double extra = 0;
-            for (int i = 0; i < nestingSpaces; i++)
-                extra += MeasureCharWidth(' ', blockKind, InlineStyle.Normal);
-            return ListIndent + extra;
+            int nestingLevel = GetNestingLevelFromPrefix(prefix);
+            return ListIndent * (nestingLevel + 1);
         }
         double total = 0;
         for (int i = 0; i < prefix.Length; i++)
             total += MeasureCharWidth(prefix[i], blockKind, InlineStyle.Normal);
         return total;
+    }
+
+    internal static int GetNestingLevelFromPrefix(string prefix)
+    {
+        int leadingSpaces = 0;
+        while (leadingSpaces < prefix.Length && prefix[leadingSpaces] == ' ')
+            leadingSpaces++;
+        return Math.Max(0, (leadingSpaces - 2) / BlockVisualMap.SpacesPerNestingLevel);
     }
 }

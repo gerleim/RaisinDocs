@@ -502,7 +502,7 @@ partial class DocsCanvas
                             if (parsed.Kind is BlockKind.TaskListItemUnchecked or BlockKind.TaskListItemChecked)
                             {
                                 double nestOff = _canvas._measure.MeasureReplacementPrefix(
-                                    map.ReplacementPrefix, map.PrefixMeasureKind) - TextMeasurer.ListIndent;
+                                    map.ReplacementPrefix, map.PrefixMeasureKind) - _canvas._measure.ListIndent;
                                 textX += _canvas.DrawTaskListCheckbox(dc,
                                     parsed.Kind == BlockKind.TaskListItemChecked,
                                     _padding, lineY - effectiveScroll, parsed.Kind, nestOff);
@@ -510,7 +510,7 @@ partial class DocsCanvas
                             else if (parsed.Kind == BlockKind.UnorderedListItem)
                             {
                                 double nestOff = _canvas._measure.MeasureReplacementPrefix(
-                                    map.ReplacementPrefix, map.PrefixMeasureKind) - TextMeasurer.ListIndent;
+                                    map.ReplacementPrefix, map.PrefixMeasureKind) - _canvas._measure.ListIndent;
                                 textX += _canvas.DrawListBullet(dc, _padding, lineY - effectiveScroll,
                                     parsed.Kind, parsed.ListNestingLevel, nestOff);
                             }

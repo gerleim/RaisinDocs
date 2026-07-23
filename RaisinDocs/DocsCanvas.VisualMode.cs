@@ -88,7 +88,7 @@ public partial class DocsCanvas
 
         double nestOff = parsed.ListNestingLevel * BlockVisualMap.SpacesPerNestingLevel
             * _measure.MeasureCharWidth(' ', parsed.Kind, InlineStyle.Normal);
-        if (pos.X > _padding + nestOff + TextMeasurer.ListIndent)
+        if (pos.X > _padding + nestOff + _measure.ListIndent)
             return false;
 
         SealAndStopTimer();
@@ -1415,14 +1415,14 @@ public partial class DocsCanvas
             if (parsed.Kind is BlockKind.TaskListItemUnchecked or BlockKind.TaskListItemChecked)
             {
                 double nestOff = _measure.MeasureReplacementPrefix(map.ReplacementPrefix, map.PrefixMeasureKind)
-                    - TextMeasurer.ListIndent;
+                    - _measure.ListIndent;
                 x += DrawTaskListCheckbox(dc, parsed.Kind == BlockKind.TaskListItemChecked,
                     _padding, screenY, parsed.Kind, nestOff);
             }
             else if (parsed.Kind == BlockKind.UnorderedListItem)
             {
                 double nestOff = _measure.MeasureReplacementPrefix(map.ReplacementPrefix, map.PrefixMeasureKind)
-                    - TextMeasurer.ListIndent;
+                    - _measure.ListIndent;
                 x += DrawListBullet(dc, _padding, screenY,
                     parsed.Kind, parsed.ListNestingLevel, nestOff);
             }
@@ -1477,7 +1477,7 @@ public partial class DocsCanvas
         double lineH = _measure.GetLineHeight(blockKind);
         double boxSize = Math.Round(lineH * 0.65);
         double yOffset = Math.Round((lineH - boxSize) / 2);
-        double checkboxX = x + nestingOffset + TextMeasurer.ListIndent - boxSize - 4;
+        double checkboxX = x + nestingOffset + _measure.ListIndent - boxSize - 4;
         double checkboxY = screenY + yOffset;
         var rect = new Rect(checkboxX, checkboxY, boxSize, boxSize);
         double radius = 2.5;
@@ -1502,16 +1502,20 @@ public partial class DocsCanvas
             dc.DrawRoundedRectangle(null, pen, rect, radius, radius);
         }
 
-        return TextMeasurer.ListIndent + nestingOffset;
+        return _measure.ListIndent + nestingOffset;
     }
 
     private double DrawListBullet(DrawingContext dc, double x, double screenY,
         BlockKind blockKind, int nestingLevel, double nestingOffset)
     {
         double lineH = _measure.GetLineHeight(blockKind);
-        double bulletSize = Math.Round(lineH * 0.28);
-        double bulletX = x + nestingOffset + TextMeasurer.ListIndent - bulletSize - 4;
-        double bulletY = screenY + Math.Round((lineH - bulletSize) / 2);
+        double baseline = _measure.GetBaseline(blockKind);
+        double fontSize = _measure.GetBlockFontSize(blockKind);
+        double capHeight = fontSize * _measure.CapsHeightRatio;
+        double bulletSize = Math.Round(lineH * 0.32);
+        double bulletX = x + nestingOffset + _measure.ListIndent - bulletSize - 4;
+        double bulletCenterY = screenY + baseline - capHeight / 2;
+        double bulletY = Math.Round(bulletCenterY - bulletSize / 2);
 
         int shape = nestingLevel % 3;
         if (shape == 0)
@@ -1531,7 +1535,21 @@ public partial class DocsCanvas
             dc.DrawRectangle(_palette.Syntax, null, new Rect(bulletX, bulletY, bulletSize, bulletSize));
         }
 
-        return TextMeasurer.ListIndent + nestingOffset;
+        return _measure.ListIndent + nestingOffset;
+    }
+
+    private double DrawOrderedListNumber(DrawingContext dc, double x, double screenY,
+        string replacementPrefix, double fontSize, int nestingLevel)
+    {
+        double totalIndent = TextMeasurer.ListIndent * (nestingLevel + 1);
+        string trimmed = replacementPrefix.TrimStart();
+        string numberText = trimmed.TrimEnd();
+        var ft = new FormattedText(numberText, CultureInfo.InvariantCulture,
+            FlowDirection.LeftToRight, TextMeasurer.NormalTypeface, fontSize,
+            _palette.Syntax, _measure.DpiScale);
+        double numberX = x + totalIndent - ft.WidthIncludingTrailingWhitespace - 4;
+        dc.DrawText(ft, new Point(numberX, screenY));
+        return totalIndent;
     }
 
     private double DrawTextSegment(DrawingContext dc, string blockText,
