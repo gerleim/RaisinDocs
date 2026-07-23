@@ -37,6 +37,18 @@ public partial class DocsCanvas
         InvalidateVisual();
     }
 
+    private void CleanupSpellCheck()
+    {
+        if (_spellCheckTimer != null)
+        {
+            _spellCheckTimer.Stop();
+            _spellCheckTimer.Tick -= SpellCheckTimerTick;
+            _spellCheckTimer = null;
+        }
+        _spellCheckService = null;
+        _blockSpellingErrors = null;
+    }
+
     internal void OnDocumentBasePathChanged()
     {
         if (_spellCheckService is null) return;

@@ -110,9 +110,10 @@ The reload closure captures the `filePath` method parameter (line 124: `File.Rea
 
 **Fix:** Track the actual edited block range (anchor through cursor) and mark all affected blocks dirty.
 
-### C4 — Spell check `DispatcherTimer` never unhooked on teardown
+### ~~C4 — Spell check `DispatcherTimer` never unhooked on teardown~~
 - **File:** `DocsCanvas.SpellCheck.cs:79–95`
 - **Severity:** Medium
+- **Status:** [x] Fixed
 
 Once spell check is enabled, the `_spellCheckTimer` is never permanently stopped or unsubscribed. If a `DocsCanvas` instance is closed (e.g. tab closed in Editor) without explicitly disabling spell check, the timer's `Tick` delegate holds a live reference to the entire `DocsCanvas` and its `Document`, `SpellCheckService`, and Hunspell dictionaries — preventing GC for the app's lifetime, compounding per closed tab.
 

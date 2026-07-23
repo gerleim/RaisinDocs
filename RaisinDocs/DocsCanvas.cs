@@ -674,6 +674,14 @@ public partial class DocsCanvas : FrameworkElement
             if ((bool)e.NewValue) _blinkTimer.Start();
             else _blinkTimer.Stop();
         };
+        Unloaded += (_, _) => OnUnloaded();
+    }
+
+    private void OnUnloaded()
+    {
+        _blinkTimer.Stop();
+        _undoSealTimer.Stop();
+        CleanupSpellCheck();
     }
 
     private void ResetUndoSealTimer()
