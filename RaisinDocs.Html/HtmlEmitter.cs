@@ -382,14 +382,12 @@ public static class HtmlEmitter
                 return RenderBlockquote(sb, blocks, lines, i, options, depth);
 
             case BlockKind.UnorderedListItem:
+            case BlockKind.TaskListItemUnchecked:
+            case BlockKind.TaskListItemChecked:
                 return RenderUnorderedList(sb, blocks, lines, i, options);
 
             case BlockKind.OrderedListItem:
                 return RenderOrderedList(sb, blocks, lines, i, options);
-
-            case BlockKind.TaskListItemUnchecked:
-            case BlockKind.TaskListItemChecked:
-                return RenderTaskList(sb, blocks, lines, i, options);
 
             case BlockKind.TableHeaderRow:
                 return RenderTable(sb, blocks, lines, i, options);
@@ -713,14 +711,13 @@ public static class HtmlEmitter
     static int RenderUnorderedList(StringBuilder sb, List<ParsedBlock> blocks, List<string> lines, int start, HtmlEmitterOptions options)
     {
         char marker = lines[start].TrimStart()[0];
-        int markerIndent = GetListMarkerIndent(lines[start]);
         int contentIndent = GetListContentIndent(lines[start]);
 
         var items = CollectListItems(blocks, lines, start, BlockKind.UnorderedListItem, contentIndent, out int end, out bool isLoose, marker);
 
         sb.Append("<ul>\n");
-        foreach (var item in items)
-            RenderListItem(sb, item, isLoose, options);
+        foreach (var (itemLines, checkboxHtml) in items)
+            RenderListItem(sb, itemLines, isLoose, options, checkboxHtml);
         sb.Append("</ul>\n");
         return end;
     }
@@ -737,31 +734,10 @@ public static class HtmlEmitter
         int contentIndent = GetListContentIndent(lines[start]);
         var items = CollectListItems(blocks, lines, start, BlockKind.OrderedListItem, contentIndent, out int end, out bool isLoose, delimiter: delimiter);
 
-        foreach (var item in items)
-            RenderListItem(sb, item, isLoose, options);
+        foreach (var (itemLines, _) in items)
+            RenderListItem(sb, itemLines, isLoose, options);
         sb.Append("</ol>\n");
         return end;
-    }
-
-    static int RenderTaskList(StringBuilder sb, List<ParsedBlock> blocks, List<string> lines, int start, HtmlEmitterOptions options)
-    {
-        sb.Append("<ul>\n");
-        int i = start;
-        while (i < blocks.Count && (blocks[i].Kind == BlockKind.TaskListItemChecked || blocks[i].Kind == BlockKind.TaskListItemUnchecked))
-        {
-            bool isChecked = blocks[i].Kind == BlockKind.TaskListItemChecked;
-            sb.Append("<li>");
-            sb.Append(isChecked
-                ? "<input checked=\"\" disabled=\"\" type=\"checkbox\"> "
-                : "<input disabled=\"\" type=\"checkbox\"> ");
-            string content = StripTaskListPrefix(lines[i]);
-            var innerBlock = MarkdownParser.ParseInlineContent(content, options.LinkDefinitions);
-            AppendInlineHtml(sb, content, innerBlock, 0, options);
-            sb.Append("</li>\n");
-            i++;
-        }
-        sb.Append("</ul>\n");
-        return i;
     }
 
     static int RenderTable(StringBuilder sb, List<ParsedBlock> blocks, List<string> lines, int start, HtmlEmitterOptions options)
@@ -1386,11 +1362,28 @@ public static class HtmlEmitter
         return i;
     }
 
-    static List<List<string>> CollectListItems(List<ParsedBlock> blocks, List<string> lines, int start,
+    static bool IsMatchingListItem(BlockKind blockKind, BlockKind itemKind)
+    {
+        if (blockKind == itemKind) return true;
+        if (itemKind == BlockKind.UnorderedListItem &&
+            blockKind is BlockKind.TaskListItemChecked or BlockKind.TaskListItemUnchecked)
+            return true;
+        return false;
+    }
+
+    static string? GetCheckboxHtml(BlockKind kind) => kind switch
+    {
+        BlockKind.TaskListItemChecked => "<input checked=\"\" disabled=\"\" type=\"checkbox\"> ",
+        BlockKind.TaskListItemUnchecked => "<input disabled=\"\" type=\"checkbox\"> ",
+        _ => null,
+    };
+
+    static List<(List<string> Lines, string? CheckboxHtml)> CollectListItems(List<ParsedBlock> blocks, List<string> lines, int start,
         BlockKind itemKind, int contentIndent, out int end, out bool isLoose, char marker = '\0', char delimiter = '\0')
     {
-        var items = new List<List<string>>();
+        var items = new List<(List<string>, string?)>();
         var currentItem = new List<string>();
+        string? currentCheckbox = null;
         isLoose = false;
         int i = start;
         bool seenBlank = false;
@@ -1399,7 +1392,7 @@ public static class HtmlEmitter
 
         while (i < blocks.Count)
         {
-            if (blocks[i].Kind == itemKind)
+            if (IsMatchingListItem(blocks[i].Kind, itemKind))
             {
                 int thisMarkerIndent = GetListMarkerIndent(lines[i]);
 
@@ -1455,12 +1448,15 @@ public static class HtmlEmitter
                 if (seenBlank && !consumedAfterBlank) isLoose = true;
                 if (currentItem.Count > 0)
                 {
-                    items.Add(currentItem);
+                    items.Add((currentItem, currentCheckbox));
                     currentItem = new List<string>();
                 }
-                string content = itemKind == BlockKind.OrderedListItem
-                    ? StripOrderedListPrefix(lines[i])
-                    : StripListPrefix(lines[i]);
+                currentCheckbox = GetCheckboxHtml(blocks[i].Kind);
+                string content = blocks[i].Kind is BlockKind.TaskListItemChecked or BlockKind.TaskListItemUnchecked
+                    ? StripTaskListPrefix(lines[i])
+                    : itemKind == BlockKind.OrderedListItem
+                        ? StripOrderedListPrefix(lines[i])
+                        : StripListPrefix(lines[i]);
                 currentItem.Add(content);
                 contentIndent = GetListContentIndent(lines[i]);
                 seenBlank = false;
@@ -1473,8 +1469,9 @@ public static class HtmlEmitter
                 {
                     if (currentItem.Count == 1 && currentItem[0] == "")
                     {
-                        items.Add(currentItem);
+                        items.Add((currentItem, currentCheckbox));
                         currentItem = new List<string>();
+                        currentCheckbox = null;
                         seenBlank = true;
                         consumedAfterBlank = false;
                         i++;
@@ -1513,10 +1510,10 @@ public static class HtmlEmitter
         }
 
         if (currentItem.Count > 0)
-            items.Add(currentItem);
+            items.Add((currentItem, currentCheckbox));
 
         // Trim leading and trailing blank lines from all items
-        foreach (var item in items)
+        foreach (var (item, _) in items)
         {
             while (item.Count > 0 && string.IsNullOrWhiteSpace(item[^1]))
                 item.RemoveAt(item.Count - 1);
@@ -1525,7 +1522,7 @@ public static class HtmlEmitter
         }
         if (!isLoose)
         {
-            foreach (var item in items)
+            foreach (var (item, _) in items)
             {
                 bool seenContent = false;
                 bool pendingBlank = false;
@@ -1574,9 +1571,11 @@ public static class HtmlEmitter
         return items;
     }
 
-    static void RenderListItem(StringBuilder sb, List<string> itemLines, bool isLoose, HtmlEmitterOptions options)
+    static void RenderListItem(StringBuilder sb, List<string> itemLines, bool isLoose, HtmlEmitterOptions options, string? checkboxHtml = null)
     {
         sb.Append("<li>");
+        if (checkboxHtml != null)
+            sb.Append(checkboxHtml);
 
         if (itemLines.Count == 0 || itemLines.All(string.IsNullOrWhiteSpace))
         {

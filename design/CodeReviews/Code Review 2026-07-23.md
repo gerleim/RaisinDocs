@@ -146,9 +146,10 @@ Same root cause as H1: task list item text is parsed with `Parse(_ => content, 1
 
 **Fix:** Same as H1.
 
-### H3 — Mixed task/plain list items produce separate `<ul>` blocks
+### ~~H3 — Mixed task/plain list items produce separate `<ul>` blocks~~
 - **File:** `HtmlEmitter.cs:384–392, 763–785, 1412–1598`
 - **Severity:** Medium
+- **Status:** [x] Fixed
 
 Task list items and plain list items are rendered by completely separate code paths. A list mixing both kinds gets split into multiple sibling `<ul>` elements instead of one continuous list. Task list rendering also has no loose/tight handling.
 
