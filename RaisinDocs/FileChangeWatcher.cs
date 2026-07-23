@@ -17,6 +17,7 @@ public class FileChangeWatcher : IDisposable
     private Timer? _debounceTimer;
     private FileChangeEvent? _pendingEvent;
     private bool _disposed;
+    private bool _suppressed;
     private const int DebounceMs = 500;
 
     public string? CurrentFilePath { get; private set; }
@@ -27,10 +28,11 @@ public class FileChangeWatcher : IDisposable
         _onFileChanged = onFileChanged ?? throw new ArgumentNullException(nameof(onFileChanged));
         _watcher = new FileSystemWatcher
         {
-            NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.Size,
+            NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.Size | NotifyFilters.FileName,
             IncludeSubdirectories = false,
         };
         _watcher.Changed += OnFileSystemChanged;
+        _watcher.Created += OnFileSystemChanged;
         _watcher.Renamed += OnFileRenamed;
     }
 
@@ -57,6 +59,20 @@ public class FileChangeWatcher : IDisposable
         CurrentFilePath = null;
     }
 
+    public void Suppress()
+    {
+        lock (_lock) _suppressed = true;
+    }
+
+    public void Resume()
+    {
+        lock (_lock)
+        {
+            _suppressed = false;
+            _pendingEvent = null;
+        }
+    }
+
     private void OnFileSystemChanged(object sender, FileSystemEventArgs e)
     {
         if (File.Exists(e.FullPath))
@@ -73,6 +89,13 @@ public class FileChangeWatcher : IDisposable
     {
         if (File.Exists(e.FullPath))
         {
+            lock (_lock)
+            {
+                CurrentFilePath = e.FullPath;
+                if (_watcher != null)
+                    _watcher.Filter = Path.GetFileName(e.FullPath);
+            }
+
             ScheduleCallback(new FileChangeEvent
             {
                 FilePath = e.FullPath,
@@ -86,7 +109,7 @@ public class FileChangeWatcher : IDisposable
     {
         lock (_lock)
         {
-            if (_disposed) return;
+            if (_disposed || _suppressed) return;
 
             _pendingEvent = changeEvent;
 
@@ -109,7 +132,7 @@ public class FileChangeWatcher : IDisposable
         FileChangeEvent? pending;
         lock (_lock)
         {
-            if (_disposed) return;
+            if (_disposed || _suppressed) return;
             pending = _pendingEvent;
             _pendingEvent = null;
         }
@@ -129,6 +152,7 @@ public class FileChangeWatcher : IDisposable
         if (_watcher != null)
         {
             _watcher.Changed -= OnFileSystemChanged;
+            _watcher.Created -= OnFileSystemChanged;
             _watcher.Renamed -= OnFileRenamed;
             _watcher.Dispose();
         }

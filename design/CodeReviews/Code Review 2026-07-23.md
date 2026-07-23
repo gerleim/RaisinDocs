@@ -45,9 +45,10 @@ This is the same class of bug fixed in commit `a8b1587` for the direct `HandleEn
 
 **Fix:** Add a `_disposed` flag checked under lock in `ScheduleCallback`/`OnDebounceTimerElapsed`. Unsubscribe `Changed`/`Renamed` handlers before disposing.
 
-### I2 — Editor `ReloadFromDisk` unhandled exception → crash
+### ~~I2 — Editor `ReloadFromDisk` unhandled exception → crash~~
 - **File:** `RaisinDocs.Editor/MainWindow.xaml.cs:557–573`
 - **Severity:** High
+- **Status:** [x] Fixed
 
 `ReloadFromDisk` has `try/finally` but no `catch`. If `File.ReadAllText` throws (file locked, permission denied, TOCTOU race with `File.Exists`), the exception propagates through `Dispatcher.Invoke` back to the ThreadPool thread from `FileChangeWatcher`'s timer callback — unhandled exception, crashing the app.
 
@@ -55,33 +56,37 @@ The Viewer's equivalent code (`Viewer/MainWindow.xaml.cs:113–131`) correctly w
 
 **Fix:** Add `catch (Exception)` with logging, matching the Viewer pattern.
 
-### I3 — SaveToFile triggers own-write detection
+### ~~I3 — SaveToFile triggers own-write detection~~
 - **File:** `RaisinDocs.Editor/MainWindow.xaml.cs:475–484`
 - **Severity:** Medium
+- **Status:** [x] Fixed
 
 `SaveToFile` calls `File.WriteAllText` (line 479) while the tab's existing `FileChangeWatcher` is still active. The watcher's `FileSystemWatcher.Changed` event fires from the app's own write, queuing a 500ms debounce callback. `SetupFileWatcher` (line 484) disposes the old watcher, but if the timer's `Elapsed` event is already queued, the callback can still fire — causing a spurious "modified by another application" dialog or a silent `ReloadFromDisk` that wipes undo history.
 
 **Fix:** Call `_fileWatcher.StopWatching()` (or `EnableRaisingEvents = false`) before writing, then set up the new watcher after.
 
-### I4 — Watcher filter not updated after rename → detection silently stops
+### ~~I4 — Watcher filter not updated after rename → detection silently stops~~
 - **File:** `FileChangeWatcher.cs:35–48, 70–81`
 - **Severity:** Medium
+- **Status:** [x] Fixed
 
 `_watcher.Filter` is set once in `WatchFile` and never updated after a `Renamed` event. `FileSystemWatcher.Filter` is matched against the current file name, so after a rename, subsequent `Changed` events for the new name no longer match the stale filter. File-change detection silently stops working for that tab.
 
 **Fix:** After handling a rename, update `_watcher.Filter` to the new filename (or call `WatchFile(newPath)` to re-arm fully).
 
-### I5 — `FilePath` set on background thread without Dispatcher
+### ~~I5 — `FilePath` set on background thread without Dispatcher~~
 - **File:** `RaisinDocs.Editor/MainWindow.xaml.cs:521–525`
 - **Severity:** Medium
+- **Status:** [x] Fixed
 
 On a `Renamed` event, `FilePath = change.FilePath;` executes directly inside the `FileChangeWatcher` callback on a ThreadPool thread, bypassing the `Dispatcher.Invoke` that wraps the `Modified` branch. `FilePath` is read from the UI thread in `Save_Click`, `CloseTab`, `UpdateTitle`, `SaveSession`, etc.
 
 **Fix:** Move the assignment inside `owner.Dispatcher.Invoke(...)`.
 
-### I6 — Viewer reload closure captures stale path parameter
+### ~~I6 — Viewer reload closure captures stale path parameter~~
 - **File:** `RaisinDocs.Viewer/MainWindow.xaml.cs:104–138`
 - **Severity:** Medium
+- **Status:** [x] Fixed
 
 The reload closure captures the `filePath` method parameter (line 124: `File.ReadAllText(filePath)`) instead of using `_currentFilePath`. After a `Renamed` event updates `_currentFilePath` (line 112), the closure still reads the old, now-stale path — `FileNotFoundException` on reload (caught and logged, but feature is broken).
 

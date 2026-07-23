@@ -109,7 +109,11 @@ public partial class MainWindow : Window
         {
             if (change.ChangeType == FileChangeType.Renamed)
             {
-                _currentFilePath = change.FilePath;
+                Dispatcher.Invoke(() =>
+                {
+                    _currentFilePath = change.FilePath;
+                    Title = $"{Path.GetFileName(change.FilePath)} — RaisinDocs Viewer";
+                });
                 return;
             }
 
@@ -121,12 +125,12 @@ public partial class MainWindow : Window
                 try
                 {
                     _isReloadingFromDisk = true;
-                    var content = File.ReadAllText(filePath);
+                    var content = File.ReadAllText(_currentFilePath!);
                     Viewer.SetText(content);
                 }
                 catch (Exception ex)
                 {
-                    Viewer.Canvas.Logger?.LogError($"Could not reload file: {ex.Message}");
+                    Viewer.Canvas.Logger?.Log(DocsLogLevel.Error, $"Could not reload file: {ex.Message}");
                 }
                 finally
                 {

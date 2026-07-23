@@ -474,6 +474,7 @@ public partial class MainWindow : Window
 
     private void SaveToFile(DocumentTab tab, string path)
     {
+        tab.SuppressFileWatcher();
         tab.FilePath = path;
         tab.Editor.DocumentBasePath = Path.GetDirectoryName(path)!;
         File.WriteAllText(path, tab.Editor.GetText());
@@ -510,6 +511,8 @@ public partial class MainWindow : Window
         public TextBlock HeaderText { get; } = headerText;
         public string? FilePath { get; set; }
 
+        public void SuppressFileWatcher() => _fileWatcher?.Suppress();
+
         public void SetupFileWatcher(MainWindow owner)
         {
             CleanupFileWatcher();
@@ -520,7 +523,12 @@ public partial class MainWindow : Window
             {
                 if (change.ChangeType == FileChangeType.Renamed)
                 {
-                    FilePath = change.FilePath;
+                    owner.Dispatcher.Invoke(() =>
+                    {
+                        FilePath = change.FilePath;
+                        UpdateTabHeader(this);
+                        owner.UpdateTitle();
+                    });
                     return;
                 }
 
@@ -531,14 +539,14 @@ public partial class MainWindow : Window
 
                     if (!Editor.IsDirty)
                     {
-                        ReloadFromDisk();
+                        ReloadFromDisk(owner);
                         return;
                     }
 
                     var editorState = Editor.GetState();
                     if (!editorState.PromptOnExternalChanges)
                     {
-                        ReloadFromDisk();
+                        ReloadFromDisk(owner);
                         return;
                     }
 
@@ -547,14 +555,14 @@ public partial class MainWindow : Window
                         $"'{name}' has been modified by another application.\n\nReload from disk and discard your unsaved changes?",
                         "File Changed", MessageBoxButton.YesNo, MessageBoxImage.Question);
                     if (result == MessageBoxResult.Yes)
-                        ReloadFromDisk();
+                        ReloadFromDisk(owner);
                 });
             });
 
             _fileWatcher.WatchFile(FilePath);
         }
 
-        private void ReloadFromDisk()
+        private void ReloadFromDisk(MainWindow? owner = null)
         {
             if (FilePath == null || !File.Exists(FilePath))
                 return;
@@ -565,6 +573,10 @@ public partial class MainWindow : Window
                 var content = File.ReadAllText(FilePath);
                 Editor.SetText(content);
                 Editor.MarkClean();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Trace.TraceError($"Could not reload file: {ex.Message}");
             }
             finally
             {
