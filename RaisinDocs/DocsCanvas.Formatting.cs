@@ -131,7 +131,7 @@ public partial class DocsCanvas
         changed |= _doc.NormalizeAdjacentMarkers(sb, eb, MarkdownParser.NormalizeAdjacentMarkers, MarkdownParser.GetFenceBacktickCount);
         changed |= _doc.RenumberOrderedLists(sb, eb, MarkdownParser.GetOrderedListPrefixLength, MarkdownParser.GetFenceBacktickCount);
         if (!changed)
-            _doc.TrimWhitespace(sb, eb, MarkdownParser.GetFenceBacktickCount);
+            _doc.TrimWhitespace(sb, eb, MarkdownParser.GetFenceBacktickCount, MarkdownParser.HasIndentedContent);
         _doc.SealUndoGroup();
         InvalidateLayout();
         EnsureCursorVisible();
@@ -143,7 +143,45 @@ public partial class DocsCanvas
         if (!_doc.HasSelection)
             return ReformatActions.None;
         var sel = _doc.GetOrderedSelection();
-        int sb = sel.startBlock, eb = sel.endBlock;
+        return GetReformatActionsForRange(sel.startBlock, sel.endBlock);
+    }
+
+    public bool CanReformat => GetReformatActions() != ReformatActions.None;
+
+    public void ReflowAll()
+    {
+        if (_doc.BlockCount == 0) return;
+        SealAndStopTimer();
+        int sb = 0, eb = _doc.BlockCount - 1;
+        _doc.BeginUndoGroup();
+        bool changed = _doc.SplitInlineColorDivs(sb, ref eb,
+            MarkdownParser.FindInlineColorOpenEnd,
+            MarkdownParser.FindInlineColorCloseStart,
+            MarkdownParser.InlineOpenToDivOpen);
+        changed |= _doc.Reflow(sb, eb, IsMergeableParagraph, MarkdownParser.GetFenceBacktickCount);
+        eb = Math.Min(eb, _doc.BlockCount - 1);
+        changed |= _doc.NormalizeAdjacentMarkers(sb, eb, MarkdownParser.NormalizeAdjacentMarkers, MarkdownParser.GetFenceBacktickCount);
+        changed |= _doc.RenumberOrderedLists(sb, eb, MarkdownParser.GetOrderedListPrefixLength, MarkdownParser.GetFenceBacktickCount);
+        if (!changed)
+            _doc.TrimWhitespace(sb, eb, MarkdownParser.GetFenceBacktickCount, MarkdownParser.HasIndentedContent);
+        _doc.SealUndoGroup();
+        InvalidateLayout();
+        EnsureCursorVisible();
+        RaiseFormattingChanged();
+    }
+
+    private bool CanReformatAll
+    {
+        get
+        {
+            if (_doc.BlockCount == 0) return false;
+            int sb = 0, eb = _doc.BlockCount - 1;
+            return GetReformatActionsForRange(sb, eb) != ReformatActions.None;
+        }
+    }
+
+    private ReformatActions GetReformatActionsForRange(int sb, int eb)
+    {
         var actions = ReformatActions.None;
         if (_doc.HasBoxDrawingTable(sb, eb))
             actions |= ReformatActions.ConvertBoxTable;
@@ -153,14 +191,12 @@ public partial class DocsCanvas
             actions |= ReformatActions.CollapseBlankLines;
         if (_doc.HasAdjacentMarkers(sb, eb, MarkdownParser.HasAdjacentMarkers, MarkdownParser.GetFenceBacktickCount))
             actions |= ReformatActions.NormalizeMarkers;
-        if (_doc.HasTrimmableWhitespace(sb, eb, MarkdownParser.GetFenceBacktickCount))
+        if (_doc.HasTrimmableWhitespace(sb, eb, MarkdownParser.GetFenceBacktickCount, MarkdownParser.HasIndentedContent))
             actions |= ReformatActions.TrimWhitespace;
         if (_doc.HasMisnumberedOrderedList(sb, eb, MarkdownParser.GetOrderedListPrefixLength, MarkdownParser.GetFenceBacktickCount))
             actions |= ReformatActions.RenumberOrderedList;
         return actions;
     }
-
-    public bool CanReformat => GetReformatActions() != ReformatActions.None;
 
     private static bool IsMergeableParagraph(string text) =>
         text.Length > 0
