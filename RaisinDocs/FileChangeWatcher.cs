@@ -1,5 +1,7 @@
 using System;
 using System.IO;
+using System.Timers;
+using Timer = System.Timers.Timer;
 
 namespace RaisinDocs;
 
@@ -11,7 +13,8 @@ public class FileChangeWatcher : IDisposable
 {
     private readonly FileSystemWatcher? _watcher;
     private readonly Action<FileChangeEvent> _onFileChanged;
-    private DateTime _lastChangeTime = DateTime.MinValue;
+    private Timer? _debounceTimer;
+    private FileChangeEvent? _pendingEvent;
     private const int DebounceMs = 500;
 
     public string? CurrentFilePath { get; private set; }
@@ -54,15 +57,9 @@ public class FileChangeWatcher : IDisposable
 
     private void OnFileSystemChanged(object sender, FileSystemEventArgs e)
     {
-        var now = DateTime.UtcNow;
-        if ((now - _lastChangeTime).TotalMilliseconds < DebounceMs)
-            return;
-
-        _lastChangeTime = now;
-
         if (File.Exists(e.FullPath))
         {
-            _onFileChanged(new FileChangeEvent
+            ScheduleCallback(new FileChangeEvent
             {
                 FilePath = e.FullPath,
                 ChangeType = FileChangeType.Modified,
@@ -72,15 +69,9 @@ public class FileChangeWatcher : IDisposable
 
     private void OnFileRenamed(object sender, RenamedEventArgs e)
     {
-        var now = DateTime.UtcNow;
-        if ((now - _lastChangeTime).TotalMilliseconds < DebounceMs)
-            return;
-
-        _lastChangeTime = now;
-
         if (File.Exists(e.FullPath))
         {
-            _onFileChanged(new FileChangeEvent
+            ScheduleCallback(new FileChangeEvent
             {
                 FilePath = e.FullPath,
                 ChangeType = FileChangeType.Renamed,
@@ -89,8 +80,35 @@ public class FileChangeWatcher : IDisposable
         }
     }
 
+    private void ScheduleCallback(FileChangeEvent changeEvent)
+    {
+        _pendingEvent = changeEvent;
+
+        if (_debounceTimer == null)
+        {
+            _debounceTimer = new Timer(DebounceMs)
+            {
+                AutoReset = false,
+            };
+            _debounceTimer.Elapsed += OnDebounceTimerElapsed;
+        }
+
+        _debounceTimer.Stop();
+        _debounceTimer.Start();
+    }
+
+    private void OnDebounceTimerElapsed(object? sender, ElapsedEventArgs e)
+    {
+        if (_pendingEvent != null)
+        {
+            _onFileChanged(_pendingEvent);
+            _pendingEvent = null;
+        }
+    }
+
     public void Dispose()
     {
+        _debounceTimer?.Dispose();
         _watcher?.Dispose();
         GC.SuppressFinalize(this);
     }
