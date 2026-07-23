@@ -106,6 +106,8 @@ public partial class MainWindow : Window
         TabControl.Items.Add(tabItem);
         TabControl.SelectedItem = tabItem;
 
+        tab.SetupFileWatcher(this);
+
         return tab;
     }
 
@@ -299,6 +301,7 @@ public partial class MainWindow : Window
 
         _tabs.Remove(tab);
         TabControl.Items.Remove(tab.TabItem);
+        tab.Dispose();
 
         if (_tabs.Count == 0)
             AddTab();
@@ -326,6 +329,10 @@ public partial class MainWindow : Window
         }
 
         SaveSession();
+
+        foreach (var tab in _tabs)
+            tab.Dispose();
+
         base.OnClosing(e);
     }
 
@@ -474,6 +481,7 @@ public partial class MainWindow : Window
         AddRecentFile(path);
         UpdateTabHeader(tab);
         UpdateTitle();
+        tab.SetupFileWatcher(this);
     }
 
     private bool ConfirmDiscard(DocumentTab tab)
@@ -492,11 +500,81 @@ public partial class MainWindow : Window
         return true;
     }
 
-    private class DocumentTab(TabItem tabItem, DocsEditor editor, TextBlock headerText)
+    private class DocumentTab(TabItem tabItem, DocsEditor editor, TextBlock headerText) : IDisposable
     {
+        private FileChangeWatcher? _fileWatcher;
+        private bool _isReloadingFromDisk;
+
         public TabItem TabItem { get; } = tabItem;
         public DocsEditor Editor { get; } = editor;
         public TextBlock HeaderText { get; } = headerText;
         public string? FilePath { get; set; }
+
+        public void SetupFileWatcher(MainWindow owner)
+        {
+            CleanupFileWatcher();
+            if (FilePath == null)
+                return;
+
+            _fileWatcher = new FileChangeWatcher(change =>
+            {
+                if (change.ChangeType == FileChangeType.Renamed)
+                {
+                    FilePath = change.FilePath;
+                    return;
+                }
+
+                owner.Dispatcher.Invoke(() =>
+                {
+                    if (_isReloadingFromDisk)
+                        return;
+
+                    if (!Editor.IsDirty)
+                    {
+                        ReloadFromDisk();
+                        return;
+                    }
+
+                    var name = Path.GetFileName(FilePath);
+                    var result = MessageBox.Show(owner,
+                        $"'{name}' has been modified by another application.\n\nReload from disk and discard your unsaved changes?",
+                        "File Changed", MessageBoxButton.YesNo, MessageBoxImage.Question);
+                    if (result == MessageBoxResult.Yes)
+                        ReloadFromDisk();
+                });
+            });
+
+            _fileWatcher.WatchFile(FilePath);
+        }
+
+        private void ReloadFromDisk()
+        {
+            if (FilePath == null || !File.Exists(FilePath))
+                return;
+
+            try
+            {
+                _isReloadingFromDisk = true;
+                var content = File.ReadAllText(FilePath);
+                Editor.SetText(content);
+                Editor.MarkClean();
+            }
+            finally
+            {
+                _isReloadingFromDisk = false;
+            }
+        }
+
+        private void CleanupFileWatcher()
+        {
+            _fileWatcher?.Dispose();
+            _fileWatcher = null;
+        }
+
+        public void Dispose()
+        {
+            CleanupFileWatcher();
+            GC.SuppressFinalize(this);
+        }
     }
 }

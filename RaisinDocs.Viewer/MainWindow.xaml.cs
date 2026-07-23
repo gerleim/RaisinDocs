@@ -16,6 +16,10 @@ public partial class MainWindow : Window
     private const string FileFilter =
         "Markdown files|*.md;*.markdown;*.mdown;*.mkd;*.mkdn|Text files|*.txt|All files|*.*";
 
+    private FileChangeWatcher? _fileWatcher;
+    private string? _currentFilePath;
+    private bool _isReloadingFromDisk;
+
     public MainWindow()
     {
         InitializeComponent();
@@ -88,10 +92,51 @@ public partial class MainWindow : Window
 
     private void OpenFile(string path)
     {
+        _currentFilePath = path;
         Viewer.DocumentBasePath = Path.GetDirectoryName(path)!;
         Viewer.SetText(File.ReadAllText(path));
         Viewer.Canvas.SetEditMode(DocsCanvas.EditMode.Visual);
         Title = $"{Path.GetFileName(path)} — RaisinDocs Viewer";
+
+        SetupFileWatcher(path);
+    }
+
+    private void SetupFileWatcher(string filePath)
+    {
+        _fileWatcher?.Dispose();
+
+        _fileWatcher = new FileChangeWatcher(change =>
+        {
+            if (change.ChangeType == FileChangeType.Renamed)
+            {
+                _currentFilePath = change.FilePath;
+                return;
+            }
+
+            Dispatcher.Invoke(() =>
+            {
+                if (_isReloadingFromDisk)
+                    return;
+
+                try
+                {
+                    _isReloadingFromDisk = true;
+                    var content = File.ReadAllText(filePath);
+                    Viewer.SetText(content);
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show(this, $"Could not reload file:\n{ex.Message}", "RaisinDocs Viewer",
+                        MessageBoxButton.OK, MessageBoxImage.Error);
+                }
+                finally
+                {
+                    _isReloadingFromDisk = false;
+                }
+            });
+        });
+
+        _fileWatcher.WatchFile(filePath);
     }
 
     private void Find_Click(object sender, RoutedEventArgs e) =>
@@ -160,5 +205,11 @@ public partial class MainWindow : Window
     {
         Viewer.Canvas.ToggleMinimap();
         MinimapMenuItem.IsChecked = Viewer.ShowMinimap;
+    }
+
+    protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
+    {
+        _fileWatcher?.Dispose();
+        base.OnClosing(e);
     }
 }
