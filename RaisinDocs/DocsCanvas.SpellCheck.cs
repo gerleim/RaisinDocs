@@ -98,7 +98,10 @@ public partial class DocsCanvas
     {
         if (!_spellCheckEnabled || _spellCheckService is null) return;
 
-        _dirtySpellBlocks.Add(_doc.CursorBlock);
+        int from = Math.Min(_doc.AnchorBlock, _doc.CursorBlock);
+        int to = Math.Max(_doc.AnchorBlock, _doc.CursorBlock);
+        for (int i = from; i <= to; i++)
+            _dirtySpellBlocks.Add(i);
 
         _spellCheckTimer?.Stop();
         _spellCheckTimer?.Start();

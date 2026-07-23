@@ -101,9 +101,10 @@ The reload closure captures the `filePath` method parameter (line 124: `File.Rea
 
 **Fix:** Use `_currentFilePath` in the closure.
 
-### C3 — Spell check only invalidates cursor block
+### ~~C3 — Spell check only invalidates cursor block~~
 - **File:** `DocsCanvas.SpellCheck.cs:97–105`
 - **Severity:** Medium
+- **Status:** [x] Fixed
 
 `OnContentChangedForSpellCheck` only adds `_doc.CursorBlock` to `_dirtySpellBlocks`. Multi-block edits (paste, find/replace) that don't change the total block count leave other modified blocks with stale spelling-error offsets — squiggles at wrong positions or missed errors.
 
