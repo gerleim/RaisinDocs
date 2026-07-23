@@ -1001,6 +1001,7 @@ public static class HtmlEmitter
         int pos = offset;
         int end = offset + text.Length;
         int replIdx = 0;
+        int runIdx = 0;
         InlineStyle? currentStyle = null;
 
         while (pos < end)
@@ -1049,7 +1050,9 @@ public static class HtmlEmitter
             int ti = pos - offset;
             if (ti < text.Length && text[ti] == '<')
             {
-                var htmlStyle = GetStyleAt(runs, pos);
+                while (runIdx < runs.Count && pos >= runs[runIdx].Start + runs[runIdx].Length)
+                    runIdx++;
+                var htmlStyle = runIdx < runs.Count && pos >= runs[runIdx].Start ? runs[runIdx].Style : InlineStyle.Normal;
                 if (htmlStyle == InlineStyle.Normal || htmlStyle == InlineStyle.Italic
                     || htmlStyle == InlineStyle.Bold || htmlStyle == InlineStyle.BoldItalic
                     || htmlStyle == InlineStyle.Link)
@@ -1068,7 +1071,9 @@ public static class HtmlEmitter
             }
 
             // Determine style at this position (code/strikethrough only — emphasis handled via markers)
-            var rawStyle = GetStyleAt(runs, pos);
+            while (runIdx < runs.Count && pos >= runs[runIdx].Start + runs[runIdx].Length)
+                runIdx++;
+            var rawStyle = runIdx < runs.Count && pos >= runs[runIdx].Start ? runs[runIdx].Style : InlineStyle.Normal;
             var style = rawStyle;
             if (style is InlineStyle.Italic or InlineStyle.Bold or InlineStyle.BoldItalic
                 or InlineStyle.Image or InlineStyle.Link or InlineStyle.Normal)

@@ -227,13 +227,14 @@ When an `IndentedCodeLine` is reclassified as a nested list item, `ParseInlineCo
 
 **Fix:** Simplified to `if (isMarker)`.
 
-### H8 — `GetStyleAt` linear scan per character
+### ~~H8 — `GetStyleAt` linear scan per character~~
 - **File:** `HtmlEmitter.cs:1216–1224`
 - **Severity:** Low (performance)
+- **Status:** [x] Fixed
 
 `GetStyleAt` does a `foreach` over `runs` for every character position in `AppendInlineHtml`, giving O(text × runs) per paragraph. Noticeable on paragraphs with many inline style runs.
 
-**Fix:** Keep a monotonically-advancing index into `runs` since they're position-ordered.
+**Fix:** Replaced the two `GetStyleAt` calls in the main character loop with a monotonically-advancing `runIdx` that skips past consumed runs.
 
 ### M5 — `CollectDefinitions` called twice in `Parse` overload
 - **File:** `MarkdownParser.cs:144–152`
