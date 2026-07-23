@@ -218,13 +218,14 @@ When an `IndentedCodeLine` is reclassified as a nested list item, `ParseInlineCo
 
 **Fix:** Trim leading/trailing `'`/`'` from extracted words before dictionary lookup, adjusting the offset accordingly.
 
-### H7 — `&& false` dead code in `ExpandTabs`
+### ~~H7 — `&& false` dead code in `ExpandTabs`~~
 - **File:** `HtmlEmitter.cs:121`
 - **Severity:** Low (code quality)
+- **Status:** [x] Fixed
 
 `if (isMarker && !(ch is '>' or '-' or '*' or '+' && false))` — the `&& false` makes the parenthesized expression always false. The condition reduces to just `if (isMarker)`. Reads as leftover/incomplete logic.
 
-**Fix:** Simplify to `if (isMarker)`.
+**Fix:** Simplified to `if (isMarker)`.
 
 ### H8 — `GetStyleAt` linear scan per character
 - **File:** `HtmlEmitter.cs:1216–1224`

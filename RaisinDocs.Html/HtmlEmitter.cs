@@ -118,7 +118,7 @@ public static class HtmlEmitter
                     while (i <= d) { sb.Append(line[i]); col++; i++; }
                 }
             }
-            if (isMarker && !(ch is '>' or '-' or '*' or '+' && false))
+            if (isMarker)
             {
                 if (ch is '>' or '-' or '*' or '+')
                 { sb.Append(line[i]); col++; i++; }
