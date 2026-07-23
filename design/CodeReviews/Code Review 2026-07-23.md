@@ -244,13 +244,14 @@ The `Parse(getBlockText, blockCount, out linkDefinitions)` overload calls `Parse
 
 **Fix:** Have the inner `Parse` optionally return the definitions it already collected.
 
-### I7 — SyntaxHighlighter re-tokenize doesn't update `ruleStack`
+### ~~I7 — SyntaxHighlighter re-tokenize doesn't update `ruleStack`~~
 - **File:** `SyntaxHighlighter.cs:39–67`
 - **Severity:** Low
+- **Status:** [x] Fixed
 
 When a non-empty line yields zero tokens, it's retokenized with `null` rule stack to recover from corruption. But `ruleStack` (carried to the next line) is never updated to the fresh result — the "corrupted" state keeps propagating forward.
 
-**Fix:** Assign the re-tokenize's returned rule stack to `ruleStack`.
+**Fix:** Assigned `ruleStack = freshResult.RuleStack` after the retry.
 
 ---
 

@@ -50,6 +50,7 @@ internal class SyntaxHighlighter
                 if (tokens.Count == 0)
                 {
                     var freshResult = grammar.TokenizeLine(line, null, TimeSpan.FromMilliseconds(500));
+                    ruleStack = freshResult.RuleStack;
                     tokens = TokenizeResult(freshResult, line);
                 }
 
