@@ -749,7 +749,8 @@ public class Document
         return fenced.Count > 0 ? fenced : null;
     }
 
-    public bool TrimWhitespace(int startBlock, int endBlock, Func<string, int>? isFenceLine = null)
+    public bool TrimWhitespace(int startBlock, int endBlock, Func<string, int>? isFenceLine = null,
+        Func<string, bool>? hasSignificantLeading = null)
     {
         var insideFence = BuildFenceMap(startBlock, endBlock, isFenceLine);
         bool changed = false;
@@ -759,8 +760,17 @@ public class Document
                 continue;
             string text = _blocks[i].ToString();
 
-            string result = text.TrimStart();
-            int leadingRemoved = text.Length - result.Length;
+            int leadingRemoved = 0;
+            string result;
+            if (hasSignificantLeading != null && hasSignificantLeading(text))
+            {
+                result = text;
+            }
+            else
+            {
+                result = text.TrimStart();
+                leadingRemoved = text.Length - result.Length;
+            }
 
             string trimmedEnd = result.TrimEnd();
             int trailingCount = result.Length - trimmedEnd.Length;
@@ -858,7 +868,8 @@ public class Document
         return false;
     }
 
-    public bool HasTrimmableWhitespace(int startBlock, int endBlock, Func<string, int>? isFenceLine = null)
+    public bool HasTrimmableWhitespace(int startBlock, int endBlock, Func<string, int>? isFenceLine = null,
+        Func<string, bool>? hasSignificantLeading = null)
     {
         var insideFence = BuildFenceMap(startBlock, endBlock, isFenceLine);
         for (int i = startBlock; i <= endBlock; i++)
@@ -866,7 +877,8 @@ public class Document
             if (insideFence != null && insideFence.Contains(i))
                 continue;
             string text = _blocks[i].ToString();
-            if (text.Length > 0 && (text[0] == ' ' || text[0] == '\t'))
+            if (text.Length > 0 && (text[0] == ' ' || text[0] == '\t')
+                && (hasSignificantLeading == null || !hasSignificantLeading(text)))
                 return true;
             if (text.Length > 0 && text[^1] == ' ')
             {

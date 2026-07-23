@@ -737,6 +737,24 @@ public class MarkdownParserTests
     }
 
     [Fact]
+    public void ListNesting_LazyContinuationPreservesNesting()
+    {
+        var blocks = ParseBlocks("- one", "justtext", "  - two");
+        blocks[0].ListNestingLevel.Should().Be(0);
+        blocks[2].Kind.Should().Be(BlockKind.UnorderedListItem);
+        blocks[2].ListNestingLevel.Should().Be(1);
+    }
+
+    [Fact]
+    public void ListNesting_BlankLineThenParagraphClearsStack()
+    {
+        var blocks = ParseBlocks("- one", "", "justtext", "  - two");
+        blocks[0].ListNestingLevel.Should().Be(0);
+        blocks[3].Kind.Should().Be(BlockKind.UnorderedListItem);
+        blocks[3].ListNestingLevel.Should().Be(0);
+    }
+
+    [Fact]
     public void ListNesting_MixedTypes()
     {
         var blocks = ParseBlocks("- foo", "  1. bar", "     - baz");

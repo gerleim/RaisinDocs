@@ -783,6 +783,7 @@ public static class MarkdownParser
     {
         // Stack tracks (contentColumn, blockIndex) for each active nesting level.
         var stack = new List<int>();
+        bool prevWasListOrContinuation = false;
 
         for (int i = 0; i < blocks.Count; i++)
         {
@@ -797,6 +798,7 @@ public static class MarkdownParser
                     stack.RemoveAt(stack.Count - 1);
                 blocks[i] = block with { ListNestingLevel = stack.Count };
                 stack.Add(block.ContentColumn);
+                prevWasListOrContinuation = true;
             }
             else if (block.Kind == BlockKind.IndentedCodeLine && stack.Count > 0)
             {
@@ -834,27 +836,43 @@ public static class MarkdownParser
                             ListNestingLevel = stack.Count,
                         };
                         stack.Add(contentCol);
+                        prevWasListOrContinuation = true;
                     }
                 }
             }
             else if (string.IsNullOrWhiteSpace(text))
             {
-                // Blank lines don't break list context
+                // Blank lines don't break list context but end lazy continuation runs
+                prevWasListOrContinuation = false;
             }
             else
             {
                 if (block.Kind == BlockKind.Paragraph && stack.Count > 0)
                 {
-                    var (_, cols) = MeasureLeadingWhitespace(text);
-                    if (cols < stack[^1])
-                        stack.Clear();
+                    if (!prevWasListOrContinuation)
+                    {
+                        var (_, cols) = MeasureLeadingWhitespace(text);
+                        if (cols < stack[^1])
+                            stack.Clear();
+                    }
+                    // prevWasListOrContinuation stays true for chained lazy continuations
                 }
                 else if (block.Kind is not BlockKind.Blockquote)
                 {
                     stack.Clear();
+                    prevWasListOrContinuation = false;
                 }
             }
         }
+    }
+
+    internal static bool HasIndentedContent(string text)
+    {
+        var (chars, _) = MeasureLeadingWhitespace(text);
+        if (chars == 0) return false;
+        string stripped = text[chars..];
+        var kind = ClassifyBlockContent(stripped);
+        return kind is not BlockKind.Paragraph;
     }
 
     private static BlockKind ClassifyBlockContent(string text)
