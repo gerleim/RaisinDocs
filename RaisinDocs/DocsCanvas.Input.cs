@@ -799,6 +799,7 @@ public partial class DocsCanvas
             BlockKind.Blockquote => leading + (stripped.StartsWith("> ") ? 2 : 1),
             _ => 0,
         };
+        stripLen = Math.Min(stripLen, text.Length);
         if (stripLen > 0)
             _doc.RemoveTextAt(_doc.CursorBlock, 0, stripLen);
     }

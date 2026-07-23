@@ -21,9 +21,10 @@ The same unclamped value is consumed by `StripExistingListPrefix` (line 798) and
 
 **Fix:** Only return `i + 2` when a space actually follows; when the delimiter is at end, return `i + 1`.
 
-### C2 — Crash: `StripExistingListPrefix` on bare unordered marker
+### ~~C2 — Crash: `StripExistingListPrefix` on bare unordered marker~~
 - **File:** `DocsCanvas.Input.cs:794–803`
 - **Severity:** High
+- **Status:** [x] Fixed
 
 `StripExistingListPrefix` computes `leading + 2` for `UnorderedListItem` without clamping. A single `-`, `*`, or `+` character (no space) is classified as `UnorderedListItem` by `ClassifyBlock` (the `text.Length == 1` case at MarkdownParser.cs:1192–1201), but `stripLen = 0 + 2 = 2` exceeds the 1-character block → `RemoveTextAt` throws.
 
