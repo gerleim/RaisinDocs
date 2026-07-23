@@ -34,9 +34,10 @@ This is the same class of bug fixed in commit `a8b1587` for the direct `HandleEn
 
 **Fix:** Clamp: `Math.Min(stripLen, text.Length)` before `RemoveTextAt`.
 
-### I1 — FileChangeWatcher `Dispose` race → crash or use-after-dispose
+### ~~I1 — FileChangeWatcher `Dispose` race → crash or use-after-dispose~~
 - **File:** `FileChangeWatcher.cs:83–114`
 - **Severity:** High
+- **Status:** [x] Fixed
 
 `Dispose()` disposes `_debounceTimer` and `_watcher` but does not set a disposed flag or unsubscribe event handlers. If `OnFileSystemChanged` fires on a ThreadPool thread concurrently with `Dispose`:
 - `ScheduleCallback` can call `.Stop()`/`.Start()` on an already-disposed `Timer` → `ObjectDisposedException` on a ThreadPool thread → app crash.

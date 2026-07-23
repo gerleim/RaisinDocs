@@ -13,8 +13,10 @@ public class FileChangeWatcher : IDisposable
 {
     private readonly FileSystemWatcher? _watcher;
     private readonly Action<FileChangeEvent> _onFileChanged;
+    private readonly object _lock = new();
     private Timer? _debounceTimer;
     private FileChangeEvent? _pendingEvent;
+    private bool _disposed;
     private const int DebounceMs = 500;
 
     public string? CurrentFilePath { get; private set; }
@@ -82,34 +84,56 @@ public class FileChangeWatcher : IDisposable
 
     private void ScheduleCallback(FileChangeEvent changeEvent)
     {
-        _pendingEvent = changeEvent;
-
-        if (_debounceTimer == null)
+        lock (_lock)
         {
-            _debounceTimer = new Timer(DebounceMs)
-            {
-                AutoReset = false,
-            };
-            _debounceTimer.Elapsed += OnDebounceTimerElapsed;
-        }
+            if (_disposed) return;
 
-        _debounceTimer.Stop();
-        _debounceTimer.Start();
+            _pendingEvent = changeEvent;
+
+            if (_debounceTimer == null)
+            {
+                _debounceTimer = new Timer(DebounceMs)
+                {
+                    AutoReset = false,
+                };
+                _debounceTimer.Elapsed += OnDebounceTimerElapsed;
+            }
+
+            _debounceTimer.Stop();
+            _debounceTimer.Start();
+        }
     }
 
     private void OnDebounceTimerElapsed(object? sender, ElapsedEventArgs e)
     {
-        if (_pendingEvent != null)
+        FileChangeEvent? pending;
+        lock (_lock)
         {
-            _onFileChanged(_pendingEvent);
+            if (_disposed) return;
+            pending = _pendingEvent;
             _pendingEvent = null;
         }
+
+        if (pending != null)
+            _onFileChanged(pending);
     }
 
     public void Dispose()
     {
+        lock (_lock)
+        {
+            if (_disposed) return;
+            _disposed = true;
+        }
+
+        if (_watcher != null)
+        {
+            _watcher.Changed -= OnFileSystemChanged;
+            _watcher.Renamed -= OnFileRenamed;
+            _watcher.Dispose();
+        }
+
         _debounceTimer?.Dispose();
-        _watcher?.Dispose();
         GC.SuppressFinalize(this);
     }
 }
