@@ -377,7 +377,7 @@ public static class MarkdownParser
 
         DetectSetextHeadings(result, getBlockText);
         DetectTables(result, getBlockText);
-        DetectListNesting(result, getBlockText, defs);
+        DetectListNesting(result, getBlockText, defs, theme);
         DetectContinuations(result, getBlockText);
         DetectIndentedCode(result, getBlockText, defs);
         ApplyBlockDivColors(result);
@@ -780,7 +780,7 @@ public static class MarkdownParser
     }
 
     private static void DetectListNesting(List<ParsedBlock> blocks, Func<int, string> getBlockText,
-        Dictionary<string, (string Url, string? Title)>? defs)
+        Dictionary<string, (string Url, string? Title)>? defs, Dictionary<string, RgbColor>? theme)
     {
         // Stack tracks (contentColumn, blockIndex) for each active nesting level.
         var stack = new List<int>();
@@ -819,7 +819,7 @@ public static class MarkdownParser
                             stack.RemoveAt(stack.Count - 1);
 
                         var runs = ParseInlines(text, out var imgs, out var lnks, out var emph, defs);
-                        var colorSpans = ParseInlineColorTags(text, null);
+                        var colorSpans = ParseInlineColorTags(text, theme);
                         blocks[i] = new ParsedBlock
                         {
                             Kind = innerKind,

@@ -200,13 +200,14 @@ For every `Paragraph` block, an inner loop walks backward through all preceding 
 
 **Fix:** Replaced `GetContentColumnForMarker` call with `GetContentColumn` and removed the now-unused method.
 
-### M3 — `DetectListNesting` drops theme dictionary
+### ~~M3 — `DetectListNesting` drops theme dictionary~~
 - **File:** `MarkdownParser.cs:781–782, 825`
 - **Severity:** Low
+- **Status:** [x] Fixed
 
 When an `IndentedCodeLine` is reclassified as a nested list item, `ParseInlineColorTags(text, null)` is called with `null` theme. The `DetectListNesting` method signature never receives `theme` despite it being in scope at the call site (line 380). Theme-defined custom colors on reclassified lines silently fail to resolve.
 
-**Fix:** Thread `theme` through `DetectListNesting`.
+**Fix:** Added `theme` parameter to `DetectListNesting` and passed it through to `ParseInlineColorTags`.
 
 ### M4 — Spell check word extraction includes leading/trailing quotes
 - **File:** `MarkdownParser.cs:3291–3292`
