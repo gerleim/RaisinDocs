@@ -1,4 +1,4 @@
-# RDMD — Raisin Docs Markdown 
+# RDMD — Raisin Docs Markdown
 
 A superset of CommonMark designed for intuitive editing. Files use the `.rdmd` extension. The parser builds on the existing CommonMark/GFM parser, producing the same `ParsedBlock` output so all downstream rendering, editing, and export infrastructure is shared.
 
@@ -45,12 +45,19 @@ Indentation is not silently stripped. Leading spaces in a line are rendered as-i
     This line is indented four spaces.
 ```
 
-### Tabs vs spaces
+### TAB
 
-- **TAB** = structural (nesting)
-- **Spaces** = visual (preserved as-is, no structural meaning)
+TAB means "indent one level." What it does depends on context:
+
+- **TAB + list marker** → nested list item (`\t- child`)
+- **TAB + no marker** → indented content (`\tsome text`)
+- **TAB after blank line in a list** → continues the current list item as a new paragraph
 
 Tab display width: default 4, configurable (global setting).
+
+### Spaces
+
+Spaces are visual only — preserved as-is, no structural meaning.
 
 ### No indented code blocks
 
@@ -60,25 +67,36 @@ The CommonMark rule "4 spaces of indentation = code block" is removed. Since lea
 
 ### List continuation
 
-Lines following a list item belong to that item until the next list marker or a blank line (new paragraph).
+Lines following a list item belong to that item until the next list marker or a blank line.
 
-Leading spaces on continuation lines are just spaces — they carry no structural meaning (no nesting detection, no content-column alignment). Indentation within a list item is done with TAB.
-
-```
-1. This is a long list item
-   this is just a line in the first item with leading spaces.
-	This line is indented (starts with TAB).
-2. Second item - continuation after 1.
-```
-
-A blank line ends the list. To continue writing after a list, start a new paragraph.
+Continuation lines always render at the item's content level (aligned with the item text, after the bullet/number). TAB adds extra indentation from there.
 
 ```
-1. Item one
-2. Item two
-
-This is a new paragraph, not part of the list.
+- Item text
+continuation (renders aligned with "Item text")
+	indented continuation (renders one level deeper than "Item text")
+		double indented (two levels deeper)
 ```
+
+### Paragraphs within list items
+
+A blank line normally ends a list. However, a TAB on the line after the blank line keeps the content within the current list item as a new paragraph:
+
+```
+1. First paragraph of item one.
+
+	Second paragraph, still in item one (TAB keeps it in the item).
+
+	   Indented second paragraph (TAB + spaces).
+
+2. Item two.
+
+This is a new paragraph, not part of the list (no TAB after blank line).
+```
+
+Rules:
+- Blank line + TAB → new paragraph within the current list item
+- Blank line + no TAB → list ends, regular paragraph follows
 
 ### List nesting
 
@@ -158,14 +176,16 @@ A `\` at the start of a line prevents the next token from being parsed as a bloc
 Numbered headings work like sub-numbered lists — the numbering is in the source and the editor auto-maintains it. A heading without a number prefix is not numbered. Numbering is opt-in per heading.
 
 ```
-# 1. Introduction
+# 1 Introduction
 ## 1.1 Background
 ## 1.2 Scope
-# 2. Architecture
+# 2 Architecture
 ## 2.1 Overview
 ## This heading is not numbered
-# 3. Implementation
+# 3 Implementation
 ```
+
+No trailing dot on heading numbers (unlike lists) — the `#` prefix already prevents ambiguity.
 
 The space after `#` is optional:
 
@@ -175,9 +195,9 @@ The space after `#` is optional:
 ```
 
 Rules:
-- A heading with a number prefix (e.g. `# 1.`) is numbered. The editor renumbers on insert/delete/reorder.
+- A heading with a number prefix (e.g. `# 1`) is numbered. The editor renumbers on insert/delete/reorder.
 - A heading without a number prefix is not numbered — it stands alone under its parent.
-- Sub-heading numbers are hierarchical: `##` under `# 1.` starts at `1.1`, `###` under `## 1.1` starts at `1.1.1`, etc.
+- Sub-heading numbers are hierarchical: `##` under `# 1` starts at `1.1`, `###` under `## 1.1` starts at `1.1.1`, etc.
 
 ### Inline color tags
 
@@ -185,3 +205,73 @@ Carried over from the existing RaisinDocs implementation:
 
 - Inline: `<!--@fg:red-->text<!--/@fg-->`
 - Block div: `<!--@div fg:red-->` / `<!--/@div-->`
+
+## Open questions
+
+### Setext headings
+
+CommonMark supports underline-style headings:
+
+```
+Heading
+=======
+```
+
+With "newline is a newline," the `=======` line is a separate line, not an underline. Drop setext headings entirely in RDMD? ATX style (`#`) is sufficient.
+
+### Horizontal rules
+
+CommonMark allows `---`, `***`, `___` with optional leading spaces. With spaces preserved, does `   ---` still produce a horizontal rule, or is it text with leading spaces?
+
+### Lists inside blockquotes
+
+`> - item` works, but how does TAB nesting interact with the `>` prefix?
+
+```
+> - Parent
+> 	- Child (TAB after `> `)
+```
+
+Is the TAB after `>` structural (nesting), or does the `>` context change things?
+
+### Block content inside list items
+
+Can a list item contain code blocks, tables, or blockquotes? If so, how?
+
+```
+- Item with a code block:
+	```
+	code here
+	```
+- Item with a table:
+	| A | B |
+	|---|---|
+	| 1 | 2 |
+```
+
+Does the TAB prefix apply to every line of the embedded block?
+
+### Nested blockquotes
+
+Are nested blockquotes supported?
+
+```
+> Outer quote
+> > Inner quote
+```
+
+### Raw HTML
+
+Is arbitrary HTML allowed in RDMD, or only the custom comment tags (`<!--@...-->`)? CommonMark allows inline and block HTML.
+
+### Mid-line escaping
+
+Line-start escaping is defined (`\1. Not a list`). Does mid-line backslash escaping follow CommonMark rules?
+
+```
+This is \*not italic\* and \`not code\`.
+```
+
+### Conversion
+
+Is `.md` ↔ `.rdmd` conversion needed? Importing a `.md` file into RDMD would need to transform soft breaks into explicit line breaks, convert space-based indentation to TABs, etc.

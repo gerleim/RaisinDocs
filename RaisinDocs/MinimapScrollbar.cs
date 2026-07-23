@@ -330,6 +330,7 @@ public class MinimapScrollbar : FrameworkElement
             byte lineFgB = fg.B, lineFgG = fg.G, lineFgR = fg.R;
             IReadOnlyList<ColorSpan>? colorSpans = null;
             int spanBaseOffset = 0;
+            double renderLineY = lineY;
 
             if (isCode)
             {
@@ -341,6 +342,7 @@ public class MinimapScrollbar : FrameworkElement
                         _pixelBuf[off + 1] = cbG;
                         _pixelBuf[off + 2] = cbR;
                     }
+                renderLineY = Math.Round(lineY);
             }
             else
             {
@@ -361,7 +363,7 @@ public class MinimapScrollbar : FrameworkElement
                 }
             }
 
-            RenderTextGlyphs(text, 1, lineY, scale, baseAdvance, isCode,
+            RenderTextGlyphs(text, 1, renderLineY, scale, baseAdvance, isCode,
                 lineFgB, lineFgG, lineFgR, colorSpans, spanBaseOffset,
                 py0, pyEnd, w, h);
         }
