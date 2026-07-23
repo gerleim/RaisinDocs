@@ -164,13 +164,14 @@ Heading inline content is re-parsed without link definitions. The code backfills
 
 **Fix:** Parse heading content via `ParseInlineContent(content, options.LinkDefinitions)`.
 
-### H5 — Escaped backslash before line break misclassified as hard break
+### ~~H5 — Escaped backslash before line break misclassified as hard break~~
 - **File:** `HtmlEmitter.cs:1145–1182`
 - **Severity:** Medium
+- **Status:** [x] Fixed
 
 A line ending in `\\` (escaped backslash = literal backslash) followed by a soft break is misclassified as a hard break. The code checks if the preceding character is `\` without verifying whether that backslash was itself the target of a backslash escape. The literal backslash is also dropped from output.
 
-**Fix:** Check whether the `\` was consumed by `MarkBackslashEscapes` before treating it as a hard-break marker.
+**Fix:** Before treating `\` as a hard-break marker, check if the preceding position is a hidden escape backslash (`hidden.Contains(ci - 2 + offset)`).
 
 ### H6 — `StripInlineMarkdown` drops all `*`/`_` in image alt text
 - **File:** `HtmlEmitter.cs:1986–1989`

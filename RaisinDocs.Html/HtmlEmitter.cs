@@ -1108,9 +1108,13 @@ public static class HtmlEmitter
                     bool isHardBreak = false;
                     if (ci > 0 && text[ci - 1] == '\\')
                     {
-                        // Backslash hard break — remove the trailing backslash from output
-                        if (sb.Length > 0 && sb[^1] == '\\') sb.Length--;
-                        isHardBreak = true;
+                        bool isEscaped = ci >= 2 && text[ci - 2] == '\\' && hidden.Contains(ci - 2 + offset);
+                        if (!isEscaped)
+                        {
+                            // Backslash hard break — remove the trailing backslash from output
+                            if (sb.Length > 0 && sb[^1] == '\\') sb.Length--;
+                            isHardBreak = true;
+                        }
                     }
                     else if (ci >= 2 && text[ci - 1] == ' ' && text[ci - 2] == ' ')
                     {
