@@ -97,26 +97,23 @@ public class InlineStyleAtCursorTests
     [Fact]
     public void CursorInsideBoldItalic_DetectsBold()
     {
-        // "***both***" — BoldItalic run should report true for Bold
+        // "***both***" — cursor at offset 4 (inside "both" content)
         var block = ParseSingle("***both***");
-        var boldItalicRun = block.Runs.First(r => r.Style == InlineStyle.BoldItalic);
-        block.HasStyleAt(boldItalicRun.Start, InlineStyle.Bold).Should().BeTrue();
+        block.HasStyleAt(4, InlineStyle.Bold).Should().BeTrue();
     }
 
     [Fact]
     public void CursorInsideBoldItalic_DetectsItalic()
     {
         var block = ParseSingle("***both***");
-        var boldItalicRun = block.Runs.First(r => r.Style == InlineStyle.BoldItalic);
-        block.HasStyleAt(boldItalicRun.Start, InlineStyle.Italic).Should().BeTrue();
+        block.HasStyleAt(4, InlineStyle.Italic).Should().BeTrue();
     }
 
     [Fact]
     public void CursorInsideBoldItalic_DoesNotDetectStrikethrough()
     {
         var block = ParseSingle("***both***");
-        var boldItalicRun = block.Runs.First(r => r.Style == InlineStyle.BoldItalic);
-        block.HasStyleAt(boldItalicRun.Start, InlineStyle.Strikethrough).Should().BeFalse();
+        block.HasStyleAt(4, InlineStyle.Strikethrough).Should().BeFalse();
     }
 
     // --- Edge cases ---
@@ -140,5 +137,65 @@ public class InlineStyleAtCursorTests
     {
         var block = ParseSingle("");
         block.HasStyleAt(0, InlineStyle.Bold).Should().BeFalse();
+    }
+
+    // --- Delimiter exclusion ---
+
+    [Fact]
+    public void CursorOnOpeningBoldMarker_DoesNotDetectBold()
+    {
+        // "**bold**" — offset 0 and 1 are the opening ** delimiter
+        var block = ParseSingle("**bold**");
+        block.HasStyleAt(0, InlineStyle.Bold).Should().BeFalse();
+        block.HasStyleAt(1, InlineStyle.Bold).Should().BeFalse();
+    }
+
+    [Fact]
+    public void CursorOnClosingBoldMarker_DoesNotDetectBold()
+    {
+        // "**bold**" — offset 6 and 7 are the closing ** delimiter
+        var block = ParseSingle("**bold**");
+        block.HasStyleAt(6, InlineStyle.Bold).Should().BeFalse();
+        block.HasStyleAt(7, InlineStyle.Bold).Should().BeFalse();
+    }
+
+    [Fact]
+    public void CursorOnOpeningItalicMarker_DoesNotDetectItalic()
+    {
+        var block = ParseSingle("*italic*");
+        block.HasStyleAt(0, InlineStyle.Italic).Should().BeFalse();
+    }
+
+    [Fact]
+    public void CursorOnClosingItalicMarker_DoesNotDetectItalic()
+    {
+        var block = ParseSingle("*italic*");
+        block.HasStyleAt(7, InlineStyle.Italic).Should().BeFalse();
+    }
+
+    [Fact]
+    public void CursorOnOpeningStrikethroughMarker_DoesNotDetect()
+    {
+        var block = ParseSingle("~~struck~~");
+        block.HasStyleAt(0, InlineStyle.Strikethrough).Should().BeFalse();
+        block.HasStyleAt(1, InlineStyle.Strikethrough).Should().BeFalse();
+    }
+
+    [Fact]
+    public void CursorOnClosingStrikethroughMarker_DoesNotDetect()
+    {
+        var block = ParseSingle("~~struck~~");
+        block.HasStyleAt(8, InlineStyle.Strikethrough).Should().BeFalse();
+        block.HasStyleAt(9, InlineStyle.Strikethrough).Should().BeFalse();
+    }
+
+    [Fact]
+    public void CursorOnBoldItalicMarker_DoesNotDetect()
+    {
+        // "***both***" — offsets 0,1,2 are markers, 3-6 are content
+        var block = ParseSingle("***both***");
+        block.HasStyleAt(0, InlineStyle.Bold).Should().BeFalse();
+        block.HasStyleAt(1, InlineStyle.Bold).Should().BeFalse();
+        block.HasStyleAt(2, InlineStyle.Italic).Should().BeFalse();
     }
 }
