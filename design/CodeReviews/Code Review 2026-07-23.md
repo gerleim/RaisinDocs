@@ -236,13 +236,14 @@ When an `IndentedCodeLine` is reclassified as a nested list item, `ParseInlineCo
 
 **Fix:** Replaced the two `GetStyleAt` calls in the main character loop with a monotonically-advancing `runIdx` that skips past consumed runs.
 
-### M5 — `CollectDefinitions` called twice in `Parse` overload
+### ~~M5 — `CollectDefinitions` called twice in `Parse` overload~~
 - **File:** `MarkdownParser.cs:144–152`
 - **Severity:** Low (performance)
+- **Status:** [x] Fixed
 
 The `Parse(getBlockText, blockCount, out linkDefinitions)` overload calls `Parse(...)` internally (which calls `CollectDefinitions`), then calls `CollectDefinitions` again explicitly to return the definitions. Double full-document scan.
 
-**Fix:** Have the inner `Parse` optionally return the definitions it already collected.
+**Fix:** Added an internal `Parse` overload with `out linkDefinitions` that returns the defs it already collected. Both public overloads now delegate to it.
 
 ### ~~I7 — SyntaxHighlighter re-tokenize doesn't update `ruleStack`~~
 - **File:** `SyntaxHighlighter.cs:39–67`

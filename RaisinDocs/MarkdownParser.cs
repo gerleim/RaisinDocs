@@ -143,13 +143,7 @@ public static class MarkdownParser
 
     public static List<ParsedBlock> Parse(Func<int, string> getBlockText, int blockCount,
         out Dictionary<string, (string Url, string? Title)>? linkDefinitions)
-    {
-        var result = Parse(getBlockText, blockCount, null);
-        // Re-collect definitions for caller use
-        var (defs, _) = CollectDefinitions(getBlockText, blockCount);
-        linkDefinitions = defs;
-        return result;
-    }
+        => Parse(getBlockText, blockCount, null, out linkDefinitions);
 
     public static ParsedBlock ParseInlineContent(string text, Dictionary<string, (string Url, string? Title)>? defs = null)
     {
@@ -159,8 +153,13 @@ public static class MarkdownParser
 
     internal static List<ParsedBlock> Parse(Func<int, string> getBlockText, int blockCount,
         SyntaxHighlighter? highlighter)
+        => Parse(getBlockText, blockCount, highlighter, out _);
+
+    internal static List<ParsedBlock> Parse(Func<int, string> getBlockText, int blockCount,
+        SyntaxHighlighter? highlighter, out Dictionary<string, (string Url, string? Title)>? linkDefinitions)
     {
         var (defs, theme) = CollectDefinitions(getBlockText, blockCount);
+        linkDefinitions = defs;
 
         var result = new List<ParsedBlock>(blockCount);
         int fenceLen = 0;
