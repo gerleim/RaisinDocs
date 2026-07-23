@@ -193,14 +193,19 @@ partial class DocsCanvas
 
         _editMode = savedMode;
 
-        dialog.PrintDocument(paginator, "Document");
+        try
+        {
+            dialog.PrintDocument(paginator, "Document");
+        }
+        finally
+        {
+            if (createdMaps && !IsVisual)
+                _visualMaps = null;
 
-        if (createdMaps && !IsVisual)
-            _visualMaps = null;
-
-        _layoutDirty = true;
-        _pageBreakLayoutVersion = -1;
-        InvalidateVisual();
+            _layoutDirty = true;
+            _pageBreakLayoutVersion = -1;
+            InvalidateVisual();
+        }
     }
 
     private sealed class DocsPaginator : DocumentPaginator

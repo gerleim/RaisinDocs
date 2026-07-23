@@ -119,9 +119,10 @@ Once spell check is enabled, the `_spellCheckTimer` is never permanently stopped
 
 **Fix:** Add a teardown hook (`Unloaded` or explicit `Dispose`) that stops the timer and unhooks `Tick`.
 
-### C5 — `Print()` has no exception safety
+### ~~C5 — `Print()` has no exception safety~~
 - **File:** `DocsCanvas.Print.cs:171–204`
 - **Severity:** Medium
+- **Status:** [x] Fixed
 
 If `dialog.PrintDocument` throws (print queue error, driver exception), the cleanup below it never runs: `_visualMaps` stays populated with stale print-only maps, `_layoutDirty` isn't set, and `InvalidateVisual()` is skipped — leaving the canvas with stale layout.
 
