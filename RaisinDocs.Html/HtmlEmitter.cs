@@ -419,25 +419,8 @@ public static class HtmlEmitter
         int level = block.Kind - BlockKind.Heading1 + 1;
         string content = GetHeadingContent(text);
         sb.Append($"<h{level}>");
-        var innerBlocks = MarkdownParser.Parse(_ => content, 1);
-        if (innerBlocks.Count > 0)
-        {
-            var innerBlock = innerBlocks[0];
-            // Inherit link refs from outer parse that inner re-parse can't resolve
-            if (innerBlock.Links == null && block.Links != null)
-            {
-                int prefixLen = GetHeadingPrefixLength(text);
-                var adjustedLinks = block.Links.Select(l =>
-                    new InlineLink(l.Start - prefixLen, l.Length, l.Text, l.Url, l.Title, l.RefLabel, l.IsAngleBracket))
-                    .Where(l => l.Start >= 0 && l.Start + l.Length <= content.Length)
-                    .ToList();
-                if (adjustedLinks.Count > 0)
-                    innerBlock = innerBlock with { Links = adjustedLinks };
-            }
-            AppendInlineHtml(sb, content, innerBlock, 0, options);
-        }
-        else
-            sb.Append(HtmlEncode(content));
+        var innerBlock = MarkdownParser.ParseInlineContent(content, options.LinkDefinitions);
+        AppendInlineHtml(sb, content, innerBlock, 0, options);
         sb.Append($"</h{level}>\n");
         return index + 1;
     }
@@ -772,11 +755,8 @@ public static class HtmlEmitter
                 ? "<input checked=\"\" disabled=\"\" type=\"checkbox\"> "
                 : "<input disabled=\"\" type=\"checkbox\"> ");
             string content = StripTaskListPrefix(lines[i]);
-            var innerBlocks = MarkdownParser.Parse(_ => content, 1);
-            if (innerBlocks.Count > 0)
-                AppendInlineHtml(sb, content, innerBlocks[0], 0, options);
-            else
-                sb.Append(HtmlEncode(content));
+            var innerBlock = MarkdownParser.ParseInlineContent(content, options.LinkDefinitions);
+            AppendInlineHtml(sb, content, innerBlock, 0, options);
             sb.Append("</li>\n");
             i++;
         }
@@ -868,11 +848,8 @@ public static class HtmlEmitter
     static void AppendTableCellContent(StringBuilder sb, string cellText, HtmlEmitterOptions options)
     {
         if (string.IsNullOrEmpty(cellText)) return;
-        var cellBlocks = MarkdownParser.Parse(_ => cellText, 1);
-        if (cellBlocks.Count > 0)
-            AppendInlineContent(sb, cellBlocks[0], cellText, options);
-        else
-            sb.Append(HtmlEncode(cellText));
+        var cellBlock = MarkdownParser.ParseInlineContent(cellText, options.LinkDefinitions);
+        AppendInlineContent(sb, cellBlock, cellText, options);
     }
 
     static void AppendInlineContent(StringBuilder sb, ParsedBlock block, string text, HtmlEmitterOptions options)

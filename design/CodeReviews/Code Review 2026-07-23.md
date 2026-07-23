@@ -128,17 +128,19 @@ If `dialog.PrintDocument` throws (print queue error, driver exception), the clea
 
 **Fix:** Wrap `dialog.PrintDocument(...)` and cleanup in `try/finally`.
 
-### H1 — Reference links not resolved in table cells
+### ~~H1 — Reference links not resolved in table cells~~
 - **File:** `HtmlEmitter.cs:868–876`
 - **Severity:** Medium
+- **Status:** [x] Fixed
 
 `AppendTableCellContent` re-parses cell text via `MarkdownParser.Parse(_ => cellText, 1)` without passing `options.LinkDefinitions`. Reference-style links/images inside table cells render as literal text instead of links.
 
 **Fix:** Use `MarkdownParser.ParseInlineContent(cellText, options.LinkDefinitions)`.
 
-### H2 — Reference links not resolved in task list items
+### ~~H2 — Reference links not resolved in task list items~~
 - **File:** `HtmlEmitter.cs:763–785`
 - **Severity:** Medium
+- **Status:** [x] Fixed
 
 Same root cause as H1: task list item text is parsed with `Parse(_ => content, 1)` and no link definitions.
 
@@ -152,9 +154,10 @@ Task list items and plain list items are rendered by completely separate code pa
 
 **Fix:** Unify task-list and plain-list item handling — treat task items as unordered items with checkbox content, sharing the same `CollectListItems`/loose-list logic.
 
-### H4 — Heading images not resolved via reference definitions
+### ~~H4 — Heading images not resolved via reference definitions~~
 - **File:** `HtmlEmitter.cs:417–443`
 - **Severity:** Medium
+- **Status:** [x] Fixed
 
 Heading inline content is re-parsed without link definitions. The code backfills `Links` only when the inner parse found none (`innerBlock.Links == null`), but `Images` are never backfilled. A heading with `![alt][ref]` silently drops the image.
 
