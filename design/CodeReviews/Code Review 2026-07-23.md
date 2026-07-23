@@ -173,13 +173,14 @@ A line ending in `\\` (escaped backslash = literal backslash) followed by a soft
 
 **Fix:** Before treating `\` as a hard-break marker, check if the preceding position is a hidden escape backslash (`hidden.Contains(ci - 2 + offset)`).
 
-### H6 — `StripInlineMarkdown` drops all `*`/`_` in image alt text
+### ~~H6 — `StripInlineMarkdown` drops all `*`/`_` in image alt text~~
 - **File:** `HtmlEmitter.cs:1986–1989`
 - **Severity:** Medium
+- **Status:** [x] Fixed
 
 Used to build `<img>` `alt` text. Every `*` and `_` character is unconditionally discarded, regardless of whether they're emphasis delimiters or literal punctuation. `![a * b_c](x.png)` produces `alt="a  bc"`.
 
-**Fix:** Only elide matched emphasis delimiters, preserving literal occurrences.
+**Fix:** Parse emphasis markers via `ParseInlineContent`, build a set of delimiter positions, and only skip `*`/`_` at those positions.
 
 ### M1 — O(n²) backward scan in `DetectSetextHeadings`
 - **File:** `MarkdownParser.cs:686–697`

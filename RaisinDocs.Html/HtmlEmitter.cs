@@ -1880,6 +1880,13 @@ public static class HtmlEmitter
 
     static string StripInlineMarkdown(string text)
     {
+        var parsed = MarkdownParser.ParseInlineContent(text);
+        var emphPositions = new HashSet<int>();
+        if (parsed.EmphasisMarkers != null)
+            foreach (var m in parsed.EmphasisMarkers)
+                for (int j = m.Start; j < m.Start + m.Length; j++)
+                    emphPositions.Add(j);
+
         var sb = new StringBuilder(text.Length);
         for (int i = 0; i < text.Length; i++)
         {
@@ -1963,7 +1970,7 @@ public static class HtmlEmitter
                 }
                 sb.Append('[');
             }
-            else if (text[i] is '*' or '_')
+            else if (text[i] is '*' or '_' && emphPositions.Contains(i))
             {
                 continue;
             }
