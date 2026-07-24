@@ -77,7 +77,7 @@ internal class FindBarController
         {
             btn.Foreground = foreground;
             btn.Background = Brushes.Transparent;
-            btn.BorderBrush = Brushes.Transparent;
+            btn.BorderBrush = syntax;
         }
 
         _caseToggle.Foreground = foreground;
@@ -252,10 +252,11 @@ internal class FindBarController
             Height = 24,
             Padding = new Thickness(0),
             Margin = new Thickness(1, 0, 1, 0),
-            BorderThickness = new Thickness(0),
+            BorderThickness = new Thickness(1),
             ToolTip = tooltip,
             Cursor = Cursors.Hand,
             Template = CreateButtonTemplate(),
+            IsHitTestVisible = true,
         };
         return btn;
     }
