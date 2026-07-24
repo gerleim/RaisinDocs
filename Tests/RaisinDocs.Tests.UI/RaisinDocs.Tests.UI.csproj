@@ -22,4 +22,8 @@
     <ProjectReference Include="..\..\RaisinDocs\RaisinDocs.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Content Include="..\..\Tests\RaisinDocs.Tests.Conformance\spec_with_text.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>
