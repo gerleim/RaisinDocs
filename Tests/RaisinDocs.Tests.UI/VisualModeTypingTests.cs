@@ -130,4 +130,38 @@ public class VisualModeTypingTests
         canvas.TestTypeText("> a");
         canvas.TestGetBlockText(0).Should().Be("> a");
     }
+
+    // --- Trailing hard break edge case ---
+
+    [StaFact]
+    public void Type_AtEndOfLineWithTrailingBackslash_InsertsBeforeBackslash()
+    {
+        // Start in visual mode with "Line1\"
+        var canvas = CreateCanvas("Line1\\");
+
+        // Set cursor at end (after the backslash)
+        canvas.TestSetCursor(0, 6);  // "Line1\" has length 6
+
+        // Type 'f'
+        canvas.TestTypeText("f");
+
+        // Result should be "Line1f\" not "Line1\f"
+        canvas.TestGetBlockText(0).Should().Be("Line1f\\", "Character should be inserted before the trailing backslash hard break");
+    }
+
+    [StaFact]
+    public void Type_AtEndOfLineWithTrailingSpaces_InsertsBeforeSpaces()
+    {
+        // Start in visual mode with "Line1  " (trailing spaces hard break)
+        var canvas = CreateCanvas("Line1  ");
+
+        // Set cursor at end (after the spaces)
+        canvas.TestSetCursor(0, 7);
+
+        // Type 'f'
+        canvas.TestTypeText("f");
+
+        // Result should be "Line1f  " not "Line1  f"
+        canvas.TestGetBlockText(0).Should().Be("Line1f  ", "Character should be inserted before trailing spaces hard break");
+    }
 }

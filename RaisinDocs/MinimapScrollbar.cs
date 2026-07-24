@@ -49,15 +49,18 @@ public class MinimapScrollbar : FrameworkElement
     private WriteableBitmap? _bitmap;
     private byte[] _pixelBuf = Array.Empty<byte>();
     private int _cachedVersion;
-    private int _cachedFirstLine;
-    private int _cachedVisibleCount;
-    private int _cachedSubPixelOff;
     private Color _cachedBg, _cachedFg, _cachedCodeBg;
     private double[]? _lineYPos;
     private double _totalMinimapH;
     private int _heightTableVersion = -1;
     private readonly List<MinimapTableCell> _tableCells = new();
     private readonly Dictionary<BitmapSource, (byte[] Pixels, int Width, int Height)> _thumbCache = new();
+
+    // Incremental rendering state
+    private int _cachedBitmapFirstLine;
+    private int _cachedBitmapLineCount;
+    private double _cachedBitmapStartY;
+    private bool _needsFullRebuild = true;
 
     internal DocsCanvas? Canvas { get; set; }
 
@@ -176,27 +179,53 @@ public class MinimapScrollbar : FrameworkElement
 
         double canvasTextWidth = Canvas.MinimapCanvasTextWidth;
 
-        int subPixelInt = (int)subPixelOff;
-        if (_bitmap == null
-            || _bitmap.PixelWidth != (int)w || _bitmap.PixelHeight != (int)h
+        // Incremental rendering: build larger cache to avoid frequent rebuilds
+        const double CacheHeightMultiplier = 2.0;
+        double cacheHeight = Math.Max(h * CacheHeightMultiplier, h + CharHeight * 20);
+
+        int cacheFirstLine = Math.Max(0, firstLine - (int)Math.Ceiling(cacheHeight / CharHeight * 0.25));
+        int cacheLastLine = Math.Min(totalLines - 1, firstLine + visibleCount + (int)Math.Ceiling(cacheHeight / CharHeight * 0.25));
+        int cacheLineCount = cacheLastLine - cacheFirstLine + 1;
+        int cacheBitmapH = Math.Max((int)cacheHeight, (int)h);
+
+        bool needsRebuild = _needsFullRebuild
+            || _bitmap == null
+            || _bitmap.PixelWidth != (int)w || _bitmap.PixelHeight != cacheBitmapH
             || version != _cachedVersion
-            || firstLine != _cachedFirstLine
-            || visibleCount != _cachedVisibleCount
-            || subPixelInt != _cachedSubPixelOff
-            || bg != _cachedBg || fg != _cachedFg || codeBg != _cachedCodeBg)
+            || bg != _cachedBg || fg != _cachedFg || codeBg != _cachedCodeBg
+            || cacheFirstLine < _cachedBitmapFirstLine || cacheLastLine > _cachedBitmapFirstLine + _cachedBitmapLineCount - 1;
+
+        if (needsRebuild)
         {
-            RebuildBitmap((int)w, (int)h, firstLine, visibleCount, subPixelOff, bg, fg, codeBg, canvasTextWidth);
+            RebuildBitmap((int)w, cacheBitmapH, cacheFirstLine, cacheLineCount, 0, bg, fg, codeBg, canvasTextWidth);
             _cachedVersion = version;
-            _cachedFirstLine = firstLine;
-            _cachedVisibleCount = visibleCount;
-            _cachedSubPixelOff = subPixelInt;
+            _cachedBitmapFirstLine = cacheFirstLine;
+            _cachedBitmapLineCount = cacheLineCount;
+            _cachedBitmapStartY = cacheFirstLine > 0 ? _lineYPos![cacheFirstLine] : 0;
             _cachedBg = bg;
             _cachedFg = fg;
             _cachedCodeBg = codeBg;
+            _needsFullRebuild = false;
         }
 
         if (_bitmap != null)
-            dc.DrawImage(_bitmap, new Rect(0, 0, w, h));
+        {
+            double viewportY = _minimapScroll;
+            double offsetFromCacheStart = viewportY - _cachedBitmapStartY;
+            int sourceY = Math.Max(0, (int)Math.Round(offsetFromCacheStart));
+            int sourceHeight = Math.Min(_bitmap.PixelHeight - sourceY, (int)h);
+
+            if (sourceHeight > 0 && sourceY < _bitmap.PixelHeight)
+            {
+                var croppedBitmap = new CroppedBitmap(_bitmap, new Int32Rect(0, sourceY, _bitmap.PixelWidth, sourceHeight));
+                dc.DrawImage(croppedBitmap, new Rect(0, 0, w, sourceHeight));
+
+                if (sourceHeight < h)
+                {
+                    dc.DrawRectangle(new SolidColorBrush(bg), null, new Rect(0, sourceHeight, w, h - sourceHeight));
+                }
+            }
+        }
 
         if (_isHovering && !_isDragging)
         {
@@ -558,6 +587,7 @@ public class MinimapScrollbar : FrameworkElement
             return;
 
         _thumbCache.Clear();
+        _needsFullRebuild = true;
         var canvasLineYs = Canvas!.MinimapCanvasLineYPositions;
         double totalContentH = Canvas.MinimapTotalHeight;
         double baseLineH = Canvas.MinimapBaseLineHeight;
