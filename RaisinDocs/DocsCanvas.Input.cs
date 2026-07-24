@@ -316,7 +316,7 @@ public partial class DocsCanvas
         foreach (char c in text)
         {
             if (c < ' ' && c != '\t') continue;
-            if (IsVisual)
+            if (IsVisual && _doc.CursorOffset == _doc.GetBlockLength(_doc.CursorBlock))
                 ClampCursorBeforeTrailingHidden();
             _doc.Insert(c);
         }

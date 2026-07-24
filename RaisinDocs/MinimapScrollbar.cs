@@ -180,11 +180,14 @@ public class MinimapScrollbar : FrameworkElement
         double canvasTextWidth = Canvas.MinimapCanvasTextWidth;
 
         // Incremental rendering: build larger cache to avoid frequent rebuilds
-        const double CacheHeightMultiplier = 2.0;
-        double cacheHeight = Math.Max(h * CacheHeightMultiplier, h + CharHeight * 20);
+        // Use 3x height multiplier with significant overlap to hide cache boundaries
+        const double CacheHeightMultiplier = 3.0;
+        double cacheHeight = Math.Max(h * CacheHeightMultiplier, h + CharHeight * 30);
+        double cacheOverlapFraction = 0.4; // 40% overlap on each side
 
-        int cacheFirstLine = Math.Max(0, firstLine - (int)Math.Ceiling(cacheHeight / CharHeight * 0.25));
-        int cacheLastLine = Math.Min(totalLines - 1, firstLine + visibleCount + (int)Math.Ceiling(cacheHeight / CharHeight * 0.25));
+        int cachePadLineCount = (int)Math.Ceiling(cacheHeight / CharHeight * cacheOverlapFraction);
+        int cacheFirstLine = Math.Max(0, firstLine - cachePadLineCount);
+        int cacheLastLine = Math.Min(totalLines - 1, firstLine + visibleCount + cachePadLineCount);
         int cacheLineCount = cacheLastLine - cacheFirstLine + 1;
         int cacheBitmapH = Math.Max((int)cacheHeight, (int)h);
 
@@ -212,18 +215,23 @@ public class MinimapScrollbar : FrameworkElement
         {
             double viewportY = _minimapScroll;
             double offsetFromCacheStart = viewportY - _cachedBitmapStartY;
-            int sourceY = Math.Max(0, (int)Math.Round(offsetFromCacheStart));
-            int sourceHeight = Math.Min(_bitmap.PixelHeight - sourceY, (int)h);
+            double destY = -offsetFromCacheStart;
 
-            if (sourceHeight > 0 && sourceY < _bitmap.PixelHeight)
+            // Clip drawing to control bounds to prevent overflow
+            dc.PushClip(new RectangleGeometry(new Rect(0, 0, w, h)));
+
+            dc.DrawImage(_bitmap, new Rect(0, destY, w, _bitmap.PixelHeight));
+
+            dc.Pop();
+
+            if (destY > 0)
             {
-                var croppedBitmap = new CroppedBitmap(_bitmap, new Int32Rect(0, sourceY, _bitmap.PixelWidth, sourceHeight));
-                dc.DrawImage(croppedBitmap, new Rect(0, 0, w, sourceHeight));
-
-                if (sourceHeight < h)
-                {
-                    dc.DrawRectangle(new SolidColorBrush(bg), null, new Rect(0, sourceHeight, w, h - sourceHeight));
-                }
+                dc.DrawRectangle(new SolidColorBrush(bg), null, new Rect(0, 0, w, destY));
+            }
+            if (destY + _bitmap.PixelHeight < h)
+            {
+                double fillY = destY + _bitmap.PixelHeight;
+                dc.DrawRectangle(new SolidColorBrush(bg), null, new Rect(0, fillY, w, h - fillY));
             }
         }
 
@@ -359,7 +367,6 @@ public class MinimapScrollbar : FrameworkElement
             byte lineFgB = fg.B, lineFgG = fg.G, lineFgR = fg.R;
             IReadOnlyList<ColorSpan>? colorSpans = null;
             int spanBaseOffset = 0;
-            double renderLineY = lineY;
 
             if (isCode)
             {
@@ -371,7 +378,6 @@ public class MinimapScrollbar : FrameworkElement
                         _pixelBuf[off + 1] = cbG;
                         _pixelBuf[off + 2] = cbR;
                     }
-                renderLineY = Math.Round(lineY);
             }
             else
             {
@@ -392,7 +398,7 @@ public class MinimapScrollbar : FrameworkElement
                 }
             }
 
-            RenderTextGlyphs(text, 1, renderLineY, scale, baseAdvance, isCode,
+            RenderTextGlyphs(text, 1, lineY, scale, baseAdvance, isCode,
                 lineFgB, lineFgG, lineFgR, colorSpans, spanBaseOffset,
                 py0, pyEnd, w, h);
         }
