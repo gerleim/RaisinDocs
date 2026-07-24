@@ -584,8 +584,32 @@ public partial class DocsCanvas : FrameworkElement
             return _padding + CursorXInVisualLine(vli);
         }
     }
+    internal record struct VisualBlockInfo(string RawText, string VisualText, BlockKind Kind);
+
     internal string TestGetBlockText(int block) => _doc.GetBlockText(block);
     internal int TestBlockCount => _doc.BlockCount;
+
+    internal VisualBlockInfo[] TestGetVisualBlockInfos()
+    {
+        var result = new List<VisualBlockInfo>();
+
+        for (int i = 0; i < _doc.BlockCount; i++)
+        {
+            var rawText = _doc.GetBlockText(i);
+            var visualMap = _visualMaps[i];
+            var displayText = visualMap.BuildDisplayString(rawText, 0, rawText.Length);
+
+            // Include replacement prefix (e.g., list markers, heading markers)
+            if (visualMap.ReplacementPrefix != null)
+                displayText = visualMap.ReplacementPrefix + displayText;
+
+            var kind = _parsedBlocks?[i].Kind ?? BlockKind.Paragraph;
+
+            result.Add(new(rawText, displayText, kind));
+        }
+
+        return result.ToArray();
+    }
     internal int TestGetVisualLineBlockIndex(int vi) => _visualLines[vi].BlockIndex;
     internal BlockKind TestGetVisualLineBlockKind(int vi) => _visualLines[vi].BlockKind;
     internal double TestGetLineYPosition(int vi) => _lineYPositions[vi];
@@ -1713,7 +1737,7 @@ public partial class DocsCanvas : FrameworkElement
         ApplySyntaxDimming(ft, vl, parsed, blockText);
     }
 
-    private void ApplySyntaxTokens(FormattedText ft, VisualLine vl, IReadOnlyList<SyntaxToken> tokens)
+    private void ApplySyntaxTokens(FormattedText ft, VisualLine vl, IReadOnlyList<SyntaxToken> tokens, BlockVisualMap? map = null)
     {
         int vlEnd = vl.StartOffset + vl.Length;
         foreach (var token in tokens)
@@ -1721,9 +1745,24 @@ public partial class DocsCanvas : FrameworkElement
             int tokenEnd = token.Start + token.Length;
             if (tokenEnd <= vl.StartOffset || token.Start >= vlEnd) continue;
 
-            int localStart = Math.Max(0, token.Start - vl.StartOffset);
-            int localEnd = Math.Min(vl.Length, tokenEnd - vl.StartOffset);
-            int count = localEnd - localStart;
+            int localStart;
+            int count;
+            if (map != null)
+            {
+                int rawStart = Math.Max(token.Start, vl.StartOffset);
+                int rawEnd = Math.Min(tokenEnd, vlEnd);
+                int vlVisualOffset = map.RawToVisual(vl.StartOffset);
+                int visStart = map.RawToVisual(rawStart) - vlVisualOffset;
+                int visEnd = map.RawToVisual(rawEnd) - vlVisualOffset;
+                localStart = visStart;
+                count = visEnd - visStart;
+            }
+            else
+            {
+                localStart = Math.Max(0, token.Start - vl.StartOffset);
+                int localEnd = Math.Min(vl.Length, tokenEnd - vl.StartOffset);
+                count = localEnd - localStart;
+            }
             if (count <= 0) continue;
 
             var brush = GetSyntaxBrush(token.ForegroundArgb);

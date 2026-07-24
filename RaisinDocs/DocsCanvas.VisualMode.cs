@@ -1301,7 +1301,7 @@ public partial class DocsCanvas
     {
         if (parsed.SyntaxTokens != null)
         {
-            ApplySyntaxTokens(ft, vl, parsed.SyntaxTokens);
+            ApplySyntaxTokens(ft, vl, parsed.SyntaxTokens, map);
             return;
         }
 
