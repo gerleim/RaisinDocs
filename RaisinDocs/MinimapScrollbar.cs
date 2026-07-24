@@ -745,6 +745,7 @@ public class MinimapScrollbar : FrameworkElement
         int bh = Math.Max(1, (int)Math.Ceiling(ft.Height) + 2);
 
         var dv = new DrawingVisual();
+        RenderOptions.SetEdgeMode(dv, EdgeMode.Aliased);  // Disable anti-aliasing for sharp rendering at scale
         using (var ctx = dv.RenderOpen())
             ctx.DrawText(ft, new Point(1, 0));
         var rtb = new RenderTargetBitmap(bw, bh, 96, 96, PixelFormats.Pbgra32);
