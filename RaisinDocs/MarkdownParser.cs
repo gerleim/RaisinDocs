@@ -891,7 +891,7 @@ public static class MarkdownParser
     private static void DetectIndentedCode(List<ParsedBlock> blocks, Func<int, string> getBlockText,
         Dictionary<string, (string Url, string? Title)>? defs)
     {
-        // Build map of which blocks are children of containers
+        // Build map of which blocks are children of containers and their parents
         var blockToParent = new Dictionary<int, int>();
         for (int i = 0; i < blocks.Count; i++)
         {
@@ -964,6 +964,27 @@ public static class MarkdownParser
             }
 
             i = j - 1;
+        }
+
+        // Handle children that are IndentedCodeLine but insufficient indentation for code block
+        // These need to be reclassified as paragraphs
+        foreach (var kvp in blockToParent)
+        {
+            int childIdx = kvp.Key;
+            int parentIdx = kvp.Value;
+
+            if (blocks[childIdx].Kind != BlockKind.IndentedCodeLine)
+                continue;
+
+            // Check if indentation is insufficient for code block within container
+            int parentCC = blocks[parentIdx].ContentColumn;
+            int indent = MeasureLeadingWhitespace(getBlockText(childIdx)).columns;
+
+            // Indented continuations need >= parentCC + 4 spaces to be code
+            if (indent < parentCC + 4)
+            {
+                blocks[childIdx] = ReclassifyAsParagraph(blocks[childIdx], getBlockText(childIdx), defs);
+            }
         }
     }
 
