@@ -1068,8 +1068,10 @@ public static class MarkdownParser
 
     private static void BuildHierarchy(List<ParsedBlock> blocks)
     {
-        // Build hierarchy from OwnerBlock relationships
-        // Each container block collects its children based on OwnerBlock
+        // Build hierarchy from continuation relationships and indentation
+        // Each container block collects its children based on:
+        // 1. OwnerBlock relationship (continuation lines)
+        // 2. Indentation-based nesting (nested containers)
         for (int i = 0; i < blocks.Count; i++)
         {
             var block = blocks[i];
@@ -1077,21 +1079,39 @@ public static class MarkdownParser
                 continue;
 
             var children = new List<ParsedBlock>();
+            int containerContentCol = block.ContentColumn;
+
             for (int j = i + 1; j < blocks.Count; j++)
             {
-                // Collect blocks that directly belong to this container
-                if (blocks[j].OwnerBlock == i)
+                var nextBlock = blocks[j];
+
+                // Case 1: Block is marked as continuation of this container
+                if (nextBlock.OwnerBlock == i)
                 {
-                    children.Add(blocks[j]);
+                    children.Add(nextBlock);
                 }
-                else if (blocks[j].OwnerBlock != -1)
+                // Case 2: Block is indented more than container's content column (nested content)
+                else if (IsContainerBlock(nextBlock.Kind) && nextBlock.LeadingSpaces >= containerContentCol)
                 {
-                    // This block belongs to a different container, stop collecting
+                    // Nested list/blockquote
+                    children.Add(nextBlock);
+                }
+                // Case 3: Block is a paragraph/code at container's indentation (lazy continuation)
+                else if ((nextBlock.Kind == BlockKind.Paragraph || nextBlock.Kind == BlockKind.IndentedCodeLine)
+                    && nextBlock.OwnerBlock == -1 && nextBlock.LeadingSpaces >= containerContentCol)
+                {
+                    // This shouldn't happen if DetectContinuations worked correctly, but handle it
+                    children.Add(nextBlock);
+                }
+                // Case 4: Stop collecting children
+                else if (nextBlock.OwnerBlock == -1 && (!IsContainerBlock(nextBlock.Kind) || nextBlock.LeadingSpaces < containerContentCol))
+                {
+                    // This block is not indented enough or belongs to a different container
                     break;
                 }
-                else if (IsContainerBlock(blocks[j].Kind))
+                else if (nextBlock.OwnerBlock != -1 && nextBlock.OwnerBlock != i)
                 {
-                    // Hit another container that's not owned, stop
+                    // This block belongs to a different container
                     break;
                 }
             }
