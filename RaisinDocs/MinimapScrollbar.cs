@@ -511,12 +511,24 @@ public class MinimapScrollbar : FrameworkElement
 
         for (int ci = 0; ci < text.Length; ci++)
         {
-            int ch = text[ci];
+            int codePoint;
+
+            // Handle UTF-16 surrogate pairs (emoji, other non-BMP characters)
+            if (char.IsHighSurrogate(text, ci) && ci + 1 < text.Length && char.IsLowSurrogate(text, ci + 1))
+            {
+                codePoint = char.ConvertToUtf32(text, ci);
+                ci++;  // Skip the low surrogate
+            }
+            else
+            {
+                codePoint = text[ci];
+            }
+
             GlyphInfo glyph;
-            if (ch >= FirstPrintable && ch <= LastPrintable)
-                glyph = glyphs[ch - FirstPrintable];
-            else if (ch > LastPrintable)
-                glyph = GetExtendedGlyph(ch, isCode);
+            if (codePoint >= FirstPrintable && codePoint <= LastPrintable)
+                glyph = glyphs[codePoint - FirstPrintable];
+            else if (codePoint > LastPrintable)
+                glyph = GetExtendedGlyph(codePoint, isCode);
             else
             {
                 x += baseAdvance;
@@ -734,11 +746,6 @@ public class MinimapScrollbar : FrameworkElement
     private static GlyphInfo RenderGlyph(int codePoint, Typeface typeface, double cellWidth)
     {
         const double size = 24.0;
-
-        // Validate UTF32 codepoint (must be 0x000000-0x10FFFF, excluding surrogates 0x00D800-0x00DFFF)
-        if (codePoint < 0 || codePoint > 0x10FFFF || (codePoint >= 0xD800 && codePoint <= 0xDFFF))
-            codePoint = '?';  // Replace invalid codepoint with fallback character
-
         string text = char.ConvertFromUtf32(codePoint);
 
         var ft = new FormattedText(text, CultureInfo.InvariantCulture,
