@@ -46,6 +46,30 @@ public class VisualBlockStructureTests
     }
 
     [Fact]
+    public void RenderingPipeline_SadS()
+    {
+        // Full pipeline test: "sad" followed by "s"
+        var blocks = new[] { "sad", "s" };
+
+        // 1. Parser detects continuation
+        var parsed = ParseBlocks(blocks);
+        parsed[0].Children.Should().NotBeNull("Parser should detect continuation");
+        parsed[0].Children!.Should().Contain(parsed[1]);
+
+        // 2. VisualBlockStructure merges them
+        var visualStructure = VisualBlockStructure.Build(parsed, i => blocks[i]);
+        visualStructure.Blocks.Should().HaveCount(1);
+        var merged = visualStructure.Blocks[0];
+        merged.MergedText.ToString().Should().Be("sad\ns");
+        merged.SourceBlockIndices.Should().HaveCount(2);
+
+        // 3. Verify all properties transferred
+        merged.Kind.Should().Be(BlockKind.Paragraph);
+        merged.Runs.Should().NotBeEmpty();
+        merged.SourceBlockIndices.Should().Equal([0, 1]);
+    }
+
+    [Fact]
     public void SingleParagraph_NoMerging()
     {
         var result = BuildVisualStructure("hello world");
