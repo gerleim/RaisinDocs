@@ -376,6 +376,7 @@ public static class MarkdownParser
         DetectSetextHeadings(result, getBlockText);
         DetectTables(result, getBlockText);
         DetectListNesting(result, getBlockText, defs, theme);
+        MergeParagraphContinuations(result, getBlockText);
         BuildHierarchy(result, getBlockText);
         DetectIndentedCode(result, getBlockText, defs);
         ApplyBlockDivColors(result);
@@ -1044,6 +1045,43 @@ public static class MarkdownParser
             return true;
 
         return false;
+    }
+
+    private static void MergeParagraphContinuations(List<ParsedBlock> blocks, Func<int, string> getBlockText)
+    {
+        // Mark paragraph lazy continuations so rendering can join them
+        // A paragraph can have lazy continuations: subsequent paragraphs with no blank line between
+        for (int i = 0; i < blocks.Count; i++)
+        {
+            if (blocks[i].Kind != BlockKind.Paragraph)
+                continue;
+
+            var continuations = new List<ParsedBlock>();
+            for (int j = i + 1; j < blocks.Count; j++)
+            {
+                string text = getBlockText(j);
+
+                // Blank line breaks continuations
+                if (text.Length == 0)
+                    break;
+
+                // Next paragraph is a lazy continuation
+                if (blocks[j].Kind == BlockKind.Paragraph)
+                {
+                    continuations.Add(blocks[j]);
+                    continue;
+                }
+
+                // Any other block type stops continuations
+                break;
+            }
+
+            if (continuations.Count > 0)
+            {
+                // Mark this paragraph as having continuations by adding them as children
+                blocks[i] = blocks[i] with { Children = continuations };
+            }
+        }
     }
 
     private static void BuildHierarchy(List<ParsedBlock> blocks, Func<int, string> getBlockText)
