@@ -1210,12 +1210,7 @@ public partial class DocsCanvas : FrameworkElement
         int offset = 0;
         for (int s = 0; s < segments.Length; s++)
         {
-            // In visual mode: render paragraph soft breaks as spaces
-            var segmentText = (IsVisual && parsed.Kind == BlockKind.Paragraph && segments.Length > 1 && s < segments.Length - 1)
-                ? segments[s] + " "  // Add space instead of newline for soft breaks
-                : segments[s];
-
-            WrapSegment(blockIndex, offset, segmentText, maxWidth, parsed, map, nestingDepth, parentContentCol);
+            WrapSegment(blockIndex, offset, segments[s], maxWidth, parsed, map, nestingDepth, parentContentCol);
             offset += segments[s].Length + 1;
         }
 
