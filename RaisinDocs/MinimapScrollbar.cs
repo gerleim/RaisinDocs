@@ -734,6 +734,11 @@ public class MinimapScrollbar : FrameworkElement
     private static GlyphInfo RenderGlyph(int codePoint, Typeface typeface, double cellWidth)
     {
         const double size = 24.0;
+
+        // Validate UTF32 codepoint (must be 0x000000-0x10FFFF, excluding surrogates 0x00D800-0x00DFFF)
+        if (codePoint < 0 || codePoint > 0x10FFFF || (codePoint >= 0xD800 && codePoint <= 0xDFFF))
+            codePoint = '?';  // Replace invalid codepoint with fallback character
+
         string text = char.ConvertFromUtf32(codePoint);
 
         var ft = new FormattedText(text, CultureInfo.InvariantCulture,
