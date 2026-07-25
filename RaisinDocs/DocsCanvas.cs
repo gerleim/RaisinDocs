@@ -262,6 +262,7 @@ public partial class DocsCanvas : FrameworkElement
     private int _layoutVersion;
 
     public string? DocumentBasePath { get; set; }
+    public int BlockCount => _doc.BlockCount;
 
     internal event Action? ScrollStateChanged;
     internal double ScrollOffset => _scroll.Offset;

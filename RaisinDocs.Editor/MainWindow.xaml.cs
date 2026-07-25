@@ -200,7 +200,8 @@ public partial class MainWindow : Window
         }
         var name = tab.FilePath != null ? Path.GetFileName(tab.FilePath) : "Untitled";
         var dirty = tab.Editor.IsDirty ? " *" : "";
-        Title = $"{name}{dirty} — RaisinDocs Editor";
+        var blockCount = tab.Editor.Canvas.BlockCount;
+        Title = $"{name}{dirty} — RaisinDocs Editor [Blocks: {blockCount}]";
     }
 
     private static void UpdateTabHeader(DocumentTab tab)
