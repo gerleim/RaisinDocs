@@ -1985,6 +1985,16 @@ public partial class DocsCanvas : FrameworkElement
                     DimRange(ft, vl, tag.Start, tag.Length);
             }
         }
+
+        if (parsed.Kind == BlockKind.HtmlBlock)
+        {
+            var htmlCommentRanges = MarkdownParser.FindHtmlCommentRanges(blockText);
+            if (htmlCommentRanges != null)
+            {
+                foreach (var commentRange in htmlCommentRanges)
+                    DimRange(ft, vl, commentRange.Start, commentRange.Length);
+            }
+        }
     }
 
     private static int CountBackticks(string text, int start)
