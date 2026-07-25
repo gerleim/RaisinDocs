@@ -2033,6 +2033,70 @@ public class DocumentTests
     }
 
     [Fact]
+    public void ParagraphContinuation_FullParseFlow()
+    {
+        // Test the full flow: create document, parse it, mark continuations, then merge
+        var doc = new Document();
+        doc.Insert('f'); doc.Insert('i'); doc.Insert('r'); doc.Insert('s'); doc.Insert('t');
+        doc.Insert(' '); doc.Insert('l'); doc.Insert('i'); doc.Insert('n'); doc.Insert('e');
+        doc.InsertParagraphBreak();
+        doc.Insert('s'); doc.Insert('e'); doc.Insert('c'); doc.Insert('o'); doc.Insert('n');
+        doc.Insert('d'); doc.Insert(' '); doc.Insert('l'); doc.Insert('i'); doc.Insert('n'); doc.Insert('e');
+
+        // Parse the current document state
+        var parsedBlocks = MarkdownParser.Parse(i => doc.GetBlockText(i), doc.BlockCount);
+
+        // Verify parser marked the continuation
+        parsedBlocks[0].Children.Should().NotBeNull("Parser should mark second paragraph as continuation");
+        parsedBlocks[0].Children.Should().HaveCount(1);
+
+        // Now merge
+        int blockCountBefore = doc.BlockCount;
+        blockCountBefore.Should().Be(2);
+
+        doc.MergeParagraphContinuations(parsedBlocks);
+
+        doc.BlockCount.Should().Be(1, "After merge, should have only one block");
+        doc.GetBlockText(0).Should().Be("first line\nsecond line");
+    }
+
+    [Fact]
+    public void ParagraphContinuation_VerifyBlocksRemoved()
+    {
+        // Verify that Document.MergeParagraphContinuations actually removes the continuation blocks
+        var doc = new Document();
+        doc.Insert('a');
+        doc.InsertParagraphBreak();
+        doc.Insert('b');
+        doc.InsertParagraphBreak();
+        doc.Insert('c');
+
+        doc.BlockCount.Should().Be(3);
+        doc.GetBlockText(0).Should().Be("a");
+        doc.GetBlockText(1).Should().Be("b");
+        doc.GetBlockText(2).Should().Be("c");
+
+        // Parse
+        var parsedBlocks = MarkdownParser.Parse(i => doc.GetBlockText(i), doc.BlockCount);
+        parsedBlocks.Should().HaveCount(3);
+
+        // First should be a paragraph, second and third should be marked as continuations
+        parsedBlocks[0].Kind.Should().Be(BlockKind.Paragraph);
+        parsedBlocks[1].Kind.Should().Be(BlockKind.Paragraph);
+        parsedBlocks[2].Kind.Should().Be(BlockKind.Paragraph);
+        parsedBlocks[0].Children.Should().NotBeNull();
+        parsedBlocks[0].Children.Should().HaveCount(2);
+
+        // Merge
+        doc.MergeParagraphContinuations(parsedBlocks);
+
+        // All three should be combined into one
+        doc.BlockCount.Should().Be(1);
+        doc.GetBlockText(0).Should().Be("a\nb\nc");
+        parsedBlocks.Should().HaveCount(1);
+    }
+
+    [Fact]
     public void ParagraphContinuation_Document_Merges()
     {
         // Create a document with parsed blocks that have continuations marked
