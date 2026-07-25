@@ -1628,6 +1628,16 @@ public partial class DocsCanvas : FrameworkElement
 
                     double textX = _padding;
 
+                    // Add indentation for nested blocks
+                    if (vl.NestingDepth > 0)
+                    {
+                        // Calculate indentation based on parent's content column
+                        // Each nesting level adds indentation equal to parent's content width
+                        double charWidth = _measure.MeasureCharWidth(' ', parsed.Kind, InlineStyle.Normal);
+                        double nestingIndent = vl.ParentContentColumn * charWidth;
+                        textX += nestingIndent;
+                    }
+
                     if (IsVisual && parsed.Kind == BlockKind.ThematicBreak)
                     {
                         double ruleY = lineY - effectiveScroll + 10;
