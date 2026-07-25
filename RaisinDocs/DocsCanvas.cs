@@ -1152,8 +1152,6 @@ public partial class DocsCanvas : FrameworkElement
 
         if (text.Length == 0)
         {
-            if (IsVisual && parsed.OwnerBlock >= 0)
-                return;
             _visualLines.Add(new VisualLine(blockIndex, 0, 0, parsed.Kind)
             {
                 OverrideHeight = _paragraphGap,

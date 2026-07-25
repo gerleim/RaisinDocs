@@ -137,12 +137,38 @@ public class BlockVisualMap
 
         bool isContinuation = false;
         BlockKind prefixMeasureKind = parsed.Kind;
-        if ((parsed.IsLazyContinuation || parsed.IsIndentedContinuation)
-            && parsed.OwnerBlock >= 0 && allBlocks != null && getBlockText != null)
-        {
-            var owner = allBlocks[parsed.OwnerBlock];
-            string ownerText = getBlockText(parsed.OwnerBlock);
 
+        // Find parent block from hierarchy if this is a child block
+        ParsedBlock? owner = null;
+        string? ownerText = null;
+        int ownerIndex = -1;
+
+        if (allBlocks != null && parsed.OwnerBlock >= 0)
+        {
+            owner = allBlocks[parsed.OwnerBlock];
+            if (getBlockText != null)
+                ownerText = getBlockText(parsed.OwnerBlock);
+            ownerIndex = parsed.OwnerBlock;
+        }
+        else if (allBlocks != null && parsed.Children == null)
+        {
+            // Try to find parent from hierarchy (block that has this block as a child)
+            for (int i = 0; i < allBlocks.Count; i++)
+            {
+                var block = allBlocks[i];
+                if (block.Children != null && block.Children.Contains(parsed))
+                {
+                    owner = block;
+                    if (getBlockText != null)
+                        ownerText = getBlockText(i);
+                    ownerIndex = i;
+                    break;
+                }
+            }
+        }
+
+        if ((parsed.IsLazyContinuation || parsed.IsIndentedContinuation) && owner != null && ownerText != null)
+        {
             if (owner.ContentColumn > 0)
             {
                 var (leadChars, cols) = MarkdownParser.MeasureLeadingWhitespace(blockText);
