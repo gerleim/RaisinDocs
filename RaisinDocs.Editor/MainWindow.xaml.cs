@@ -174,6 +174,11 @@ public partial class MainWindow : Window
         var tab = new DocumentTab(tabItem, editor, headerText) { FilePath = filePath };
 
         closeButton.Click += (_, _) => CloseTab(tab);
+        editor.Canvas.ContentChanged += (_, _) =>
+        {
+            if (tab == ActiveTab)
+                UpdateTitle();
+        };
         editor.IsDirtyChanged += (_, _) =>
         {
             UpdateTabHeader(tab);
