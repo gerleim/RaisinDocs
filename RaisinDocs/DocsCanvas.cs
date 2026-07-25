@@ -1473,7 +1473,7 @@ public partial class DocsCanvas : FrameworkElement
         double lineH = GetEffectiveLineHeight(_visualLines[vli]);
         double cursorBottom = cursorY + lineH;
         if (cursorY < _scroll.Offset + _padding)
-            _scroll.Offset = cursorY - _padding;
+            _scroll.Offset = Math.Max(0, cursorY - _padding);
         else if (cursorBottom > _scroll.Offset + ActualHeight - _padding)
             _scroll.Offset = cursorBottom - ActualHeight + _padding;
         _scroll.Clamp();
