@@ -952,6 +952,22 @@ public partial class DocsCanvas : FrameworkElement
     private void BuildParagraphGroups()
     {
         _blockToGroup = new Dictionary<int, ParagraphGroup>();
+
+        // If we have VisualBlockStructure, use it to identify merged paragraphs
+        if (_visualBlockStructure != null)
+        {
+            for (int vi = 0; vi < _visualBlockStructure.Blocks.Count; vi++)
+            {
+                var vblock = _visualBlockStructure.Blocks[vi];
+                if (vblock.SourceBlockIndices.Count > 1)
+                {
+                    EmitParagraphGroupFromVisualBlock(vblock);
+                }
+            }
+            return;
+        }
+
+        // Fallback: original logic for when VisualBlockStructure is not available
         var groupBlocks = new List<int>();
 
         for (int bi = 0; bi <= _doc.BlockCount; bi++)
@@ -991,6 +1007,67 @@ public partial class DocsCanvas : FrameworkElement
                     groupBlocks.Add(bi);
             }
         }
+    }
+
+    private void EmitParagraphGroupFromVisualBlock(VisualBlock vblock)
+    {
+        var blockIndices = vblock.SourceBlockIndices;
+        var joinedText = vblock.MergedText.ToString();
+
+        // Build segments from source indices
+        var segments = new JoinSegment[blockIndices.Count];
+        var softBreakOffsets = new List<int>();
+        int currentOffset = 0;
+
+        for (int i = 0; i < blockIndices.Count; i++)
+        {
+            if (i > 0)
+            {
+                softBreakOffsets.Add(currentOffset);
+                currentOffset++; // for the internal \n
+            }
+
+            int bi = blockIndices[i];
+            string text = _doc.GetBlockText(bi);
+            segments[i] = new JoinSegment(bi, currentOffset, text.Length);
+            currentOffset += text.Length;
+        }
+
+        // Create BlockVisualMap for the merged text
+        var mergedHiddenRanges = new List<HiddenRange>();
+        if (IsVisual && _visualMaps != null)
+        {
+            for (int i = 0; i < blockIndices.Count; i++)
+            {
+                var map = _visualMaps[blockIndices[i]];
+                foreach (var hr in map.HiddenRanges)
+                    mergedHiddenRanges.Add(new HiddenRange(hr.Start + segments[i].OffsetInJoined, hr.Length));
+            }
+        }
+        mergedHiddenRanges.Sort((a, b) => a.Start.CompareTo(b.Start));
+
+        var joinedParsed = new ParsedBlock
+        {
+            Kind = BlockKind.Paragraph,
+            Runs = vblock.Runs,
+            Images = vblock.Images,
+            ColorSpans = vblock.ColorSpans,
+        };
+        var joinedMap = new BlockVisualMap(mergedHiddenRanges,
+            images: vblock.Images,
+            colorSpans: vblock.ColorSpans);
+
+        var group = new ParagraphGroup
+        {
+            Segments = segments,
+            JoinedText = joinedText,
+            JoinedMap = joinedMap,
+            JoinedParsed = joinedParsed,
+            SoftBreakOffsets = softBreakOffsets.ToArray(),
+        };
+
+        foreach (var seg in segments)
+            _blockToGroup![seg.BlockIndex] = group;
     }
 
     private void EmitParagraphGroup(List<int> blockIndices)
