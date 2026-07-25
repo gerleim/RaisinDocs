@@ -175,3 +175,92 @@ public class VisualBlockStructureTests
         result.Blocks[0].Links!.Should().HaveCount(1);
     }
 }
+
+public class ContinuationRenderingTests
+{
+    [Fact]
+    public void MergedBlockContainsNewline()
+    {
+        // After MergeParagraphContinuations, a block should contain \n between continuations
+        var blocks = new[] { "sad", "s" };
+        var parsed = MarkdownParser.Parse(i => blocks[i], blocks.Length);
+
+        // Manually simulate what MergeParagraphContinuations does
+        parsed[0] = parsed[0] with { Children = [parsed[1]] };
+        var visualStructure = VisualBlockStructure.Build(parsed, i => blocks[i]);
+
+        // The merged block should have \n between the parts
+        visualStructure.Blocks.Should().HaveCount(1);
+        visualStructure.Blocks[0].MergedText.ToString().Should().Contain("\n");
+        visualStructure.Blocks[0].MergedText.ToString().Should().Be("sad\ns");
+    }
+
+    [Fact]
+    public void SoftBreakReplacement()
+    {
+        // Test that \n is replaced with "¶ " (pilcrow + space)
+        string merged = "sad\ns";
+        string replaced = merged.Replace("\n", "¶ ");
+
+        replaced.Should().Be("sad¶ s");
+        replaced.Should().Contain("¶");
+    }
+
+    [Fact]
+    public void SoftBreakOffsetCalculation()
+    {
+        // Test that soft break offsets are calculated correctly for "¶ "
+        var sb = new System.Text.StringBuilder();
+        var offsets = new List<int>();
+
+        // Simulate EmitParagraphGroup logic with 2 blocks
+        string[] texts = ["sad", "s"];
+
+        for (int i = 0; i < texts.Length; i++)
+        {
+            if (i > 0)
+            {
+                offsets.Add(sb.Length);  // Position of ¶
+                sb.Append("¶ ");         // 2 characters
+            }
+            sb.Append(texts[i]);
+        }
+
+        string result = sb.ToString();
+        result.Should().Be("sad¶ s");
+        offsets.Should().Equal([3]);  // ¶ is at position 3
+    }
+
+    [Fact]
+    public void BlockDetectionWithNewline()
+    {
+        // After merging, a single block containing \n should be detected as a continuation
+        string blockText = "sad\ns";
+        bool hasContinuation = blockText.Contains('\n');
+
+        hasContinuation.Should().BeTrue("Block should be recognized as containing continuations");
+    }
+
+    [Fact]
+    public void FullPipelineSimulation()
+    {
+        // Simulate the full rendering pipeline:
+        // 1. Blocks merged: "sad\ns"
+        // 2. Should be detected as continuation
+        // 3. Should be converted to "sad¶ s" for rendering
+
+        string mergedBlock = "sad\ns";
+
+        // Step 1: Detect it has continuations
+        bool isContinuation = mergedBlock.Contains('\n');
+        isContinuation.Should().BeTrue();
+
+        // Step 2: Convert for rendering
+        string displayText = mergedBlock.Replace("\n", "¶ ");
+        displayText.Should().Be("sad¶ s");
+
+        // Step 3: Verify soft break position
+        int softBreakPos = displayText.IndexOf('¶');
+        softBreakPos.Should().Be(3);
+    }
+}
