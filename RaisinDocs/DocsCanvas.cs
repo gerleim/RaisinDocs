@@ -244,6 +244,8 @@ public partial class DocsCanvas : FrameworkElement
     {
         public double OverrideHeight { get; init; }
         public ParagraphGroup? Group { get; init; }
+        public int NestingDepth { get; init; }
+        public int ParentContentColumn { get; init; }
     }
     private readonly List<VisualLine> _visualLines = [];
     private readonly List<double> _lineYPositions = [];
@@ -1067,6 +1069,29 @@ public partial class DocsCanvas : FrameworkElement
             BuildParagraphGroups();
         }
 
+        // Identify which blocks are children of containers (used to skip during iteration)
+        var childBlockIndices = new HashSet<int>();
+        for (int bi = 0; bi < _doc.BlockCount; bi++)
+        {
+            var parsed = _parsedBlocks![bi];
+            if (parsed.Children != null)
+            {
+                foreach (var child in parsed.Children)
+                {
+                    // Find the flat index of this child
+                    for (int ci = 0; ci < _doc.BlockCount; ci++)
+                    {
+                        if (_parsedBlocks![ci] == child)
+                        {
+                            childBlockIndices.Add(ci);
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        // Process blocks, using hierarchy when available
         for (int bi = 0; bi < _doc.BlockCount; bi++)
         {
             var parsed = _parsedBlocks![bi];
@@ -1074,44 +1099,12 @@ public partial class DocsCanvas : FrameworkElement
             if (IsVisual && parsed.IsSkippedInVisual)
                 continue;
 
-            if (IsVisual && _blockToGroup != null && _blockToGroup.TryGetValue(bi, out var group))
-            {
-                if (bi == group.FirstBlock)
-                    WrapSegmentJoined(group, maxWidth);
+            // Skip blocks that are children - they'll be processed via their parent's Children
+            if (childBlockIndices.Contains(bi))
                 continue;
-            }
 
-            string text = _doc.GetBlockText(bi);
-
-            if (text.Length == 0)
-            {
-                if (IsVisual && parsed.OwnerBlock >= 0)
-                    continue;
-                _visualLines.Add(new VisualLine(bi, 0, 0, parsed.Kind) { OverrideHeight = _paragraphGap });
-                continue;
-            }
-
-            var map = IsVisual ? _visualMaps?[bi] : null;
-
-            if (IsVisual && parsed.Kind == BlockKind.ThematicBreak)
-            {
-                _visualLines.Add(new VisualLine(bi, 0, text.Length, parsed.Kind) { OverrideHeight = 20 });
-                continue;
-            }
-
-            if (IsVisual && parsed.Table != null && parsed.Kind is BlockKind.TableHeaderRow or BlockKind.TableDataRow)
-            {
-                _visualLines.Add(new VisualLine(bi, 0, text.Length, parsed.Kind));
-                continue;
-            }
-
-            var segments = text.Split('\n');
-            int offset = 0;
-            for (int s = 0; s < segments.Length; s++)
-            {
-                WrapSegment(bi, offset, segments[s], maxWidth, parsed, map);
-                offset += segments[s].Length + 1;
-            }
+            // Process this block and its children recursively
+            ProcessBlockAndChildren(bi, parsed, maxWidth, nestingDepth: 0, parentContentCol: 0);
         }
 
         double y = _padding;
@@ -1146,12 +1139,106 @@ public partial class DocsCanvas : FrameworkElement
         _layoutVersion++;
     }
 
+    private void ProcessBlockAndChildren(int blockIndex, ParsedBlock parsed, double maxWidth, int nestingDepth, int parentContentCol)
+    {
+        if (IsVisual && _blockToGroup != null && _blockToGroup.TryGetValue(blockIndex, out var group))
+        {
+            if (blockIndex == group.FirstBlock)
+                WrapSegmentJoined(group, maxWidth);
+            return;
+        }
+
+        string text = _doc.GetBlockText(blockIndex);
+
+        if (text.Length == 0)
+        {
+            if (IsVisual && parsed.OwnerBlock >= 0)
+                return;
+            _visualLines.Add(new VisualLine(blockIndex, 0, 0, parsed.Kind)
+            {
+                OverrideHeight = _paragraphGap,
+                NestingDepth = nestingDepth,
+                ParentContentColumn = parentContentCol
+            });
+
+            // Process children of empty blocks
+            if (parsed.Children != null)
+            {
+                int childParentCol = nestingDepth > 0 ? parentContentCol : parsed.ContentColumn;
+                foreach (var child in parsed.Children)
+                {
+                    int childIndex = FindBlockIndex(child);
+                    if (childIndex >= 0)
+                        ProcessBlockAndChildren(childIndex, child, maxWidth, nestingDepth + 1, childParentCol);
+                }
+            }
+            return;
+        }
+
+        var map = IsVisual ? _visualMaps?[blockIndex] : null;
+
+        if (IsVisual && parsed.Kind == BlockKind.ThematicBreak)
+        {
+            _visualLines.Add(new VisualLine(blockIndex, 0, text.Length, parsed.Kind)
+            {
+                OverrideHeight = 20,
+                NestingDepth = nestingDepth,
+                ParentContentColumn = parentContentCol
+            });
+            return;
+        }
+
+        if (IsVisual && parsed.Table != null && parsed.Kind is BlockKind.TableHeaderRow or BlockKind.TableDataRow)
+        {
+            _visualLines.Add(new VisualLine(blockIndex, 0, text.Length, parsed.Kind)
+            {
+                NestingDepth = nestingDepth,
+                ParentContentColumn = parentContentCol
+            });
+            return;
+        }
+
+        var segments = text.Split('\n');
+        int offset = 0;
+        for (int s = 0; s < segments.Length; s++)
+        {
+            WrapSegment(blockIndex, offset, segments[s], maxWidth, parsed, map, nestingDepth, parentContentCol);
+            offset += segments[s].Length + 1;
+        }
+
+        // Process children
+        if (parsed.Children != null)
+        {
+            int childParentCol = nestingDepth > 0 ? parentContentCol : parsed.ContentColumn;
+            foreach (var child in parsed.Children)
+            {
+                int childIndex = FindBlockIndex(child);
+                if (childIndex >= 0)
+                    ProcessBlockAndChildren(childIndex, child, maxWidth, nestingDepth + 1, childParentCol);
+            }
+        }
+    }
+
+    private int FindBlockIndex(ParsedBlock block)
+    {
+        for (int i = 0; i < _doc.BlockCount; i++)
+        {
+            if (_parsedBlocks![i] == block)
+                return i;
+        }
+        return -1;
+    }
+
     private void WrapSegment(int blockIndex, int startOffset, string segment, double maxWidth,
-        ParsedBlock parsed, BlockVisualMap? map = null)
+        ParsedBlock parsed, BlockVisualMap? map = null, int nestingDepth = 0, int parentContentCol = 0)
     {
         if (segment.Length == 0)
         {
-            _visualLines.Add(new VisualLine(blockIndex, startOffset, 0, parsed.Kind));
+            _visualLines.Add(new VisualLine(blockIndex, startOffset, 0, parsed.Kind)
+            {
+                NestingDepth = nestingDepth,
+                ParentContentColumn = parentContentCol
+            });
             return;
         }
 
@@ -1164,7 +1251,11 @@ public partial class DocsCanvas : FrameworkElement
         {
             double lineMax = pos == 0 ? maxWidth - prefixWidth : maxWidth;
             int lineLen = FitLine(segment, pos, lineMax, parsed, map, startOffset);
-            var vl = new VisualLine(blockIndex, startOffset + pos, lineLen, parsed.Kind);
+            var vl = new VisualLine(blockIndex, startOffset + pos, lineLen, parsed.Kind)
+            {
+                NestingDepth = nestingDepth,
+                ParentContentColumn = parentContentCol
+            };
             if (IsVisual && map?.Images != null)
             {
                 double imgH = GetImageMaxLineHeight(vl, map);
