@@ -920,6 +920,9 @@ public partial class DocsCanvas : FrameworkElement
 
         _parsedBlocks ??= MarkdownParser.Parse(i => _doc.GetBlockText(i), _doc.BlockCount, _syntaxHighlighter);
 
+        // Merge paragraph lazy continuations in the Document (logical structure per CommonMark spec)
+        _doc.MergeParagraphContinuations(_parsedBlocks);
+
         if (IsVisual && _visualMaps == null)
         {
             _visualMaps = new List<BlockVisualMap>(_doc.BlockCount);
@@ -1204,12 +1207,16 @@ public partial class DocsCanvas : FrameworkElement
             offset += segments[s].Length + 1;
         }
 
-        // Process children
+        // Process children (skip paragraph continuations - they're rendered with parent)
         if (parsed.Children != null)
         {
             int childParentCol = nestingDepth > 0 ? parentContentCol : parsed.ContentColumn;
             foreach (var child in parsed.Children)
             {
+                // Skip rendering paragraph lazy continuations separately
+                if (parsed.Kind == BlockKind.Paragraph && child.Kind == BlockKind.Paragraph)
+                    continue;
+
                 int childIndex = FindBlockIndex(child);
                 if (childIndex >= 0)
                     ProcessBlockAndChildren(childIndex, child, maxWidth, nestingDepth + 1, childParentCol);
@@ -1618,8 +1625,8 @@ public partial class DocsCanvas : FrameworkElement
                 }
                 else
                 {
-                    string blockText = _doc.GetBlockText(vl.BlockIndex);
                     var parsed = _parsedBlocks![vl.BlockIndex];
+                    string blockText = _doc.GetBlockText(vl.BlockIndex);
                     double fontSize = _measure.GetBlockFontSize(parsed.Kind);
                     var baseTypeface = TextMeasurer.GetBlockBaseTypeface(parsed.Kind);
                     var map = IsVisual ? _visualMaps?[vl.BlockIndex] : null;
@@ -2310,8 +2317,8 @@ public partial class DocsCanvas : FrameworkElement
             int hlEnd = Document.ComparePositions(vl.BlockIndex, vlEnd, eb, eo) <= 0
                 ? vlEnd : eo;
 
-            string blockText = _doc.GetBlockText(vl.BlockIndex);
             var parsed = _parsedBlocks![vl.BlockIndex];
+            string blockText = _doc.GetBlockText(vl.BlockIndex);
             var map = IsVisual ? _visualMaps?[vl.BlockIndex] : null;
 
             double x1, x2;

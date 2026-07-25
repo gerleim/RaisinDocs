@@ -1047,4 +1047,91 @@ public class Document
         _blocks[CursorBlock].Append(afterCursor);
         CollapseSelection();
     }
+
+    // Merge paragraph continuation blocks
+    internal void MergeParagraphContinuations(List<ParsedBlock> parsedBlocks)
+    {
+        // Process in reverse to avoid index shifting issues when removing
+        int i = parsedBlocks.Count - 1;
+        while (i >= 0)
+        {
+            var parsed = parsedBlocks[i];
+            if (parsed.Kind != BlockKind.Paragraph || parsed.Children == null)
+            {
+                i--;
+                continue;
+            }
+
+            // Find which parsed blocks are continuations (they come right after in the list)
+            var continuationIndices = new List<int>();
+            for (int j = i + 1; j < parsedBlocks.Count && j <= i + parsed.Children.Count; j++)
+            {
+                if (parsed.Children.Contains(parsedBlocks[j]))
+                    continuationIndices.Add(j);
+            }
+
+            if (continuationIndices.Count > 0)
+            {
+                // Calculate offset adjustments BEFORE merging
+                int parentBlockLen = _blocks[i].Length;
+                var offsetAdjustments = new Dictionary<int, int>();
+                int accumulatedLen = parentBlockLen + 1; // +1 for newline
+
+                for (int j = 0; j < continuationIndices.Count; j++)
+                {
+                    int contIdx = continuationIndices[j];
+                    offsetAdjustments[contIdx] = accumulatedLen;
+                    accumulatedLen += _blocks[contIdx].Length + 1; // +1 for the newline
+                }
+
+                // Merge block text: combine i with all continuations after it
+                var parentText = _blocks[i].ToString();
+                for (int j = 0; j < continuationIndices.Count; j++)
+                {
+                    int contIdx = continuationIndices[j];
+                    string contText = _blocks[contIdx].ToString();
+                    parentText += "\n" + contText;
+                }
+                _blocks[i] = new StringBuilder(parentText);
+
+                // Remove continuation blocks from _blocks and parsedBlocks (in reverse order to preserve indices)
+                for (int j = continuationIndices.Count - 1; j >= 0; j--)
+                {
+                    int idxToRemove = continuationIndices[j];
+
+                    // Adjust cursor if it's at or after the removed block
+                    if (CursorBlock == idxToRemove)
+                    {
+                        // Cursor is in a continuation block - move it to the parent block
+                        CursorBlock = i;
+                        CursorOffset = offsetAdjustments[idxToRemove] + CursorOffset;
+                    }
+                    else if (CursorBlock > idxToRemove)
+                    {
+                        // Cursor is after the removed block - shift it back
+                        CursorBlock--;
+                    }
+
+                    // Same for anchor
+                    if (AnchorBlock == idxToRemove)
+                    {
+                        AnchorBlock = i;
+                        AnchorOffset = offsetAdjustments[idxToRemove] + AnchorOffset;
+                    }
+                    else if (AnchorBlock > idxToRemove)
+                    {
+                        AnchorBlock--;
+                    }
+
+                    _blocks.RemoveAt(idxToRemove);
+                    parsedBlocks.RemoveAt(idxToRemove);
+                }
+
+                // Update the parent block to clear Children since they're merged
+                parsedBlocks[i] = parsed with { Children = null };
+            }
+
+            i--;
+        }
+    }
 }

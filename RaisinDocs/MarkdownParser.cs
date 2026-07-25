@@ -1049,8 +1049,9 @@ public static class MarkdownParser
 
     private static void MergeParagraphContinuations(List<ParsedBlock> blocks, Func<int, string> getBlockText)
     {
-        // Mark paragraph lazy continuations so rendering can join them
-        // A paragraph can have lazy continuations: subsequent paragraphs with no blank line between
+        // Mark paragraph lazy continuations in hierarchy
+        // Keep all blocks in place (don't remove) so indices stay aligned with Document
+        // Rendering will recognize merged blocks via Children
         for (int i = 0; i < blocks.Count; i++)
         {
             if (blocks[i].Kind != BlockKind.Paragraph)
@@ -1078,7 +1079,7 @@ public static class MarkdownParser
 
             if (continuations.Count > 0)
             {
-                // Mark this paragraph as having continuations by adding them as children
+                // Mark this paragraph as having continuations
                 blocks[i] = blocks[i] with { Children = continuations };
             }
         }
