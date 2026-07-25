@@ -1482,15 +1482,18 @@ public partial class DocsCanvas : FrameworkElement
 
     // --- Rendering ---
 
+    protected override Size ArrangeOverride(Size finalSize)
+    {
+        var result = base.ArrangeOverride(finalSize);
+        _measure.EnsureMeasured(this);
+        ComputeLayout();
+        return result;
+    }
+
     protected override void OnRender(DrawingContext dc)
     {
         _measure.EnsureMeasured(this);
         dc.DrawRectangle(_palette.Background, null, new Rect(0, 0, ActualWidth, ActualHeight));
-
-        // Mutating layout state here violates WPF's OnRender contract (should only draw, not mutate).
-        // Correct placement would be MeasureOverride/ArrangeOverride, but this is stable because
-        // ComputeLayout is idempotent and completes before any drawing calls.
-        ComputeLayout();
 
         double effectiveScroll = Math.Round(_scroll.EffectiveOffset);
         double viewTop = effectiveScroll;
