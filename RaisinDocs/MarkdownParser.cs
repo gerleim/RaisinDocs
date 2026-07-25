@@ -105,12 +105,6 @@ public record class ParsedBlock
     public int LeadingSpaces { get; init; }
     public int ContentColumn { get; init; }
     public int ListNestingLevel { get; init; }
-    [Obsolete("Use Children property instead - continuations are now tracked via hierarchy")]
-    public bool IsLazyContinuation { get; init; }
-    [Obsolete("Use Children property instead - continuations are now tracked via hierarchy")]
-    public bool IsIndentedContinuation { get; init; }
-    [Obsolete("Use Children property instead - parent-child relationships are now in hierarchy")]
-    public int OwnerBlock { get; init; } = -1;
     public string? CodeLanguage { get; init; }
     public IReadOnlyList<SyntaxToken>? SyntaxTokens { get; init; }
     public IReadOnlyList<SpellingError>? SpellingErrors { get; init; }
@@ -382,7 +376,6 @@ public static class MarkdownParser
         DetectSetextHeadings(result, getBlockText);
         DetectTables(result, getBlockText);
         DetectListNesting(result, getBlockText, defs, theme);
-        DetectContinuations(result, getBlockText);  // Still needed for now - BuildHierarchy uses this info
         BuildHierarchy(result, getBlockText);
         DetectIndentedCode(result, getBlockText, defs);
         ApplyBlockDivColors(result);
@@ -895,59 +888,36 @@ public static class MarkdownParser
         return BlockKind.Paragraph;
     }
 
-    private static void DetectContinuations(List<ParsedBlock> blocks, Func<int, string> getBlockText)
-    {
-        for (int i = 0; i < blocks.Count; i++)
-        {
-            if (!IsContainerBlock(blocks[i].Kind))
-                continue;
-
-            int contentColumn = blocks[i].ContentColumn;
-            int blankStart = -1;
-
-            for (int j = i + 1; j < blocks.Count; j++)
-            {
-                string text = getBlockText(j);
-
-                if (text.Length == 0)
-                {
-                    if (blankStart < 0) blankStart = j;
-                    continue;
-                }
-
-                if (blankStart >= 0)
-                {
-                    if (MeasureLeadingWhitespace(text).columns >= contentColumn
-                        && blocks[j].Kind is BlockKind.Paragraph or BlockKind.IndentedCodeLine)
-                    {
-                        for (int b = blankStart; b < j; b++)
-                            blocks[b] = blocks[b] with { OwnerBlock = i };
-                        blocks[j] = blocks[j] with { IsIndentedContinuation = true, OwnerBlock = i };
-                        blankStart = -1;
-                        continue;
-                    }
-                    break;
-                }
-
-                if (blocks[j].Kind is not BlockKind.Paragraph and not BlockKind.IndentedCodeLine)
-                    break;
-                if (blocks[i].Kind == BlockKind.Blockquote && blocks[j].Kind == BlockKind.IndentedCodeLine)
-                    break;
-
-                blocks[j] = blocks[j] with { IsLazyContinuation = true, OwnerBlock = i };
-            }
-        }
-    }
-
     private static void DetectIndentedCode(List<ParsedBlock> blocks, Func<int, string> getBlockText,
         Dictionary<string, (string Url, string? Title)>? defs)
     {
-#pragma warning disable CS0618 // Type or member is obsolete
+        // Build map of which blocks are children of containers
+        var blockToParent = new Dictionary<int, int>();
+        for (int i = 0; i < blocks.Count; i++)
+        {
+            if (blocks[i].Children != null)
+            {
+                foreach (var child in blocks[i].Children)
+                {
+                    for (int ci = 0; ci < blocks.Count; ci++)
+                    {
+                        if (blocks[ci] == child)
+                        {
+                            blockToParent[ci] = i;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
         for (int i = 0; i < blocks.Count; i++)
         {
             if (blocks[i].Kind != BlockKind.IndentedCodeLine)
                 continue;
-            if (blocks[i].IsLazyContinuation || blocks[i].IsIndentedContinuation)
+
+            // Skip if this block is a child of a container
+            if (blockToParent.ContainsKey(i))
                 continue;
 
             string text = getBlockText(i);
@@ -981,7 +951,9 @@ public static class MarkdownParser
 
                 if (blocks[j].Kind != BlockKind.IndentedCodeLine)
                     break;
-                if (blocks[j].IsLazyContinuation || blocks[j].IsIndentedContinuation)
+
+                // Skip if this block is a child of a container
+                if (blockToParent.ContainsKey(j))
                     break;
 
                 for (int k = lastCodeLine + 1; k < j; k++)
@@ -993,24 +965,6 @@ public static class MarkdownParser
 
             i = j - 1;
         }
-
-        for (int i = 0; i < blocks.Count; i++)
-        {
-            if (blocks[i].Kind != BlockKind.IndentedCodeLine)
-                continue;
-            if (blocks[i].IsLazyContinuation)
-            {
-                blocks[i] = ReclassifyAsParagraph(blocks[i], getBlockText(i), defs);
-            }
-            else if (blocks[i].IsIndentedContinuation)
-            {
-                int ownerCC = blocks[blocks[i].OwnerBlock].ContentColumn;
-                int indent = MeasureLeadingWhitespace(getBlockText(i)).columns;
-                if (indent < ownerCC + 4)
-                    blocks[i] = ReclassifyAsParagraph(blocks[i], getBlockText(i), defs);
-            }
-        }
-#pragma warning restore CS0618 // Type or member is obsolete
     }
 
     private static void DetectHtmlCommentSeparations(List<ParsedBlock> blocks)
@@ -1073,8 +1027,7 @@ public static class MarkdownParser
 
     private static void BuildHierarchy(List<ParsedBlock> blocks, Func<int, string> getBlockText)
     {
-        // Build hierarchy from OwnerBlock relationships set by DetectContinuations
-#pragma warning disable CS0618 // Type or member is obsolete
+        // Build hierarchy from block types and indentation (replaces DetectContinuations)
         for (int i = 0; i < blocks.Count; i++)
         {
             var block = blocks[i];
@@ -1082,23 +1035,46 @@ public static class MarkdownParser
                 continue;
 
             var children = new List<ParsedBlock>();
+            int contentColumn = block.ContentColumn;
+            int blankStart = -1;
+
             for (int j = i + 1; j < blocks.Count; j++)
             {
-                // Collect blocks that belong to this container
-                if (blocks[j].OwnerBlock == i)
+                string text = getBlockText(j);
+
+                if (text.Length == 0)
                 {
+                    if (blankStart < 0) blankStart = j;
+                    continue;
+                }
+
+                // Handle indented content after blank lines
+                if (blankStart >= 0)
+                {
+                    if (MeasureLeadingWhitespace(text).columns >= contentColumn
+                        && blocks[j].Kind is BlockKind.Paragraph or BlockKind.IndentedCodeLine)
+                    {
+                        // Blank lines + indented content are children
+                        for (int b = blankStart; b < j; b++)
+                            children.Add(blocks[b]);
+                        children.Add(blocks[j]);
+                        blankStart = -1;
+                        continue;
+                    }
+                    break;
+                }
+
+                // Handle lazy continuations
+                if (blocks[j].Kind is BlockKind.Paragraph or BlockKind.IndentedCodeLine)
+                {
+                    if (block.Kind == BlockKind.Blockquote && blocks[j].Kind == BlockKind.IndentedCodeLine)
+                        break;
                     children.Add(blocks[j]);
+                    continue;
                 }
-                else if (blocks[j].OwnerBlock != -1)
-                {
-                    // This block belongs to a different container
-                    break;
-                }
-                else if (IsContainerBlock(blocks[j].Kind))
-                {
-                    // Hit another container that's not owned
-                    break;
-                }
+
+                // Stop at other block types
+                break;
             }
 
             if (children.Count > 0)
@@ -1106,7 +1082,6 @@ public static class MarkdownParser
                 blocks[i] = block with { Children = children };
             }
         }
-#pragma warning restore CS0618 // Type or member is obsolete
     }
 
     private static ParsedBlock ReclassifyAsParagraph(ParsedBlock block, string text,
