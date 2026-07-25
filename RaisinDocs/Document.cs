@@ -285,6 +285,7 @@ public class Document
         CursorBlock++;
         _blocks.Insert(CursorBlock, new StringBuilder(after));
         CursorOffset = 0;
+        ContentChanged?.Invoke();
     }
 
     public void Backspace()
