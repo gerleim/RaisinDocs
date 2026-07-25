@@ -111,6 +111,7 @@ public record class ParsedBlock
     public string? CodeLanguage { get; init; }
     public IReadOnlyList<SyntaxToken>? SyntaxTokens { get; init; }
     public IReadOnlyList<SpellingError>? SpellingErrors { get; init; }
+    public bool CreateVisualSeparation { get; init; }
 
     public bool HasStyleAt(int offset, InlineStyle targetStyle)
     {
@@ -381,6 +382,7 @@ public static class MarkdownParser
         DetectIndentedCode(result, getBlockText, defs);
         ApplyBlockDivColors(result);
         ApplySyntaxHighlighting(result, getBlockText, highlighter);
+        DetectHtmlCommentSeparations(result);
 
         return result;
     }
@@ -1002,6 +1004,64 @@ public static class MarkdownParser
                     blocks[i] = ReclassifyAsParagraph(blocks[i], getBlockText(i), defs);
             }
         }
+    }
+
+    private static void DetectHtmlCommentSeparations(List<ParsedBlock> blocks)
+    {
+        for (int i = 0; i < blocks.Count; i++)
+        {
+            if (blocks[i].Kind != BlockKind.HtmlBlock)
+                continue;
+
+            // Check if this is an HTML comment that separates lists
+            bool isSeparator = IsListSeparatorComment(blocks, i);
+            if (isSeparator)
+            {
+                blocks[i] = blocks[i] with { CreateVisualSeparation = true };
+            }
+        }
+    }
+
+    private static bool IsListSeparatorComment(List<ParsedBlock> blocks, int htmlBlockIndex)
+    {
+        // Per CommonMark spec: empty HTML comment separates consecutive lists of same type
+        // or separates a list from an indented code block
+
+        int prevBlockIndex = htmlBlockIndex - 1;
+        int nextBlockIndex = htmlBlockIndex + 1;
+
+        // Find previous non-empty block
+        while (prevBlockIndex >= 0 && blocks[prevBlockIndex].IsSkippedInVisual)
+            prevBlockIndex--;
+
+        // Find next non-empty block
+        while (nextBlockIndex < blocks.Count && blocks[nextBlockIndex].IsSkippedInVisual)
+            nextBlockIndex++;
+
+        if (prevBlockIndex < 0 || nextBlockIndex >= blocks.Count)
+            return false;
+
+        var prevKind = blocks[prevBlockIndex].Kind;
+        var nextKind = blocks[nextBlockIndex].Kind;
+
+        // Check: consecutive lists of same type
+        bool isList(BlockKind k) => k is BlockKind.UnorderedListItem or BlockKind.OrderedListItem
+            or BlockKind.TaskListItemUnchecked or BlockKind.TaskListItemChecked;
+
+        if (isList(prevKind) && isList(nextKind))
+        {
+            // Same type of list?
+            bool prevIsUnordered = prevKind is BlockKind.UnorderedListItem or BlockKind.TaskListItemUnchecked or BlockKind.TaskListItemChecked;
+            bool nextIsUnordered = nextKind is BlockKind.UnorderedListItem or BlockKind.TaskListItemUnchecked or BlockKind.TaskListItemChecked;
+            if (prevIsUnordered == nextIsUnordered)
+                return true;
+        }
+
+        // Check: list followed by code block
+        if (isList(prevKind) && nextKind is BlockKind.IndentedCodeLine)
+            return true;
+
+        return false;
     }
 
     private static ParsedBlock ReclassifyAsParagraph(ParsedBlock block, string text,
