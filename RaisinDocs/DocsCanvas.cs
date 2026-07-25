@@ -957,21 +957,26 @@ public partial class DocsCanvas : FrameworkElement
     {
         _blockToGroup = new Dictionary<int, ParagraphGroup>();
 
-        // If we have VisualBlockStructure, use it to identify merged paragraphs
+        // If we have VisualBlockStructure, try to use it to identify merged paragraphs
         if (_visualBlockStructure != null)
         {
+            bool createdAnyGroups = false;
             for (int vi = 0; vi < _visualBlockStructure.Blocks.Count; vi++)
             {
                 var vblock = _visualBlockStructure.Blocks[vi];
                 if (vblock.SourceBlockIndices.Count > 1)
                 {
                     EmitParagraphGroupFromVisualBlock(vblock);
+                    createdAnyGroups = true;
                 }
             }
-            return;
+            // If we created groups from VisualBlockStructure, we're done
+            if (createdAnyGroups)
+                return;
+            // Otherwise fall through to original logic
         }
 
-        // Fallback: original logic for when VisualBlockStructure is not available
+        // Original logic: detect paragraph continuations by analyzing content
         var groupBlocks = new List<int>();
 
         for (int bi = 0; bi <= _doc.BlockCount; bi++)
