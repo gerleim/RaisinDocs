@@ -190,23 +190,23 @@ public class BlockVisualMap
         }
         else if (parsed.Kind == BlockKind.UnorderedListItem)
         {
-            int ls = parsed.LeadingSpaces;
-            var stripped = ls > 0 ? blockText[ls..] : blockText;
-            if (stripped.StartsWith("- ") || stripped.StartsWith("* "))
+            var stripped = parsed.LeadingSpaces > 0 ? blockText[parsed.LeadingSpaces..] : blockText;
+            if (stripped.Length > 0 && (stripped[0] == '-' || stripped[0] == '*'))
             {
-                ranges.Add(new HiddenRange(0, ls + 2));
+                // Hide the marker and all spacing (1-4 spaces) up to content column
+                ranges.Add(new HiddenRange(0, parsed.ContentColumn));
                 string nestIndent = NestingIndentString(parsed.ListNestingLevel);
                 replacementPrefix = nestIndent + "  " + GetBulletChar(parsed.ListNestingLevel) + " ";
             }
         }
         else if (parsed.Kind == BlockKind.OrderedListItem)
         {
-            int ls = parsed.LeadingSpaces;
-            var stripped = ls > 0 ? blockText[ls..] : blockText;
+            var stripped = parsed.LeadingSpaces > 0 ? blockText[parsed.LeadingSpaces..] : blockText;
             int prefixLen = MarkdownParser.GetOrderedListPrefixLength(stripped);
             if (prefixLen > 0)
             {
-                ranges.Add(new HiddenRange(0, ls + prefixLen));
+                // Hide the marker and all spacing (1-4 spaces) up to content column
+                ranges.Add(new HiddenRange(0, parsed.ContentColumn));
                 string nestIndent = NestingIndentString(parsed.ListNestingLevel);
                 string number = stripped.Substring(0, prefixLen - 2);
                 char delim = stripped[prefixLen - 2];
