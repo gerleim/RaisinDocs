@@ -256,6 +256,7 @@ public partial class DocsCanvas : FrameworkElement
     private readonly ScrollController _scroll;
 
     private List<ParsedBlock>? _parsedBlocks;
+    private VisualBlockStructure? _visualBlockStructure;
     private List<BlockVisualMap>? _visualMaps;
     private Dictionary<int, ParagraphGroup>? _blockToGroup;
     private readonly ImageCache _imageCache = new();
@@ -837,6 +838,7 @@ public partial class DocsCanvas : FrameworkElement
     {
         _layoutDirty = true;
         _parsedBlocks = null;
+        _visualBlockStructure = null;
         _visualMaps = null;
         _blockToGroup = null;
         InvalidateArrange();
@@ -929,6 +931,12 @@ public partial class DocsCanvas : FrameworkElement
         // If block count changed due to merging, invalidate visual maps
         if (blockCountBefore != _doc.BlockCount)
             _visualMaps = null;
+
+        // Build visual block structure for visual mode rendering
+        if (IsVisual)
+        {
+            _visualBlockStructure = VisualBlockStructure.Build(_parsedBlocks, i => _doc.GetBlockText(i));
+        }
 
         if (IsVisual && _visualMaps == null)
         {
