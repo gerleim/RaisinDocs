@@ -1024,10 +1024,12 @@ public partial class DocsCanvas : FrameworkElement
                 string blockText = _doc.GetBlockText(bi);
                 if (blockText.Contains('\n'))
                 {
+                    Logger?.Log(DocsLogLevel.Debug, $"Continuation: Block {bi} has internal newline");
                     // This block has internal newlines - it's a merged continuation
                     // Create a group for it
                     var singleBlockGroup = new List<int> { bi };
                     EmitParagraphGroup(singleBlockGroup);
+                    Logger?.Log(DocsLogLevel.Debug, $"Continuation: Created ParagraphGroup for block {bi}");
                 }
             }
         }
@@ -1264,10 +1266,16 @@ public partial class DocsCanvas : FrameworkElement
     {
         if (IsVisual && _blockToGroup != null && _blockToGroup.TryGetValue(blockIndex, out var group))
         {
+            Logger?.Log(DocsLogLevel.Debug, $"ProcessBlockAndChildren: Block {blockIndex} is in a ParagraphGroup");
             if (blockIndex == group.FirstBlock)
+            {
+                Logger?.Log(DocsLogLevel.Debug, $"ProcessBlockAndChildren: Block {blockIndex} is FirstBlock, wrapping as joined");
                 WrapSegmentJoined(group, maxWidth);
+            }
             return;
         }
+
+        Logger?.Log(DocsLogLevel.Debug, $"ProcessBlockAndChildren: Block {blockIndex} is NOT in a ParagraphGroup");
 
         string text = _doc.GetBlockText(blockIndex);
 
@@ -1882,6 +1890,7 @@ public partial class DocsCanvas : FrameworkElement
         double lineY, double effectiveScroll)
     {
         var group = vl.Group!;
+        Logger?.Log(DocsLogLevel.Debug, $"DrawJoinedLine: Rendering joined line with text '{group.JoinedText}'");
 
         if (HasImagesOnLine(vl, group.JoinedMap))
         {
