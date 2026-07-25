@@ -1586,18 +1586,21 @@ public partial class DocsCanvas : FrameworkElement
                             }
 
                             string displayText = map.BuildDisplayString(blockText, vl.StartOffset, vl.Length);
-                            if (displayText.Length > 0)
+                            if (displayText.Length > 0 || (parsed.Kind == BlockKind.HtmlBlock && parsed.CreateVisualSeparation))
                             {
-                                var ft = new FormattedText(displayText, CultureInfo.InvariantCulture,
-                                    FlowDirection.LeftToRight, baseTypeface, fontSize,
-                                    _palette.Foreground, _measure.DpiScale);
-                                ApplyInlineStylesVisual(ft, vl, parsed, map);
-                                if (parsed.Kind == BlockKind.TaskListItemChecked)
+                                if (displayText.Length > 0)
                                 {
-                                    ft.SetForegroundBrush(_palette.Syntax, 0, displayText.Length);
-                                    ft.SetTextDecorations(TextDecorations.Strikethrough, 0, displayText.Length);
+                                    var ft = new FormattedText(displayText, CultureInfo.InvariantCulture,
+                                        FlowDirection.LeftToRight, baseTypeface, fontSize,
+                                        _palette.Foreground, _measure.DpiScale);
+                                    ApplyInlineStylesVisual(ft, vl, parsed, map);
+                                    if (parsed.Kind == BlockKind.TaskListItemChecked)
+                                    {
+                                        ft.SetForegroundBrush(_palette.Syntax, 0, displayText.Length);
+                                        ft.SetTextDecorations(TextDecorations.Strikethrough, 0, displayText.Length);
+                                    }
+                                    dc.DrawText(ft, new Point(textX, lineY - effectiveScroll));
                                 }
-                                dc.DrawText(ft, new Point(textX, lineY - effectiveScroll));
                             }
                         }
                     }
