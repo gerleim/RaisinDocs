@@ -138,21 +138,14 @@ public class BlockVisualMap
         bool isContinuation = false;
         BlockKind prefixMeasureKind = parsed.Kind;
 
-        // Find parent block from hierarchy if this is a child block
+        // Find parent block from hierarchy (block that has this block as a child)
         ParsedBlock? owner = null;
         string? ownerText = null;
         int ownerIndex = -1;
 
-        if (allBlocks != null && parsed.OwnerBlock >= 0)
+        if (allBlocks != null && parsed.Children == null)
         {
-            owner = allBlocks[parsed.OwnerBlock];
-            if (getBlockText != null)
-                ownerText = getBlockText(parsed.OwnerBlock);
-            ownerIndex = parsed.OwnerBlock;
-        }
-        else if (allBlocks != null && parsed.Children == null)
-        {
-            // Try to find parent from hierarchy (block that has this block as a child)
+            // Try to find parent from hierarchy
             for (int i = 0; i < allBlocks.Count; i++)
             {
                 var block = allBlocks[i];
@@ -167,22 +160,22 @@ public class BlockVisualMap
             }
         }
 
-        if ((parsed.IsLazyContinuation || parsed.IsIndentedContinuation) && owner != null && ownerText != null)
+        if (owner != null && ownerText != null)
         {
             if (owner.ContentColumn > 0)
             {
                 var (leadChars, cols) = MarkdownParser.MeasureLeadingWhitespace(blockText);
-                if (parsed.IsIndentedContinuation && cols >= owner.ContentColumn)
+
+                // Check if this is an indented continuation (has more indentation than owner's content column)
+                if (cols >= owner.ContentColumn)
                 {
                     int hideChars = MarkdownParser.CharsForColumns(blockText, owner.ContentColumn);
                     ranges.Add(new HiddenRange(0, hideChars));
                 }
-                else if (parsed.IsLazyContinuation && leadChars > 0)
+                // Otherwise it's a lazy continuation - only hide leading spaces if present
+                else if (leadChars > 0)
                 {
-                    int hideChars = cols <= owner.ContentColumn
-                        ? leadChars
-                        : MarkdownParser.CharsForColumns(blockText, owner.ContentColumn);
-                    ranges.Add(new HiddenRange(0, hideChars));
+                    ranges.Add(new HiddenRange(0, leadChars));
                 }
             }
 

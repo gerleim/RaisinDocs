@@ -105,8 +105,11 @@ public record class ParsedBlock
     public int LeadingSpaces { get; init; }
     public int ContentColumn { get; init; }
     public int ListNestingLevel { get; init; }
+    [Obsolete("Use Children property instead - continuations are now tracked via hierarchy")]
     public bool IsLazyContinuation { get; init; }
+    [Obsolete("Use Children property instead - continuations are now tracked via hierarchy")]
     public bool IsIndentedContinuation { get; init; }
+    [Obsolete("Use Children property instead - parent-child relationships are now in hierarchy")]
     public int OwnerBlock { get; init; } = -1;
     public string? CodeLanguage { get; init; }
     public IReadOnlyList<SyntaxToken>? SyntaxTokens { get; init; }
@@ -379,12 +382,12 @@ public static class MarkdownParser
         DetectSetextHeadings(result, getBlockText);
         DetectTables(result, getBlockText);
         DetectListNesting(result, getBlockText, defs, theme);
-        DetectContinuations(result, getBlockText);
+        DetectContinuations(result, getBlockText);  // Still needed for now - BuildHierarchy uses this info
+        BuildHierarchy(result, getBlockText);
         DetectIndentedCode(result, getBlockText, defs);
         ApplyBlockDivColors(result);
         ApplySyntaxHighlighting(result, getBlockText, highlighter);
         DetectHtmlCommentSeparations(result);
-        BuildHierarchy(result);
 
         return result;
     }
@@ -939,6 +942,7 @@ public static class MarkdownParser
     private static void DetectIndentedCode(List<ParsedBlock> blocks, Func<int, string> getBlockText,
         Dictionary<string, (string Url, string? Title)>? defs)
     {
+#pragma warning disable CS0618 // Type or member is obsolete
         for (int i = 0; i < blocks.Count; i++)
         {
             if (blocks[i].Kind != BlockKind.IndentedCodeLine)
@@ -1006,6 +1010,7 @@ public static class MarkdownParser
                     blocks[i] = ReclassifyAsParagraph(blocks[i], getBlockText(i), defs);
             }
         }
+#pragma warning restore CS0618 // Type or member is obsolete
     }
 
     private static void DetectHtmlCommentSeparations(List<ParsedBlock> blocks)
@@ -1066,9 +1071,10 @@ public static class MarkdownParser
         return false;
     }
 
-    private static void BuildHierarchy(List<ParsedBlock> blocks)
+    private static void BuildHierarchy(List<ParsedBlock> blocks, Func<int, string> getBlockText)
     {
-        // Build hierarchy from OwnerBlock relationships (continuations are marked by DetectContinuations)
+        // Build hierarchy from OwnerBlock relationships set by DetectContinuations
+#pragma warning disable CS0618 // Type or member is obsolete
         for (int i = 0; i < blocks.Count; i++)
         {
             var block = blocks[i];
@@ -1078,19 +1084,19 @@ public static class MarkdownParser
             var children = new List<ParsedBlock>();
             for (int j = i + 1; j < blocks.Count; j++)
             {
-                // Collect blocks that directly belong to this container
+                // Collect blocks that belong to this container
                 if (blocks[j].OwnerBlock == i)
                 {
                     children.Add(blocks[j]);
                 }
                 else if (blocks[j].OwnerBlock != -1)
                 {
-                    // This block belongs to a different container, stop collecting
+                    // This block belongs to a different container
                     break;
                 }
                 else if (IsContainerBlock(blocks[j].Kind))
                 {
-                    // Hit another container that's not owned, stop
+                    // Hit another container that's not owned
                     break;
                 }
             }
@@ -1100,6 +1106,7 @@ public static class MarkdownParser
                 blocks[i] = block with { Children = children };
             }
         }
+#pragma warning restore CS0618 // Type or member is obsolete
     }
 
     private static ParsedBlock ReclassifyAsParagraph(ParsedBlock block, string text,

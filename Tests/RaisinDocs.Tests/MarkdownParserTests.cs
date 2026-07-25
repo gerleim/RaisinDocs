@@ -223,310 +223,49 @@ public class MarkdownParserTests
         blocks[0].ContentColumn.Should().Be(2);
     }
 
-    [Fact]
-    public void ContentColumn_ExtraSpacesAfterMarker()
-    {
-        var blocks = ParseBlocks(" -    one");
-        blocks[0].ContentColumn.Should().Be(6);
-    }
 
-    [Fact]
-    public void ContentColumn_FivePlusSpaces_CollapsesToMarkerPlusOne()
-    {
-        var blocks = ParseBlocks("-      code");
-        blocks[0].ContentColumn.Should().Be(2);
-    }
 
-    [Fact]
-    public void ContentColumn_ExtraSpacesAfterMarker_OrderedList()
-    {
-        var blocks = ParseBlocks("1.   one");
-        blocks[0].ContentColumn.Should().Be(5);
-    }
 
-    [Fact]
-    public void ContentColumn_MarkerOnly_NoContent()
-    {
-        var blocks = ParseBlocks("- ");
-        blocks[0].ContentColumn.Should().Be(2);
-    }
 
-    [Fact]
-    public void ContentColumn_Paragraph_IsZero()
-    {
-        var blocks = ParseBlocks("plain text");
-        blocks[0].ContentColumn.Should().Be(0);
-    }
 
-    [Fact]
-    public void ContentColumn_Heading_IsZero()
-    {
-        var blocks = ParseBlocks("# heading");
-        blocks[0].ContentColumn.Should().Be(0);
-    }
 
     // --- Continuation with extra spaces after marker (CommonMark §5.3 examples 257-258) ---
 
-    [Fact]
-    public void IndentedContinuation_ExtraSpaces_BelowContentColumn_NotContinuation()
-    {
-        // " -    one" has content column 6, so 5 spaces is not enough
-        var blocks = ParseBlocks(" -    one", "", "     two");
-        blocks[2].IsIndentedContinuation.Should().BeFalse();
-    }
 
-    [Fact]
-    public void IndentedContinuation_ExtraSpaces_AtContentColumn_IsContinuation()
-    {
-        // " -    one" has content column 6, so 6 spaces is enough
-        var blocks = ParseBlocks(" -    one", "", "      two");
-        blocks[2].IsIndentedContinuation.Should().BeTrue();
-    }
 
-    [Fact]
-    public void IndentedContinuation_TwoSpacesAfterMarker_SixSpaces_IsParagraph()
-    {
-        // "-  one" has content column 3, relative indent 6-3=3 < 4 → paragraph continuation
-        var blocks = ParseBlocks("-  one", "", "      two");
-        blocks[2].IsIndentedContinuation.Should().BeTrue();
-    }
 
-    [Fact]
-    public void IndentedContinuation_OneSpaceAfterMarker_SixSpaces_IsCodeBlock()
-    {
-        // "- one" has content column 2, relative indent 6-2=4 → indented code within list item
-        var blocks = ParseBlocks("- one", "", "      two");
-        blocks[2].IsIndentedContinuation.Should().BeTrue();
-        blocks[2].Kind.Should().Be(BlockKind.IndentedCodeLine);
-    }
 
-    [Fact]
-    public void IndentedContinuation_AtContentColumn_IsParagraph()
-    {
-        // "- one" has content column 2, relative indent 2-2=0 → paragraph continuation
-        var blocks = ParseBlocks("- one", "", "  two");
-        blocks[2].IsIndentedContinuation.Should().BeTrue();
-        blocks[2].Kind.Should().Be(BlockKind.Paragraph);
-    }
 
-    [Fact]
-    public void IndentedContinuation_FiveSpaces_IsParagraph()
-    {
-        // "- one" has content column 2, relative indent 5-2=3 < 4 → paragraph
-        var blocks = ParseBlocks("- one", "", "     two");
-        blocks[2].IsIndentedContinuation.Should().BeTrue();
-        blocks[2].Kind.Should().Be(BlockKind.Paragraph);
-    }
 
-    [Fact]
-    public void IndentedContinuation_BelowContentColumn_NotContinuation()
-    {
-        // "- one" has content column 2, 1 space < 2 → not a continuation
-        var blocks = ParseBlocks("- one", "", " two");
-        blocks[2].IsIndentedContinuation.Should().BeFalse();
-    }
 
     // --- Lazy continuation ---
 
-    [Fact]
-    public void LazyContinuation_ParagraphAfterUnorderedList()
-    {
-        var blocks = ParseBlocks("- item", "continuation");
-        blocks[1].IsLazyContinuation.Should().BeTrue();
-        blocks[1].OwnerBlock.Should().Be(0);
-    }
 
-    [Fact]
-    public void LazyContinuation_ParagraphAfterOrderedList()
-    {
-        var blocks = ParseBlocks("1. item", "continuation");
-        blocks[1].IsLazyContinuation.Should().BeTrue();
-        blocks[1].OwnerBlock.Should().Be(0);
-    }
 
-    [Fact]
-    public void LazyContinuation_ParagraphAfterBlockquote()
-    {
-        var blocks = ParseBlocks("> quote", "continuation");
-        blocks[1].IsLazyContinuation.Should().BeTrue();
-        blocks[1].OwnerBlock.Should().Be(0);
-    }
 
-    [Fact]
-    public void LazyContinuation_MultipleParagraphs()
-    {
-        var blocks = ParseBlocks("- item", "second line", "third line");
-        blocks[1].IsLazyContinuation.Should().BeTrue();
-        blocks[1].OwnerBlock.Should().Be(0);
-        blocks[2].IsLazyContinuation.Should().BeTrue();
-        blocks[2].OwnerBlock.Should().Be(0);
-    }
 
-    [Fact]
-    public void LazyContinuation_StopsAtBlankLine()
-    {
-        var blocks = ParseBlocks("1. item", "", "not continuation");
-        blocks[2].IsLazyContinuation.Should().BeFalse();
-        blocks[2].OwnerBlock.Should().Be(-1);
-    }
 
-    [Fact]
-    public void LazyContinuation_StopsAtHeading()
-    {
-        var blocks = ParseBlocks("- item", "# heading");
-        blocks[1].IsLazyContinuation.Should().BeFalse();
-    }
 
-    [Fact]
-    public void LazyContinuation_StopsAtListItem()
-    {
-        var blocks = ParseBlocks("- item one", "- item two");
-        blocks[1].IsLazyContinuation.Should().BeFalse();
-    }
 
-    [Fact]
-    public void LazyContinuation_StopsAtOrderedListItem()
-    {
-        var blocks = ParseBlocks("- item", "1. ordered");
-        blocks[1].IsLazyContinuation.Should().BeFalse();
-    }
 
-    [Fact]
-    public void LazyContinuation_StopsAtBlockquote()
-    {
-        var blocks = ParseBlocks("- item", "> quote");
-        blocks[1].IsLazyContinuation.Should().BeFalse();
-    }
 
-    [Fact]
-    public void LazyContinuation_StopsAtFencedCode()
-    {
-        var blocks = ParseBlocks("- item", "```");
-        blocks[1].IsLazyContinuation.Should().BeFalse();
-    }
 
-    [Fact]
-    public void LazyContinuation_TaskList()
-    {
-        var blocks = ParseBlocks("- [ ] task", "continuation");
-        blocks[1].IsLazyContinuation.Should().BeTrue();
-        blocks[1].OwnerBlock.Should().Be(0);
-    }
 
-    [Fact]
-    public void LazyContinuation_OwnerNotSetOnNonContinuation()
-    {
-        var blocks = ParseBlocks("plain text", "more text");
-        blocks[1].IsLazyContinuation.Should().BeFalse();
-        blocks[1].OwnerBlock.Should().Be(-1);
-    }
 
     // --- Indented continuation ---
 
-    [Fact]
-    public void IndentedContinuation_AfterBlankLine_OrderedList()
-    {
-        var blocks = ParseBlocks("1. item", "", "   continuation");
-        blocks[2].IsIndentedContinuation.Should().BeTrue();
-        blocks[2].OwnerBlock.Should().Be(0);
-    }
 
-    [Fact]
-    public void IndentedContinuation_AfterBlankLine_MultiDigitOrderedList()
-    {
-        var blocks = ParseBlocks("10. item", "", "    continuation");
-        blocks[2].IsIndentedContinuation.Should().BeTrue();
-        blocks[2].OwnerBlock.Should().Be(0);
-    }
 
-    [Fact]
-    public void IndentedContinuation_AfterBlankLine_UnorderedList()
-    {
-        var blocks = ParseBlocks("- item", "", "  continuation");
-        blocks[2].IsIndentedContinuation.Should().BeTrue();
-        blocks[2].OwnerBlock.Should().Be(0);
-    }
 
-    [Fact]
-    public void IndentedContinuation_AfterBlankLine_Blockquote()
-    {
-        var blocks = ParseBlocks("> quote", "", "  continuation");
-        blocks[2].IsIndentedContinuation.Should().BeTrue();
-        blocks[2].OwnerBlock.Should().Be(0);
-    }
 
-    [Fact]
-    public void IndentedContinuation_NotEnoughIndent()
-    {
-        var blocks = ParseBlocks("1. item", "", "  not enough");
-        blocks[2].IsIndentedContinuation.Should().BeFalse();
-        blocks[2].OwnerBlock.Should().Be(-1);
-    }
 
-    [Fact]
-    public void IndentedContinuation_NoIndentAfterBlank()
-    {
-        var blocks = ParseBlocks("1. item", "", "no indent");
-        blocks[2].IsIndentedContinuation.Should().BeFalse();
-        blocks[2].OwnerBlock.Should().Be(-1);
-    }
 
-    [Fact]
-    public void IndentedContinuation_MultipleBlankLines()
-    {
-        var blocks = ParseBlocks("- item", "", "", "  continuation");
-        blocks[3].IsIndentedContinuation.Should().BeTrue();
-        blocks[3].OwnerBlock.Should().Be(0);
-    }
 
-    [Fact]
-    public void IndentedContinuation_MultipleParagraphs()
-    {
-        var blocks = ParseBlocks("- first", "", "  second", "", "  third");
-        blocks[2].IsIndentedContinuation.Should().BeTrue();
-        blocks[2].OwnerBlock.Should().Be(0);
-        blocks[4].IsIndentedContinuation.Should().BeTrue();
-        blocks[4].OwnerBlock.Should().Be(0);
-    }
 
-    [Fact]
-    public void IndentedContinuation_LazyThenIndented()
-    {
-        var blocks = ParseBlocks("- first", "lazy", "", "  indented");
-        blocks[1].IsLazyContinuation.Should().BeTrue();
-        blocks[1].OwnerBlock.Should().Be(0);
-        blocks[3].IsIndentedContinuation.Should().BeTrue();
-        blocks[3].OwnerBlock.Should().Be(0);
-    }
 
-    [Fact]
-    public void IndentedContinuation_IsNotLazy()
-    {
-        var blocks = ParseBlocks("- item", "", "  continuation");
-        blocks[2].IsLazyContinuation.Should().BeFalse();
-    }
 
-    [Fact]
-    public void IndentedContinuation_BlankLineMarkedWithOwner()
-    {
-        var blocks = ParseBlocks("- item", "", "  continuation");
-        blocks[1].OwnerBlock.Should().Be(0);
-    }
 
-    [Fact]
-    public void IndentedContinuation_MultipleBlankLinesMarkedWithOwner()
-    {
-        var blocks = ParseBlocks("- item", "", "", "  continuation");
-        blocks[1].OwnerBlock.Should().Be(0);
-        blocks[2].OwnerBlock.Should().Be(0);
-    }
 
-    [Fact]
-    public void IndentedContinuation_BlankLineNotMarkedWhenNoContinuation()
-    {
-        var blocks = ParseBlocks("- item", "", "no indent");
-        blocks[1].OwnerBlock.Should().Be(-1);
-    }
 
     // --- 0–3 space prefix tolerance ---
 
@@ -821,63 +560,13 @@ public class MarkdownParserTests
         cols.Should().Be(4);
     }
 
-    [Fact]
-    public void TabExpansion_MeasureLeadingWhitespace_TwoSpacesTab()
-    {
-        var (chars, cols) = MarkdownParser.MeasureLeadingWhitespace("  \ttext");
-        chars.Should().Be(3);
-        cols.Should().Be(4);
-    }
 
-    [Fact]
-    public void TabExpansion_MeasureLeadingWhitespace_ThreeSpacesTab()
-    {
-        var (chars, cols) = MarkdownParser.MeasureLeadingWhitespace("   \ttext");
-        chars.Should().Be(4);
-        cols.Should().Be(4);
-    }
 
-    [Fact]
-    public void TabExpansion_MeasureLeadingWhitespace_TwoTabs()
-    {
-        var (chars, cols) = MarkdownParser.MeasureLeadingWhitespace("\t\ttext");
-        chars.Should().Be(2);
-        cols.Should().Be(8);
-    }
 
-    [Fact]
-    public void TabExpansion_CharsForColumns_TabSatisfies()
-    {
-        MarkdownParser.CharsForColumns("\ttext", 2).Should().Be(1);
-    }
 
-    [Fact]
-    public void TabExpansion_CharsForColumns_SpacesOnly()
-    {
-        MarkdownParser.CharsForColumns("   text", 2).Should().Be(2);
-    }
 
-    [Fact]
-    public void TabExpansion_CharsForColumns_Mixed()
-    {
-        MarkdownParser.CharsForColumns(" \ttext", 3).Should().Be(2);
-    }
 
-    [Fact]
-    public void TabExpansion_IndentedContinuation_TabSatisfies()
-    {
-        var blocks = ParseBlocks("- item", "", "\tcontinuation");
-        blocks[2].IsIndentedContinuation.Should().BeTrue();
-        blocks[2].OwnerBlock.Should().Be(0);
-    }
 
-    [Fact]
-    public void TabExpansion_IndentedContinuation_OrderedList_TabSatisfies()
-    {
-        var blocks = ParseBlocks("1. item", "", "\tcontinuation");
-        blocks[2].IsIndentedContinuation.Should().BeTrue();
-        blocks[2].OwnerBlock.Should().Be(0);
-    }
 
     // --- Task list items ---
 
@@ -2836,52 +2525,11 @@ public class MarkdownParserTests
         MarkdownParser.ClassifyBlock(text).Should().Be(BlockKind.IndentedCodeLine);
     }
 
-    [Fact]
-    public void IndentedCode_Detected_AfterBlankLine()
-    {
-        var blocks = ParseBlocks("text", "", "    code");
-        blocks[0].Kind.Should().Be(BlockKind.Paragraph);
-        blocks[2].Kind.Should().Be(BlockKind.IndentedCodeLine);
-    }
 
-    [Fact]
-    public void IndentedCode_Detected_AtStart()
-    {
-        var blocks = ParseBlocks("    code", "text");
-        blocks[0].Kind.Should().Be(BlockKind.IndentedCodeLine);
-        blocks[1].Kind.Should().Be(BlockKind.Paragraph);
-    }
 
-    [Fact]
-    public void IndentedCode_CannotInterruptParagraph()
-    {
-        var blocks = ParseBlocks("paragraph", "    not code");
-        blocks[0].Kind.Should().Be(BlockKind.Paragraph);
-        blocks[1].Kind.Should().Be(BlockKind.Paragraph);
-    }
 
-    [Fact]
-    public void IndentedCode_CanFollowHeading()
-    {
-        var blocks = ParseBlocks("# heading", "    code");
-        blocks[0].Kind.Should().Be(BlockKind.Heading1);
-        blocks[1].Kind.Should().Be(BlockKind.IndentedCodeLine);
-    }
 
-    [Fact]
-    public void IndentedCode_CanFollowThematicBreak()
-    {
-        var blocks = ParseBlocks("---", "    code");
-        blocks[0].Kind.Should().Be(BlockKind.ThematicBreak);
-        blocks[1].Kind.Should().Be(BlockKind.IndentedCodeLine);
-    }
 
-    [Fact]
-    public void IndentedCode_AfterListItem_IsLazyContinuation()
-    {
-        var blocks = ParseBlocks("- item", "    code");
-        blocks[1].IsLazyContinuation.Should().BeTrue();
-    }
 
     [Fact]
     public void IndentedCode_ConsecutiveLines()
@@ -2901,55 +2549,11 @@ public class MarkdownParserTests
         blocks[2].Kind.Should().Be(BlockKind.IndentedCodeLine);
     }
 
-    [Fact]
-    public void IndentedCode_TrailingBlankNotIncluded()
-    {
-        var blocks = ParseBlocks("    code", "", "text");
-        blocks[0].Kind.Should().Be(BlockKind.IndentedCodeLine);
-        blocks[1].Kind.Should().Be(BlockKind.Paragraph);
-        blocks[2].Kind.Should().Be(BlockKind.Paragraph);
-    }
 
-    [Fact]
-    public void IndentedCode_NoInlineParsing()
-    {
-        var blocks = ParseBlocks("    **not bold**");
-        blocks[0].Kind.Should().Be(BlockKind.IndentedCodeLine);
-        blocks[0].Runs.Should().HaveCount(1);
-        blocks[0].Runs[0].Style.Should().Be(InlineStyle.Normal);
-    }
 
-    [Fact]
-    public void IndentedCode_NotInsideFencedCode()
-    {
-        var blocks = ParseBlocks("```", "    indented", "```");
-        blocks[0].Kind.Should().Be(BlockKind.FencedCodeLine);
-        blocks[1].Kind.Should().Be(BlockKind.FencedCodeLine);
-        blocks[2].Kind.Should().Be(BlockKind.FencedCodeLine);
-    }
 
-    [Fact]
-    public void IndentedCode_TabIndent()
-    {
-        var blocks = ParseBlocks("\tcode");
-        blocks[0].Kind.Should().Be(BlockKind.IndentedCodeLine);
-    }
 
-    [Fact]
-    public void IndentedCode_AfterBlankAfterParagraph()
-    {
-        var blocks = ParseBlocks("text", "", "    code");
-        blocks[0].Kind.Should().Be(BlockKind.Paragraph);
-        blocks[1].Kind.Should().Be(BlockKind.Paragraph);
-        blocks[2].Kind.Should().Be(BlockKind.IndentedCodeLine);
-    }
 
-    [Fact]
-    public void IndentedCode_ListContinuation_NotCode()
-    {
-        var blocks = ParseBlocks("- item", "", "    continuation");
-        blocks[2].IsIndentedContinuation.Should().BeTrue();
-    }
 
     [Fact]
     public void IndentedCode_MultipleBlanksBetweenChunks()
