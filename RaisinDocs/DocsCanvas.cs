@@ -1023,6 +1023,7 @@ public partial class DocsCanvas : FrameworkElement
         {
             if (i > 0)
             {
+                // Soft break is at the position of the \n character
                 softBreakOffsets.Add(currentOffset);
                 currentOffset++; // for the internal \n
             }
