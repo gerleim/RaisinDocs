@@ -1282,7 +1282,10 @@ public static class MarkdownParser
             i++;
         }
 
-        if (col - markerEndCol > 4 || i >= text.Length)
+        if (col - markerEndCol > 4)
+            return markerEndCol + 4;  // 5+ spaces: preserve extra indentation as code
+
+        if (i >= text.Length)
             return markerEndCol + 1;
 
         return col;
