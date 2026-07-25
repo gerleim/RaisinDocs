@@ -76,7 +76,8 @@ public class CommonMarkVisualRenderingTests
 
             // Normalize visual glyphs back to markdown markers for comparison
             text = text.Replace("●", "-").Replace("○", "-").Replace("■", "-");
-            result.Append(text.TrimEnd());
+            // Trim all leading/trailing whitespace (leading spaces are visual indentation only)
+            result.Append(text.Trim());
             lastNonEmptyIndex = i;
         }
 
