@@ -43,14 +43,15 @@ public class CommonMarkVisualRenderingTests
 
     /// <summary>
     /// Extract visible text from visual mode rendering.
-    /// Uses visual glyphs (●, ○, ■) and includes all rendered text.
-    /// Normalizes glyphs back to markdown markers (-) for comparison.
-    /// Joins blocks with newlines (as they render vertically in canvas).
+    /// Normalizes visual glyphs (●, ○, ■) back to markdown markers (-) for comparison.
+    /// Uses soft break (space) within same block type (paragraph continuation),
+    /// or hard break (newline) between different block types.
     /// </summary>
     private static string ExtractVisualText(DocsCanvas canvas)
     {
         var blocks = canvas.TestGetVisualBlockInfos();
         var result = new System.Text.StringBuilder();
+        int lastNonEmptyIndex = -1;
 
         for (int i = 0; i < blocks.Length; i++)
         {
@@ -64,12 +65,19 @@ public class CommonMarkVisualRenderingTests
             if (text.TrimStart().StartsWith("<!--"))
                 continue;
 
-            if (result.Length > 0)
-                result.Append('\n');
+            if (lastNonEmptyIndex >= 0)
+            {
+                var prevBlock = blocks[lastNonEmptyIndex];
+                // Use space for soft break within same logical block (both Paragraph)
+                // Use newline for hard break between different block types
+                bool isSoftBreak = block.Kind == BlockKind.Paragraph && prevBlock.Kind == BlockKind.Paragraph;
+                result.Append(isSoftBreak ? ' ' : '\n');
+            }
 
             // Normalize visual glyphs back to markdown markers for comparison
             text = text.Replace("●", "-").Replace("○", "-").Replace("■", "-");
             result.Append(text.TrimEnd());
+            lastNonEmptyIndex = i;
         }
 
         return result.ToString();
