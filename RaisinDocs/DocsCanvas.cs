@@ -1021,8 +1021,8 @@ public partial class DocsCanvas : FrameworkElement
     private void EmitParagraphGroupFromVisualBlock(VisualBlock vblock)
     {
         var blockIndices = vblock.SourceBlockIndices;
-        // Convert internal \n to ¶ for visual rendering (actual newline won't display)
-        var joinedText = vblock.MergedText.ToString().Replace('\n', '¶');
+        // Convert internal \n to "¶ " (pilcrow + space) for visual rendering
+        var joinedText = vblock.MergedText.ToString().Replace("\n", "¶ ");
 
         // Build segments from source indices
         var segments = new JoinSegment[blockIndices.Count];
@@ -1033,9 +1033,9 @@ public partial class DocsCanvas : FrameworkElement
         {
             if (i > 0)
             {
-                // Soft break is at the position of the \n character
+                // Soft break marker (¶) is at the position
                 softBreakOffsets.Add(currentOffset);
-                currentOffset++; // for the internal \n
+                currentOffset += 2; // for "¶ " (2 characters)
             }
 
             int bi = blockIndices[i];
@@ -1092,7 +1092,7 @@ public partial class DocsCanvas : FrameworkElement
             if (i > 0)
             {
                 softBreakOffsets.Add(sb.Length);
-                sb.Append('¶');
+                sb.Append("¶ ");  // pilcrow + space for soft break
             }
             int bi = blockIndices[i];
             string text = _doc.GetBlockText(bi);
@@ -1893,7 +1893,7 @@ public partial class DocsCanvas : FrameworkElement
         {
             if (group.JoinedMap.IsHidden(i)) continue;
             if (softBreaks.Contains(i) && visPos < displayText.Length)
-                ft.SetForegroundBrush(_palette.Syntax, visPos, 1);
+                ft.SetForegroundBrush(_palette.Syntax, visPos, 2);  // color both ¶ and space
             visPos++;
         }
 
