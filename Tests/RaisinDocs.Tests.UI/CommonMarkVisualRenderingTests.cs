@@ -35,35 +35,35 @@ public class CommonMarkVisualRenderingTests
         canvas.TestComputeLayout();
 
         var actualText = ExtractVisualText(canvas);
+
         actualText.Should().Be(expectedText,
             because: $"example {example} in section '{section}' visual rendering should match text output");
     }
 
+
     /// <summary>
     /// Extract visible text from visual mode rendering.
-    /// Joins block text from all blocks, normalizing whitespace.
+    /// Uses BlockVisualMap to strip hidden characters and ReplacementPrefix for markers.
+    /// Joins all non-empty blocks with spaces (treating as continuous text flow).
     /// </summary>
     private static string ExtractVisualText(DocsCanvas canvas)
     {
-        var lines = new List<string>();
+        var blocks = canvas.TestGetVisualBlockInfos();
+        var result = new System.Text.StringBuilder();
 
-        for (int i = 0; i < canvas.TestBlockCount; i++)
+        for (int i = 0; i < blocks.Length; i++)
         {
-            var blockText = canvas.TestGetBlockText(i);
-            if (!string.IsNullOrEmpty(blockText))
-            {
-                lines.Add(blockText.TrimEnd());
-            }
+            var block = blocks[i];
+            if (string.IsNullOrEmpty(block.VisualText))
+                continue;
+
+            if (result.Length > 0)
+                result.Append(' ');
+
+            result.Append(block.VisualText.TrimEnd());
         }
 
-        // Join blocks with newlines
-        var result = string.Join("\n", lines);
-
-        // Remove trailing blank lines
-        while (result.EndsWith("\n"))
-            result = result.Substring(0, result.Length - 1);
-
-        return result;
+        return result.ToString();
     }
 
     static List<SpecTextExample> LoadExamples()
