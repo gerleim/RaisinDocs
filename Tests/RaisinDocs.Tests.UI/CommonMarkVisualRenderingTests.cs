@@ -76,8 +76,13 @@ public class CommonMarkVisualRenderingTests
 
             // Normalize visual glyphs back to markdown markers for comparison
             text = text.Replace("●", "-").Replace("○", "-").Replace("■", "-");
-            // Only trim trailing whitespace; preserve leading for honest structure representation
-            result.Append(text.TrimEnd());
+            // For list items, trim leading spaces (visual indentation only); for others trim trailing only
+            if (block.Kind is BlockKind.UnorderedListItem or BlockKind.OrderedListItem or
+                BlockKind.TaskListItemUnchecked or BlockKind.TaskListItemChecked)
+                text = text.Trim();
+            else
+                text = text.TrimEnd();
+            result.Append(text);
             lastNonEmptyIndex = i;
         }
 
