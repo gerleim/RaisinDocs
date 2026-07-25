@@ -40,6 +40,49 @@ public partial class MainWindow : Window
         DarkWindowHelper.Apply(this);
     }
 
+    protected override void OnPreviewKeyDown(KeyEventArgs e)
+    {
+        var ctrl = (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control && (Keyboard.Modifiers & ModifierKeys.Alt) == ModifierKeys.None;
+
+        switch (e.Key)
+        {
+            case Key.O when ctrl:
+                Open_Click(this, new RoutedEventArgs());
+                e.Handled = true;
+                break;
+            case Key.F when ctrl:
+                Find_Click(this, new RoutedEventArgs());
+                e.Handled = true;
+                break;
+            case Key.T when ctrl:
+                Toc_Click(this, new RoutedEventArgs());
+                e.Handled = true;
+                break;
+            case Key.OemPlus when ctrl:
+            case Key.Add when ctrl:
+                ZoomIn_Click(this, new RoutedEventArgs());
+                e.Handled = true;
+                break;
+            case Key.OemMinus when ctrl:
+            case Key.Subtract when ctrl:
+                ZoomOut_Click(this, new RoutedEventArgs());
+                e.Handled = true;
+                break;
+            case Key.D0 when ctrl:
+            case Key.NumPad0 when ctrl:
+                ZoomReset_Click(this, new RoutedEventArgs());
+                e.Handled = true;
+                break;
+            case Key.M when ctrl:
+                Viewer.Canvas.ToggleEditMode();
+                e.Handled = true;
+                break;
+        }
+
+        if (!e.Handled)
+            base.OnPreviewKeyDown(e);
+    }
+
     private void Open_Click(object sender, RoutedEventArgs e)
     {
         var dlg = new OpenFileDialog { Filter = FileFilter };

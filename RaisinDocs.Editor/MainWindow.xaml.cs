@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using Microsoft.Win32;
 using Raisin.WPF.Base;
 
@@ -54,6 +55,68 @@ public partial class MainWindow : Window
     {
         base.OnSourceInitialized(e);
         DarkWindowHelper.Apply(this);
+    }
+
+    protected override void OnPreviewKeyDown(KeyEventArgs e)
+    {
+        var modifiers = Keyboard.Modifiers;
+        var ctrl = (modifiers & ModifierKeys.Control) == ModifierKeys.Control && (modifiers & ModifierKeys.Alt) == ModifierKeys.None;
+        var ctrlShift = (modifiers & (ModifierKeys.Control | ModifierKeys.Shift)) == (ModifierKeys.Control | ModifierKeys.Shift) && (modifiers & ModifierKeys.Alt) == ModifierKeys.None;
+
+        switch (e.Key)
+        {
+            case Key.N when ctrl:
+                New_Click(this, new RoutedEventArgs());
+                e.Handled = true;
+                break;
+            case Key.O when ctrl:
+                Open_Click(this, new RoutedEventArgs());
+                e.Handled = true;
+                break;
+            case Key.S when ctrl && !ctrlShift:
+                Save_Click(this, new RoutedEventArgs());
+                e.Handled = true;
+                break;
+            case Key.S when ctrlShift:
+                SaveAs_Click(this, new RoutedEventArgs());
+                e.Handled = true;
+                break;
+            case Key.P when ctrl:
+                Print_Click(this, new RoutedEventArgs());
+                e.Handled = true;
+                break;
+            case Key.W when ctrl:
+                CloseTab_Click(this, new RoutedEventArgs());
+                e.Handled = true;
+                break;
+            case Key.Z when ctrl:
+                Undo_Click(this, new RoutedEventArgs());
+                e.Handled = true;
+                break;
+            case Key.Y when ctrl:
+                Redo_Click(this, new RoutedEventArgs());
+                e.Handled = true;
+                break;
+            case Key.F when ctrl:
+                Find_Click(this, new RoutedEventArgs());
+                e.Handled = true;
+                break;
+            case Key.H when ctrl:
+                FindReplace_Click(this, new RoutedEventArgs());
+                e.Handled = true;
+                break;
+            case Key.T when ctrl:
+                Toc_Click(this, new RoutedEventArgs());
+                e.Handled = true;
+                break;
+            case Key.M when ctrl:
+                ActiveTab?.Editor.Canvas.ToggleEditMode();
+                e.Handled = true;
+                break;
+        }
+
+        if (!e.Handled)
+            base.OnPreviewKeyDown(e);
     }
 
     private DocumentTab? ActiveTab =>
