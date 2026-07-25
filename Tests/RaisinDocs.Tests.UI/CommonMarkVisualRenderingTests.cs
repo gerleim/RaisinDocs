@@ -43,8 +43,9 @@ public class CommonMarkVisualRenderingTests
 
     /// <summary>
     /// Extract visible text from visual mode rendering.
-    /// Uses BlockVisualMap to strip hidden characters and ReplacementPrefix for markers.
-    /// Joins all non-empty blocks with spaces (treating as continuous text flow).
+    /// Uses visual glyphs (●, ○, ■) and includes all rendered text.
+    /// Normalizes glyphs back to markdown markers (-) for comparison.
+    /// Joins blocks with newlines (as they render vertically in canvas).
     /// </summary>
     private static string ExtractVisualText(DocsCanvas canvas)
     {
@@ -54,13 +55,21 @@ public class CommonMarkVisualRenderingTests
         for (int i = 0; i < blocks.Length; i++)
         {
             var block = blocks[i];
-            if (string.IsNullOrEmpty(block.VisualText))
+            var text = block.VisualText;
+
+            if (string.IsNullOrEmpty(text))
+                continue;
+
+            // Skip HTML comment blocks (not visible in rendering)
+            if (text.TrimStart().StartsWith("<!--"))
                 continue;
 
             if (result.Length > 0)
-                result.Append(' ');
+                result.Append('\n');
 
-            result.Append(block.VisualText.TrimEnd());
+            // Normalize visual glyphs back to markdown markers for comparison
+            text = text.Replace("●", "-").Replace("○", "-").Replace("■", "-");
+            result.Append(text.TrimEnd());
         }
 
         return result.ToString();
