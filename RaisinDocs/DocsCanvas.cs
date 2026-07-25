@@ -1206,12 +1206,17 @@ public partial class DocsCanvas : FrameworkElement
             return;
         }
 
-        var segments = text.Split('\n');
+        // For paragraphs with soft breaks (lazy continuations), treat \n as space
+        // For other blocks, split by \n to create visual line breaks
+        var segments = parsed.Kind == BlockKind.Paragraph
+            ? new[] { text.Replace("\n", " ") }
+            : text.Split('\n');
+
         int offset = 0;
         for (int s = 0; s < segments.Length; s++)
         {
             WrapSegment(blockIndex, offset, segments[s], maxWidth, parsed, map, nestingDepth, parentContentCol);
-            offset += segments[s].Length + 1;
+            offset += segments[s].Length + (s < segments.Length - 1 ? 1 : 0); // Add 1 for newline only if not last segment
         }
 
         // Process children (skip paragraph continuations - they're rendered with parent)
