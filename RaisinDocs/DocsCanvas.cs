@@ -1012,7 +1012,8 @@ public partial class DocsCanvas : FrameworkElement
     private void EmitParagraphGroupFromVisualBlock(VisualBlock vblock)
     {
         var blockIndices = vblock.SourceBlockIndices;
-        var joinedText = vblock.MergedText.ToString();
+        // Convert internal \n to ¶ for visual rendering (actual newline won't display)
+        var joinedText = vblock.MergedText.ToString().Replace('\n', '¶');
 
         // Build segments from source indices
         var segments = new JoinSegment[blockIndices.Count];
