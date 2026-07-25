@@ -46,7 +46,7 @@ public class VisualBlockStructure
 
             var parsed = parsedBlocks[i];
 
-            if (parsed.Kind == BlockKind.Paragraph && parsed.Children?.Count > 1)
+            if (parsed.Kind == BlockKind.Paragraph && parsed.Children?.Count > 0)
             {
                 var (merged, childIndices) = MergeParagraph(parsed, parsedBlocks, getBlockText, i);
                 visualBlocks.Add(merged);

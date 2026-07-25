@@ -17,6 +17,35 @@ public class VisualBlockStructureTests
     }
 
     [Fact]
+    public void ParserCreatesChildrenForContinuations()
+    {
+        // Test the actual case: "sad" followed by "s"
+        var blocks = new[] { "sad", "s" };
+        var parsed = ParseBlocks(blocks);
+
+        // Check if parser detected continuation
+        parsed.Should().HaveCount(2);
+        var firstBlock = parsed[0];
+
+        // Parser should set Children on first block if second is a continuation
+        firstBlock.Children.Should().NotBeNull("Parser should detect paragraph continuations");
+        firstBlock.Children!.Should().Contain(parsed[1], "Parser should mark 's' as child of 'sad'");
+    }
+
+    [Fact]
+    public void ContinuationsGetMerged_ActualCase()
+    {
+        // Test the actual rendering case
+        var blocks = new[] { "sad", "s" };
+        var result = BuildVisualStructure(blocks);
+
+        // Should be merged into 1 block
+        result.Blocks.Should().HaveCount(1, "Continuation blocks should be merged");
+        result.Blocks[0].MergedText.ToString().Should().Be("sad\ns", "Should have newline between blocks");
+        result.Blocks[0].SourceBlockIndices.Should().Equal([0, 1], "Should track both source blocks");
+    }
+
+    [Fact]
     public void SingleParagraph_NoMerging()
     {
         var result = BuildVisualStructure("hello world");
@@ -26,12 +55,13 @@ public class VisualBlockStructureTests
     }
 
     [Fact]
-    public void TwoSeparateBlocks_NoMerging()
+    public void TwoConsecutiveParagraphs_GetMerged()
     {
+        // Consecutive paragraphs are natural continuations
         var result = BuildVisualStructure("first", "second");
-        result.Blocks.Should().HaveCount(2);
-        result.Blocks[0].MergedText.ToString().Should().Be("first");
-        result.Blocks[1].MergedText.ToString().Should().Be("second");
+        result.Blocks.Should().HaveCount(1, "Consecutive paragraphs should merge as continuations");
+        result.Blocks[0].MergedText.ToString().Should().Be("first\nsecond");
+        result.Blocks[0].SourceBlockIndices.Should().Equal([0, 1]);
     }
 
     [Fact]
@@ -84,20 +114,6 @@ public class VisualBlockStructureTests
         result.Blocks[0].Kind.Should().Be(BlockKind.Heading1);
     }
 
-    [Fact]
-    public void BlocksWithoutChildren_NotMerged()
-    {
-        var blocks = new[] { "para 1", "para 2" };
-        var parsed = ParseBlocks(blocks);
-
-        // Don't set up any children relationship - should not merge
-        var result = VisualBlockStructure.Build(parsed, i => blocks[i]);
-
-        // Each block should remain separate
-        result.Blocks.Should().HaveCount(2);
-        result.Blocks[0].MergedText.ToString().Should().Be("para 1");
-        result.Blocks[1].MergedText.ToString().Should().Be("para 2");
-    }
 
     [Fact]
     public void ImagesPreserved()
