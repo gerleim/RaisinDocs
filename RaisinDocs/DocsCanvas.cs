@@ -584,7 +584,7 @@ public partial class DocsCanvas : FrameworkElement
             return _padding + CursorXInVisualLine(vli);
         }
     }
-    internal record struct VisualBlockInfo(string RawText, string VisualText, BlockKind Kind);
+    internal record struct VisualBlockInfo(string RawText, string VisualText, BlockKind Kind, bool CreateVisualSeparation = false);
 
     internal string TestGetBlockText(int block) => _doc.GetBlockText(block);
     internal int TestBlockCount => _doc.BlockCount;
@@ -604,8 +604,9 @@ public partial class DocsCanvas : FrameworkElement
                 displayText = visualMap.ReplacementPrefix + displayText;
 
             var kind = _parsedBlocks?[i].Kind ?? BlockKind.Paragraph;
+            var createVisualSeparation = _parsedBlocks?[i].CreateVisualSeparation ?? false;
 
-            result.Add(new(rawText, displayText, kind));
+            result.Add(new(rawText, displayText, kind, createVisualSeparation));
         }
 
         return result.ToArray();

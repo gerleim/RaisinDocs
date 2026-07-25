@@ -1030,12 +1030,12 @@ public static class MarkdownParser
         int prevBlockIndex = htmlBlockIndex - 1;
         int nextBlockIndex = htmlBlockIndex + 1;
 
-        // Find previous non-empty block
-        while (prevBlockIndex >= 0 && blocks[prevBlockIndex].IsSkippedInVisual)
+        // Find previous non-empty block (skip visual markers and empty paragraphs)
+        while (prevBlockIndex >= 0 && (blocks[prevBlockIndex].IsSkippedInVisual || blocks[prevBlockIndex].Kind == BlockKind.Paragraph))
             prevBlockIndex--;
 
-        // Find next non-empty block
-        while (nextBlockIndex < blocks.Count && blocks[nextBlockIndex].IsSkippedInVisual)
+        // Find next non-empty block (skip visual markers and empty paragraphs)
+        while (nextBlockIndex < blocks.Count && (blocks[nextBlockIndex].IsSkippedInVisual || blocks[nextBlockIndex].Kind == BlockKind.Paragraph))
             nextBlockIndex++;
 
         if (prevBlockIndex < 0 || nextBlockIndex >= blocks.Count)

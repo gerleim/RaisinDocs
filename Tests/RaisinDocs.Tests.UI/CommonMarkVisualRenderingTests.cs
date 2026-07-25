@@ -58,6 +58,13 @@ public class CommonMarkVisualRenderingTests
             var block = blocks[i];
             var text = block.VisualText;
 
+            // HTML blocks that separate lists/code create blank lines in text output
+            if (block.Kind == BlockKind.HtmlBlock && block.CreateVisualSeparation && lastNonEmptyIndex >= 0)
+            {
+                result.Append('\n');
+                continue;
+            }
+
             if (string.IsNullOrEmpty(text))
                 continue;
 
