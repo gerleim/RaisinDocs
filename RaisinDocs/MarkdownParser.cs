@@ -112,6 +112,7 @@ public record class ParsedBlock
     public IReadOnlyList<SyntaxToken>? SyntaxTokens { get; init; }
     public IReadOnlyList<SpellingError>? SpellingErrors { get; init; }
     public bool CreateVisualSeparation { get; init; }
+    public IReadOnlyList<ParsedBlock>? Children { get; init; }
 
     public bool HasStyleAt(int offset, InlineStyle targetStyle)
     {
@@ -383,6 +384,7 @@ public static class MarkdownParser
         ApplyBlockDivColors(result);
         ApplySyntaxHighlighting(result, getBlockText, highlighter);
         DetectHtmlCommentSeparations(result);
+        BuildHierarchy(result);
 
         return result;
     }
@@ -1062,6 +1064,43 @@ public static class MarkdownParser
             return true;
 
         return false;
+    }
+
+    private static void BuildHierarchy(List<ParsedBlock> blocks)
+    {
+        // Build hierarchy from OwnerBlock relationships
+        // Each container block collects its children based on OwnerBlock
+        for (int i = 0; i < blocks.Count; i++)
+        {
+            var block = blocks[i];
+            if (!IsContainerBlock(block.Kind))
+                continue;
+
+            var children = new List<ParsedBlock>();
+            for (int j = i + 1; j < blocks.Count; j++)
+            {
+                // Collect blocks that directly belong to this container
+                if (blocks[j].OwnerBlock == i)
+                {
+                    children.Add(blocks[j]);
+                }
+                else if (blocks[j].OwnerBlock != -1)
+                {
+                    // This block belongs to a different container, stop collecting
+                    break;
+                }
+                else if (IsContainerBlock(blocks[j].Kind))
+                {
+                    // Hit another container that's not owned, stop
+                    break;
+                }
+            }
+
+            if (children.Count > 0)
+            {
+                blocks[i] = block with { Children = children };
+            }
+        }
     }
 
     private static ParsedBlock ReclassifyAsParagraph(ParsedBlock block, string text,
