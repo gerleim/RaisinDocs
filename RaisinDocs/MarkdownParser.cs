@@ -376,8 +376,8 @@ public static class MarkdownParser
         DetectSetextHeadings(result, getBlockText);
         DetectTables(result, getBlockText);
         DetectListNesting(result, getBlockText, defs, theme);
-        MergeParagraphContinuations(result, getBlockText);
         BuildHierarchy(result, getBlockText);
+        MergeParagraphContinuations(result, getBlockText);
         DetectIndentedCode(result, getBlockText, defs);
         ApplyBlockDivColors(result);
         ApplySyntaxHighlighting(result, getBlockText, highlighter);

@@ -2000,6 +2000,39 @@ public class DocumentTests
     }
 
     [Fact]
+    public void ParagraphContinuation_BlockCountReflectsMerge()
+    {
+        // Test that when parsing, the blocks are marked and later merged, resulting in fewer blocks
+        var parsedBlocks = MarkdownParser.Parse(i => i switch
+        {
+            0 => "first line",
+            1 => "second line",
+            2 => "third line",
+            _ => ""
+        }, 3);
+
+        // Parser should mark all three as part of first paragraph
+        parsedBlocks[0].Children.Should().HaveCount(2);
+        parsedBlocks.Should().HaveCount(3);  // Blocks still separate at parsing level
+
+        // Create document and merge
+        var doc = new Document();
+        for (int i = 0; i < parsedBlocks.Count; i++)
+        {
+            if (i > 0) doc.InsertParagraphBreak();
+            string text = i switch { 0 => "first line", 1 => "second line", 2 => "third line", _ => "" };
+            foreach (char c in text) doc.Insert(c);
+        }
+
+        doc.BlockCount.Should().Be(3);  // Before merge
+
+        doc.MergeParagraphContinuations(parsedBlocks);
+
+        doc.BlockCount.Should().Be(1);  // After merge - all combined
+        doc.GetBlockText(0).Should().Be("first line\nsecond line\nthird line");
+    }
+
+    [Fact]
     public void ParagraphContinuation_Document_Merges()
     {
         // Create a document with parsed blocks that have continuations marked
