@@ -61,10 +61,6 @@ public class CommonMarkVisualRenderingTests
             if (string.IsNullOrEmpty(text))
                 continue;
 
-            // Skip HTML comment blocks (not visible in rendering)
-            if (text.TrimStart().StartsWith("<!--"))
-                continue;
-
             if (lastNonEmptyIndex >= 0)
             {
                 var prevBlock = blocks[lastNonEmptyIndex];
