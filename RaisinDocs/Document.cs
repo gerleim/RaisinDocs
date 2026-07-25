@@ -248,6 +248,7 @@ public class Document
     {
         _blocks[CursorBlock].Insert(CursorOffset, c);
         CursorOffset++;
+        ContentChanged?.Invoke();
     }
 
     public void InsertTextAt(int block, int offset, string text)

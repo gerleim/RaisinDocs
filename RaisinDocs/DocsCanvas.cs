@@ -922,12 +922,23 @@ public partial class DocsCanvas : FrameworkElement
         int blockCountBefore = _doc.BlockCount;
         _parsedBlocks ??= MarkdownParser.Parse(i => _doc.GetBlockText(i), _doc.BlockCount, _syntaxHighlighter);
 
+        // Debug: Check if first block has Children marked
+        if (_parsedBlocks.Count >= 2)
+        {
+            System.Diagnostics.Debug.WriteLine($"[MERGE] Block[0]: Kind={_parsedBlocks[0].Kind}, Text='{_doc.GetBlockText(0)}'");
+            System.Diagnostics.Debug.WriteLine($"[MERGE] Block[1]: Kind={_parsedBlocks[1].Kind}, Text='{_doc.GetBlockText(1)}'");
+        }
+        System.Diagnostics.Debug.WriteLine($"[MERGE] Before merge: BlockCount={_doc.BlockCount}, ParsedBlocks={_parsedBlocks.Count}, FirstHasChildren={(_parsedBlocks.Count > 0 && _parsedBlocks[0].Children != null)}, ChildCount={(_parsedBlocks.Count > 0 ? _parsedBlocks[0].Children?.Count ?? 0 : 0)}");
+
         // Merge paragraph lazy continuations in the Document (logical structure per CommonMark spec)
         _doc.MergeParagraphContinuations(_parsedBlocks);
 
         // If block count changed due to merging, invalidate visual maps
         if (blockCountBefore != _doc.BlockCount)
             _visualMaps = null;
+
+        // Debug: Check after merge
+        System.Diagnostics.Debug.WriteLine($"[MERGE] After merge: BlockCount={_doc.BlockCount}, ParsedBlocks={_parsedBlocks.Count}");
 
         if (IsVisual && _visualMaps == null)
         {
