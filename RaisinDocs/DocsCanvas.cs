@@ -1206,16 +1206,16 @@ public partial class DocsCanvas : FrameworkElement
             return;
         }
 
-        // In visual mode: paragraphs with soft breaks (\n) should render as one line (space)
-        // In source mode: show actual newlines as separate lines
-        var segments = (IsVisual && parsed.Kind == BlockKind.Paragraph)
-            ? new[] { text.Replace("\n", " ") }
-            : text.Split('\n');
-
+        var segments = text.Split('\n');
         int offset = 0;
         for (int s = 0; s < segments.Length; s++)
         {
-            WrapSegment(blockIndex, offset, segments[s], maxWidth, parsed, map, nestingDepth, parentContentCol);
+            // In visual mode: render paragraph soft breaks as spaces
+            var segmentText = (IsVisual && parsed.Kind == BlockKind.Paragraph && segments.Length > 1 && s < segments.Length - 1)
+                ? segments[s] + " "  // Add space instead of newline for soft breaks
+                : segments[s];
+
+            WrapSegment(blockIndex, offset, segmentText, maxWidth, parsed, map, nestingDepth, parentContentCol);
             offset += segments[s].Length + 1;
         }
 
