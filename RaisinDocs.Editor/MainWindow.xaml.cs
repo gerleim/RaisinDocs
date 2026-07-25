@@ -113,6 +113,21 @@ public partial class MainWindow : Window
                 ActiveTab?.Editor.Canvas.ToggleEditMode();
                 e.Handled = true;
                 break;
+            case Key.OemPlus when ctrl:
+            case Key.Add when ctrl:
+                ActiveTab?.Editor.Canvas.ZoomIn();
+                e.Handled = true;
+                break;
+            case Key.OemMinus when ctrl:
+            case Key.Subtract when ctrl:
+                ActiveTab?.Editor.Canvas.ZoomOut();
+                e.Handled = true;
+                break;
+            case Key.D0 when ctrl:
+            case Key.NumPad0 when ctrl:
+                ActiveTab?.Editor.Canvas.ZoomReset();
+                e.Handled = true;
+                break;
         }
 
         if (!e.Handled)
