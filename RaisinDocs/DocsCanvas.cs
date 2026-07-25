@@ -687,6 +687,7 @@ public partial class DocsCanvas : FrameworkElement
 
         _doc.ContentChanged += () =>
         {
+            InvalidateLayout();
             IsDirty = !_doc.IsClean;
             ContentChanged?.Invoke(this, EventArgs.Empty);
             OnContentChangedForSpellCheck();
