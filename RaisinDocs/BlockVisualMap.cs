@@ -300,6 +300,13 @@ public class BlockVisualMap
                 ranges.Add(tag);
         }
 
+        var htmlCommentRanges = MarkdownParser.FindHtmlCommentRanges(blockText);
+        if (htmlCommentRanges != null)
+        {
+            foreach (var comment in htmlCommentRanges)
+                ranges.Add(comment);
+        }
+
         ranges.Sort((a, b) => a.Start.CompareTo(b.Start));
 
         return new BlockVisualMap(ranges, replacementPrefix, isContinuation, prefixMeasureKind,

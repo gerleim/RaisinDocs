@@ -2894,6 +2894,24 @@ public static class MarkdownParser
         return ranges;
     }
 
+    internal static List<HiddenRange>? FindHtmlCommentRanges(string text)
+    {
+        List<HiddenRange>? ranges = null;
+        int pos = 0;
+        while (true)
+        {
+            int start = text.IndexOf("<!--", pos);
+            if (start < 0) break;
+            int end = text.IndexOf("-->", start);
+            if (end < 0) break;
+            end += 3;  // Include the closing -->
+            ranges ??= [];
+            ranges.Add(new HiddenRange(start, end - start));
+            pos = end;
+        }
+        return ranges;
+    }
+
     private static void AddOrMergeColorSpan(ref List<ColorSpan> spans, int start, int length,
         RgbColor? fg, RgbColor? bg)
     {
