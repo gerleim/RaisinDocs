@@ -1016,6 +1016,26 @@ public partial class DocsCanvas : FrameworkElement
                     groupBlocks.Add(bi);
             }
         }
+
+        // After grouping consecutive blocks, check for single blocks that contain
+        // internal newlines (merged continuations from MergeParagraphContinuations)
+        for (int bi = 0; bi < _doc.BlockCount; bi++)
+        {
+            if (_blockToGroup != null && _blockToGroup.ContainsKey(bi))
+                continue;  // Already in a group
+
+            if (_parsedBlocks![bi].Kind == BlockKind.Paragraph)
+            {
+                string blockText = _doc.GetBlockText(bi);
+                if (blockText.Contains('\n'))
+                {
+                    // This block has internal newlines - it's a merged continuation
+                    // Create a group for it
+                    var singleBlockGroup = new List<int> { bi };
+                    EmitParagraphGroup(singleBlockGroup);
+                }
+            }
+        }
     }
 
     private void EmitParagraphGroupFromVisualBlock(VisualBlock vblock)
