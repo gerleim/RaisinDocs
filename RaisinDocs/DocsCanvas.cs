@@ -928,9 +928,13 @@ public partial class DocsCanvas : FrameworkElement
         // Merge paragraph lazy continuations in the Document (logical structure per CommonMark spec)
         _doc.MergeParagraphContinuations(_parsedBlocks);
 
-        // If block count changed due to merging, invalidate visual maps
+        // If block count changed due to merging, rebuild parsedBlocks and invalidate visual maps
         if (blockCountBefore != _doc.BlockCount)
+        {
             _visualMaps = null;
+            // Rebuild parsedBlocks to reflect the merged state
+            _parsedBlocks = MarkdownParser.Parse(i => _doc.GetBlockText(i), _doc.BlockCount, _syntaxHighlighter);
+        }
 
         // Build visual block structure for visual mode rendering
         if (IsVisual)
