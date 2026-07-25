@@ -43,9 +43,22 @@ internal class TextMeasurer
 
     internal void EnsureMeasured(Visual visual)
     {
-        if (_measured) return;
+        double newDpiScale = _dpiScale;
         if (PresentationSource.FromVisual(visual) != null)
-            _dpiScale = VisualTreeHelper.GetDpi(visual).PixelsPerDip;
+            newDpiScale = VisualTreeHelper.GetDpi(visual).PixelsPerDip;
+
+        // If measurements were done with the wrong DPI, recalculate
+        if (_measured && newDpiScale != _dpiScale)
+        {
+            _dpiScale = newDpiScale;
+            _charWidthCache.Clear();
+            _lineHeights.Clear();
+            _baselines.Clear();
+            _measured = false;
+        }
+
+        if (_measured) return;
+        _dpiScale = newDpiScale;
 
         NormalTypeface.TryGetGlyphTypeface(out _normalGlyph);
         BoldTypeface.TryGetGlyphTypeface(out _boldGlyph);
