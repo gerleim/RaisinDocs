@@ -2842,4 +2842,49 @@ public class MarkdownParserTests
         MarkdownParser.HasAdjacentMarkers("<!--@fg:red-->a<!--/@--> <!--@fg:red-->b<!--/@-->").Should().BeFalse();
     }
 
+    // --- Paragraph lazy continuations ---
+
+    [Fact]
+    public void ParagraphContinuation_NonIndented_MarkedAsChild()
+    {
+        var result = ParseBlocks("first line", "second line");
+        result.Should().HaveCount(2);
+        result[0].Kind.Should().Be(BlockKind.Paragraph);
+        result[1].Kind.Should().Be(BlockKind.Paragraph);
+        result[0].Children.Should().NotBeNull();
+        result[0].Children.Should().Contain(result[1]);
+    }
+
+    [Fact]
+    public void ParagraphContinuation_Indented_MarkedAsChild()
+    {
+        var result = ParseBlocks("first line", "  second line");
+        result.Should().HaveCount(2);
+        result[0].Kind.Should().Be(BlockKind.Paragraph);
+        result[1].Kind.Should().Be(BlockKind.Paragraph);
+        result[0].Children.Should().NotBeNull();
+        result[0].Children.Should().Contain(result[1]);
+    }
+
+    [Fact]
+    public void ParagraphContinuation_BlankLineBreaksIt()
+    {
+        var result = ParseBlocks("first line", "", "second line");
+        result.Should().HaveCount(3);
+        result[0].Children.Should().BeNull();
+        result[2].Children.Should().BeNull();
+    }
+
+    [Fact]
+    public void ParagraphContinuation_MultipleContinuations()
+    {
+        var result = ParseBlocks("line 1", "line 2", "line 3");
+        result[0].Kind.Should().Be(BlockKind.Paragraph);
+        result[0].Children.Should().NotBeNull();
+        result[0].Children.Should().HaveCount(2);
+        // Verify children are the next two paragraphs by checking their content
+        result[0].Children![0].Runs[0].Length.Should().Be(6);  // "line 2"
+        result[0].Children![1].Runs[0].Length.Should().Be(6);  // "line 3"
+    }
+
 }

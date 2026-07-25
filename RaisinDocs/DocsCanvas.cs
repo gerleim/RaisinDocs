@@ -918,10 +918,15 @@ public partial class DocsCanvas : FrameworkElement
         _layoutDirty = false;
         _measure.EnsureMeasured(this);
 
+        int blockCountBefore = _doc.BlockCount;
         _parsedBlocks ??= MarkdownParser.Parse(i => _doc.GetBlockText(i), _doc.BlockCount, _syntaxHighlighter);
 
         // Merge paragraph lazy continuations in the Document (logical structure per CommonMark spec)
         _doc.MergeParagraphContinuations(_parsedBlocks);
+
+        // If block count changed due to merging, invalidate visual maps
+        if (blockCountBefore != _doc.BlockCount)
+            _visualMaps = null;
 
         if (IsVisual && _visualMaps == null)
         {

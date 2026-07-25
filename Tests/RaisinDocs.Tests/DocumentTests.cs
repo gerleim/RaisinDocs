@@ -1981,4 +1981,53 @@ public class DocumentTests
         doc.GetBlockText(1).Should().Be("world");
         doc.CursorOffset.Should().Be(3);
     }
+
+    // --- Paragraph lazy continuation detection ---
+
+    [Fact]
+    public void ParagraphContinuation_Parser_MarksChildren()
+    {
+        // Test that the parser correctly marks continuations in the ParsedBlock.Children hierarchy
+        var parsedBlocks = MarkdownParser.Parse(i => i switch
+        {
+            0 => "first line",
+            1 => "second line",
+            _ => ""
+        }, 2);
+
+        parsedBlocks[0].Children.Should().NotBeNull();
+        parsedBlocks[0].Children.Should().HaveCount(1);
+    }
+
+    [Fact]
+    public void ParagraphContinuation_Document_Merges()
+    {
+        // Create a document with parsed blocks that have continuations marked
+        var doc = new Document();
+
+        // Manually populate with parsed blocks that have continuations marked
+        var parsedBlocks = MarkdownParser.Parse(i => i switch
+        {
+            0 => "first line",
+            1 => "second line",
+            _ => ""
+        }, 2);
+
+        // Insert text to match what the parser parsed
+        doc.Insert('f'); doc.Insert('i'); doc.Insert('r'); doc.Insert('s'); doc.Insert('t');
+        doc.Insert(' '); doc.Insert('l'); doc.Insert('i'); doc.Insert('n'); doc.Insert('e');
+        doc.InsertParagraphBreak();
+        doc.Insert('s'); doc.Insert('e'); doc.Insert('c'); doc.Insert('o'); doc.Insert('n');
+        doc.Insert('d'); doc.Insert(' '); doc.Insert('l'); doc.Insert('i'); doc.Insert('n'); doc.Insert('e');
+
+        // Verify blocks are separate before merging
+        doc.BlockCount.Should().Be(2);
+
+        // Call merge
+        doc.MergeParagraphContinuations(parsedBlocks);
+
+        // After merge, blocks should be combined
+        doc.BlockCount.Should().Be(1);
+        doc.GetBlockText(0).Should().Be("first line\nsecond line");
+    }
 }
