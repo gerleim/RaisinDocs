@@ -98,20 +98,15 @@ public partial class DocsEditor : UserControl
     private void UpdateScrollBar()
     {
         _updatingScrollBar = true;
-        double maxScroll = Math.Max(0, PART_Canvas.TotalContentHeight - PART_Canvas.ActualHeight);
-        if (maxScroll > 0)
-        {
-            PART_ScrollBar.Maximum = maxScroll;
-            PART_ScrollBar.ViewportSize = PART_Canvas.ActualHeight;
-            PART_ScrollBar.LargeChange = Math.Max(1, PART_Canvas.ActualHeight - 20);
-            PART_ScrollBar.SmallChange = 20;
-            PART_ScrollBar.Value = PART_Canvas.ScrollOffset;
-            PART_ScrollBar.Visibility = Visibility.Visible;
-        }
-        else
-        {
-            PART_ScrollBar.Visibility = Visibility.Collapsed;
-        }
+        double totalHeight = PART_Canvas.TotalContentHeight;
+        double actualHeight = PART_Canvas.ActualHeight;
+        double maxScroll = Math.Max(0, totalHeight - actualHeight);
+        PART_ScrollBar.Maximum = maxScroll;
+        PART_ScrollBar.ViewportSize = actualHeight;
+        PART_ScrollBar.LargeChange = Math.Max(1, actualHeight - 20);
+        PART_ScrollBar.SmallChange = 20;
+        PART_ScrollBar.Value = PART_Canvas.ScrollOffset;
+        PART_ScrollBar.IsEnabled = maxScroll > 0;
         _updatingScrollBar = false;
     }
 

@@ -33,7 +33,6 @@
             <ScrollBar x:Name="PART_ScrollBar" Grid.Column="4"
                        Orientation="Vertical"
                        Minimum="0"
-                       Visibility="Collapsed"
                        ValueChanged="OnScrollBarValueChanged" />
         </Grid>
     </DockPanel>
