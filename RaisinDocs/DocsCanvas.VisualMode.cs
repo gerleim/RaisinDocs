@@ -1034,7 +1034,13 @@ public partial class DocsCanvas
         while (i < _visualLines.Count)
         {
             var vl = _visualLines[i];
-            var parsed = _parsedBlocks![vl.BlockIndex];
+            // Safety check: skip if block index is out of range (can happen after merging)
+            if (_parsedBlocks == null || vl.BlockIndex >= _parsedBlocks.Count)
+            {
+                i++;
+                continue;
+            }
+            var parsed = _parsedBlocks[vl.BlockIndex];
             if (parsed.Table == null || parsed.Kind is not (BlockKind.TableHeaderRow or BlockKind.TableDataRow))
             {
                 i++;
