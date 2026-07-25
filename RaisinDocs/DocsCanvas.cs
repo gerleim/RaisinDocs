@@ -835,6 +835,7 @@ public partial class DocsCanvas : FrameworkElement
         _parsedBlocks = null;
         _visualMaps = null;
         _blockToGroup = null;
+        InvalidateArrange();
         InvalidateSearchOnContentChange();
         InvalidateVisual();
     }
@@ -1486,7 +1487,8 @@ public partial class DocsCanvas : FrameworkElement
     {
         var result = base.ArrangeOverride(finalSize);
         _measure.EnsureMeasured(this);
-        ComputeLayout();
+        if (ActualHeight > 0 && ActualWidth > 0)
+            ComputeLayout();
         return result;
     }
 

@@ -127,6 +127,7 @@ public partial class MainWindow : Window
     private DocumentTab AddTab(string? filePath = null, string text = "")
     {
         var editor = new DocsEditor();
+        editor.Canvas.Logger = App.Logger;
         editor.ApplyState(ActiveTab?.Editor.GetState() ?? _editorState);
 
         editor.SetText(text);
