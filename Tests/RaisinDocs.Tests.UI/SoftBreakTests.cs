@@ -265,4 +265,69 @@ public class SoftBreakTests
         canvas.TestCursorOffset.Should().Be(6);
         canvas.TestGetBlockText(0)[6].Should().Be('w');  // Should point to 'w'
     }
+
+    // --- Visual cursor position (caret placement) ---
+
+    [StaFact]
+    public void SoftBreak_VisualCursorPosition_BeforeSoftBreak()
+    {
+        var canvas = CreateCanvas("hello\nworld");
+
+        // Position cursor before soft break
+        canvas.TestSetCursor(0, 5);  // After "hello", before "\n"
+
+        // Get visual x position
+        double xBefore = canvas.TestCursorX;
+
+        // Position cursor after soft break
+        canvas.TestSetCursor(0, 6);  // After "\n", before "world"
+
+        double xAfter = canvas.TestCursorX;
+
+        // Cursor x should advance significantly (by pilcrow + visual space width)
+        // It should not be at the same position or only slightly advanced
+        (xAfter - xBefore).Should().BeGreaterThan(0, "Cursor should move right after soft break");
+    }
+
+    [StaFact]
+    public void SoftBreak_VisualCursorPosition_Consistency()
+    {
+        var canvas = CreateCanvas("a\nb\nc");
+
+        // Get visual positions at each character
+        canvas.TestSetCursor(0, 0);
+        double x0 = canvas.TestCursorX;  // 'a'
+
+        canvas.TestSetCursor(0, 2);
+        double x2 = canvas.TestCursorX;  // 'b'
+
+        canvas.TestSetCursor(0, 4);
+        double x4 = canvas.TestCursorX;  // 'c'
+
+        // Each position should be different (cursor moves across screen)
+        x0.Should().NotBe(x2, "Cursor at 'b' should be at different x than 'a'");
+        x2.Should().NotBe(x4, "Cursor at 'c' should be at different x than 'b'");
+        x0.Should().BeLessThan(x2, "Text flows left-to-right");
+        x2.Should().BeLessThan(x4, "Text flows left-to-right");
+    }
+
+    [StaFact]
+    public void SoftBreak_VisualCursorPosition_NotAtStartOfNextChar()
+    {
+        var canvas = CreateCanvas("abc\nxyz");
+
+        // Get cursor position at 'x' (first char after soft break)
+        canvas.TestSetCursor(0, 4);  // Points to 'x'
+        double xAtX = canvas.TestCursorX;
+
+        // The cursor should be AT the start of 'x', not after the visual space
+        // It should NOT be at the same position as if we had skipped the space
+
+        // Get position at 'c' (before soft break)
+        canvas.TestSetCursor(0, 3);  // Points to soft break
+        double xAtBreak = canvas.TestCursorX;
+
+        // There should be visible gap for the pilcrow + space between 'c' and 'x'
+        (xAtX - xAtBreak).Should().BeGreaterThan(10, "Visual space should create visible gap between break and next char");
+    }
 }

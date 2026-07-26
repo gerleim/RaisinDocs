@@ -1654,8 +1654,24 @@ public partial class DocsCanvas : FrameworkElement
 
     private double MeasureJoinedRange(ParagraphGroup group, int start, int length)
     {
-        return MeasureRangeWidth(group.JoinedText, start, length,
+        double width = MeasureRangeWidth(group.JoinedText, start, length,
             group.JoinedParsed.Runs, BlockKind.Paragraph, group.JoinedMap);
+
+        // Add visual space width for soft breaks that fall within the range
+        var softBreaks = new HashSet<int>(group.SoftBreakOffsets);
+        int runIdx = 0;
+        for (int i = start; i < start + length; i++)
+        {
+            if (softBreaks.Contains(i) && i < group.JoinedText.Length && group.JoinedText[i] == '¶')
+            {
+                // Add visual space width after each pilcrow
+                var style = TextMeasurer.GetStyleAtOffset(group.JoinedParsed.Runs, i, ref runIdx);
+                double spaceW = _measure.MeasureCharWidth(' ', BlockKind.Paragraph, style);
+                width += spaceW;
+            }
+        }
+
+        return width;
     }
 
     private int HitTestInVisualLine(int vlIndex, double x)
