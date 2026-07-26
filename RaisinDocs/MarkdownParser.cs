@@ -3065,6 +3065,18 @@ public static class MarkdownParser
             int end = text.IndexOf("-->", start);
             if (end < 0) break;
             end += 3;  // Include the closing -->
+
+            // Skip color tags (they're handled separately by FindInlineColorTagRanges)
+            var content = text.AsSpan()[(start + 4)..(end - 3)].Trim();
+            if (content.StartsWith("@fg:") || content.StartsWith("@bg:") ||
+                content.StartsWith("/@fg") || content.StartsWith("/@bg") ||
+                content.Equals("@fg") || content.Equals("@bg") ||
+                content.Equals("/@fg") || content.Equals("/@bg"))
+            {
+                pos = end;
+                continue;
+            }
+
             ranges ??= [];
             ranges.Add(new HiddenRange(start, end - start));
             pos = end;
