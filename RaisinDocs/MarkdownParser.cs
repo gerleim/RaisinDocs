@@ -1057,8 +1057,9 @@ public static class MarkdownParser
             if (blocks[i].Kind != BlockKind.Paragraph)
                 continue;
 
-            // Empty blocks cannot have continuations - they represent paragraph breaks
             string blockText = getBlockText(i);
+
+            // Empty blocks cannot have continuations - they represent paragraph breaks
             if (blockText.Trim().Length == 0)
                 continue;
 
@@ -1068,9 +1069,9 @@ public static class MarkdownParser
                 string text = getBlockText(j);
                 string trimmed = text.Trim();
 
-                // Blank line (empty or whitespace-only) breaks continuations
+                // Skip empty blocks but continue checking for continuations after them
                 if (trimmed.Length == 0)
-                    break;
+                    continue;
 
                 // Next paragraph is a lazy continuation
                 if (blocks[j].Kind == BlockKind.Paragraph)
