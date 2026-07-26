@@ -373,6 +373,7 @@ public static class MarkdownParser
             });
         }
 
+        DetectBareMarkerContinuations(result, getBlockText);
         DetectSetextHeadings(result, getBlockText);
         DetectTables(result, getBlockText);
         DetectListNesting(result, getBlockText, defs, theme);
@@ -716,6 +717,31 @@ public static class MarkdownParser
             blocks[i + 1] = blocks[i + 1] with { Kind = BlockKind.SetextUnderline };
             containerInRun = false;
             i++;
+        }
+    }
+
+    private static void DetectBareMarkerContinuations(List<ParsedBlock> blocks, Func<int, string> getBlockText)
+    {
+        // Reclassify bare markers (*, +, -) that follow paragraphs as paragraph continuations
+        // This handles cases like "*foo bar\n*\n" where the second * should not be a bullet point
+        for (int i = 1; i < blocks.Count; i++)
+        {
+            if (blocks[i - 1].Kind != BlockKind.Paragraph)
+                continue;
+
+            if (blocks[i].Kind != BlockKind.UnorderedListItem)
+                continue;
+
+            string text = getBlockText(i);
+            int ls = blocks[i].LeadingSpaces;
+            string stripped = ls > 0 ? text[ls..] : text;
+
+            // Check if this is just a bare marker with no space after it
+            if (stripped.Length == 1 && stripped[0] is '-' or '*' or '+')
+            {
+                // This is a bare marker following a paragraph - treat as continuation
+                blocks[i] = blocks[i] with { Kind = BlockKind.Paragraph };
+            }
         }
     }
 
