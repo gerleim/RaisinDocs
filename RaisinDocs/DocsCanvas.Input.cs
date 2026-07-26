@@ -317,7 +317,11 @@ public partial class DocsCanvas
         {
             if (c < ' ' && c != '\t') continue;
             if (IsVisual && _doc.CursorOffset == _doc.GetBlockLength(_doc.CursorBlock))
+            {
+                // Ensure layout is current before using visual maps
+                ComputeLayout();
                 ClampCursorBeforeTrailingHidden();
+            }
             _doc.Insert(c);
         }
 
