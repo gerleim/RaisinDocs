@@ -363,4 +363,19 @@ public class HardBreakTests
         // Should have exactly 2 visual blocks (not merged)
         blockInfos.Length.Should().Be(2, "Hard break should prevent block merging");
     }
+
+    [StaFact]
+    public void HardBreak_TrailingSpaces_SeparatesBlocks()
+    {
+        var canvas = CreateCanvas("a  \nb");
+
+        // Source has 2 blocks: "a  " (two trailing spaces) and "b"
+        canvas.TestBlockCount.Should().Be(2);
+
+        // In visual mode, trailing spaces hard break should NOT merge blocks
+        var blockInfos = canvas.TestGetVisualBlockInfos();
+
+        // Should have exactly 2 visual blocks (not merged)
+        blockInfos.Length.Should().Be(2, "Trailing spaces hard break should prevent block merging");
+    }
 }

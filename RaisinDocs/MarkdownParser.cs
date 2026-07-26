@@ -1450,6 +1450,11 @@ public static class MarkdownParser
         int end = GetContentEnd(blockText);
         if (end == 0) return false;
 
+        // Check for two or more trailing spaces (CommonMark hard break)
+        if (end >= 2 && blockText[end - 1] == ' ' && blockText[end - 2] == ' ')
+            return true;
+
+        // Check for backslash hard break
         if (blockText[end - 1] != '\\') return false;
 
         int count = 0;

@@ -279,14 +279,20 @@ public class BlockVisualMap
         int effectiveEnd = MarkdownParser.GetContentEnd(blockText);
         if (MarkdownParser.IsTrailingHardBreak(parsed, blockText))
         {
-            ranges.Add(new HiddenRange(effectiveEnd - 1, 1));
-        }
-        else if (parsed.Kind is not BlockKind.FencedCodeLine and not BlockKind.IndentedCodeLine && effectiveEnd >= 2
-                 && blockText[effectiveEnd - 1] == ' ' && blockText[effectiveEnd - 2] == ' ')
-        {
-            int trailStart = effectiveEnd;
-            while (trailStart > 0 && blockText[trailStart - 1] == ' ') trailStart--;
-            ranges.Add(new HiddenRange(trailStart, effectiveEnd - trailStart));
+            // Check if it's a backslash or trailing spaces
+            if (effectiveEnd > 0 && blockText[effectiveEnd - 1] == '\\')
+            {
+                // Backslash hard break - hide just the backslash
+                ranges.Add(new HiddenRange(effectiveEnd - 1, 1));
+            }
+            else if (parsed.Kind is not BlockKind.FencedCodeLine and not BlockKind.IndentedCodeLine && effectiveEnd >= 2
+                     && blockText[effectiveEnd - 1] == ' ' && blockText[effectiveEnd - 2] == ' ')
+            {
+                // Trailing spaces hard break - hide all trailing spaces
+                int trailStart = effectiveEnd;
+                while (trailStart > 0 && blockText[trailStart - 1] == ' ') trailStart--;
+                ranges.Add(new HiddenRange(trailStart, effectiveEnd - trailStart));
+            }
         }
 
         if (parsed.Images != null)

@@ -1922,7 +1922,8 @@ public class MarkdownParserTests
     public void IsTrailingHardBreak_TrailingSpacesBeforeClosingColorTag()
     {
         var parsed = ParseBlocks("<!--@bg:red-->hello  <!--/@bg-->")[0];
-        MarkdownParser.IsTrailingHardBreak(parsed, "<!--@bg:red-->hello  <!--/@bg-->").Should().BeFalse();
+        // Two trailing spaces create a hard break (per CommonMark spec)
+        MarkdownParser.IsTrailingHardBreak(parsed, "<!--@bg:red-->hello  <!--/@bg-->").Should().BeTrue();
         MarkdownParser.GetContentEnd("<!--@bg:red-->hello  <!--/@bg-->").Should().Be(21);
     }
 
