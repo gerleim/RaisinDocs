@@ -925,7 +925,11 @@ public partial class DocsCanvas : FrameworkElement
         _parsedBlocks ??= MarkdownParser.Parse(i => _doc.GetBlockText(i), _doc.BlockCount, _syntaxHighlighter);
 
         // Merge paragraph lazy continuations in the Document (logical structure per CommonMark spec)
+        int blockCountBefore = _doc.BlockCount;
         _doc.MergeParagraphContinuations(_parsedBlocks);
+        int blockCountAfter = _doc.BlockCount;
+        if (blockCountBefore != blockCountAfter)
+            Logger?.Log(DocsLogLevel.Debug, $"MergeParagraphContinuations: {blockCountBefore} blocks -> {blockCountAfter} blocks");
 
         // After merging, always rebuild parsedBlocks to reflect current block structure and content
         _parsedBlocks = MarkdownParser.Parse(i => _doc.GetBlockText(i), _doc.BlockCount, _syntaxHighlighter);
