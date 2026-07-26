@@ -147,17 +147,18 @@ public class FormattingToggleTests
     [StaFact]
     public void ToggleBlockquote_MultiBlock_SelectionIncludesFirstPrefix()
     {
-        var canvas = CreateCanvas("one\ntwo");
-        canvas.TestSetSelection(0, 0, 1, 3);
+        // Use two headings (which cannot be merged as continuations)
+        var canvas = CreateCanvas("# Heading 1\n# Heading 2");
+        canvas.TestSetSelection(0, 0, 1, 9);
 
         canvas.ToggleBlockquote();
 
-        canvas.TestGetBlockText(0).Should().Be("> one");
-        canvas.TestGetBlockText(1).Should().Be("> two");
+        canvas.TestGetBlockText(0).Should().Be("> # Heading 1");
+        canvas.TestGetBlockText(1).Should().Be("> # Heading 2");
         canvas.TestAnchorBlock.Should().Be(0);
         canvas.TestAnchorOffset.Should().Be(0);
         canvas.TestCursorBlock.Should().Be(1);
-        canvas.TestCursorOffset.Should().Be(5);
+        canvas.TestCursorOffset.Should().Be(13);
     }
 
     [StaFact]
