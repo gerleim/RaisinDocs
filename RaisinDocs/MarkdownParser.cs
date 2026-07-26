@@ -1073,6 +1073,10 @@ public static class MarkdownParser
             if (blockText.Trim().Length == 0)
                 continue;
 
+            // Hard break (backslash or trailing spaces) breaks paragraph continuations
+            if (IsTrailingHardBreak(blocks[i], blockText))
+                continue;
+
             var continuations = new List<ParsedBlock>();
             for (int j = i + 1; j < blocks.Count; j++)
             {
