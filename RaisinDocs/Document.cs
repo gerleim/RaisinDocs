@@ -246,7 +246,17 @@ public class Document
 
     public void Insert(char c)
     {
-        _blocks[CursorBlock].Insert(CursorOffset, c);
+        if (CursorBlock < 0 || CursorBlock >= _blocks.Count)
+            throw new InvalidOperationException(
+                $"Invalid cursor block: {CursorBlock} (valid range: 0-{_blocks.Count - 1})");
+
+        var block = _blocks[CursorBlock];
+        if (CursorOffset < 0 || CursorOffset > block.Length)
+            throw new InvalidOperationException(
+                $"Invalid cursor offset: {CursorOffset} in block {CursorBlock} with length {block.Length}. " +
+                $"Block content preview: {block.ToString().Substring(0, Math.Min(50, block.Length))}");
+
+        block.Insert(CursorOffset, c);
         CursorOffset++;
     }
 

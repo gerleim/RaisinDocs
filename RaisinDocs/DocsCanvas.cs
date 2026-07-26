@@ -1040,8 +1040,8 @@ public partial class DocsCanvas : FrameworkElement
     private void EmitParagraphGroupFromVisualBlock(VisualBlock vblock)
     {
         var blockIndices = vblock.SourceBlockIndices;
-        // Convert internal \n to "¶ " (pilcrow + space) for visual rendering
-        var joinedText = vblock.MergedText.ToString().Replace("\n", "¶ ");
+        // Convert internal \n to "¶" (pilcrow only; visual space is rendered, not in text)
+        var joinedText = vblock.MergedText.ToString().Replace("\n", "¶");
 
         // Build segments from source indices
         var segments = new JoinSegment[blockIndices.Count];
@@ -1054,7 +1054,7 @@ public partial class DocsCanvas : FrameworkElement
             {
                 // Soft break marker (¶) is at the position
                 softBreakOffsets.Add(currentOffset);
-                currentOffset += 2; // for "¶ " (2 characters)
+                currentOffset += 1; // for "¶" (1 character; replaces \n 1-to-1)
             }
 
             int bi = blockIndices[i];
@@ -1113,7 +1113,7 @@ public partial class DocsCanvas : FrameworkElement
             if (i > 0)
             {
                 softBreakOffsets.Add(sb.Length);
-                sb.Append("¶ ");  // pilcrow + space for soft break
+                sb.Append("¶");  // pilcrow only (visual space is rendered, not in text)
             }
             int bi = blockIndices[i];
             string text = _doc.GetBlockText(bi);
@@ -1132,9 +1132,9 @@ public partial class DocsCanvas : FrameworkElement
                     if (j > 0)
                     {
                         softBreakOffsets.Add(sb.Length);
-                        sb.Append("¶ ");
+                        sb.Append("¶");  // pilcrow only (visual space is rendered, not in text)
                         sourcePos++;  // skip the \n
-                        displayPos += 2;  // ¶ and space
+                        displayPos++;  // ¶ replaces \n 1-to-1
                     }
 
                     string part = parts[j];
@@ -1147,7 +1147,7 @@ public partial class DocsCanvas : FrameworkElement
                     }
                 }
 
-                segments[i] = new JoinSegment(bi, startPos, displayPos - startPos);
+                segments[i] = new JoinSegment(bi, startPos, text.Length);
             }
             else
             {
@@ -2007,7 +2007,7 @@ public partial class DocsCanvas : FrameworkElement
         {
             if (group.JoinedMap.IsHidden(i)) continue;
             if (softBreaks.Contains(i) && visPos < displayText.Length)
-                ft.SetForegroundBrush(_palette.Syntax, visPos, 2);  // color both ¶ and space
+                ft.SetForegroundBrush(_palette.Syntax, visPos, 1);  // color pilcrow only
             visPos++;
         }
 
