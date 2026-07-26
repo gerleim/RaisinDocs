@@ -1136,6 +1136,7 @@ public partial class DocsCanvas : FrameworkElement
                     }
 
                     string part = parts[j];
+                    sb.Append(part);
                     for (int k = 0; k < part.Length; k++)
                     {
                         posMap[sourcePos] = displayPos;
