@@ -610,6 +610,10 @@ public partial class DocsCanvas : FrameworkElement
             var kind = _parsedBlocks?[i].Kind ?? BlockKind.Paragraph;
             var createVisualSeparation = _parsedBlocks?[i].CreateVisualSeparation ?? false;
 
+            // For merged paragraph blocks, convert soft breaks (newlines) to spaces for text extraction
+            if (kind == BlockKind.Paragraph && displayText.Contains('\n'))
+                displayText = displayText.Replace('\n', ' ');
+
             result.Add(new(rawText, displayText, kind, createVisualSeparation));
         }
 
