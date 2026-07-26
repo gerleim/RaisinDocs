@@ -1238,27 +1238,28 @@ public partial class DocsCanvas : FrameworkElement
         if (posMap.Count == 0)
             return (segOffset + sourceStart, sourceLength);
 
-        int displayStart = sourceStart < posMap.Count ? posMap[sourceStart] : segOffset + sourceStart;
+        // Get display start position
+        int displayStart = posMap.ContainsKey(sourceStart) ? posMap[sourceStart] : segOffset + sourceStart;
 
         // Calculate display end position
-        int sourceEnd = sourceStart + sourceLength;
+        int sourceEnd = sourceStart + sourceLength - 1;  // Last source position in the range
         int displayEnd;
 
-        if (sourceEnd - 1 < posMap.Count && posMap.ContainsKey(sourceEnd - 1))
+        if (posMap.ContainsKey(sourceEnd))
         {
-            displayEnd = posMap[sourceEnd - 1];
+            displayEnd = posMap[sourceEnd];
         }
-        else if (sourceEnd - 1 >= posMap.Count)
+        else if (posMap.Count > 0)
         {
-            // Extrapolate from last known position
+            // Extrapolate from the last mapped position
             int lastMappedSource = posMap.Keys.Max();
             int lastMappedDisplay = posMap[lastMappedSource];
-            int unmappedDistance = (sourceEnd - 1) - lastMappedSource;
+            int unmappedDistance = sourceEnd - lastMappedSource;
             displayEnd = lastMappedDisplay + unmappedDistance;
         }
         else
         {
-            displayEnd = segOffset + sourceEnd - 1;
+            displayEnd = segOffset + sourceEnd;
         }
 
         int displayLength = displayEnd - displayStart + 1;
