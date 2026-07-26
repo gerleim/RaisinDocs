@@ -1061,9 +1061,10 @@ public static class MarkdownParser
             for (int j = i + 1; j < blocks.Count; j++)
             {
                 string text = getBlockText(j);
+                string trimmed = text.Trim();
 
-                // Blank line breaks continuations
-                if (text.Length == 0)
+                // Blank line (empty or whitespace-only) breaks continuations
+                if (trimmed.Length == 0)
                     break;
 
                 // Next paragraph is a lazy continuation
