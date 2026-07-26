@@ -984,7 +984,17 @@ public static class MarkdownParser
             // Indented continuations need >= parentCC + 4 spaces to be code
             if (indent < parentCC + 4)
             {
-                blocks[childIdx] = ReclassifyAsParagraph(blocks[childIdx], getBlockText(childIdx), defs);
+                var oldChild = blocks[childIdx];
+                var newChild = ReclassifyAsParagraph(oldChild, getBlockText(childIdx), defs);
+                blocks[childIdx] = newChild;
+
+                // Update parent's Children list to reference the new reclassified instance
+                var parent = blocks[parentIdx];
+                if (parent.Children != null)
+                {
+                    var updatedChildren = parent.Children.Select(c => ReferenceEquals(c, oldChild) ? newChild : c).ToList();
+                    blocks[parentIdx] = parent with { Children = updatedChildren };
+                }
             }
         }
     }
@@ -1069,9 +1079,9 @@ public static class MarkdownParser
                 string text = getBlockText(j);
                 string trimmed = text.Trim();
 
-                // Skip empty blocks but continue checking for continuations after them
+                // Blank line breaks paragraph continuations (per CommonMark spec)
                 if (trimmed.Length == 0)
-                    continue;
+                    break;
 
                 // Next paragraph is a lazy continuation
                 if (blocks[j].Kind == BlockKind.Paragraph)
