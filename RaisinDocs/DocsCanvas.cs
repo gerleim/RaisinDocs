@@ -1990,7 +1990,29 @@ public partial class DocsCanvas : FrameworkElement
             return;
         }
 
-        string displayText = BuildJoinedDisplayString(group, vl.StartOffset, vl.Length);
+        // Build base display string (with "¶" only, no spaces yet)
+        var baseDisplay = group.JoinedMap.BuildDisplayString(group.JoinedText, vl.StartOffset, vl.Length);
+
+        // Add visual spaces after pilcrows
+        var softBreaks = new HashSet<int>(group.SoftBreakOffsets);
+        var sb = new System.Text.StringBuilder();
+        int visPos = 0;
+        for (int i = vl.StartOffset; i < vl.StartOffset + vl.Length; i++)
+        {
+            if (group.JoinedMap.IsHidden(i)) continue;
+
+            // Add the visible character from base display
+            if (visPos < baseDisplay.Length)
+                sb.Append(baseDisplay[visPos]);
+
+            // Add visual space after pilcrow
+            if (softBreaks.Contains(i) && i < group.JoinedText.Length && group.JoinedText[i] == '¶')
+                sb.Append(' ');
+
+            visPos++;
+        }
+
+        string displayText = sb.ToString();
         if (displayText.Length == 0) return;
 
         double fontSize = _measure.GetBlockFontSize(BlockKind.Paragraph);
@@ -2001,13 +2023,18 @@ public partial class DocsCanvas : FrameworkElement
             _palette.Foreground, _measure.DpiScale);
         ApplyInlineStylesVisual(ft, vl, group.JoinedParsed, group.JoinedMap);
 
-        var softBreaks = new HashSet<int>(group.SoftBreakOffsets);
-        int visPos = 0;
+        // Color soft breaks (pilcrow + visual space)
+        visPos = 0;
+        int displayPos = 0;
         for (int i = vl.StartOffset; i < vl.StartOffset + vl.Length; i++)
         {
             if (group.JoinedMap.IsHidden(i)) continue;
-            if (softBreaks.Contains(i) && visPos < displayText.Length)
-                ft.SetForegroundBrush(_palette.Syntax, visPos, 1);  // color pilcrow only
+
+            if (softBreaks.Contains(i) && displayPos < displayText.Length)
+                ft.SetForegroundBrush(_palette.Syntax, displayPos, 2);  // color pilcrow + visual space
+
+            // Advance display position (by 2 if soft break with visual space, else by 1)
+            displayPos += (softBreaks.Contains(i)) ? 2 : 1;
             visPos++;
         }
 
@@ -2016,6 +2043,7 @@ public partial class DocsCanvas : FrameworkElement
 
     private string BuildJoinedDisplayString(ParagraphGroup group, int start, int length)
     {
+        // Note: Soft break visual spaces are added in DrawJoinedLine, not here
         return group.JoinedMap.BuildDisplayString(group.JoinedText, start, length);
     }
 
