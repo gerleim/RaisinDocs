@@ -1022,7 +1022,8 @@ public partial class DocsCanvas : FrameworkElement
             if (_parsedBlocks![bi].Kind == BlockKind.Paragraph)
             {
                 string blockText = _doc.GetBlockText(bi);
-                if (blockText.Contains('\n'))
+                // Skip empty blocks - they shouldn't be rendered as continuations
+                if (blockText.Length > 0 && blockText.Contains('\n'))
                 {
                     Logger?.Log(DocsLogLevel.Debug, $"Continuation: Block {bi} has internal newline");
                     // This block has internal newlines - it's a merged continuation
