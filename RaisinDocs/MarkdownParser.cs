@@ -1,4 +1,3 @@
-using System.IO;
 using System.Text;
 
 namespace RaisinDocs;
@@ -1071,16 +1070,7 @@ public static class MarkdownParser
 
                 // Blank line (empty or whitespace-only) breaks continuations
                 if (trimmed.Length == 0)
-                {
-                    File.AppendAllText(@"C:\Temp\continuation_debug.txt",
-                        $"MergeParagraphContinuations: Block {i} stopped by empty block {j} (raw length: {text.Length}, trimmed length: {trimmed.Length}){Environment.NewLine}");
                     break;
-                }
-                else
-                {
-                    File.AppendAllText(@"C:\Temp\continuation_debug.txt",
-                        $"MergeParagraphContinuations: Block {i} checking block {j}: text='{text}', kind={blocks[j].Kind}{Environment.NewLine}");
-                }
 
                 // Next paragraph is a lazy continuation
                 if (blocks[j].Kind == BlockKind.Paragraph)
