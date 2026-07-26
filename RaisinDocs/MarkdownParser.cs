@@ -733,8 +733,7 @@ public static class MarkdownParser
                 continue;
 
             string text = getBlockText(i);
-            int ls = blocks[i].LeadingSpaces;
-            string stripped = ls > 0 ? text[ls..] : text;
+            string stripped = text.TrimStart();
 
             // Check if this is just a bare marker with no space after it
             if (stripped.Length == 1 && stripped[0] is '-' or '*' or '+')
