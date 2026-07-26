@@ -95,6 +95,27 @@ public class BlockVisualMap
         return rawOffset;
     }
 
+    /// <summary>
+    /// Build a parent map for O(1) parent lookup during visual map computation.
+    /// Maps each child block to its parent block's index in allBlocks.
+    /// </summary>
+    public static Dictionary<ParsedBlock, int> BuildParentMap(IReadOnlyList<ParsedBlock> allBlocks)
+    {
+        var parentMap = new Dictionary<ParsedBlock, int>();
+        for (int i = 0; i < allBlocks.Count; i++)
+        {
+            var block = allBlocks[i];
+            if (block.Children != null)
+            {
+                foreach (var child in block.Children)
+                {
+                    parentMap[child] = i;
+                }
+            }
+        }
+        return parentMap;
+    }
+
     internal const int SpacesPerNestingLevel = 4;
     private static readonly char[] BulletChars = ['●', '○', '■'];
 
@@ -130,7 +151,8 @@ public class BlockVisualMap
     }
 
     public static BlockVisualMap Compute(ParsedBlock parsed, string blockText,
-        IReadOnlyList<ParsedBlock>? allBlocks = null, Func<int, string>? getBlockText = null)
+        IReadOnlyList<ParsedBlock>? allBlocks = null, Func<int, string>? getBlockText = null,
+        Dictionary<ParsedBlock, int>? parentMap = null)
     {
         var ranges = new List<HiddenRange>();
         string? replacementPrefix = null;
@@ -145,17 +167,28 @@ public class BlockVisualMap
 
         if (allBlocks != null && parsed.Children == null)
         {
-            // Try to find parent from hierarchy
-            for (int i = 0; i < allBlocks.Count; i++)
+            // Use parent map for O(1) lookup if available, otherwise search O(n)
+            if (parentMap != null && parentMap.TryGetValue(parsed, out int parentIndex))
             {
-                var block = allBlocks[i];
-                if (block.Children != null && block.Children.Contains(parsed))
+                owner = allBlocks[parentIndex];
+                if (getBlockText != null)
+                    ownerText = getBlockText(parentIndex);
+                ownerIndex = parentIndex;
+            }
+            else
+            {
+                // Fallback to O(n) search if no parent map provided
+                for (int i = 0; i < allBlocks.Count; i++)
                 {
-                    owner = block;
-                    if (getBlockText != null)
-                        ownerText = getBlockText(i);
-                    ownerIndex = i;
-                    break;
+                    var block = allBlocks[i];
+                    if (block.Children != null && block.Children.Contains(parsed))
+                    {
+                        owner = block;
+                        if (getBlockText != null)
+                            ownerText = getBlockText(i);
+                        ownerIndex = i;
+                        break;
+                    }
                 }
             }
         }

@@ -941,8 +941,12 @@ public partial class DocsCanvas : FrameworkElement
         {
             _visualMaps = new List<BlockVisualMap>(_doc.BlockCount);
             Func<int, string> getText = _doc.GetBlockText;
+
+            // Build parent map for O(1) parent lookup during visual map computation
+            var parentMap = BlockVisualMap.BuildParentMap(_parsedBlocks);
+
             for (int i = 0; i < _doc.BlockCount; i++)
-                _visualMaps.Add(BlockVisualMap.Compute(_parsedBlocks[i], getText(i), _parsedBlocks, getText));
+                _visualMaps.Add(BlockVisualMap.Compute(_parsedBlocks[i], getText(i), _parsedBlocks, getText, parentMap));
         }
 
         ComputeLayoutCore(ActualWidth - _padding * 2);

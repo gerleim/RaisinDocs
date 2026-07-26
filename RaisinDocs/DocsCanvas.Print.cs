@@ -182,8 +182,12 @@ partial class DocsCanvas
         if (createdMaps)
         {
             _visualMaps = new List<BlockVisualMap>(_doc.BlockCount);
+
+            // Build parent map for O(1) parent lookup during visual map computation
+            var parentMap = BlockVisualMap.BuildParentMap(_parsedBlocks);
+
             for (int i = 0; i < _doc.BlockCount; i++)
-                _visualMaps.Add(BlockVisualMap.Compute(_parsedBlocks[i], _doc.GetBlockText(i), _parsedBlocks, _doc.GetBlockText));
+                _visualMaps.Add(BlockVisualMap.Compute(_parsedBlocks[i], _doc.GetBlockText(i), _parsedBlocks, _doc.GetBlockText, parentMap));
         }
 
         var savedMode = _editMode;
