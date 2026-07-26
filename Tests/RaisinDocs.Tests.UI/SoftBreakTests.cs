@@ -182,4 +182,87 @@ public class SoftBreakTests
         canvas.TestGetBlockText(0).Should().Contain("\n");
         canvas.TestGetBlockText(0).Should().NotContain("¶");
     }
+
+    // --- Cursor positioning precision ---
+
+    [StaFact]
+    public void SoftBreak_CursorPositioning_BeforePilcrow()
+    {
+        var canvas = CreateCanvas("sad\nasd");
+
+        // Set cursor before soft break
+        canvas.TestSetCursor(0, 3);  // After "sad", before "\n"
+        canvas.TestCursorBlock.Should().Be(0);
+        canvas.TestCursorOffset.Should().Be(3);
+    }
+
+    [StaFact]
+    public void SoftBreak_CursorPositioning_AfterPilcrow()
+    {
+        var canvas = CreateCanvas("sad\nasd");
+
+        // Set cursor after soft break (at start of next part)
+        canvas.TestSetCursor(0, 4);  // After "\n", before "asd"
+        canvas.TestCursorBlock.Should().Be(0);
+        canvas.TestCursorOffset.Should().Be(4);
+    }
+
+    [StaFact]
+    public void SoftBreak_CursorPositioning_NotInsideNextCharacter()
+    {
+        // This is the key test: ensure cursor doesn't appear in middle of 's'
+        var canvas = CreateCanvas("a\ns");
+
+        // Set cursor to position after soft break
+        canvas.TestSetCursor(0, 2);  // Should point to 's', not in middle of it
+
+        // Verify position is at character boundary
+        canvas.TestCursorBlock.Should().Be(0);
+        canvas.TestCursorOffset.Should().Be(2);
+
+        // Text should be "a\ns", so offset 2 is the 's'
+        canvas.TestGetBlockText(0).Should().Be("a\ns");
+        canvas.TestGetBlockText(0)[2].Should().Be('s');
+    }
+
+    [StaFact]
+    public void SoftBreak_CursorPositioning_MultipleBreaks()
+    {
+        var canvas = CreateCanvas("a\nb\nc");
+
+        // Test cursor at each position
+        canvas.TestSetCursor(0, 0);
+        canvas.TestCursorOffset.Should().Be(0);  // 'a'
+
+        canvas.TestSetCursor(0, 1);
+        canvas.TestCursorOffset.Should().Be(1);  // '\n'
+
+        canvas.TestSetCursor(0, 2);
+        canvas.TestCursorOffset.Should().Be(2);  // 'b'
+
+        canvas.TestSetCursor(0, 3);
+        canvas.TestCursorOffset.Should().Be(3);  // '\n'
+
+        canvas.TestSetCursor(0, 4);
+        canvas.TestCursorOffset.Should().Be(4);  // 'c'
+    }
+
+    [StaFact]
+    public void SoftBreak_CursorPositioning_TypeThenNavigate()
+    {
+        var canvas = CreateCanvas("");
+
+        canvas.TestSetCursor(0, 0);
+        canvas.TestTypeText("hello");
+        canvas.TestInsert("\n");
+        canvas.TestTypeText("world");
+
+        // Now cursor should be at position 11 (after "hello\nworld")
+        canvas.TestCursorOffset.Should().Be(11);
+
+        // Move cursor back to after soft break
+        canvas.TestSetCursor(0, 6);  // After "hello\n"
+        canvas.TestCursorOffset.Should().Be(6);
+        canvas.TestGetBlockText(0)[6].Should().Be('w');  // Should point to 'w'
+    }
 }
