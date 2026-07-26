@@ -1103,6 +1103,8 @@ public partial class DocsCanvas : FrameworkElement
         var sb = new System.Text.StringBuilder();
         var segments = new JoinSegment[blockIndices.Count];
         var softBreakOffsets = new List<int>();
+        // Map from original position to display position for offset adjustments
+        var positionMaps = new List<Dictionary<int, int>>();
 
         for (int i = 0; i < blockIndices.Count; i++)
         {
@@ -1113,8 +1115,47 @@ public partial class DocsCanvas : FrameworkElement
             }
             int bi = blockIndices[i];
             string text = _doc.GetBlockText(bi);
-            segments[i] = new JoinSegment(bi, sb.Length, text.Length);
-            sb.Append(text);
+            int startPos = sb.Length;
+            var posMap = new Dictionary<int, int>();
+
+            // Handle internal newlines in merged blocks
+            if (text.Contains('\n'))
+            {
+                int displayPos = startPos;
+                int sourcePos = 0;
+                var parts = text.Split('\n');
+
+                for (int j = 0; j < parts.Length; j++)
+                {
+                    if (j > 0)
+                    {
+                        softBreakOffsets.Add(sb.Length);
+                        sb.Append("¶ ");
+                        sourcePos++;  // skip the \n
+                        displayPos += 2;  // ¶ and space
+                    }
+
+                    string part = parts[j];
+                    for (int k = 0; k < part.Length; k++)
+                    {
+                        posMap[sourcePos] = displayPos;
+                        sourcePos++;
+                        displayPos++;
+                    }
+                }
+
+                segments[i] = new JoinSegment(bi, startPos, displayPos - startPos);
+            }
+            else
+            {
+                sb.Append(text);
+                // For non-merged blocks, positions don't change
+                for (int k = 0; k < text.Length; k++)
+                    posMap[k] = startPos + k;
+                segments[i] = new JoinSegment(bi, startPos, text.Length);
+            }
+
+            positionMaps.Add(posMap);
         }
 
         string joinedText = sb.ToString();
@@ -1129,26 +1170,39 @@ public partial class DocsCanvas : FrameworkElement
             var seg = segments[i];
             var parsed = _parsedBlocks![seg.BlockIndex];
             var map = _visualMaps![seg.BlockIndex];
+            var posMap = positionMaps[i];
 
             foreach (var run in parsed.Runs)
-                mergedRuns.Add(new StyledRun(run.Start + seg.OffsetInJoined, run.Length, run.Style));
+            {
+                var (displayStart, displayLength) = MapOffset(run.Start, run.Length, posMap, seg.OffsetInJoined);
+                mergedRuns.Add(new StyledRun(displayStart, displayLength, run.Style));
+            }
 
             if (parsed.Images != null)
             {
                 foreach (var img in parsed.Images)
+                {
+                    var (displayStart, displayLength) = MapOffset(img.Start, img.Length, posMap, seg.OffsetInJoined);
                     mergedImages.Add(new InlineImage(
-                        img.Start + seg.OffsetInJoined, img.Length, img.AltText, img.Url, img.Title));
+                        displayStart, displayLength, img.AltText, img.Url, img.Title));
+                }
             }
 
             if (parsed.ColorSpans != null)
             {
                 foreach (var cs in parsed.ColorSpans)
+                {
+                    var (displayStart, displayLength) = MapOffset(cs.Start, cs.Length, posMap, seg.OffsetInJoined);
                     mergedColorSpans.Add(new ColorSpan(
-                        cs.Start + seg.OffsetInJoined, cs.Length, cs.Foreground, cs.Background));
+                        displayStart, displayLength, cs.Foreground, cs.Background));
+                }
             }
 
             foreach (var hr in map.HiddenRanges)
-                mergedHiddenRanges.Add(new HiddenRange(hr.Start + seg.OffsetInJoined, hr.Length));
+            {
+                var (displayStart, displayLength) = MapOffset(hr.Start, hr.Length, posMap, seg.OffsetInJoined);
+                mergedHiddenRanges.Add(new HiddenRange(displayStart, displayLength));
+            }
         }
 
         mergedRuns.Sort((a, b) => a.Start.CompareTo(b.Start));
@@ -1176,6 +1230,38 @@ public partial class DocsCanvas : FrameworkElement
 
         foreach (var seg in segments)
             _blockToGroup![seg.BlockIndex] = group;
+    }
+
+    private (int displayStart, int displayLength) MapOffset(int sourceStart, int sourceLength, Dictionary<int, int> posMap, int segOffset)
+    {
+        if (posMap.Count == 0)
+            return (segOffset + sourceStart, sourceLength);
+
+        int displayStart = sourceStart < posMap.Count ? posMap[sourceStart] : segOffset + sourceStart;
+
+        // Calculate display end position
+        int sourceEnd = sourceStart + sourceLength;
+        int displayEnd;
+
+        if (sourceEnd - 1 < posMap.Count && posMap.ContainsKey(sourceEnd - 1))
+        {
+            displayEnd = posMap[sourceEnd - 1];
+        }
+        else if (sourceEnd - 1 >= posMap.Count)
+        {
+            // Extrapolate from last known position
+            int lastMappedSource = posMap.Keys.Max();
+            int lastMappedDisplay = posMap[lastMappedSource];
+            int unmappedDistance = (sourceEnd - 1) - lastMappedSource;
+            displayEnd = lastMappedDisplay + unmappedDistance;
+        }
+        else
+        {
+            displayEnd = segOffset + sourceEnd - 1;
+        }
+
+        int displayLength = displayEnd - displayStart + 1;
+        return (displayStart, displayLength);
     }
 
     private void ComputeLayoutCore(double maxWidth)
