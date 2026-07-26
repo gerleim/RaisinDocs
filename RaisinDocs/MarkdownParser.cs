@@ -989,15 +989,9 @@ public static class MarkdownParser
             {
                 var oldChild = blocks[childIdx];
                 var newChild = ReclassifyAsParagraph(oldChild, getBlockText(childIdx), defs);
-                blocks[childIdx] = newChild;
 
-                // Update parent's Children list to reference the new reclassified instance
-                var parent = blocks[parentIdx];
-                if (parent.Children != null)
-                {
-                    var updatedChildren = parent.Children.Select(c => ReferenceEquals(c, oldChild) ? newChild : c).ToList();
-                    blocks[parentIdx] = parent with { Children = updatedChildren };
-                }
+                // Use centralized helper to ensure parent references are updated
+                ReclassifyBlockAndUpdateParents(blocks, childIdx, newChild, blockToParent);
             }
         }
     }
@@ -3502,6 +3496,43 @@ public static class MarkdownParser
             return true;
 
         return false;
+    }
+
+    /// <summary>
+    /// Reclassify a block and update all parent references to the new instance.
+    ///
+    /// CRITICAL: This must be used by ANY transformation that reclassifies blocks AFTER BuildHierarchy runs.
+    /// When a block is reclassified (replaced with a new ParsedBlock instance), any parent block that has
+    /// it as a child must be updated to reference the new instance, not the old one.
+    ///
+    /// Usage:
+    /// - Only call AFTER BuildHierarchy (where parent-child relationships are established)
+    /// - DetectListNesting runs BEFORE BuildHierarchy, so doesn't need this helper
+    /// - DetectIndentedCode runs AFTER BuildHierarchy, so MUST use this helper
+    ///
+    /// If a future transformation reclassifies blocks, use this helper to prevent stale references.
+    /// </summary>
+    private static void ReclassifyBlockAndUpdateParents(
+        List<ParsedBlock> blocks,
+        int blockIndex,
+        ParsedBlock newBlock,
+        Dictionary<int, int> blockToParent)
+    {
+        var oldBlock = blocks[blockIndex];
+        blocks[blockIndex] = newBlock;
+
+        // If this block is a child of another block, update the parent's Children list
+        if (blockToParent.TryGetValue(blockIndex, out int parentIndex))
+        {
+            var parent = blocks[parentIndex];
+            if (parent.Children != null)
+            {
+                var updatedChildren = parent.Children
+                    .Select(c => ReferenceEquals(c, oldBlock) ? newBlock : c)
+                    .ToList();
+                blocks[parentIndex] = parent with { Children = updatedChildren };
+            }
+        }
     }
 
     // Hierarchy validation: ensure parent-child references are consistent
