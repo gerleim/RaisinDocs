@@ -328,7 +328,15 @@ public class BlockVisualMap
 
         ranges.Sort((a, b) => a.Start.CompareTo(b.Start));
 
-        return new BlockVisualMap(ranges, replacementPrefix, isContinuation, prefixMeasureKind,
+        // Deduplicate identical ranges (e.g., color tags found by both color tag and HTML comment finders)
+        var deduped = new List<HiddenRange>();
+        foreach (var range in ranges)
+        {
+            if (deduped.Count == 0 || deduped[^1].Start != range.Start || deduped[^1].Length != range.Length)
+                deduped.Add(range);
+        }
+
+        return new BlockVisualMap(deduped, replacementPrefix, isContinuation, prefixMeasureKind,
             parsed.Images, parsed.Links, parsed.ColorSpans);
     }
 
