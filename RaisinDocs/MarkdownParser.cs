@@ -383,6 +383,9 @@ public static class MarkdownParser
         ApplySyntaxHighlighting(result, getBlockText, highlighter);
         DetectHtmlCommentSeparations(result);
 
+        // Validate hierarchy consistency in debug builds
+        ValidateHierarchy(result);
+
         return result;
     }
 
@@ -3499,5 +3502,30 @@ public static class MarkdownParser
             return true;
 
         return false;
+    }
+
+    // Hierarchy validation: ensure parent-child references are consistent
+    private static void ValidateHierarchy(List<ParsedBlock> blocks)
+    {
+        var blockSet = new HashSet<ParsedBlock>(blocks);
+        int staleRefCount = 0;
+        foreach (var block in blocks)
+        {
+            if (block.Children != null)
+            {
+                foreach (var child in block.Children)
+                {
+                    if (!blockSet.Contains(child))
+                    {
+                        staleRefCount++;
+                        System.Diagnostics.Debug.WriteLine($"WARNING: Stale child reference in block {block.Kind}");
+                    }
+                }
+            }
+        }
+        if (staleRefCount > 0)
+        {
+            System.Diagnostics.Debug.WriteLine($"WARNING: Found {staleRefCount} stale child references after Parse()");
+        }
     }
 }

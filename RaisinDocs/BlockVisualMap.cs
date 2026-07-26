@@ -334,13 +334,32 @@ public class BlockVisualMap
 
         ranges.Sort((a, b) => a.Start.CompareTo(b.Start));
 
-        // Deduplicate identical ranges (e.g., color tags found by both color tag and HTML comment finders)
-        var deduped = new List<HiddenRange>();
+        // Merge overlapping ranges (e.g., color tags found by both color tag and HTML comment finders)
+        var merged = new List<HiddenRange>();
         foreach (var range in ranges)
         {
-            if (deduped.Count == 0 || deduped[^1].Start != range.Start || deduped[^1].Length != range.Length)
-                deduped.Add(range);
+            if (merged.Count == 0)
+            {
+                merged.Add(range);
+            }
+            else
+            {
+                var last = merged[^1];
+                // Check if current range overlaps with or is adjacent to the last merged range
+                if (range.Start <= last.Start + last.Length)
+                {
+                    // Merge: extend the last range to cover both
+                    int newEnd = Math.Max(last.Start + last.Length, range.Start + range.Length);
+                    merged[^1] = new HiddenRange(last.Start, newEnd - last.Start);
+                }
+                else
+                {
+                    // No overlap, add as new range
+                    merged.Add(range);
+                }
+            }
         }
+        var deduped = merged;
 
         return new BlockVisualMap(deduped, replacementPrefix, isContinuation, prefixMeasureKind,
             parsed.Images, parsed.Links, parsed.ColorSpans);
