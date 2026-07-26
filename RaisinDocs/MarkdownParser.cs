@@ -3070,6 +3070,15 @@ public static class MarkdownParser
             if (start < 0) break;
             int end = text.IndexOf("-->", start);
             if (end < 0) break;
+
+            // Skip color tags (they are also HTML comments but handled separately by FindInlineColorTagRanges)
+            // Color tags start with <!--@ or <!--/@ so we skip those
+            if (start + 4 < text.Length && text[start + 4] == '@')
+            {
+                pos = end + 3;
+                continue;
+            }
+
             end += 3;  // Include the closing -->
             ranges ??= [];
             ranges.Add(new HiddenRange(start, end - start));
