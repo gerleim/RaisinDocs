@@ -1714,6 +1714,7 @@ public partial class DocsCanvas : FrameworkElement
     private int HitTestInJoinedLine(VisualLine vl, double x)
     {
         var group = vl.Group!;
+        var softBreaks = new HashSet<int>(group.SoftBreakOffsets);
         double accum = 0;
         int runIdx = 0;
 
@@ -1735,6 +1736,14 @@ public partial class DocsCanvas : FrameworkElement
             }
             var style = TextMeasurer.GetStyleAtOffset(group.JoinedParsed.Runs, offset, ref runIdx);
             double charW = _measure.MeasureCharWidth(group.JoinedText[offset], BlockKind.Paragraph, style);
+
+            // Account for visual space after pilcrow
+            if (softBreaks.Contains(offset) && group.JoinedText[offset] == '¶')
+            {
+                double spaceW = _measure.MeasureCharWidth(' ', BlockKind.Paragraph, style);
+                charW += spaceW;  // Add visual space width
+            }
+
             if (x < accum + charW / 2)
                 return offset;
             accum += charW;
