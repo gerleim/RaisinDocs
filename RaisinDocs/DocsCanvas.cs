@@ -1737,15 +1737,19 @@ public partial class DocsCanvas : FrameworkElement
             var style = TextMeasurer.GetStyleAtOffset(group.JoinedParsed.Runs, offset, ref runIdx);
             double charW = _measure.MeasureCharWidth(group.JoinedText[offset], BlockKind.Paragraph, style);
 
-            // Account for visual space after pilcrow
+            // For soft breaks, account for visual space when hit-testing
+            double testWidth = charW;
             if (softBreaks.Contains(offset) && group.JoinedText[offset] == '¶')
             {
                 double spaceW = _measure.MeasureCharWidth(' ', BlockKind.Paragraph, style);
-                charW += spaceW;  // Add visual space width
+                testWidth += spaceW;  // Use full visual width for hit-testing
             }
 
-            if (x < accum + charW / 2)
+            // Check if click is in this character's area
+            if (x < accum + testWidth / 2)
                 return offset;
+
+            // Advance by character width only (not visual space - that's rendering-only)
             accum += charW;
         }
         return vl.StartOffset + vl.Length;
