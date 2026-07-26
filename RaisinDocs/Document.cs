@@ -1100,6 +1100,9 @@ public class Document
                 {
                     int contIdx = continuationIndices[j];
                     string contText = _blocks[contIdx].ToString();
+                    // Trim trailing spaces from parent and leading spaces from continuation to avoid duplication
+                    parentText = parentText.TrimEnd();
+                    contText = contText.TrimStart();
                     parentText += "\n" + contText;
                 }
                 _blocks[i] = new StringBuilder(parentText);
