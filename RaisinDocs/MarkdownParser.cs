@@ -109,7 +109,6 @@ public record class ParsedBlock
     public IReadOnlyList<SyntaxToken>? SyntaxTokens { get; init; }
     public IReadOnlyList<SpellingError>? SpellingErrors { get; init; }
     public bool CreateVisualSeparation { get; init; }
-    public bool IsBareMarkerContinuation { get; init; }
     public IReadOnlyList<ParsedBlock>? Children { get; init; }
 
     public bool HasStyleAt(int offset, InlineStyle targetStyle)
@@ -704,10 +703,6 @@ public static class MarkdownParser
             var nextKind = blocks[i + 1].Kind;
             string nextText = getBlockText(i + 1);
 
-            // Skip setext detection if next block is a bare marker continuation
-            if (blocks[i + 1].IsBareMarkerContinuation)
-                continue;
-
             BlockKind? headingKind = null;
             if (nextKind is BlockKind.Paragraph or BlockKind.ThematicBreak or BlockKind.UnorderedListItem
                 && IsSetextUnderline(nextText, out char underlineChar))
@@ -743,9 +738,8 @@ public static class MarkdownParser
             // Check if this is just a bare marker with no space after it
             if (stripped.Length == 1 && stripped[0] is '-' or '*' or '+')
             {
-                // This is a bare marker following a paragraph - treat as continuation
-                // Mark to prevent other post-processing passes from modifying it
-                blocks[i] = blocks[i] with { Kind = BlockKind.Paragraph, IsBareMarkerContinuation = true };
+                // This is a bare marker following a paragraph - treat as continuation, not as list item
+                blocks[i] = blocks[i] with { Kind = BlockKind.Paragraph };
             }
         }
     }
