@@ -614,6 +614,10 @@ public partial class DocsCanvas : FrameworkElement
             if (kind == BlockKind.Paragraph && displayText.Contains('\n'))
                 displayText = displayText.Replace('\n', ' ');
 
+            // For thematic breaks, render as normalized ---
+            if (kind == BlockKind.ThematicBreak)
+                displayText = " --- ";
+
             result.Add(new(rawText, displayText, kind, createVisualSeparation));
         }
 
