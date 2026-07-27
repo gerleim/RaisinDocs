@@ -618,6 +618,10 @@ public partial class DocsCanvas : FrameworkElement
             if (kind == BlockKind.ThematicBreak)
                 displayText = " --- ";
 
+            // Escape whitespace characters for clarity in test output
+            displayText = displayText.Replace("\n", "[\\n]")
+                                     .Replace("\t", "[\\t]");
+
             // Wrap block with type delimiter for unambiguous test output
             string blockType = GetBlockTypeLabel(kind);
             if (!string.IsNullOrWhiteSpace(displayText))
