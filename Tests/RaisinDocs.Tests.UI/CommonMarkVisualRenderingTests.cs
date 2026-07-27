@@ -51,42 +51,22 @@ public class CommonMarkVisualRenderingTests
     {
         var blocks = canvas.TestGetVisualBlockInfos();
         var result = new System.Text.StringBuilder();
-        int lastNonEmptyIndex = -1;
 
         for (int i = 0; i < blocks.Length; i++)
         {
             var block = blocks[i];
             var text = block.VisualText;
 
-            // HTML blocks that separate lists/code create blank lines in text output
-            if (block.Kind == BlockKind.HtmlBlock && block.CreateVisualSeparation && lastNonEmptyIndex >= 0)
-            {
-                result.Append('\n');
-                continue;
-            }
-
+            // Skip empty blocks and HTML separators
             if (string.IsNullOrEmpty(text))
                 continue;
+            if (block.Kind == BlockKind.HtmlBlock && block.CreateVisualSeparation)
+                continue;
 
-            if (lastNonEmptyIndex >= 0)
-            {
-                var prevBlock = blocks[lastNonEmptyIndex];
-                // Use space for soft break within same logical block (both Paragraph)
-                // Use newline for hard break between different block types
-                bool isSoftBreak = block.Kind == BlockKind.Paragraph && prevBlock.Kind == BlockKind.Paragraph;
-                result.Append(isSoftBreak ? ' ' : '\n');
-            }
-
-            // Normalize visual glyphs back to markdown markers for comparison
-            text = text.Replace("●", "-").Replace("○", "-").Replace("■", "-");
-            // For list items, trim leading spaces (visual indentation only); for others trim trailing only
-            if (block.Kind is BlockKind.UnorderedListItem or BlockKind.OrderedListItem or
-                BlockKind.TaskListItemUnchecked or BlockKind.TaskListItemChecked)
-                text = text.Trim();
-            else
-                text = text.TrimEnd();
+            // Blocks now include type delimiters like [PARA: text], so join with newlines
+            if (result.Length > 0)
+                result.Append('\n');
             result.Append(text);
-            lastNonEmptyIndex = i;
         }
 
         return result.ToString();

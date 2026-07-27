@@ -618,11 +618,43 @@ public partial class DocsCanvas : FrameworkElement
             if (kind == BlockKind.ThematicBreak)
                 displayText = " --- ";
 
+            // Wrap block with type delimiter for unambiguous test output
+            string blockType = GetBlockTypeLabel(kind);
+            if (!string.IsNullOrWhiteSpace(displayText))
+                displayText = $"[{blockType}: {displayText}]";
+            else
+                displayText = $"[{blockType}]";
+
             result.Add(new(rawText, displayText, kind, createVisualSeparation));
         }
 
         return result.ToArray();
     }
+
+    private static string GetBlockTypeLabel(BlockKind kind) => kind switch
+    {
+        BlockKind.Paragraph => "PARA",
+        BlockKind.Heading1 => "H1",
+        BlockKind.Heading2 => "H2",
+        BlockKind.Heading3 => "H3",
+        BlockKind.Heading4 => "H4",
+        BlockKind.Heading5 => "H5",
+        BlockKind.Heading6 => "H6",
+        BlockKind.UnorderedListItem => "LIST",
+        BlockKind.OrderedListItem => "OLIST",
+        BlockKind.TaskListItemUnchecked => "TASK",
+        BlockKind.TaskListItemChecked => "TASK_DONE",
+        BlockKind.Blockquote => "QUOTE",
+        BlockKind.FencedCodeLine => "CODE",
+        BlockKind.IndentedCodeLine => "CODE",
+        BlockKind.ThematicBreak => "BREAK",
+        BlockKind.TableHeaderRow => "TABLE_HEAD",
+        BlockKind.TableSeparatorRow => "TABLE_SEP",
+        BlockKind.TableDataRow => "TABLE_DATA",
+        BlockKind.HtmlBlock => "HTML",
+        _ => "UNKNOWN"
+    };
+
     internal int TestGetVisualLineBlockIndex(int vi) => _visualLines[vi].BlockIndex;
     internal BlockKind TestGetVisualLineBlockKind(int vi) => _visualLines[vi].BlockKind;
     internal double TestGetLineYPosition(int vi) => _lineYPositions[vi];
