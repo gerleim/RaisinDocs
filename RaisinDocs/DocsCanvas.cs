@@ -1940,8 +1940,9 @@ public partial class DocsCanvas : FrameworkElement
 
                     double textX = _padding;
 
-                    // Add indentation for nested blocks
-                    if (vl.NestingDepth > 0)
+                    // Add indentation for nested blocks (visual mode only)
+                    // In source mode, render raw text without visual layout indentation
+                    if (IsVisual && vl.NestingDepth > 0)
                     {
                         // Calculate indentation based on parent's content column
                         // Each nesting level adds indentation equal to parent's content width
