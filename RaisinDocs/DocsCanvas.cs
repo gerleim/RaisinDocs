@@ -603,12 +603,18 @@ public partial class DocsCanvas : FrameworkElement
             var visualMap = _visualMaps[i];
             var displayText = visualMap.BuildDisplayString(rawText, 0, rawText.Length);
 
-            // Include replacement prefix (e.g., list markers, heading markers)
-            // But skip for continuation blocks - they're just formatting, not content
-            if (visualMap.ReplacementPrefix != null && !visualMap.IsContinuationIndent)
+            var kind = _parsedBlocks?[i].Kind ?? BlockKind.Paragraph;
+
+            // Include replacement prefix (e.g., heading markers)
+            // But skip for:
+            // - Continuation blocks (they're just formatting, not content)
+            // - List items (the block type already indicates LIST/OLIST)
+            bool isListItem = kind is BlockKind.UnorderedListItem or BlockKind.OrderedListItem
+                           or BlockKind.TaskListItemUnchecked or BlockKind.TaskListItemChecked;
+
+            if (visualMap.ReplacementPrefix != null && !visualMap.IsContinuationIndent && !isListItem)
                 displayText = visualMap.ReplacementPrefix + displayText;
 
-            var kind = _parsedBlocks?[i].Kind ?? BlockKind.Paragraph;
             var createVisualSeparation = _parsedBlocks?[i].CreateVisualSeparation ?? false;
 
             // For merged paragraph blocks, convert soft breaks (newlines) to spaces for text extraction
