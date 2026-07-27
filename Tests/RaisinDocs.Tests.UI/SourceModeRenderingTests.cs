@@ -117,9 +117,12 @@ public class SourceModeRenderingTests
     }
 
     [StaFact]
-    public void SourceMode_ListItemWithHardBreak_CursorNavigation()
+    public void SourceMode_ListItemWithHardBreak_CursorSkipsVisualSpace()
     {
-        // BUG #2: Cursor can navigate into visual-only indentation space
+        // BUG #2: Cursor should NEVER be in visual-only indentation
+        // Visual display shows: "- foo\\\n  bar" (visual indent for alignment)
+        // But source has: "- foo\\\nbar" (no leading spaces)
+        // Cursor should skip visual space and land on 'b'
         var markdown = "- foo\\\nbar";
         var canvas = new DocsCanvas();
         canvas.SetText(markdown);
@@ -128,18 +131,33 @@ public class SourceModeRenderingTests
         canvas.Arrange(new Rect(0, 0, CanvasWidth, CanvasHeight));
         canvas.TestComputeLayout();
 
-        // Position cursor at start of "bar" line (block 1, offset 0)
-        canvas.TestSetCursor(1, 0);
+        // Block 0: "- foo\\"
+        // Block 1: "bar" (visually indented but no leading spaces in source)
 
-        // Try to move cursor left
-        canvas.TestNavigate(Key.Left);
-        var blockAfterLeft = canvas.TestCursorBlock;
-        var offsetAfterLeft = canvas.TestCursorOffset;
+        // Position cursor at end of first line
+        canvas.TestSetCursor(0, 7); // After the "\\"
 
-        _output.WriteLine($"After Left: block={blockAfterLeft}, offset={offsetAfterLeft}");
+        // Move right - should go to block 1, offset 0 (the 'b')
+        canvas.TestNavigate(Key.Right);
 
-        // Cursor should move to end of previous line, not into visual space
-        // Should be at block 0, end of "- foo\\"
-        blockAfterLeft.Should().Be(0, "Left from start of bar should go to previous line");
+        var blockAfterRight = canvas.TestCursorBlock;
+        var offsetAfterRight = canvas.TestCursorOffset;
+        _output.WriteLine($"After Right from end of line 1: block={blockAfterRight}, offset={offsetAfterRight}");
+
+        // Cursor should be at start of "bar" (block 1, offset 0)
+        blockAfterRight.Should().Be(1, "Right should move to next line");
+        offsetAfterRight.Should().Be(0, "Cursor should be at 'b', not in visual space");
+
+        // Also test moving down from first line
+        canvas.TestSetCursor(0, 2); // On the dash "-"
+        canvas.TestNavigate(Key.Down);
+
+        var blockAfterDown = canvas.TestCursorBlock;
+        var offsetAfterDown = canvas.TestCursorOffset;
+        _output.WriteLine($"After Down from line 1: block={blockAfterDown}, offset={offsetAfterDown}");
+
+        // Cursor should land on 'b', not in visual space
+        blockAfterDown.Should().Be(1);
+        offsetAfterDown.Should().Be(0, "Down should land on 'b', not visual space");
     }
 }

@@ -1969,7 +1969,9 @@ public partial class DocsCanvas : FrameworkElement
                         }
                         else
                         {
-                            if (map.ReplacementPrefix != null && vl.StartOffset == 0)
+                            // In source mode, only draw actual markdown syntax (bullets, numbers, etc)
+                            // but NOT continuation indentation - show raw text at column 0
+                            if (map.ReplacementPrefix != null && vl.StartOffset == 0 && !map.IsContinuationIndent)
                             {
                                 if (parsed.Kind is BlockKind.TaskListItemUnchecked or BlockKind.TaskListItemChecked)
                                 {
@@ -1989,10 +1991,6 @@ public partial class DocsCanvas : FrameworkElement
                                 {
                                     textX += DrawOrderedListNumber(dc, _padding, lineY - effectiveScroll,
                                         map.ReplacementPrefix!, fontSize, parsed.ListNestingLevel);
-                                }
-                                else if (map.IsContinuationIndent)
-                                {
-                                    textX += _measure.MeasureReplacementPrefix(map.ReplacementPrefix!, map.PrefixMeasureKind);
                                 }
                                 else
                                 {
