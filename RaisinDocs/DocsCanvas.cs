@@ -604,7 +604,8 @@ public partial class DocsCanvas : FrameworkElement
             var displayText = visualMap.BuildDisplayString(rawText, 0, rawText.Length);
 
             // Include replacement prefix (e.g., list markers, heading markers)
-            if (visualMap.ReplacementPrefix != null)
+            // But skip for continuation blocks - they're just formatting, not content
+            if (visualMap.ReplacementPrefix != null && !visualMap.IsContinuationIndent)
                 displayText = visualMap.ReplacementPrefix + displayText;
 
             var kind = _parsedBlocks?[i].Kind ?? BlockKind.Paragraph;

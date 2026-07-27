@@ -63,7 +63,8 @@ public class GenerateSpecJsonTest
         {
             WriteIndented = true,
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+            Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
         };
 
         var updatedJson = JsonSerializer.Serialize(examples, options);
@@ -93,6 +94,16 @@ public class GenerateSpecJsonTest
                 continue;
             if (block.Kind == BlockKind.HtmlBlock && block.CreateVisualSeparation)
                 continue;
+
+            // Skip bare block type indicators with no content (e.g., [PARA] with no colon)
+            if (text.StartsWith("[") && text.EndsWith("]") && !text.Contains(":"))
+                continue;
+
+            // For blockquotes, hide the > marker if present at start
+            if (text.StartsWith("[QUOTE: >"))
+            {
+                text = "[QUOTE: " + text.Substring("[QUOTE: >".Length);
+            }
 
             if (result.Length > 0)
                 result.Append('\n');

@@ -63,6 +63,16 @@ public class CommonMarkVisualRenderingTests
             if (block.Kind == BlockKind.HtmlBlock && block.CreateVisualSeparation)
                 continue;
 
+            // Skip bare block type indicators with no content (e.g., [PARA] with no colon)
+            if (text.StartsWith("[") && text.EndsWith("]") && !text.Contains(":"))
+                continue;
+
+            // For blockquotes, hide the > marker if present at start
+            if (text.StartsWith("[QUOTE: >"))
+            {
+                text = "[QUOTE: " + text.Substring("[QUOTE: >".Length);
+            }
+
             // Blocks now include type delimiters like [PARA: text], so join with newlines
             if (result.Length > 0)
                 result.Append('\n');
@@ -101,11 +111,11 @@ public class SpecExample
 {
     public string Markdown { get; set; } = "";
     public string Html { get; set; } = "";
-    public string? Text { get; set; }
     public int Example { get; set; }
-    public string Section { get; set; } = "";
     public int Start_line { get; set; }
     public int End_line { get; set; }
+    public string Section { get; set; } = "";
+    public string? Text { get; set; }
 }
 
 public class SpecTextExample
