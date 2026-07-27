@@ -77,6 +77,14 @@ public partial class MainWindow : Window
                 Viewer.Canvas.ToggleEditMode();
                 e.Handled = true;
                 break;
+            case Key.PageUp:
+                Viewer.Canvas.PageUp();
+                e.Handled = true;
+                break;
+            case Key.PageDown:
+                Viewer.Canvas.PageDown();
+                e.Handled = true;
+                break;
         }
 
         if (!e.Handled)

@@ -1483,7 +1483,9 @@ public partial class DocsCanvas
         double lineH = _measure.GetLineHeight(blockKind);
         double boxSize = Math.Round(lineH * 0.65);
         double yOffset = Math.Round((lineH - boxSize) / 2);
-        double checkboxX = x + nestingOffset + _measure.ListIndent - boxSize - 4;
+
+        var aligner = new ListVisualAlignment(x, _measure.ListIndent);
+        double checkboxX = aligner.CalculateMarkerXForSize(boxSize, nestingOffset);
         double checkboxY = screenY + yOffset;
         var rect = new Rect(checkboxX, checkboxY, boxSize, boxSize);
         double radius = 2.5;
@@ -1508,7 +1510,7 @@ public partial class DocsCanvas
             dc.DrawRoundedRectangle(null, pen, rect, radius, radius);
         }
 
-        return _measure.ListIndent + nestingOffset;
+        return aligner.CalculateTextStartX(nestingOffset) - x;
     }
 
     private double DrawListBullet(DrawingContext dc, double x, double screenY,
@@ -1519,7 +1521,9 @@ public partial class DocsCanvas
         double fontSize = _measure.GetBlockFontSize(blockKind);
         double capHeight = fontSize * _measure.CapsHeightRatio;
         double bulletSize = Math.Round(lineH * 0.32);
-        double bulletX = x + nestingOffset + _measure.ListIndent - bulletSize - 4;
+
+        var aligner = new ListVisualAlignment(x, _measure.ListIndent);
+        double bulletX = aligner.CalculateMarkerXForSize(bulletSize, nestingOffset);
         double bulletCenterY = screenY + baseline - capHeight / 2;
         double bulletY = Math.Round(bulletCenterY - bulletSize / 2);
 
@@ -1541,21 +1545,34 @@ public partial class DocsCanvas
             dc.DrawRectangle(_palette.Syntax, null, new Rect(bulletX, bulletY, bulletSize, bulletSize));
         }
 
-        return _measure.ListIndent + nestingOffset;
+        return aligner.CalculateTextStartX(nestingOffset) - x;
     }
 
     private double DrawOrderedListNumber(DrawingContext dc, double x, double screenY,
         string replacementPrefix, double fontSize, int nestingLevel)
     {
-        double totalIndent = _measure.ListIndent * (nestingLevel + 1);
         string trimmed = replacementPrefix.TrimStart();
         string numberText = trimmed.TrimEnd();
-        var ft = new FormattedText(numberText, CultureInfo.InvariantCulture,
+
+        var aligner = new ListVisualAlignment(x, _measure.ListIndent);
+        double nestingOffset = nestingLevel * _measure.ListIndent;
+
+        int delimiterPos = numberText.IndexOfAny(new[] { '.', ')' });
+        string numberOnly = delimiterPos > 0 ? numberText.Substring(0, delimiterPos) : numberText;
+
+        var ftNumberOnly = new FormattedText(numberOnly, CultureInfo.InvariantCulture,
             FlowDirection.LeftToRight, TextMeasurer.NormalTypeface, fontSize,
             _palette.Syntax, _measure.DpiScale);
-        double numberX = x + totalIndent - ft.WidthIncludingTrailingWhitespace - 4;
-        dc.DrawText(ft, new Point(numberX, screenY));
-        return totalIndent;
+
+        var ftFullNumber = new FormattedText(numberText, CultureInfo.InvariantCulture,
+            FlowDirection.LeftToRight, TextMeasurer.NormalTypeface, fontSize,
+            _palette.Syntax, _measure.DpiScale);
+
+        double numberX = aligner.CalculateMarkerXForSize(ftNumberOnly.WidthIncludingTrailingWhitespace, nestingOffset);
+        dc.DrawText(ftFullNumber, new Point(numberX, screenY));
+
+        double textStartX = aligner.CalculateTextStartXForWidth(ftNumberOnly.WidthIncludingTrailingWhitespace, nestingOffset);
+        return textStartX - x;
     }
 
     private double DrawTextSegment(DrawingContext dc, string blockText,

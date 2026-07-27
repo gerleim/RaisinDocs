@@ -131,7 +131,7 @@ public class BlockVisualMap
         string nestIndent = NestingIndentString(nestingLevel);
         return kind switch
         {
-            BlockKind.UnorderedListItem => nestIndent + "  " + GetBulletChar(nestingLevel) + " ",
+            BlockKind.UnorderedListItem => nestIndent + "  " + GetBulletChar(nestingLevel) + "  ",
             BlockKind.TaskListItemUnchecked => nestIndent + "  ☐ ",
             BlockKind.TaskListItemChecked => nestIndent + "  ☑ ",
             BlockKind.OrderedListItem => GetOrderedListVisualPrefix(blockText, leadingSpaces, nestingLevel),
@@ -147,7 +147,7 @@ public class BlockVisualMap
         if (prefixLen <= 0) return null;
         string number = text.Substring(0, prefixLen - 2);
         char delim = text[prefixLen - 2];
-        return NestingIndentString(nestingLevel) + "  " + number + delim + " ";
+        return NestingIndentString(nestingLevel) + "  " + number + delim + "  ";
     }
 
     public static BlockVisualMap Compute(ParsedBlock parsed, string blockText,
@@ -248,7 +248,7 @@ public class BlockVisualMap
                 // Hide the marker and all spacing (1-4 spaces) up to content column
                 ranges.Add(new HiddenRange(0, parsed.ContentColumn));
                 string nestIndent = NestingIndentString(parsed.ListNestingLevel);
-                replacementPrefix = nestIndent + "  " + GetBulletChar(parsed.ListNestingLevel) + " ";
+                replacementPrefix = nestIndent + "  " + GetBulletChar(parsed.ListNestingLevel) + "  ";
             }
         }
         else if (parsed.Kind == BlockKind.OrderedListItem)
@@ -262,7 +262,7 @@ public class BlockVisualMap
                 string nestIndent = NestingIndentString(parsed.ListNestingLevel);
                 string number = stripped.Substring(0, prefixLen - 2);
                 char delim = stripped[prefixLen - 2];
-                replacementPrefix = nestIndent + "  " + number + delim + " ";
+                replacementPrefix = nestIndent + "  " + number + delim + "  ";
             }
         }
 

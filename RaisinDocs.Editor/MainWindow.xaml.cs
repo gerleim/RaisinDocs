@@ -128,6 +128,14 @@ public partial class MainWindow : Window
                 ActiveTab?.Editor.Canvas.ZoomReset();
                 e.Handled = true;
                 break;
+            case Key.PageUp:
+                ActiveTab?.Editor.Canvas.PageUp();
+                e.Handled = true;
+                break;
+            case Key.PageDown:
+                ActiveTab?.Editor.Canvas.PageDown();
+                e.Handled = true;
+                break;
         }
 
         if (!e.Handled)

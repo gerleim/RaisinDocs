@@ -486,6 +486,9 @@ public partial class DocsCanvas : FrameworkElement
     public void ZoomOut(double anchorViewportY = -1) => SetZoom(_measure.ZoomFactor - 0.1, anchorViewportY);
     public void ZoomReset() => SetZoom(1.0);
 
+    public void PageUp() => HandlePageUp(shift: false);
+    public void PageDown() => HandlePageDown(shift: false);
+
     public void ToggleShowWhitespace()
     {
         _showWhitespace = !_showWhitespace;
