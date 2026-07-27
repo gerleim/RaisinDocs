@@ -1,0 +1,13 @@
+  Determining projects to restore...
+  All projects are up-to-date for restore.
+  Raisin.EventSystem -> D:\Sources\Raisin\RaisinLibraries\Raisin.EventSystem\bin\Debug\net8.0\Raisin.EventSystem.dll
+  AvalonDock -> D:\Sources\Raisin\LibrariesExternal\AvalonDock\source\Components\AvalonDock\bin\Debug\net8.0-windows\AvalonDock.dll
+  Raisin.Core -> D:\Sources\Raisin\RaisinLibraries\Raisin.Core\bin\Debug\net8.0\Raisin.Core.dll
+  Raisin.App.Base -> D:\Sources\Raisin\RaisinLibraries\Raisin.App.Base\bin\Debug\net8.0\Raisin.App.Base.dll
+  Raisin.WPF.Base -> D:\Sources\Raisin\RaisinLibraries\Raisin.WPF.Base\bin\Debug\net8.0-windows\Raisin.WPF.Base.dll
+  RaisinDocs -> D:\Sources\Raisin\RaisinDocs\RaisinDocs\bin\Debug\net8.0-windows\RaisinDocs.dll
+  RaisinDocs.Tests.UI -> D:\Sources\Raisin\RaisinDocs\Tests\RaisinDocs.Tests.UI\bin\Debug\net8.0-windows\RaisinDocs.Tests.UI.dll
+Test run for D:\Sources\Raisin\RaisinDocs\Tests\RaisinDocs.Tests.UI\bin\Debug\net8.0-windows\RaisinDocs.Tests.UI.dll (.NETCoreApp,Version=v8.0)
+A total of 1 test files matched the specified pattern.
+
+Passed!  - Failed:     0, Passed:     2, Skipped:     0, Total:     2, Duration: 329 ms - RaisinDocs.Tests.UI.dll (net8.0)
