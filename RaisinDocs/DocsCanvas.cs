@@ -1742,6 +1742,60 @@ public partial class DocsCanvas : FrameworkElement
         return width;
     }
 
+    private int HitTestInVisualLineProper(int vlIndex, double clickX)
+    {
+        var vl = _visualLines[vlIndex];
+        if (vl.Length == 0) return vl.StartOffset;
+
+        var parsed = _parsedBlocks![vl.BlockIndex];
+        var map = IsVisual ? _visualMaps?[vl.BlockIndex] : null;
+        string blockText = _doc.GetBlockText(vl.BlockIndex);
+
+        // Measure x position for each offset and find closest to clickX
+        double accum = 0;
+        if (map != null && map.ReplacementPrefix != null && vl.StartOffset == 0)
+            accum = _measure.MeasureReplacementPrefix(map.ReplacementPrefix!, map.PrefixMeasureKind);
+
+        int runIdx = 0;
+        double closestDist = double.MaxValue;
+        int closestOffset = vl.StartOffset;
+
+        for (int i = vl.StartOffset; i < vl.StartOffset + vl.Length; i++)
+        {
+            double charStart = accum;
+
+            if (map != null && map.IsHidden(i))
+            {
+                var img = FindImageAtRawOffset(map.Images, i);
+                if (img != null)
+                {
+                    var (imgW, _) = GetImageSize(img.Value, _layoutMaxWidth);
+                    accum += imgW;
+                }
+                continue;
+            }
+
+            var style = TextMeasurer.GetStyleAtOffset(parsed.Runs, i, ref runIdx);
+            double charW = _measure.MeasureCharWidth(blockText[i], parsed.Kind, style);
+            double charEnd = accum + charW;
+
+            // Check if click is closer to this char's start or end
+            double distToStart = Math.Abs(clickX - charStart);
+            double distToEnd = Math.Abs(clickX - charEnd);
+            double minDist = Math.Min(distToStart, distToEnd);
+
+            if (minDist < closestDist)
+            {
+                closestDist = minDist;
+                closestOffset = i + (distToEnd < distToStart ? 1 : 0);
+            }
+
+            accum = charEnd;
+        }
+
+        return Math.Min(closestOffset, vl.StartOffset + vl.Length);
+    }
+
     private int HitTestInVisualLine(int vlIndex, double x)
     {
         var vl = _visualLines[vlIndex];
@@ -1868,20 +1922,8 @@ public partial class DocsCanvas : FrameworkElement
         var vl = _visualLines[vli];
         double xForHitTest = pos.X - _padding;
 
-        // For blockquotes, account for the graphical bar offset from padding
-        if (IsVisual && _parsedBlocks != null && vl.BlockIndex < _parsedBlocks.Count && vl.StartOffset == 0)
-        {
-            var parsed = _parsedBlocks[vl.BlockIndex];
-            if (parsed.Kind == BlockKind.Blockquote)
-            {
-                var aligner = new ContentBlockAligner(_padding, _measure.ListIndent);
-                double barWidth = 3;  // Width of the blockquote bar
-                double spacing = 8;   // Spacing after bar
-                xForHitTest -= (barWidth + spacing);
-            }
-        }
+        int rawOffset = IsVisual ? HitTestInVisualLineProper(vli, xForHitTest) : HitTestInVisualLine(vli, xForHitTest);
 
-        int rawOffset = HitTestInVisualLine(vli, xForHitTest);
         if (vl.Group != null)
         {
             var (bi, bo) = vl.Group.JoinedToSource(rawOffset);
