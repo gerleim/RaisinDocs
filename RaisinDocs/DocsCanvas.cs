@@ -1660,6 +1660,32 @@ public partial class DocsCanvas : FrameworkElement
         return 0;
     }
 
+    private double GetTextStartXForVisualLine(VisualLine vl)
+    {
+        double textX = _padding;
+
+        // Add indentation for nested blocks (visual mode only)
+        if (IsVisual && vl.NestingDepth > 0)
+        {
+            double charWidth = _measure.MeasureCharWidth(' ', vl.BlockKind, InlineStyle.Normal);
+            double nestingIndent = vl.ParentContentColumn * charWidth;
+            textX += nestingIndent;
+        }
+
+        // For blockquotes, text starts at indented position
+        if (IsVisual && _parsedBlocks != null && vl.BlockIndex < _parsedBlocks.Count && vl.StartOffset == 0)
+        {
+            var parsed = _parsedBlocks[vl.BlockIndex];
+            if (parsed.Kind == BlockKind.Blockquote)
+            {
+                var aligner = new ContentBlockAligner(_padding, _measure.ListIndent);
+                textX = aligner.GetBlockquoteContentIndentX();
+            }
+        }
+
+        return textX;
+    }
+
     private double CursorXInVisualLine(int vlIndex)
     {
         var vl = _visualLines[vlIndex];
@@ -1683,7 +1709,11 @@ public partial class DocsCanvas : FrameworkElement
         }
 
         string blockText = _doc.GetBlockText(vl.BlockIndex);
-        double x = 0;
+        double x = GetTextStartXForVisualLine(vl);
+
+        // Subtract padding since we're returning cursor x relative to control left edge
+        x -= _padding;
+
         if (map != null && map.ReplacementPrefix != null && vl.StartOffset == 0)
             x += _measure.MeasureReplacementPrefix(map.ReplacementPrefix!, map.PrefixMeasureKind);
 
@@ -1751,7 +1781,13 @@ public partial class DocsCanvas : FrameworkElement
         var map = IsVisual ? _visualMaps?[vl.BlockIndex] : null;
         string blockText = _doc.GetBlockText(vl.BlockIndex);
 
-        // Measure x position for each offset and find closest to clickX
+        // Account for where text actually starts on screen
+        double textStartX = GetTextStartXForVisualLine(vl);
+
+        // Adjust click position to be relative to text start
+        double adjustedClickX = clickX + _padding - textStartX;
+
+        // Measure x position for each offset and find closest to adjustedClickX
         double accum = 0;
         if (map != null && map.ReplacementPrefix != null && vl.StartOffset == 0)
             accum = _measure.MeasureReplacementPrefix(map.ReplacementPrefix!, map.PrefixMeasureKind);
@@ -1780,8 +1816,8 @@ public partial class DocsCanvas : FrameworkElement
             double charEnd = accum + charW;
 
             // Check if click is closer to this char's start or end
-            double distToStart = Math.Abs(clickX - charStart);
-            double distToEnd = Math.Abs(clickX - charEnd);
+            double distToStart = Math.Abs(adjustedClickX - charStart);
+            double distToEnd = Math.Abs(adjustedClickX - charEnd);
             double minDist = Math.Min(distToStart, distToEnd);
 
             if (minDist < closestDist)
