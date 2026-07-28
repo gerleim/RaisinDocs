@@ -266,6 +266,18 @@ public class BlockVisualMap
             }
         }
 
+        if (parsed.Kind == BlockKind.Blockquote)
+        {
+            var stripped = parsed.LeadingSpaces > 0 ? blockText[parsed.LeadingSpaces..] : blockText;
+            if (stripped.Length > 0 && stripped[0] == '>')
+            {
+                int hideLen = 1;
+                if (stripped.Length > 1 && stripped[1] == ' ')
+                    hideLen = 2;
+                ranges.Add(new HiddenRange(0, parsed.LeadingSpaces + hideLen));
+            }
+        }
+
         if (parsed.Kind == BlockKind.IndentedCodeLine && blockText.Length > 0)
         {
             int hideChars = MarkdownParser.CharsForColumns(blockText, 4);

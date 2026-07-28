@@ -1957,15 +1957,15 @@ public partial class DocsCanvas : FrameworkElement
                     if (IsVisual && parsed.Kind == BlockKind.Blockquote && vl.StartOffset == 0)
                     {
                         var aligner = new ContentBlockAligner(_padding, _measure.ListIndent);
-                        double barX = aligner.GetBlockquoteBarX();
-                        double barWidth = 3;
-                        double barY = lineY - effectiveScroll;
-                        double barHeight = _measure.GetLineHeight(parsed.Kind);
-                        var barBrush = new SolidColorBrush(Color.FromArgb(80, 150, 150, 150));
-                        barBrush.Freeze();
-                        dc.DrawRectangle(barBrush, null, new Rect(barX, barY, barWidth, barHeight));
+                        textX = aligner.GetBlockquoteContentIndentX();
                     }
-                    else if (IsVisual && parsed.Kind == BlockKind.ThematicBreak)
+
+                    if (IsVisual && parsed.Kind == BlockKind.Blockquote && vl.StartOffset == 0)
+                    {
+                        DrawBlockquoteBar(dc, lineY, effectiveScroll);
+                    }
+
+                    if (IsVisual && parsed.Kind == BlockKind.ThematicBreak)
                     {
                         double ruleY = lineY - effectiveScroll + 10;
                         double ruleRight = ActualWidth - _padding;
