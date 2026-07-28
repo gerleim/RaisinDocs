@@ -1019,6 +1019,10 @@ public partial class DocsCanvas
     protected override void OnKeyDown(KeyEventArgs e)
     {
         base.OnKeyDown(e);
+
+        if (IsVisual)
+            ClampCursorAwayFromHidden();
+
         bool handled = true;
         bool shift = Keyboard.Modifiers.HasFlag(ModifierKeys.Shift);
         bool alt = Keyboard.Modifiers.HasFlag(ModifierKeys.Alt);
