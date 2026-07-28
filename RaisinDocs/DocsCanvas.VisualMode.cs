@@ -146,6 +146,32 @@ public partial class DocsCanvas
         _doc.CursorOffset = offset;
     }
 
+    private void ClampCursorAwayFromHidden()
+    {
+        if (_visualMaps == null) return;
+        if (_doc.CursorBlock >= _visualMaps.Count) return;
+        if (_parsedBlocks != null && _doc.CursorBlock < _parsedBlocks.Count
+            && IsTableRow(_parsedBlocks[_doc.CursorBlock])) return;
+        var map = _visualMaps[_doc.CursorBlock];
+        int offset = _doc.CursorOffset;
+
+        if (map.IsHidden(offset))
+        {
+            int minOffset = 0;
+            if (map.HiddenRanges.Count > 0 && map.HiddenRanges[0].Start == 0)
+                minOffset = map.HiddenRanges[0].Length;
+            if (offset < minOffset)
+                offset = minOffset;
+            else
+            {
+                while (offset > 0 && map.IsHidden(offset))
+                    offset--;
+                offset++;
+            }
+            _doc.CursorOffset = offset;
+        }
+    }
+
     private void ClampCursorBeforeTrailingHidden()
     {
         if (_visualMaps == null) return;

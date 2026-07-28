@@ -1011,6 +1011,9 @@ public partial class DocsCanvas : FrameworkElement
         }
 
         ComputeLayoutCore(ActualWidth - _padding * 2);
+
+        if (IsVisual)
+            ClampCursorAwayFromHidden();
     }
 
     private void BuildParagraphGroups()
