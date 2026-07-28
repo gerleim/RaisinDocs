@@ -1672,14 +1672,22 @@ public partial class DocsCanvas : FrameworkElement
             textX += nestingIndent;
         }
 
-        // For blockquotes, text starts at indented position
+        // For lists and blockquotes in visual mode, use ContentBlockAligner to determine text start
         if (IsVisual && _parsedBlocks != null && vl.BlockIndex < _parsedBlocks.Count && vl.StartOffset == 0)
         {
             var parsed = _parsedBlocks[vl.BlockIndex];
+            var aligner = new ContentBlockAligner(_padding, _measure.ListIndent);
+
             if (parsed.Kind == BlockKind.Blockquote)
             {
-                var aligner = new ContentBlockAligner(_padding, _measure.ListIndent);
                 textX = aligner.GetBlockquoteContentIndentX();
+            }
+            else if (parsed.Kind is BlockKind.UnorderedListItem or BlockKind.OrderedListItem or
+                     BlockKind.TaskListItemChecked or BlockKind.TaskListItemUnchecked)
+            {
+                // For lists, text starts after marker
+                double nestingOffset = parsed.ListNestingLevel * aligner.GetBlockIndentWidth();
+                textX = aligner.CalculateContentStartX(nestingOffset);
             }
         }
 
