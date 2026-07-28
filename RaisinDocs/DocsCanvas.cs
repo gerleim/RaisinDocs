@@ -2112,24 +2112,7 @@ public partial class DocsCanvas : FrameworkElement
                     var baseTypeface = TextMeasurer.GetBlockBaseTypeface(parsed.Kind);
                     var map = IsVisual ? _visualMaps?[vl.BlockIndex] : null;
 
-                    double textX = _padding;
-
-                    // Add indentation for nested blocks (visual mode only)
-                    // In source mode, render raw text without visual layout indentation
-                    if (IsVisual && vl.NestingDepth > 0)
-                    {
-                        // Calculate indentation based on parent's content column
-                        // Each nesting level adds indentation equal to parent's content width
-                        double charWidth = _measure.MeasureCharWidth(' ', parsed.Kind, InlineStyle.Normal);
-                        double nestingIndent = vl.ParentContentColumn * charWidth;
-                        textX += nestingIndent;
-                    }
-
-                    if (IsVisual && parsed.Kind == BlockKind.Blockquote && vl.StartOffset == 0)
-                    {
-                        var aligner = new ContentBlockAligner(_padding, _measure.ListIndent);
-                        textX = aligner.GetBlockquoteContentIndentX();
-                    }
+                    double textX = GetTextStartXForVisualLine(vl);
 
                     if (IsVisual && parsed.Kind == BlockKind.Blockquote && vl.StartOffset == 0)
                     {
@@ -2163,19 +2146,19 @@ public partial class DocsCanvas : FrameworkElement
                                 {
                                     double nestOff = _measure.MeasureReplacementPrefix(map.ReplacementPrefix!, map.PrefixMeasureKind)
                                         - _measure.ListIndent;
-                                    textX += DrawTaskListCheckbox(dc, parsed.Kind == BlockKind.TaskListItemChecked,
+                                    DrawTaskListCheckbox(dc, parsed.Kind == BlockKind.TaskListItemChecked,
                                         _padding, lineY - effectiveScroll, parsed.Kind, nestOff);
                                 }
                                 else if (parsed.Kind == BlockKind.UnorderedListItem)
                                 {
                                     double nestOff = _measure.MeasureReplacementPrefix(map.ReplacementPrefix!, map.PrefixMeasureKind)
                                         - _measure.ListIndent;
-                                    textX += DrawListBullet(dc, _padding, lineY - effectiveScroll,
+                                    DrawListBullet(dc, _padding, lineY - effectiveScroll,
                                         parsed.Kind, parsed.ListNestingLevel, nestOff);
                                 }
                                 else if (parsed.Kind == BlockKind.OrderedListItem)
                                 {
-                                    textX += DrawOrderedListNumber(dc, _padding, lineY - effectiveScroll,
+                                    DrawOrderedListNumber(dc, _padding, lineY - effectiveScroll,
                                         map.ReplacementPrefix!, fontSize, parsed.ListNestingLevel);
                                 }
                                 else
@@ -2184,7 +2167,6 @@ public partial class DocsCanvas : FrameworkElement
                                         CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
                                         TextMeasurer.NormalTypeface, fontSize, _palette.Syntax, _measure.DpiScale);
                                     dc.DrawText(prefixFt, new Point(_padding, lineY - effectiveScroll));
-                                    textX += _measure.MeasureReplacementPrefix(map.ReplacementPrefix!, map.PrefixMeasureKind);
                                 }
                             }
 
