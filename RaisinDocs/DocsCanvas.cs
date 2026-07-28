@@ -1868,17 +1868,28 @@ public partial class DocsCanvas : FrameworkElement
         var vl = _visualLines[vli];
         double xForHitTest = pos.X - _padding;
 
-        // Account for blockquote indentation in visual mode
+        // Account for indentation in visual mode (blockquotes and lists)
         if (IsVisual && _parsedBlocks != null && vl.BlockIndex < _parsedBlocks.Count)
         {
             var parsed = _parsedBlocks[vl.BlockIndex];
+            var aligner = new ContentBlockAligner(_padding, _measure.ListIndent);
+            double contentIndent = 0;
+
             if (parsed.Kind == BlockKind.Blockquote && vl.StartOffset == 0)
             {
-                var aligner = new ContentBlockAligner(_padding, _measure.ListIndent);
-                double blockquoteContentIndent = aligner.GetBlockquoteContentIndentX();
-                xForHitTest -= blockquoteContentIndent;
-                Logger?.Log(DocsLogLevel.Debug, $"HitTestToPosition: Blockquote detected, subtracting indent {blockquoteContentIndent}, adjusted xForHitTest={xForHitTest}");
+                contentIndent = aligner.GetBlockquoteContentIndentX();
+                Logger?.Log(DocsLogLevel.Debug, $"HitTestToPosition: Blockquote detected, indent={contentIndent}");
             }
+            else if ((parsed.Kind == BlockKind.UnorderedListItem || parsed.Kind == BlockKind.OrderedListItem ||
+                      parsed.Kind == BlockKind.TaskListItemChecked || parsed.Kind == BlockKind.TaskListItemUnchecked)
+                     && vl.StartOffset == 0)
+            {
+                contentIndent = aligner.CalculateContentStartX(parsed.ListNestingLevel * aligner.GetBlockIndentWidth());
+                Logger?.Log(DocsLogLevel.Debug, $"HitTestToPosition: List item detected, indent={contentIndent}");
+            }
+
+            if (contentIndent > 0)
+                xForHitTest -= contentIndent;
         }
 
         int rawOffset = HitTestInVisualLine(vli, xForHitTest);
