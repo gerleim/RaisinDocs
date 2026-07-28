@@ -258,6 +258,7 @@ public partial class DocsCanvas : FrameworkElement
     private List<ParsedBlock>? _parsedBlocks;
     private VisualBlockStructure? _visualBlockStructure;
     private List<BlockVisualMap>? _visualMaps;
+    private List<BlockVisualSpacing?>? _visualLineSpacings;
     private Dictionary<int, ParagraphGroup>? _blockToGroup;
     private readonly ImageCache _imageCache = new();
     private int _layoutVersion;
@@ -1347,6 +1348,9 @@ public partial class DocsCanvas : FrameworkElement
 
         if (IsVisual)
         {
+            _visualLineSpacings = [];
+        }
+        {
             ComputeAllTableColumnWidths(maxWidth);
             BuildParagraphGroups();
         }
@@ -1418,6 +1422,16 @@ public partial class DocsCanvas : FrameworkElement
             y += lineH;
         }
         _totalContentHeight = y + _padding;
+
+        // Compute and cache spacing for each visual line (visual mode only)
+        if (IsVisual && _visualLineSpacings != null)
+        {
+            foreach (var vl in _visualLines)
+            {
+                _visualLineSpacings.Add(ComputeVisualLineSpacing(vl));
+            }
+        }
+
         _layoutVersion++;
     }
 
@@ -1661,13 +1675,82 @@ public partial class DocsCanvas : FrameworkElement
         return 0;
     }
 
+    private BlockVisualSpacing ComputeVisualLineSpacing(VisualLine vl)
+    {
+        if (!IsVisual || _parsedBlocks == null || _visualMaps == null || vl.BlockIndex >= _parsedBlocks.Count)
+            return new BlockVisualSpacing { ContentStartX = _padding };
+
+        var parsed = _parsedBlocks[vl.BlockIndex];
+        var map = _visualMaps[vl.BlockIndex];
+
+        var spacing = new BlockVisualSpacing();
+        double textX = _padding;
+
+        // Add nesting indentation (block hierarchy)
+        if (vl.NestingDepth > 0)
+        {
+            double charWidth = _measure.MeasureCharWidth(' ', parsed.Kind, InlineStyle.Normal);
+            textX += vl.ParentContentColumn * charWidth;
+        }
+
+        // Handle markers and content positioning
+        if (vl.StartOffset == 0)
+        {
+            if (parsed.Kind == BlockKind.Blockquote)
+            {
+                var aligner = new ContentBlockAligner(_padding, _measure.ListIndent);
+                spacing.MarkerStartX = aligner.GetBlockquoteBarX();
+                spacing.MarkerWidth = 3;
+                spacing.SpacingAfterMarker = 8;
+                spacing.ContentStartX = aligner.GetBlockquoteContentIndentX();
+            }
+            else if (map.ReplacementPrefix != null && !map.IsContinuationIndent)
+            {
+                spacing.MarkerStartX = textX;
+                spacing.MarkerWidth = _measure.MeasureReplacementPrefix(map.ReplacementPrefix, map.PrefixMeasureKind);
+                spacing.SpacingAfterMarker = 0;
+                spacing.ContentStartX = textX + spacing.MarkerWidth;
+            }
+            else
+            {
+                spacing.MarkerStartX = textX;
+                spacing.MarkerWidth = 0;
+                spacing.SpacingAfterMarker = 0;
+                spacing.ContentStartX = textX;
+            }
+        }
+        else
+        {
+            // Continuation lines (no marker)
+            spacing.MarkerStartX = textX;
+            spacing.MarkerWidth = 0;
+            spacing.SpacingAfterMarker = 0;
+            spacing.ContentStartX = textX;
+        }
+
+        return spacing;
+    }
+
     private double GetTextStartXForVisualLine(VisualLine vl)
     {
-        if (!IsVisual || _visualMaps == null || vl.BlockIndex >= _visualMaps.Count || vl.StartOffset != 0)
+        if (!IsVisual || _visualLineSpacings == null || vl.BlockIndex < 0)
             return _padding;
 
-        var map = _visualMaps[vl.BlockIndex];
-        return map.Spacing?.ContentStartX ?? _padding;
+        // Find the index of this VisualLine
+        int vlIndex = -1;
+        for (int i = 0; i < _visualLines.Count; i++)
+        {
+            if (_visualLines[i] == vl)
+            {
+                vlIndex = i;
+                break;
+            }
+        }
+
+        if (vlIndex < 0 || vlIndex >= _visualLineSpacings.Count)
+            return _padding;
+
+        return _visualLineSpacings[vlIndex]?.ContentStartX ?? _padding;
     }
 
     private double CursorXInVisualLine(int vlIndex)
