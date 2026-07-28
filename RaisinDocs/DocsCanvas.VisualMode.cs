@@ -116,14 +116,14 @@ public partial class DocsCanvas
 
         if (map.IsHidden(offset))
         {
-            System.Diagnostics.Debug.WriteLine($"[CURSOR] Block {_doc.CursorBlock} offset {originalOffset} is hidden. Ranges: {string.Join(", ", map.HiddenRanges)}");
+            Logger?.Log(DocsLogLevel.Debug, $"SkipCursorOverHiddenRanges: Block {_doc.CursorBlock} offset {originalOffset} is hidden. Ranges: {string.Join(", ", map.HiddenRanges.Select(r => $"[{r.Start},{r.Length})"))}");
             if (forward)
             {
                 int blockLen = _doc.GetBlockLength(_doc.CursorBlock);
                 offset = map.SkipHidden(offset, true);
                 while (offset < blockLen && map.IsHidden(offset))
                     offset++;
-                System.Diagnostics.Debug.WriteLine($"[CURSOR] Forward skip: {originalOffset} -> {offset}");
+                Logger?.Log(DocsLogLevel.Debug, $"SkipCursorOverHiddenRanges: Forward skip {originalOffset} -> {offset}");
             }
             else
             {
@@ -136,17 +136,17 @@ public partial class DocsCanvas
                     offset = map.SkipHidden(0, true);
                     while (offset < blockLen && map.IsHidden(offset))
                         offset++;
-                    System.Diagnostics.Debug.WriteLine($"[CURSOR] Backward skip (at start): {originalOffset} -> {offset}");
+                    Logger?.Log(DocsLogLevel.Debug, $"SkipCursorOverHiddenRanges: Backward skip (at start) {originalOffset} -> {offset}");
                 }
                 else
                 {
-                    System.Diagnostics.Debug.WriteLine($"[CURSOR] Backward skip: {originalOffset} -> {offset}");
+                    Logger?.Log(DocsLogLevel.Debug, $"SkipCursorOverHiddenRanges: Backward skip {originalOffset} -> {offset}");
                 }
             }
         }
         else
         {
-            System.Diagnostics.Debug.WriteLine($"[CURSOR] Block {_doc.CursorBlock} offset {originalOffset} is NOT hidden");
+            Logger?.Log(DocsLogLevel.Debug, $"SkipCursorOverHiddenRanges: Block {_doc.CursorBlock} offset {originalOffset} is NOT hidden");
         }
         _doc.CursorOffset = offset;
     }
