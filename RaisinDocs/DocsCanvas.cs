@@ -1867,7 +1867,20 @@ public partial class DocsCanvas : FrameworkElement
         int vli = HitTestVisualLine(pos.Y + effectiveScroll);
         var vl = _visualLines[vli];
         double xForHitTest = pos.X - _padding;
-        Logger?.Log(DocsLogLevel.Debug, $"HitTestToPosition: vl.StartOffset={vl.StartOffset}, pos.X={pos.X}, _padding={_padding}, xForHitTest={xForHitTest}, vl.Width estimate?");
+
+        // Account for blockquote indentation in visual mode
+        if (IsVisual && _parsedBlocks != null && vl.BlockIndex < _parsedBlocks.Count)
+        {
+            var parsed = _parsedBlocks[vl.BlockIndex];
+            if (parsed.Kind == BlockKind.Blockquote && vl.StartOffset == 0)
+            {
+                var aligner = new ContentBlockAligner(_padding, _measure.ListIndent);
+                double blockquoteContentIndent = aligner.GetBlockquoteContentIndentX();
+                xForHitTest -= blockquoteContentIndent;
+                Logger?.Log(DocsLogLevel.Debug, $"HitTestToPosition: Blockquote detected, subtracting indent {blockquoteContentIndent}, adjusted xForHitTest={xForHitTest}");
+            }
+        }
+
         int rawOffset = HitTestInVisualLine(vli, xForHitTest);
         if (vl.Group != null)
         {
