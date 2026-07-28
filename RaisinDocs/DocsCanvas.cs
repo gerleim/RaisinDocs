@@ -1868,6 +1868,19 @@ public partial class DocsCanvas : FrameworkElement
         var vl = _visualLines[vli];
         double xForHitTest = pos.X - _padding;
 
+        // For blockquotes, account for the graphical bar offset from padding
+        if (IsVisual && _parsedBlocks != null && vl.BlockIndex < _parsedBlocks.Count && vl.StartOffset == 0)
+        {
+            var parsed = _parsedBlocks[vl.BlockIndex];
+            if (parsed.Kind == BlockKind.Blockquote)
+            {
+                var aligner = new ContentBlockAligner(_padding, _measure.ListIndent);
+                double barWidth = 3;  // Width of the blockquote bar
+                double spacing = 8;   // Spacing after bar
+                xForHitTest -= (barWidth + spacing);
+            }
+        }
+
         int rawOffset = HitTestInVisualLine(vli, xForHitTest);
         if (vl.Group != null)
         {

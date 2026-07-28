@@ -275,8 +275,6 @@ public class BlockVisualMap
                 if (stripped.Length > 1 && stripped[1] == ' ')
                     hideLen = 2;
                 ranges.Add(new HiddenRange(0, parsed.LeadingSpaces + hideLen));
-                // Set replacement prefix for blockquote bar so HitTest accounts for it
-                replacementPrefix = "│ ";  // Visual bar representation
             }
         }
 
