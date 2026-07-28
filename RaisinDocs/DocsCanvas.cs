@@ -1954,7 +1954,18 @@ public partial class DocsCanvas : FrameworkElement
                         textX += nestingIndent;
                     }
 
-                    if (IsVisual && parsed.Kind == BlockKind.ThematicBreak)
+                    if (IsVisual && parsed.Kind == BlockKind.Blockquote && vl.StartOffset == 0)
+                    {
+                        var aligner = new ContentBlockAligner(_padding, _measure.ListIndent);
+                        double barX = aligner.GetBlockquoteBarX();
+                        double barWidth = 3;
+                        double barY = lineY - effectiveScroll;
+                        double barHeight = _measure.GetLineHeight(parsed.Kind);
+                        var barBrush = new SolidColorBrush(Color.FromArgb(80, 150, 150, 150));
+                        barBrush.Freeze();
+                        dc.DrawRectangle(barBrush, null, new Rect(barX, barY, barWidth, barHeight));
+                    }
+                    else if (IsVisual && parsed.Kind == BlockKind.ThematicBreak)
                     {
                         double ruleY = lineY - effectiveScroll + 10;
                         double ruleRight = ActualWidth - _padding;
@@ -2349,8 +2360,18 @@ public partial class DocsCanvas : FrameworkElement
                 ft.SetForegroundBrush(_palette.Syntax, 0, ls + prefixLen);
         }
 
-        if (parsed.Kind == BlockKind.Blockquote && vl.StartOffset == 0 && vl.Length >= ls + 2)
-            ft.SetForegroundBrush(_palette.Syntax, 0, ls + 2);
+        if (parsed.Kind == BlockKind.Blockquote && vl.StartOffset == 0)
+        {
+            var stripped = ls > 0 ? blockText[ls..] : blockText;
+            if (stripped.Length > 0 && stripped[0] == '>')
+            {
+                int dimLength = ls + 1;
+                if (stripped.Length > 1 && stripped[1] == ' ')
+                    dimLength += 1;
+                if (vl.Length >= dimLength)
+                    ft.SetForegroundBrush(_palette.Syntax, 0, dimLength);
+            }
+        }
 
         if (parsed.Kind == BlockKind.LinkDefinition)
             ft.SetForegroundBrush(_palette.Syntax, 0, vl.Length);

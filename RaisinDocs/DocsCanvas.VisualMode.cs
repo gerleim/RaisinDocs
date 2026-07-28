@@ -1484,7 +1484,7 @@ public partial class DocsCanvas
         double boxSize = Math.Round(lineH * 0.65);
         double yOffset = Math.Round((lineH - boxSize) / 2);
 
-        var aligner = new ListVisualAlignment(x, _measure.ListIndent);
+        var aligner = new ContentBlockAligner(x, _measure.ListIndent);
         double checkboxX = aligner.CalculateMarkerXForSize(boxSize, nestingOffset);
         double checkboxY = screenY + yOffset;
         var rect = new Rect(checkboxX, checkboxY, boxSize, boxSize);
@@ -1510,7 +1510,7 @@ public partial class DocsCanvas
             dc.DrawRoundedRectangle(null, pen, rect, radius, radius);
         }
 
-        return aligner.CalculateTextStartX(nestingOffset) - x;
+        return aligner.CalculateContentStartX(nestingOffset) - x;
     }
 
     private double DrawListBullet(DrawingContext dc, double x, double screenY,
@@ -1522,7 +1522,7 @@ public partial class DocsCanvas
         double capHeight = fontSize * _measure.CapsHeightRatio;
         double bulletSize = Math.Round(lineH * 0.32);
 
-        var aligner = new ListVisualAlignment(x, _measure.ListIndent);
+        var aligner = new ContentBlockAligner(x, _measure.ListIndent);
         double bulletX = aligner.CalculateMarkerXForSize(bulletSize, nestingOffset);
         double bulletCenterY = screenY + baseline - capHeight / 2;
         double bulletY = Math.Round(bulletCenterY - bulletSize / 2);
@@ -1545,7 +1545,7 @@ public partial class DocsCanvas
             dc.DrawRectangle(_palette.Syntax, null, new Rect(bulletX, bulletY, bulletSize, bulletSize));
         }
 
-        return aligner.CalculateTextStartX(nestingOffset) - x;
+        return aligner.CalculateContentStartX(nestingOffset) - x;
     }
 
     private double DrawOrderedListNumber(DrawingContext dc, double x, double screenY,
@@ -1554,7 +1554,7 @@ public partial class DocsCanvas
         string trimmed = replacementPrefix.TrimStart();
         string numberText = trimmed.TrimEnd();
 
-        var aligner = new ListVisualAlignment(x, _measure.ListIndent);
+        var aligner = new ContentBlockAligner(x, _measure.ListIndent);
         double nestingOffset = nestingLevel * _measure.ListIndent;
 
         int delimiterPos = numberText.IndexOfAny(new[] { '.', ')' });
@@ -1571,7 +1571,7 @@ public partial class DocsCanvas
         double numberX = aligner.CalculateMarkerXForSize(ftNumberOnly.WidthIncludingTrailingWhitespace, nestingOffset);
         dc.DrawText(ftFullNumber, new Point(numberX, screenY));
 
-        double textStartX = aligner.CalculateTextStartXForWidth(ftNumberOnly.WidthIncludingTrailingWhitespace, nestingOffset);
+        double textStartX = aligner.CalculateContentStartXForWidth(ftNumberOnly.WidthIncludingTrailingWhitespace, nestingOffset);
         return textStartX - x;
     }
 
