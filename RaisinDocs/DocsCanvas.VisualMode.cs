@@ -112,18 +112,29 @@ public partial class DocsCanvas
         if (_doc.CursorBlock >= _visualMaps.Count) return;
         var map = _visualMaps[_doc.CursorBlock];
         int offset = _doc.CursorOffset;
-        if (forward)
+
+        if (map.IsHidden(offset))
         {
-            int blockLen = _doc.GetBlockLength(_doc.CursorBlock);
-            offset = map.SkipHidden(offset, true);
-            while (offset < blockLen && map.IsHidden(offset))
-                offset++;
-        }
-        else
-        {
-            offset = map.SkipHidden(offset, false);
-            while (offset > 0 && map.IsHidden(offset))
-                offset--;
+            if (forward)
+            {
+                int blockLen = _doc.GetBlockLength(_doc.CursorBlock);
+                offset = map.SkipHidden(offset, true);
+                while (offset < blockLen && map.IsHidden(offset))
+                    offset++;
+            }
+            else
+            {
+                offset = map.SkipHidden(offset, false);
+                while (offset > 0 && map.IsHidden(offset))
+                    offset--;
+                if (offset == 0 && map.IsHidden(0))
+                {
+                    int blockLen = _doc.GetBlockLength(_doc.CursorBlock);
+                    offset = map.SkipHidden(0, true);
+                    while (offset < blockLen && map.IsHidden(offset))
+                        offset++;
+                }
+            }
         }
         _doc.CursorOffset = offset;
     }

@@ -89,7 +89,7 @@ public class BlockVisualMap
             int end = hr.Start + hr.Length;
             if (forward && rawOffset >= hr.Start && rawOffset < end)
                 return end;
-            if (!forward && rawOffset > hr.Start && rawOffset < end)
+            if (!forward && rawOffset >= hr.Start && rawOffset < end)
                 return hr.Start;
         }
         return rawOffset;
