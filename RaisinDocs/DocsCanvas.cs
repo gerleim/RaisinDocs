@@ -1873,23 +1873,26 @@ public partial class DocsCanvas : FrameworkElement
         {
             var parsed = _parsedBlocks[vl.BlockIndex];
             var aligner = new ContentBlockAligner(_padding, _measure.ListIndent);
-            double contentIndent = 0;
+            double indentToSubtract = 0;
 
             if (parsed.Kind == BlockKind.Blockquote && vl.StartOffset == 0)
             {
-                contentIndent = aligner.GetBlockquoteContentIndentX();
-                Logger?.Log(DocsLogLevel.Debug, $"HitTestToPosition: Blockquote detected, indent={contentIndent}");
+                // Blockquote content indentation (excluding padding, since it's already subtracted)
+                indentToSubtract = aligner.GetBlockquoteContentIndentX() - _padding;
+                Logger?.Log(DocsLogLevel.Debug, $"HitTestToPosition: Blockquote detected, indentToSubtract={indentToSubtract}");
             }
             else if ((parsed.Kind == BlockKind.UnorderedListItem || parsed.Kind == BlockKind.OrderedListItem ||
                       parsed.Kind == BlockKind.TaskListItemChecked || parsed.Kind == BlockKind.TaskListItemUnchecked)
                      && vl.StartOffset == 0)
             {
-                contentIndent = aligner.CalculateContentStartX(parsed.ListNestingLevel * aligner.GetBlockIndentWidth());
-                Logger?.Log(DocsLogLevel.Debug, $"HitTestToPosition: List item detected, indent={contentIndent}");
+                // List content starts at marker position
+                double nestingOffset = parsed.ListNestingLevel * aligner.GetBlockIndentWidth();
+                indentToSubtract = aligner.CalculateContentStartX(nestingOffset) - _padding;
+                Logger?.Log(DocsLogLevel.Debug, $"HitTestToPosition: List item nesting={parsed.ListNestingLevel}, indentToSubtract={indentToSubtract}");
             }
 
-            if (contentIndent > 0)
-                xForHitTest -= contentIndent;
+            if (indentToSubtract > 0)
+                xForHitTest -= indentToSubtract;
         }
 
         int rawOffset = HitTestInVisualLine(vli, xForHitTest);
