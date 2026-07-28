@@ -1672,22 +1672,22 @@ public partial class DocsCanvas : FrameworkElement
             textX += nestingIndent;
         }
 
-        // For lists and blockquotes in visual mode, use ContentBlockAligner to determine text start
+        // Match exact rendering logic for where text starts
         if (IsVisual && _parsedBlocks != null && vl.BlockIndex < _parsedBlocks.Count && vl.StartOffset == 0)
         {
             var parsed = _parsedBlocks[vl.BlockIndex];
-            var aligner = new ContentBlockAligner(_padding, _measure.ListIndent);
+            var map = _visualMaps?[vl.BlockIndex];
 
+            // For blockquotes, use exact rendering calculation
             if (parsed.Kind == BlockKind.Blockquote)
             {
+                var aligner = new ContentBlockAligner(_padding, _measure.ListIndent);
                 textX = aligner.GetBlockquoteContentIndentX();
             }
-            else if (parsed.Kind is BlockKind.UnorderedListItem or BlockKind.OrderedListItem or
-                     BlockKind.TaskListItemChecked or BlockKind.TaskListItemUnchecked)
+            // For lists, add marker width just like rendering does (from ReplacementPrefix)
+            else if (map?.ReplacementPrefix != null && !map.IsContinuationIndent)
             {
-                // For lists, text starts after marker
-                double nestingOffset = parsed.ListNestingLevel * aligner.GetBlockIndentWidth();
-                textX = aligner.CalculateContentStartX(nestingOffset);
+                textX += _measure.MeasureReplacementPrefix(map.ReplacementPrefix, map.PrefixMeasureKind);
             }
         }
 
