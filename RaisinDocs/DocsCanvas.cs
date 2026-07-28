@@ -1765,7 +1765,12 @@ public partial class DocsCanvas : FrameworkElement
         if (map != null && map.ReplacementPrefix != null && vl.StartOffset == 0)
         {
             double prefixW = _measure.MeasureReplacementPrefix(map.ReplacementPrefix!, map.PrefixMeasureKind);
-            if (x < prefixW) return vl.StartOffset;
+            Logger?.Log(DocsLogLevel.Debug, $"HitTestInVisualLine: Block {vl.BlockIndex} has replacement prefix, prefixW={prefixW}, x={x}");
+            if (x < prefixW)
+            {
+                Logger?.Log(DocsLogLevel.Debug, $"HitTestInVisualLine: Click in prefix area, returning StartOffset={vl.StartOffset}");
+                return vl.StartOffset;
+            }
             accum = prefixW;
         }
 
@@ -1789,9 +1794,13 @@ public partial class DocsCanvas : FrameworkElement
             var style = TextMeasurer.GetStyleAtOffset(parsed.Runs, offset, ref runIdx);
             double charW = _measure.MeasureCharWidth(blockText[offset], parsed.Kind, style);
             if (x < accum + charW / 2)
+            {
+                Logger?.Log(DocsLogLevel.Debug, $"HitTestInVisualLine: Block {vl.BlockIndex} matched char at offset {offset} (accum={accum}, charW={charW})");
                 return offset;
+            }
             accum += charW;
         }
+        Logger?.Log(DocsLogLevel.Debug, $"HitTestInVisualLine: Block {vl.BlockIndex} past all chars, returning end offset {vl.StartOffset + vl.Length} (accum={accum}, x={x})");
         return vl.StartOffset + vl.Length;
     }
 
