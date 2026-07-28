@@ -1867,38 +1867,6 @@ public partial class DocsCanvas : FrameworkElement
         int vli = HitTestVisualLine(pos.Y + effectiveScroll);
         var vl = _visualLines[vli];
         double xForHitTest = pos.X - _padding;
-        Logger?.Log(DocsLogLevel.Debug, $"HitTestToPosition: Initial xForHitTest = {pos.X} - {_padding} = {xForHitTest}");
-
-        // Account for indentation in visual mode (blockquotes and lists)
-        if (IsVisual && _parsedBlocks != null && vl.BlockIndex < _parsedBlocks.Count)
-        {
-            var parsed = _parsedBlocks[vl.BlockIndex];
-            var aligner = new ContentBlockAligner(_padding, _measure.ListIndent);
-            double indentToSubtract = 0;
-
-            if (parsed.Kind == BlockKind.Blockquote && vl.StartOffset == 0)
-            {
-                // Blockquote content indentation (excluding padding, since it's already subtracted)
-                indentToSubtract = aligner.GetBlockquoteContentIndentX() - _padding;
-                Logger?.Log(DocsLogLevel.Debug, $"HitTestToPosition: Blockquote detected, indentToSubtract={indentToSubtract}");
-            }
-            else if ((parsed.Kind == BlockKind.UnorderedListItem || parsed.Kind == BlockKind.OrderedListItem ||
-                      parsed.Kind == BlockKind.TaskListItemChecked || parsed.Kind == BlockKind.TaskListItemUnchecked)
-                     && vl.StartOffset == 0)
-            {
-                // List content starts at marker position
-                double nestingOffset = parsed.ListNestingLevel * aligner.GetBlockIndentWidth();
-                indentToSubtract = aligner.CalculateContentStartX(nestingOffset) - _padding;
-                Logger?.Log(DocsLogLevel.Debug, $"HitTestToPosition: List item nesting={parsed.ListNestingLevel}, indentToSubtract={indentToSubtract}");
-            }
-
-            if (indentToSubtract > 0)
-            {
-                Logger?.Log(DocsLogLevel.Debug, $"HitTestToPosition: Before adjustment xForHitTest={xForHitTest}");
-                xForHitTest -= indentToSubtract;
-                Logger?.Log(DocsLogLevel.Debug, $"HitTestToPosition: After adjustment xForHitTest={xForHitTest}");
-            }
-        }
 
         int rawOffset = HitTestInVisualLine(vli, xForHitTest);
         if (vl.Group != null)
