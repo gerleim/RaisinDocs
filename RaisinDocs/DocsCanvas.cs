@@ -1660,38 +1660,54 @@ public partial class DocsCanvas : FrameworkElement
         return 0;
     }
 
+    private BlockVisualSpacing ComputeBlockVisualSpacing(VisualLine vl, ParsedBlock parsed, BlockVisualMap? map)
+    {
+        var spacing = new BlockVisualSpacing();
+        double contentX = _padding;
+
+        // Add nesting indentation
+        if (vl.NestingDepth > 0)
+        {
+            double charWidth = _measure.MeasureCharWidth(' ', parsed.Kind, InlineStyle.Normal);
+            contentX += vl.ParentContentColumn * charWidth;
+        }
+
+        // Compute marker and content positions based on block type
+        if (parsed.Kind == BlockKind.Blockquote)
+        {
+            var aligner = new ContentBlockAligner(_padding, _measure.ListIndent);
+            spacing.MarkerStartX = aligner.GetBlockquoteBarX();
+            spacing.MarkerWidth = 3; // blockquote bar width
+            spacing.SpacingAfterMarker = 8; // spacing after bar
+            spacing.ContentStartX = aligner.GetBlockquoteContentIndentX();
+        }
+        else if (map?.ReplacementPrefix != null && !map.IsContinuationIndent)
+        {
+            spacing.MarkerStartX = contentX;
+            spacing.MarkerWidth = _measure.MeasureReplacementPrefix(map.ReplacementPrefix, map.PrefixMeasureKind);
+            spacing.SpacingAfterMarker = 0;
+            spacing.ContentStartX = contentX + spacing.MarkerWidth;
+        }
+        else
+        {
+            spacing.MarkerStartX = contentX;
+            spacing.MarkerWidth = 0;
+            spacing.SpacingAfterMarker = 0;
+            spacing.ContentStartX = contentX;
+        }
+
+        return spacing;
+    }
+
     private double GetTextStartXForVisualLine(VisualLine vl)
     {
-        double textX = _padding;
+        if (!IsVisual || _parsedBlocks == null || vl.BlockIndex >= _parsedBlocks.Count || vl.StartOffset != 0)
+            return _padding;
 
-        // Add indentation for nested blocks (visual mode only)
-        if (IsVisual && vl.NestingDepth > 0)
-        {
-            double charWidth = _measure.MeasureCharWidth(' ', vl.BlockKind, InlineStyle.Normal);
-            double nestingIndent = vl.ParentContentColumn * charWidth;
-            textX += nestingIndent;
-        }
-
-        // Match exact rendering logic for where text starts
-        if (IsVisual && _parsedBlocks != null && vl.BlockIndex < _parsedBlocks.Count && vl.StartOffset == 0)
-        {
-            var parsed = _parsedBlocks[vl.BlockIndex];
-            var map = _visualMaps?[vl.BlockIndex];
-
-            // For blockquotes, use exact rendering calculation
-            if (parsed.Kind == BlockKind.Blockquote)
-            {
-                var aligner = new ContentBlockAligner(_padding, _measure.ListIndent);
-                textX = aligner.GetBlockquoteContentIndentX();
-            }
-            // For lists, add marker width just like rendering does (from ReplacementPrefix)
-            else if (map?.ReplacementPrefix != null && !map.IsContinuationIndent)
-            {
-                textX += _measure.MeasureReplacementPrefix(map.ReplacementPrefix, map.PrefixMeasureKind);
-            }
-        }
-
-        return textX;
+        var parsed = _parsedBlocks[vl.BlockIndex];
+        var map = _visualMaps?[vl.BlockIndex];
+        var spacing = ComputeBlockVisualSpacing(vl, parsed, map);
+        return spacing.ContentStartX;
     }
 
     private double CursorXInVisualLine(int vlIndex)

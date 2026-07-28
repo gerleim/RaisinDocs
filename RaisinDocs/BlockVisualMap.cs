@@ -4,6 +4,14 @@ namespace RaisinDocs;
 
 public readonly record struct HiddenRange(int Start, int Length);
 
+public class BlockVisualSpacing
+{
+    public double MarkerStartX { get; set; }
+    public double MarkerWidth { get; set; }
+    public double SpacingAfterMarker { get; set; }
+    public double ContentStartX { get; set; }
+}
+
 public class BlockVisualMap
 {
     public IReadOnlyList<HiddenRange> HiddenRanges { get; }
@@ -13,11 +21,12 @@ public class BlockVisualMap
     public IReadOnlyList<InlineImage>? Images { get; }
     public IReadOnlyList<InlineLink>? Links { get; }
     public IReadOnlyList<ColorSpan>? ColorSpans { get; }
+    public BlockVisualSpacing? Spacing { get; }
 
     public BlockVisualMap(IReadOnlyList<HiddenRange> hiddenRanges, string? replacementPrefix = null,
         bool isContinuationIndent = false, BlockKind prefixMeasureKind = BlockKind.Paragraph,
         IReadOnlyList<InlineImage>? images = null, IReadOnlyList<InlineLink>? links = null,
-        IReadOnlyList<ColorSpan>? colorSpans = null)
+        IReadOnlyList<ColorSpan>? colorSpans = null, BlockVisualSpacing? spacing = null)
     {
         HiddenRanges = hiddenRanges;
         ReplacementPrefix = replacementPrefix;
@@ -26,6 +35,7 @@ public class BlockVisualMap
         Images = images;
         Links = links;
         ColorSpans = colorSpans;
+        Spacing = spacing;
     }
 
     public bool IsHidden(int rawOffset)
