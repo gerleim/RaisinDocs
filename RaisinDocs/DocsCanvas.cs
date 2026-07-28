@@ -1869,6 +1869,7 @@ public partial class DocsCanvas : FrameworkElement
             blockIndex = vl.BlockIndex;
             charOffset = rawOffset;
         }
+        System.Diagnostics.Debug.WriteLine($"[HIT] Click at ({pos.X}, {pos.Y}) -> Block {blockIndex}, Offset {charOffset}");
     }
 
     // --- Scroll ---
