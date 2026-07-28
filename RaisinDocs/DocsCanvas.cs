@@ -1007,7 +1007,8 @@ public partial class DocsCanvas : FrameworkElement
             var parentMap = BlockVisualMap.BuildParentMap(_parsedBlocks);
 
             for (int i = 0; i < _doc.BlockCount; i++)
-                _visualMaps.Add(BlockVisualMap.Compute(_parsedBlocks[i], getText(i), _parsedBlocks, getText, parentMap));
+                _visualMaps.Add(BlockVisualMap.Compute(_parsedBlocks[i], getText(i), _parsedBlocks, getText, parentMap,
+                    _padding, _measure.ListIndent, _measure.MeasureReplacementPrefix));
         }
 
         ComputeLayoutCore(ActualWidth - _padding * 2);
@@ -1660,54 +1661,13 @@ public partial class DocsCanvas : FrameworkElement
         return 0;
     }
 
-    private BlockVisualSpacing ComputeBlockVisualSpacing(VisualLine vl, ParsedBlock parsed, BlockVisualMap? map)
-    {
-        var spacing = new BlockVisualSpacing();
-        double contentX = _padding;
-
-        // Add nesting indentation
-        if (vl.NestingDepth > 0)
-        {
-            double charWidth = _measure.MeasureCharWidth(' ', parsed.Kind, InlineStyle.Normal);
-            contentX += vl.ParentContentColumn * charWidth;
-        }
-
-        // Compute marker and content positions based on block type
-        if (parsed.Kind == BlockKind.Blockquote)
-        {
-            var aligner = new ContentBlockAligner(_padding, _measure.ListIndent);
-            spacing.MarkerStartX = aligner.GetBlockquoteBarX();
-            spacing.MarkerWidth = 3; // blockquote bar width
-            spacing.SpacingAfterMarker = 8; // spacing after bar
-            spacing.ContentStartX = aligner.GetBlockquoteContentIndentX();
-        }
-        else if (map?.ReplacementPrefix != null && !map.IsContinuationIndent)
-        {
-            spacing.MarkerStartX = contentX;
-            spacing.MarkerWidth = _measure.MeasureReplacementPrefix(map.ReplacementPrefix, map.PrefixMeasureKind);
-            spacing.SpacingAfterMarker = 0;
-            spacing.ContentStartX = contentX + spacing.MarkerWidth;
-        }
-        else
-        {
-            spacing.MarkerStartX = contentX;
-            spacing.MarkerWidth = 0;
-            spacing.SpacingAfterMarker = 0;
-            spacing.ContentStartX = contentX;
-        }
-
-        return spacing;
-    }
-
     private double GetTextStartXForVisualLine(VisualLine vl)
     {
-        if (!IsVisual || _parsedBlocks == null || vl.BlockIndex >= _parsedBlocks.Count || vl.StartOffset != 0)
+        if (!IsVisual || _visualMaps == null || vl.BlockIndex >= _visualMaps.Count || vl.StartOffset != 0)
             return _padding;
 
-        var parsed = _parsedBlocks[vl.BlockIndex];
-        var map = _visualMaps?[vl.BlockIndex];
-        var spacing = ComputeBlockVisualSpacing(vl, parsed, map);
-        return spacing.ContentStartX;
+        var map = _visualMaps[vl.BlockIndex];
+        return map.Spacing?.ContentStartX ?? _padding;
     }
 
     private double CursorXInVisualLine(int vlIndex)

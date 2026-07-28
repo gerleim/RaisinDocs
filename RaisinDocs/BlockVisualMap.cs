@@ -162,7 +162,8 @@ public class BlockVisualMap
 
     public static BlockVisualMap Compute(ParsedBlock parsed, string blockText,
         IReadOnlyList<ParsedBlock>? allBlocks = null, Func<int, string>? getBlockText = null,
-        Dictionary<ParsedBlock, int>? parentMap = null)
+        Dictionary<ParsedBlock, int>? parentMap = null, double padding = 0, double listIndent = 0,
+        Func<string, BlockKind, double>? measureReplacementPrefix = null)
     {
         var ranges = new List<HiddenRange>();
         string? replacementPrefix = null;
@@ -416,8 +417,49 @@ public class BlockVisualMap
         }
         var deduped = merged;
 
+        // Compute visual spacing if measure function is provided
+        BlockVisualSpacing? spacing = null;
+        if (measureReplacementPrefix != null && padding > 0)
+        {
+            spacing = ComputeSpacing(parsed, replacementPrefix, prefixMeasureKind, padding, listIndent, measureReplacementPrefix);
+        }
+
         return new BlockVisualMap(deduped, replacementPrefix, isContinuation, prefixMeasureKind,
-            parsed.Images, parsed.Links, parsed.ColorSpans);
+            parsed.Images, parsed.Links, parsed.ColorSpans, spacing);
+    }
+
+    private static BlockVisualSpacing ComputeSpacing(ParsedBlock parsed, string? replacementPrefix,
+        BlockKind prefixMeasureKind, double padding, double listIndent,
+        Func<string, BlockKind, double> measureReplacementPrefix)
+    {
+        var spacing = new BlockVisualSpacing();
+        var aligner = new ContentBlockAligner(padding, listIndent);
+
+        if (parsed.Kind == BlockKind.Blockquote)
+        {
+            spacing.MarkerStartX = aligner.GetBlockquoteBarX();
+            spacing.MarkerWidth = 3; // blockquote bar width
+            spacing.SpacingAfterMarker = 8;
+            spacing.ContentStartX = aligner.GetBlockquoteContentIndentX();
+        }
+        else if (parsed.Kind is BlockKind.UnorderedListItem or BlockKind.OrderedListItem or
+                 BlockKind.TaskListItemChecked or BlockKind.TaskListItemUnchecked)
+        {
+            double listNestingOffset = parsed.ListNestingLevel * aligner.GetBlockIndentWidth();
+            spacing.ContentStartX = aligner.CalculateContentStartX(listNestingOffset);
+            spacing.MarkerStartX = padding;
+            spacing.MarkerWidth = replacementPrefix != null ? measureReplacementPrefix(replacementPrefix, prefixMeasureKind) : 0;
+            spacing.SpacingAfterMarker = 0;
+        }
+        else
+        {
+            spacing.MarkerStartX = padding;
+            spacing.MarkerWidth = 0;
+            spacing.SpacingAfterMarker = 0;
+            spacing.ContentStartX = padding;
+        }
+
+        return spacing;
     }
 
     private static int CountBackticks(string text, int start)
