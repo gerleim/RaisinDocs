@@ -1866,7 +1866,9 @@ public partial class DocsCanvas : FrameworkElement
         double effectiveScroll = _scroll.EffectiveOffset;
         int vli = HitTestVisualLine(pos.Y + effectiveScroll);
         var vl = _visualLines[vli];
-        int rawOffset = HitTestInVisualLine(vli, pos.X - _padding);
+        double xForHitTest = pos.X - _padding;
+        Logger?.Log(DocsLogLevel.Debug, $"HitTestToPosition: vl.StartOffset={vl.StartOffset}, pos.X={pos.X}, _padding={_padding}, xForHitTest={xForHitTest}, vl.Width estimate?");
+        int rawOffset = HitTestInVisualLine(vli, xForHitTest);
         if (vl.Group != null)
         {
             var (bi, bo) = vl.Group.JoinedToSource(rawOffset);
