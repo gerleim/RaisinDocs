@@ -445,11 +445,13 @@ public class BlockVisualMap
         else if (parsed.Kind is BlockKind.UnorderedListItem or BlockKind.OrderedListItem or
                  BlockKind.TaskListItemChecked or BlockKind.TaskListItemUnchecked)
         {
+            // For lists, content starts after the marker
+            // Calculate nesting offset based on list nesting level
             double listNestingOffset = parsed.ListNestingLevel * aligner.GetBlockIndentWidth();
-            spacing.ContentStartX = aligner.CalculateContentStartX(listNestingOffset);
-            spacing.MarkerStartX = padding;
+            spacing.MarkerStartX = padding + listNestingOffset;
             spacing.MarkerWidth = replacementPrefix != null ? measureReplacementPrefix(replacementPrefix, prefixMeasureKind) : 0;
             spacing.SpacingAfterMarker = 0;
+            spacing.ContentStartX = spacing.MarkerStartX + spacing.MarkerWidth;
         }
         else
         {
