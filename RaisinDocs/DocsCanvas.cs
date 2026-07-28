@@ -1349,8 +1349,6 @@ public partial class DocsCanvas : FrameworkElement
         if (IsVisual)
         {
             _visualLineSpacings = [];
-        }
-        {
             ComputeAllTableColumnWidths(maxWidth);
             BuildParagraphGroups();
         }
