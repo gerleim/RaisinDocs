@@ -1621,6 +1621,13 @@ public partial class DocsCanvas
         double numberX = aligner.CalculateMarkerXForSize(ftNumberOnly.WidthIncludingTrailingWhitespace, nestingOffset);
         dc.DrawText(ftNumberOnly, new Point(numberX, screenY));
 
+        // Draw the delimiter after the centered digit
+        double delimiterX = numberX + ftNumberOnly.WidthIncludingTrailingWhitespace;
+        var ftDelimiter = new FormattedText(numberText.Substring(numberOnly.Length), CultureInfo.InvariantCulture,
+            FlowDirection.LeftToRight, TextMeasurer.NormalTypeface, fontSize,
+            _palette.Syntax, _measure.DpiScale);
+        dc.DrawText(ftDelimiter, new Point(delimiterX, screenY));
+
         // Text starts after the full number (including delimiter)
         double textStartX = aligner.CalculateContentStartXForWidth(ftFullNumber.WidthIncludingTrailingWhitespace, nestingOffset);
         return textStartX - x;
