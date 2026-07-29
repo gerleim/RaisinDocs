@@ -1617,8 +1617,8 @@ public partial class DocsCanvas
             FlowDirection.LeftToRight, TextMeasurer.NormalTypeface, fontSize,
             _palette.Syntax, _measure.DpiScale);
 
-        // Center the full number text (including delimiter) at the marker center position
-        double numberX = aligner.CalculateMarkerXForSize(ftFullNumber.WidthIncludingTrailingWhitespace, nestingOffset);
+        // Center just the number digits at the marker center position (like bullets and checkboxes)
+        double numberX = aligner.CalculateMarkerXForSize(ftNumberOnly.WidthIncludingTrailingWhitespace, nestingOffset);
         dc.DrawText(ftFullNumber, new Point(numberX, screenY));
 
         // Text starts after the full number (including delimiter)
