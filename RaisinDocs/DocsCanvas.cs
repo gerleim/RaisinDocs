@@ -1704,19 +1704,14 @@ public partial class DocsCanvas : FrameworkElement
             }
             else if (map.ReplacementPrefix != null && !map.IsContinuationIndent)
             {
-                // ReplacementPrefix includes nesting indent, but textX already has it
-                // Extract just the marker part (without nesting) for MarkerWidth
-                string markerOnly = map.ReplacementPrefix;
-                string nestIndent = BlockVisualMap.NestingIndentString(parsed.ListNestingLevel);
-                if (nestIndent.Length > 0 && markerOnly.StartsWith(nestIndent))
-                {
-                    markerOnly = markerOnly.Substring(nestIndent.Length);
-                }
+                // Use ContentBlockAligner to match rendering exactly (same as marker drawing functions use)
+                var aligner = new ContentBlockAligner(textX, _measure.ListIndent);
+                double nestOff = _measure.MeasureReplacementPrefix(map.ReplacementPrefix, map.PrefixMeasureKind) - _measure.ListIndent;
 
                 spacing.MarkerStartX = textX;
-                spacing.MarkerWidth = _measure.MeasureReplacementPrefix(markerOnly, map.PrefixMeasureKind);
+                spacing.MarkerWidth = aligner.CalculateContentStartX(nestOff) - textX;
                 spacing.SpacingAfterMarker = 0;
-                spacing.ContentStartX = textX + spacing.MarkerWidth;
+                spacing.ContentStartX = aligner.CalculateContentStartX(nestOff);
             }
             else
             {
