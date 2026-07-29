@@ -1619,7 +1619,7 @@ public partial class DocsCanvas
 
         // Center just the number digits at the marker center position (like bullets and checkboxes)
         double numberX = aligner.CalculateMarkerXForSize(ftNumberOnly.WidthIncludingTrailingWhitespace, nestingOffset);
-        dc.DrawText(ftFullNumber, new Point(numberX, screenY));
+        dc.DrawText(ftNumberOnly, new Point(numberX, screenY));
 
         // Text starts after the full number (including delimiter)
         double textStartX = aligner.CalculateContentStartXForWidth(ftFullNumber.WidthIncludingTrailingWhitespace, nestingOffset);
