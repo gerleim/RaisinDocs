@@ -1861,14 +1861,9 @@ public partial class DocsCanvas : FrameworkElement
         // Offset from where text starts
         double offsetFromTextStart = clickX - textStartX;
 
-        // Measure x position for each offset and find closest to offsetFromTextStart
+        // Measure x position for each visible character and find closest to offsetFromTextStart
+        // Start at 0 since offsetFromTextStart is already relative to where text starts
         double accum = 0;
-        if (vl.StartOffset == 0 && vlIndex >= 0 && vlIndex < _visualLineSpacings?.Count)
-        {
-            // Use cached marker width for accurate positioning
-            if (_visualLineSpacings[vlIndex] != null)
-                accum = _visualLineSpacings[vlIndex].MarkerWidth;
-        }
 
         int runIdx = 0;
         double closestDist = double.MaxValue;
