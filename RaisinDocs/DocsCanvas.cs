@@ -1707,10 +1707,10 @@ public partial class DocsCanvas : FrameworkElement
                 // ReplacementPrefix includes nesting indent, but textX already has it
                 // Extract just the marker part (without nesting) for MarkerWidth
                 string markerOnly = map.ReplacementPrefix;
-                int nestingIndentLen = BlockVisualMap.NestingIndentString(parsed.ListNestingLevel).Length;
-                if (nestingIndentLen > 0 && markerOnly.StartsWith(map.ReplacementPrefix.Substring(0, nestingIndentLen)))
+                string nestIndent = BlockVisualMap.NestingIndentString(parsed.ListNestingLevel);
+                if (nestIndent.Length > 0 && markerOnly.StartsWith(nestIndent))
                 {
-                    markerOnly = markerOnly.Substring(nestingIndentLen);
+                    markerOnly = markerOnly.Substring(nestIndent.Length);
                 }
 
                 spacing.MarkerStartX = textX;
