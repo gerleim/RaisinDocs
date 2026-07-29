@@ -322,6 +322,12 @@ public partial class DocsCanvas
                 ComputeLayout();
                 ClampCursorBeforeTrailingHidden();
             }
+
+            // Defensive: clamp cursor offset to valid range in case clamping logic missed it
+            int blockLen = _doc.GetBlockLength(_doc.CursorBlock);
+            if (_doc.CursorOffset > blockLen)
+                _doc.CursorOffset = blockLen;
+
             _doc.Insert(c);
         }
 
