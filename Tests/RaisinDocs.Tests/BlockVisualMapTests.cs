@@ -857,7 +857,7 @@ public class BlockVisualMapTests
     public void LazyContinuation_UnorderedList_UsesOwnerPrefix()
     {
         var map = ComputeMapMultiBlock(["- item", "continuation"], 1);
-        map.ReplacementPrefix.Should().Be("  ● ");
+        map.ReplacementPrefix.Should().Be("  ●  ");
         map.IsContinuationIndent.Should().BeTrue();
         map.PrefixMeasureKind.Should().Be(BlockKind.UnorderedListItem);
     }
