@@ -1849,13 +1849,17 @@ public partial class DocsCanvas : FrameworkElement
         // Account for where text actually starts on screen
         double textStartX = GetTextStartXForVisualLine(vl);
 
-        // Adjust click position to be relative to text start
-        double adjustedClickX = clickX + _padding - textStartX;
+        // Offset from where text starts
+        double offsetFromTextStart = clickX - textStartX;
 
-        // Measure x position for each offset and find closest to adjustedClickX
+        // Measure x position for each offset and find closest to offsetFromTextStart
         double accum = 0;
-        if (map != null && map.ReplacementPrefix != null && vl.StartOffset == 0)
-            accum = _measure.MeasureReplacementPrefix(map.ReplacementPrefix!, map.PrefixMeasureKind);
+        if (vl.StartOffset == 0 && vlIndex >= 0 && vlIndex < _visualLineSpacings?.Count)
+        {
+            // Use cached marker width for accurate positioning
+            if (_visualLineSpacings[vlIndex] != null)
+                accum = _visualLineSpacings[vlIndex].MarkerWidth;
+        }
 
         int runIdx = 0;
         double closestDist = double.MaxValue;
@@ -1881,8 +1885,8 @@ public partial class DocsCanvas : FrameworkElement
             double charEnd = accum + charW;
 
             // Check if click is closer to this char's start or end
-            double distToStart = Math.Abs(adjustedClickX - charStart);
-            double distToEnd = Math.Abs(adjustedClickX - charEnd);
+            double distToStart = Math.Abs(offsetFromTextStart - charStart);
+            double distToEnd = Math.Abs(offsetFromTextStart - charEnd);
             double minDist = Math.Min(distToStart, distToEnd);
 
             if (minDist < closestDist)
