@@ -1618,7 +1618,14 @@ public partial class DocsCanvas
             _palette.Syntax, _measure.DpiScale);
 
         double numberX = aligner.CalculateMarkerXForSize(ftNumberOnly.WidthIncludingTrailingWhitespace, nestingOffset);
-        dc.DrawText(ftFullNumber, new Point(numberX, screenY));
+
+        // Center number vertically with text baseline (like bullets)
+        double baseline = _measure.GetBaseline(BlockKind.Paragraph);
+        double capHeight = fontSize * _measure.CapsHeightRatio;
+        double numberCenterY = screenY + baseline - capHeight / 2;
+        double numberY = Math.Round(numberCenterY - ftFullNumber.Height / 2);
+
+        dc.DrawText(ftFullNumber, new Point(numberX, numberY));
 
         double textStartX = aligner.CalculateContentStartXForWidth(ftNumberOnly.WidthIncludingTrailingWhitespace, nestingOffset);
         return textStartX - x;
