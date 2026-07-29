@@ -1858,8 +1858,9 @@ public partial class DocsCanvas : FrameworkElement
         // Account for where text actually starts on screen
         double textStartX = GetTextStartXForVisualLine(vl);
 
-        // Offset from where text starts
-        double offsetFromTextStart = clickX - textStartX;
+        // clickX is already adjusted by _padding, so adjust textStartX to match
+        // (textStartX is in screen coordinates, so we need to remove padding to match clickX)
+        double offsetFromTextStart = clickX - (textStartX - _padding);
 
         // Measure x position for each visible character and find closest to offsetFromTextStart
         // Start at 0 since offsetFromTextStart is already relative to where text starts
