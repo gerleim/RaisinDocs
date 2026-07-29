@@ -1617,10 +1617,12 @@ public partial class DocsCanvas
             FlowDirection.LeftToRight, TextMeasurer.NormalTypeface, fontSize,
             _palette.Syntax, _measure.DpiScale);
 
-        double numberX = aligner.CalculateMarkerXForSize(ftNumberOnly.WidthIncludingTrailingWhitespace, nestingOffset);
+        // Center the full number text (including delimiter) at the marker center position
+        double numberX = aligner.CalculateMarkerXForSize(ftFullNumber.WidthIncludingTrailingWhitespace, nestingOffset);
         dc.DrawText(ftFullNumber, new Point(numberX, screenY));
 
-        double textStartX = aligner.CalculateContentStartXForWidth(ftNumberOnly.WidthIncludingTrailingWhitespace, nestingOffset);
+        // Text starts after the full number (including delimiter)
+        double textStartX = aligner.CalculateContentStartXForWidth(ftFullNumber.WidthIncludingTrailingWhitespace, nestingOffset);
         return textStartX - x;
     }
 
