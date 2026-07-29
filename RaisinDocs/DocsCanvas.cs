@@ -2184,8 +2184,10 @@ public partial class DocsCanvas : FrameworkElement
                                 }
                                 else if (parsed.Kind == BlockKind.OrderedListItem)
                                 {
+                                    double nestOff = _measure.MeasureReplacementPrefix(map.ReplacementPrefix!, map.PrefixMeasureKind)
+                                        - _measure.ListIndent;
                                     DrawOrderedListNumber(dc, _padding, lineY - effectiveScroll,
-                                        map.ReplacementPrefix!, fontSize, parsed.ListNestingLevel);
+                                        map.ReplacementPrefix!, fontSize, parsed.ListNestingLevel, nestOff);
                                 }
                                 else
                                 {

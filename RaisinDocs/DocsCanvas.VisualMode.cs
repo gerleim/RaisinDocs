@@ -1598,13 +1598,12 @@ public partial class DocsCanvas
     }
 
     private double DrawOrderedListNumber(DrawingContext dc, double x, double screenY,
-        string replacementPrefix, double fontSize, int nestingLevel)
+        string replacementPrefix, double fontSize, int nestingLevel, double nestingOffset = 0)
     {
         string trimmed = replacementPrefix.TrimStart();
         string numberText = trimmed.TrimEnd();
 
         var aligner = new ContentBlockAligner(x, _measure.ListIndent);
-        double nestingOffset = nestingLevel * _measure.ListIndent;
 
         int delimiterPos = numberText.IndexOfAny(new[] { '.', ')' });
         string numberOnly = delimiterPos > 0 ? numberText.Substring(0, delimiterPos) : numberText;

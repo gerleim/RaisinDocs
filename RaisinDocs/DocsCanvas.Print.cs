@@ -525,8 +525,10 @@ partial class DocsCanvas
                             }
                             else if (parsed.Kind == BlockKind.OrderedListItem)
                             {
+                                double nestOff = _canvas._measure.MeasureReplacementPrefix(map.ReplacementPrefix, map.PrefixMeasureKind)
+                                    - _canvas._measure.ListIndent;
                                 textX += _canvas.DrawOrderedListNumber(dc, _padding, lineY - effectiveScroll,
-                                    map.ReplacementPrefix, fontSize, parsed.ListNestingLevel);
+                                    map.ReplacementPrefix, fontSize, parsed.ListNestingLevel, nestOff);
                             }
                             else if (map.IsContinuationIndent)
                             {
