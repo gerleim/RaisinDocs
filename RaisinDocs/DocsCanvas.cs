@@ -1704,8 +1704,17 @@ public partial class DocsCanvas : FrameworkElement
             }
             else if (map.ReplacementPrefix != null && !map.IsContinuationIndent)
             {
+                // ReplacementPrefix includes nesting indent, but textX already has it
+                // Extract just the marker part (without nesting) for MarkerWidth
+                string markerOnly = map.ReplacementPrefix;
+                int nestingIndentLen = BlockVisualMap.NestingIndentString(parsed.ListNestingLevel).Length;
+                if (nestingIndentLen > 0 && markerOnly.StartsWith(map.ReplacementPrefix.Substring(0, nestingIndentLen)))
+                {
+                    markerOnly = markerOnly.Substring(nestingIndentLen);
+                }
+
                 spacing.MarkerStartX = textX;
-                spacing.MarkerWidth = _measure.MeasureReplacementPrefix(map.ReplacementPrefix, map.PrefixMeasureKind);
+                spacing.MarkerWidth = _measure.MeasureReplacementPrefix(markerOnly, map.PrefixMeasureKind);
                 spacing.SpacingAfterMarker = 0;
                 spacing.ContentStartX = textX + spacing.MarkerWidth;
             }
