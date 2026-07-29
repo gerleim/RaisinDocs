@@ -1704,41 +1704,12 @@ public partial class DocsCanvas : FrameworkElement
             }
             else if (map.ReplacementPrefix != null && !map.IsContinuationIndent)
             {
-                // Compute marker positioning exactly as drawing functions do
-                var aligner = new ContentBlockAligner(textX, _measure.ListIndent);
-                double nestOff = _measure.MeasureReplacementPrefix(map.ReplacementPrefix, map.PrefixMeasureKind) - _measure.ListIndent;
-
-                spacing.ContentStartX = aligner.CalculateContentStartX(nestOff);
-                spacing.SpacingAfterMarker = aligner.GetSpacingAfterMarker();
-
-                // Calculate MarkerStartX based on marker type and size
-                if (parsed.Kind is BlockKind.TaskListItemUnchecked or BlockKind.TaskListItemChecked)
-                {
-                    double lineH = _measure.GetLineHeight(parsed.Kind);
-                    double boxSize = Math.Round(lineH * 0.65);
-                    spacing.MarkerStartX = aligner.CalculateMarkerXForSize(boxSize, nestOff);
-                    spacing.MarkerWidth = spacing.ContentStartX - spacing.MarkerStartX;
-                }
-                else if (parsed.Kind == BlockKind.UnorderedListItem)
-                {
-                    double lineH = _measure.GetLineHeight(parsed.Kind);
-                    double bulletSize = Math.Round(lineH * 0.32);
-                    spacing.MarkerStartX = aligner.CalculateMarkerXForSize(bulletSize, nestOff);
-                    spacing.MarkerWidth = spacing.ContentStartX - spacing.MarkerStartX;
-                }
-                else if (parsed.Kind == BlockKind.OrderedListItem)
-                {
-                    // For ordered lists, use similar calculation
-                    double lineH = _measure.GetLineHeight(parsed.Kind);
-                    double numberSize = lineH * 0.8;  // Approximate for number width
-                    spacing.MarkerStartX = aligner.CalculateMarkerXForSize(numberSize, nestOff);
-                    spacing.MarkerWidth = spacing.ContentStartX - spacing.MarkerStartX;
-                }
-                else
-                {
-                    spacing.MarkerStartX = textX;
-                    spacing.MarkerWidth = 0;
-                }
+                // For cursor positioning: content starts after the actual width of the replacement prefix
+                double prefixWidth = _measure.MeasureReplacementPrefix(map.ReplacementPrefix, map.PrefixMeasureKind);
+                spacing.ContentStartX = textX + prefixWidth;
+                spacing.MarkerStartX = textX;
+                spacing.MarkerWidth = prefixWidth;
+                spacing.SpacingAfterMarker = 0;
             }
             else
             {
@@ -1750,11 +1721,21 @@ public partial class DocsCanvas : FrameworkElement
         }
         else
         {
-            // Continuation lines (no marker)
+            // Continuation lines - align with first line's content position
             spacing.MarkerStartX = textX;
             spacing.MarkerWidth = 0;
             spacing.SpacingAfterMarker = 0;
-            spacing.ContentStartX = textX;
+
+            if (map.ReplacementPrefix != null)
+            {
+                // Continuation line of a list/blockquote - indent to match first line content
+                double prefixWidth = _measure.MeasureReplacementPrefix(map.ReplacementPrefix, map.PrefixMeasureKind);
+                spacing.ContentStartX = textX + prefixWidth;
+            }
+            else
+            {
+                spacing.ContentStartX = textX;
+            }
         }
 
         return spacing;
@@ -1808,10 +1789,8 @@ public partial class DocsCanvas : FrameworkElement
         double x = GetTextStartXForVisualLine(vl);
 
         // Subtract padding since we're returning cursor x relative to control left edge
+        // (ContentStartX from cache already accounts for ReplacementPrefix width)
         x -= _padding;
-
-        if (map != null && map.ReplacementPrefix != null && vl.StartOffset == 0)
-            x += _measure.MeasureReplacementPrefix(map.ReplacementPrefix!, map.PrefixMeasureKind);
 
         if (localOff == 0) return x;
 

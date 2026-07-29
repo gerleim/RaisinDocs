@@ -207,12 +207,8 @@ internal class TextMeasurer
 
     internal double MeasureReplacementPrefix(string prefix, BlockKind blockKind)
     {
-        if (blockKind is BlockKind.TaskListItemUnchecked or BlockKind.TaskListItemChecked
-            or BlockKind.UnorderedListItem or BlockKind.OrderedListItem)
-        {
-            int nestingLevel = GetNestingLevelFromPrefix(prefix);
-            return ListIndent * (nestingLevel + 1);
-        }
+        // Measure actual character widths of the prefix string, not assumed ListIndent
+        // This is used for cursor positioning, which needs the visual text width, not the marker space width
         double total = 0;
         for (int i = 0; i < prefix.Length; i++)
             total += MeasureCharWidth(prefix[i], blockKind, InlineStyle.Normal);
