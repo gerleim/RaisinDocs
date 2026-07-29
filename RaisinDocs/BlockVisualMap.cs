@@ -21,12 +21,11 @@ public class BlockVisualMap
     public IReadOnlyList<InlineImage>? Images { get; }
     public IReadOnlyList<InlineLink>? Links { get; }
     public IReadOnlyList<ColorSpan>? ColorSpans { get; }
-    public BlockVisualSpacing? Spacing { get; }
 
     public BlockVisualMap(IReadOnlyList<HiddenRange> hiddenRanges, string? replacementPrefix = null,
         bool isContinuationIndent = false, BlockKind prefixMeasureKind = BlockKind.Paragraph,
         IReadOnlyList<InlineImage>? images = null, IReadOnlyList<InlineLink>? links = null,
-        IReadOnlyList<ColorSpan>? colorSpans = null, BlockVisualSpacing? spacing = null)
+        IReadOnlyList<ColorSpan>? colorSpans = null)
     {
         HiddenRanges = hiddenRanges;
         ReplacementPrefix = replacementPrefix;
@@ -35,7 +34,6 @@ public class BlockVisualMap
         Images = images;
         Links = links;
         ColorSpans = colorSpans;
-        Spacing = spacing;
     }
 
     public bool IsHidden(int rawOffset)
@@ -417,51 +415,8 @@ public class BlockVisualMap
         }
         var deduped = merged;
 
-        // Compute visual spacing if measure function is provided
-        BlockVisualSpacing? spacing = null;
-        if (measureReplacementPrefix != null && padding > 0)
-        {
-            spacing = ComputeSpacing(parsed, replacementPrefix, prefixMeasureKind, padding, listIndent, measureReplacementPrefix);
-        }
-
         return new BlockVisualMap(deduped, replacementPrefix, isContinuation, prefixMeasureKind,
-            parsed.Images, parsed.Links, parsed.ColorSpans, spacing);
-    }
-
-    private static BlockVisualSpacing ComputeSpacing(ParsedBlock parsed, string? replacementPrefix,
-        BlockKind prefixMeasureKind, double padding, double listIndent,
-        Func<string, BlockKind, double> measureReplacementPrefix)
-    {
-        var spacing = new BlockVisualSpacing();
-        var aligner = new ContentBlockAligner(padding, listIndent);
-
-        if (parsed.Kind == BlockKind.Blockquote)
-        {
-            spacing.MarkerStartX = aligner.GetBlockquoteBarX();
-            spacing.MarkerWidth = 3; // blockquote bar width
-            spacing.SpacingAfterMarker = 8;
-            spacing.ContentStartX = aligner.GetBlockquoteContentIndentX();
-        }
-        else if (parsed.Kind is BlockKind.UnorderedListItem or BlockKind.OrderedListItem or
-                 BlockKind.TaskListItemChecked or BlockKind.TaskListItemUnchecked)
-        {
-            // For lists, content starts after the marker
-            // Calculate nesting offset based on list nesting level
-            double listNestingOffset = parsed.ListNestingLevel * aligner.GetBlockIndentWidth();
-            spacing.MarkerStartX = padding + listNestingOffset;
-            spacing.MarkerWidth = replacementPrefix != null ? measureReplacementPrefix(replacementPrefix, prefixMeasureKind) : 0;
-            spacing.SpacingAfterMarker = 0;
-            spacing.ContentStartX = spacing.MarkerStartX + spacing.MarkerWidth;
-        }
-        else
-        {
-            spacing.MarkerStartX = padding;
-            spacing.MarkerWidth = 0;
-            spacing.SpacingAfterMarker = 0;
-            spacing.ContentStartX = padding;
-        }
-
-        return spacing;
+            parsed.Images, parsed.Links, parsed.ColorSpans);
     }
 
     private static int CountBackticks(string text, int start)
