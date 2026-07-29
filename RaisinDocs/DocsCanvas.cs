@@ -1685,11 +1685,13 @@ public partial class DocsCanvas : FrameworkElement
         double textX = _padding;
 
         // Add nesting indentation (block hierarchy)
-        if (vl.NestingDepth > 0)
+        // For continuation blocks, skip this because the prefix width will serve as the indentation
+        if (vl.NestingDepth > 0 && !map.IsContinuationIndent)
         {
             double charWidth = _measure.MeasureCharWidth(' ', parsed.Kind, InlineStyle.Normal);
             textX += vl.ParentContentColumn * charWidth;
         }
+
 
         // Handle markers and content positioning
         if (vl.StartOffset == 0)
@@ -1702,14 +1704,28 @@ public partial class DocsCanvas : FrameworkElement
                 spacing.SpacingAfterMarker = aligner.GetSpacingAfterMarker();
                 spacing.ContentStartX = aligner.GetBlockquoteContentIndentX();
             }
-            else if (map.ReplacementPrefix != null && !map.IsContinuationIndent)
+            else if (map.ReplacementPrefix != null)
             {
-                // For cursor positioning: content starts after the actual width of the replacement prefix
                 double prefixWidth = _measure.MeasureReplacementPrefix(map.ReplacementPrefix, map.PrefixMeasureKind);
-                spacing.ContentStartX = textX + prefixWidth;
-                spacing.MarkerStartX = textX;
-                spacing.MarkerWidth = prefixWidth;
-                spacing.SpacingAfterMarker = 0;
+
+                if (!map.IsContinuationIndent)
+                {
+                    // First line with marker: content starts after prefix
+                    spacing.ContentStartX = textX + prefixWidth;
+                    spacing.MarkerStartX = textX;
+                    spacing.MarkerWidth = prefixWidth;
+                    spacing.SpacingAfterMarker = 0;
+                }
+                else
+                {
+                    // Continuation block: indent to match parent's content by using prefix width
+                    // (nesting indentation is skipped for continuation blocks)
+                    spacing.ContentStartX = textX + prefixWidth;
+                    spacing.MarkerStartX = textX;
+                    spacing.MarkerWidth = 0;
+                    spacing.SpacingAfterMarker = 0;
+                }
+
             }
             else
             {
