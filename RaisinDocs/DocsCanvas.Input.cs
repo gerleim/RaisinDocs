@@ -323,12 +323,6 @@ public partial class DocsCanvas
                 ClampCursorBeforeTrailingHidden();
             }
 
-            // TODO: Defensive clamping - root cause is ClampCursorBeforeTrailingHidden or ComputeLayout
-            // incorrectly setting cursor offset beyond block length. Fix the actual logic instead.
-            int blockLen = _doc.GetBlockLength(_doc.CursorBlock);
-            if (_doc.CursorOffset > blockLen)
-                _doc.CursorOffset = blockLen;
-
             _doc.Insert(c);
         }
 

@@ -116,14 +116,16 @@ public partial class DocsCanvas
 
         if (map.IsHidden(offset))
         {
-            Logger?.Log(DocsLogLevel.Debug, $"SkipCursorOverHiddenRanges: Block {_doc.CursorBlock} offset {originalOffset} is hidden. Ranges: {string.Join(", ", map.HiddenRanges.Select(r => $"[{r.Start},{r.Length})"))}");
+            if (Logger?.IsDebugEnabled ?? false)
+                Logger.Log(DocsLogLevel.Debug, $"SkipCursorOverHiddenRanges: Block {_doc.CursorBlock} offset {originalOffset} is hidden. Ranges: {string.Join(", ", map.HiddenRanges.Select(r => $"[{r.Start},{r.Length})"))}");
             if (forward)
             {
                 int blockLen = _doc.GetBlockLength(_doc.CursorBlock);
                 offset = map.SkipHidden(offset, true);
                 while (offset < blockLen && map.IsHidden(offset))
                     offset++;
-                Logger?.Log(DocsLogLevel.Debug, $"SkipCursorOverHiddenRanges: Forward skip {originalOffset} -> {offset}");
+                if (Logger?.IsDebugEnabled ?? false)
+                    Logger.Log(DocsLogLevel.Debug, $"SkipCursorOverHiddenRanges: Forward skip {originalOffset} -> {offset}");
             }
             else
             {
@@ -136,17 +138,20 @@ public partial class DocsCanvas
                     offset = map.SkipHidden(0, true);
                     while (offset < blockLen && map.IsHidden(offset))
                         offset++;
-                    Logger?.Log(DocsLogLevel.Debug, $"SkipCursorOverHiddenRanges: Backward skip (at start) {originalOffset} -> {offset}");
+                    if (Logger?.IsDebugEnabled ?? false)
+                        Logger.Log(DocsLogLevel.Debug, $"SkipCursorOverHiddenRanges: Backward skip (at start) {originalOffset} -> {offset}");
                 }
                 else
                 {
-                    Logger?.Log(DocsLogLevel.Debug, $"SkipCursorOverHiddenRanges: Backward skip {originalOffset} -> {offset}");
+                    if (Logger?.IsDebugEnabled ?? false)
+                        Logger.Log(DocsLogLevel.Debug, $"SkipCursorOverHiddenRanges: Backward skip {originalOffset} -> {offset}");
                 }
             }
         }
         else
         {
-            Logger?.Log(DocsLogLevel.Debug, $"SkipCursorOverHiddenRanges: Block {_doc.CursorBlock} offset {originalOffset} is NOT hidden");
+            if (Logger?.IsDebugEnabled ?? false)
+                Logger.Log(DocsLogLevel.Debug, $"SkipCursorOverHiddenRanges: Block {_doc.CursorBlock} offset {originalOffset} is NOT hidden");
         }
         _doc.CursorOffset = offset;
     }
@@ -205,6 +210,7 @@ public partial class DocsCanvas
         int blockLen = _doc.GetBlockLength(_doc.CursorBlock);
         if (blockLen == 0 || !map.IsHidden(blockLen - 1)) return;
         int offset = _doc.CursorOffset;
+        offset = Math.Min(offset, blockLen);
         int minOffset = 0;
         if (map.HiddenRanges.Count > 0 && map.HiddenRanges[0].Start == 0)
             minOffset = map.HiddenRanges[0].Length;
@@ -1469,15 +1475,13 @@ public partial class DocsCanvas
         {
             if (parsed.Kind is BlockKind.TaskListItemUnchecked or BlockKind.TaskListItemChecked)
             {
-                double nestOff = _measure.MeasureReplacementPrefix(map.ReplacementPrefix, map.PrefixMeasureKind)
-                    - _measure.ListIndent;
+                double nestOff = _measure.ComputeNestingOffset(map.ReplacementPrefix, map.PrefixMeasureKind);
                 x += DrawTaskListCheckbox(dc, parsed.Kind == BlockKind.TaskListItemChecked,
                     _padding, screenY, parsed.Kind, nestOff);
             }
             else if (parsed.Kind == BlockKind.UnorderedListItem)
             {
-                double nestOff = _measure.MeasureReplacementPrefix(map.ReplacementPrefix, map.PrefixMeasureKind)
-                    - _measure.ListIndent;
+                double nestOff = _measure.ComputeNestingOffset(map.ReplacementPrefix, map.PrefixMeasureKind);
                 x += DrawListBullet(dc, _padding, screenY,
                     parsed.Kind, parsed.ListNestingLevel, nestOff);
             }
