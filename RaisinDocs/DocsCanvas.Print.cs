@@ -510,23 +510,22 @@ partial class DocsCanvas
                         {
                             if (parsed.Kind is BlockKind.TaskListItemUnchecked or BlockKind.TaskListItemChecked)
                             {
-                                double nestOff = _canvas._measure.MeasureReplacementPrefix(
-                                    map.ReplacementPrefix, map.PrefixMeasureKind) - _canvas._measure.ListIndent;
+                                double nestOff = _canvas._measure.ComputeNestingOffset(
+                                    map.ReplacementPrefix, map.PrefixMeasureKind);
                                 textX += _canvas.DrawTaskListCheckbox(dc,
                                     parsed.Kind == BlockKind.TaskListItemChecked,
                                     _padding, lineY - effectiveScroll, parsed.Kind, nestOff);
                             }
                             else if (parsed.Kind == BlockKind.UnorderedListItem)
                             {
-                                double nestOff = _canvas._measure.MeasureReplacementPrefix(
-                                    map.ReplacementPrefix, map.PrefixMeasureKind) - _canvas._measure.ListIndent;
+                                double nestOff = _canvas._measure.ComputeNestingOffset(
+                                    map.ReplacementPrefix, map.PrefixMeasureKind);
                                 textX += _canvas.DrawListBullet(dc, _padding, lineY - effectiveScroll,
                                     parsed.Kind, parsed.ListNestingLevel, nestOff);
                             }
                             else if (parsed.Kind == BlockKind.OrderedListItem)
                             {
-                                double nestOff = _canvas._measure.MeasureReplacementPrefix(map.ReplacementPrefix, map.PrefixMeasureKind)
-                                    - _canvas._measure.ListIndent;
+                                double nestOff = _canvas._measure.ComputeNestingOffset(map.ReplacementPrefix, map.PrefixMeasureKind);
                                 textX += _canvas.DrawOrderedListNumber(dc, _padding, lineY - effectiveScroll,
                                     map.ReplacementPrefix, fontSize, parsed.ListNestingLevel, nestOff);
                             }

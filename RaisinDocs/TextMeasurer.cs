@@ -215,6 +215,9 @@ internal class TextMeasurer
         return total;
     }
 
+    internal double ComputeNestingOffset(string prefix, BlockKind blockKind) =>
+        MeasureReplacementPrefix(prefix, blockKind) - ListIndent;
+
     internal static int GetNestingLevelFromPrefix(string prefix)
     {
         int leadingSpaces = 0;
