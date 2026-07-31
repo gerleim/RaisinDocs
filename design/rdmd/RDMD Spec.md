@@ -204,7 +204,7 @@ Rules:
 Carried over from the existing RaisinDocs implementation:
 
 - Inline: `<!--@fg:red-->text<!--/@fg-->`
-- Block div: `<!--@div fg:red-->` / `<!--/@div-->`
+- Block div: `<!--@fg:red-->` / `<!--/@fg-->`
 
 ## Open questions
 
