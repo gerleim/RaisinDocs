@@ -1008,8 +1008,7 @@ public partial class DocsCanvas : FrameworkElement
             var parentMap = BlockVisualMap.BuildParentMap(_parsedBlocks);
 
             for (int i = 0; i < _doc.BlockCount; i++)
-                _visualMaps.Add(BlockVisualMap.Compute(_parsedBlocks[i], getText(i), _parsedBlocks, getText, parentMap,
-                    _padding, _measure.ListIndent, _measure.MeasureReplacementPrefix));
+                _visualMaps.Add(BlockVisualMap.Compute(_parsedBlocks[i], getText(i), _parsedBlocks, getText, parentMap));
         }
 
         ComputeLayoutCore(ActualWidth - _padding * 2);
@@ -1675,7 +1674,7 @@ public partial class DocsCanvas : FrameworkElement
 
     private BlockVisualSpacing ComputeVisualLineSpacing(VisualLine vl)
     {
-        if (!IsVisual || _parsedBlocks == null || _visualMaps == null || vl.BlockIndex >= _parsedBlocks.Count)
+        if (!IsVisual || _parsedBlocks == null || _visualMaps == null || vl.BlockIndex >= _parsedBlocks.Count || vl.BlockIndex >= _visualMaps.Count)
             return new BlockVisualSpacing { ContentStartX = _padding };
 
         var parsed = _parsedBlocks[vl.BlockIndex];
@@ -2100,6 +2099,9 @@ public partial class DocsCanvas : FrameworkElement
         _measure.EnsureMeasured(this);
         dc.DrawRectangle(_palette.Background, null, new Rect(0, 0, ActualWidth, ActualHeight));
 
+        if (_parsedBlocks == null)
+            return;
+
         double effectiveScroll = Math.Round(_scroll.EffectiveOffset);
         double viewTop = effectiveScroll;
         double viewBottom = effectiveScroll + ActualHeight;
@@ -2132,7 +2134,7 @@ public partial class DocsCanvas : FrameworkElement
                 }
                 else
                 {
-                    var parsed = _parsedBlocks![vl.BlockIndex];
+                    var parsed = _parsedBlocks[vl.BlockIndex];
                     string blockText = _doc.GetBlockText(vl.BlockIndex);
                     double fontSize = _measure.GetBlockFontSize(parsed.Kind);
                     var baseTypeface = TextMeasurer.GetBlockBaseTypeface(parsed.Kind);
@@ -2170,22 +2172,19 @@ public partial class DocsCanvas : FrameworkElement
                             {
                                 if (parsed.Kind is BlockKind.TaskListItemUnchecked or BlockKind.TaskListItemChecked)
                                 {
-                                    double nestOff = _measure.MeasureReplacementPrefix(map.ReplacementPrefix!, map.PrefixMeasureKind)
-                                        - _measure.ListIndent;
+                                    double nestOff = _measure.ComputeNestingOffset(map.ReplacementPrefix!, map.PrefixMeasureKind);
                                     DrawTaskListCheckbox(dc, parsed.Kind == BlockKind.TaskListItemChecked,
                                         _padding, lineY - effectiveScroll, parsed.Kind, nestOff);
                                 }
                                 else if (parsed.Kind == BlockKind.UnorderedListItem)
                                 {
-                                    double nestOff = _measure.MeasureReplacementPrefix(map.ReplacementPrefix!, map.PrefixMeasureKind)
-                                        - _measure.ListIndent;
+                                    double nestOff = _measure.ComputeNestingOffset(map.ReplacementPrefix!, map.PrefixMeasureKind);
                                     DrawListBullet(dc, _padding, lineY - effectiveScroll,
                                         parsed.Kind, parsed.ListNestingLevel, nestOff);
                                 }
                                 else if (parsed.Kind == BlockKind.OrderedListItem)
                                 {
-                                    double nestOff = _measure.MeasureReplacementPrefix(map.ReplacementPrefix!, map.PrefixMeasureKind)
-                                        - _measure.ListIndent;
+                                    double nestOff = _measure.ComputeNestingOffset(map.ReplacementPrefix!, map.PrefixMeasureKind);
                                     DrawOrderedListNumber(dc, _padding, lineY - effectiveScroll,
                                         map.ReplacementPrefix!, fontSize, parsed.ListNestingLevel, nestOff);
                                 }
