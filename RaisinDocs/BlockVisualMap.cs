@@ -160,8 +160,7 @@ public class BlockVisualMap
 
     public static BlockVisualMap Compute(ParsedBlock parsed, string blockText,
         IReadOnlyList<ParsedBlock>? allBlocks = null, Func<int, string>? getBlockText = null,
-        Dictionary<ParsedBlock, int>? parentMap = null, double padding = 0, double listIndent = 0,
-        Func<string, BlockKind, double>? measureReplacementPrefix = null)
+        Dictionary<ParsedBlock, int>? parentMap = null)
     {
         var ranges = new List<HiddenRange>();
         string? replacementPrefix = null;
