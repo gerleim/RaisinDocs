@@ -58,9 +58,6 @@ internal class ScrollController
         double velBefore = _wheelVelocity;
         _wheelVelocity -= delta * WheelDamping;
 
-        var log = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "raisindocs_wheel.txt");
-        System.IO.File.AppendAllText(log, $"{System.DateTime.Now:HH:mm:ss.fff} HandleWheel: delta={delta} velBefore={velBefore:F0} velAfter={_wheelVelocity:F0} maxScroll={_getMaxScroll():F0}\n");
-
         if (!_wheelCoasting)
         {
             _wheelCoasting = true;
@@ -116,9 +113,6 @@ internal class ScrollController
 
         double velBefore = _wheelVelocity;
         _wheelVelocity *= Math.Exp(-dt * WheelDamping);
-
-        var log = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "raisindocs_wheel.txt");
-        System.IO.File.AppendAllText(log, $"{System.DateTime.Now:HH:mm:ss.fff} Frame: vel {velBefore:F0}→{_wheelVelocity:F0} deltaPx={deltaPx:F1} offset={_offset:F0} (dt={dt:F4})\n");
 
         bool stop = Math.Abs(_wheelVelocity) < 0.5;
         if (!stop && Math.Round(_offset) != prevPixel
