@@ -10,5 +10,6 @@ public enum DocsLogLevel
 
 public interface IDocsLogger
 {
+    bool IsDebugEnabled { get; }
     void Log(DocsLogLevel level, string message);
 }

@@ -15,6 +15,8 @@ internal class FileLogger : IDocsLogger
     private readonly string _logPath;
     private readonly object _lock = new();
 
+    public bool IsDebugEnabled => true;
+
     public FileLogger()
     {
         string logDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "RaisinDocs");
