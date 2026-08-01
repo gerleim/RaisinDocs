@@ -510,18 +510,25 @@ partial class DocsCanvas
                         {
                             if (parsed.Kind is BlockKind.TaskListItemUnchecked or BlockKind.TaskListItemChecked)
                             {
-                                // TODO: Print.cs needs access to precomputed spacing; refactor later
-                                // For now, skip checkbox drawing in print output
-                                // _canvas.DrawTaskListCheckbox(dc, ...)
+                                var spacing = _canvas.GetVisualLineSpacing(vl);
+                                if (spacing != null)
+                                {
+                                    _canvas.DrawTaskListCheckbox(dc, parsed.Kind == BlockKind.TaskListItemChecked,
+                                        new AbsoluteX(spacing.MarkerStartX), new AbsoluteY(lineY - effectiveScroll),
+                                        parsed.Kind);
+                                    textX += spacing.MarkerWidth + spacing.SpacingAfterMarker;
+                                }
                             }
                             else if (parsed.Kind == BlockKind.UnorderedListItem)
                             {
-                                double nestOff = _canvas._measure.ComputeNestingOffset(
-                                    map.ReplacementPrefix, map.PrefixMeasureKind);
-                                _canvas.DrawListBullet(dc, new AbsoluteX(_padding),
-                                    new AbsoluteY(lineY - effectiveScroll),
-                                    parsed.Kind, parsed.ListNestingLevel, nestOff);
-                                textX += _canvas._measure.MeasureReplacementPrefix(map.ReplacementPrefix, map.PrefixMeasureKind) + 4.0;
+                                var spacing = _canvas.GetVisualLineSpacing(vl);
+                                if (spacing != null)
+                                {
+                                    _canvas.DrawListBullet(dc, new AbsoluteX(spacing.MarkerStartX),
+                                        new AbsoluteY(lineY - effectiveScroll),
+                                        parsed.Kind, parsed.ListNestingLevel);
+                                    textX += spacing.MarkerWidth + spacing.SpacingAfterMarker;
+                                }
                             }
                             else if (parsed.Kind == BlockKind.OrderedListItem)
                             {
