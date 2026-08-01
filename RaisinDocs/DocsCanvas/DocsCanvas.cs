@@ -1697,6 +1697,7 @@ public partial class DocsCanvas : FrameworkElement
         {
             if (parsed.Kind == BlockKind.Blockquote)
             {
+                // Blockquote bar positioning
                 var aligner = new ContentBlockAligner(textX, _measure.ListIndent);
                 spacing.MarkerStartX = aligner.GetBlockquoteBarX();
                 spacing.MarkerWidth = 3;
@@ -1709,11 +1710,74 @@ public partial class DocsCanvas : FrameworkElement
 
                 if (!map.IsContinuationIndent)
                 {
-                    // First line with marker: content starts after prefix
-                    spacing.ContentStartX = textX + prefixWidth;
-                    spacing.MarkerStartX = textX;
-                    spacing.MarkerWidth = prefixWidth;
-                    spacing.SpacingAfterMarker = 0;
+                    // List marker spacing structure:
+                    // 1. Nesting indentation (from ListNestingLevel)
+                    // 2. Fixed space before marker (2 spaces)
+                    // 3. Marker (centered at MarkerStartX)
+                    // 4. Fixed space after marker (SpacingAfterMarker)
+                    // 5. Text content (at ContentStartX)
+
+                    bool isListItem = parsed.Kind is BlockKind.UnorderedListItem or BlockKind.OrderedListItem or
+                        BlockKind.TaskListItemUnchecked or BlockKind.TaskListItemChecked;
+
+                    if (isListItem)
+                    {
+                        double spaceCharWidth = _measure.MeasureCharWidth(' ', parsed.Kind, InlineStyle.Normal);
+
+                        // 1. Nesting indentation (from ListNestingLevel)
+                        double nestingIndentWidth = parsed.ListNestingLevel > 0
+                            ? parsed.ListNestingLevel * BlockVisualMap.SpacesPerNestingLevel * spaceCharWidth
+                            : 0;
+
+                        // 2. Fixed space before marker (2 spaces)
+                        const double spacesBeforeMarker = 2;
+                        double spaceBeforeMarkerWidth = spacesBeforeMarker * spaceCharWidth;
+
+                        // Use standard marker width (checked checkbox) for all types to align centers
+                        double standardMarkerWidth = _measure.MeasureReplacementPrefix("☑", parsed.Kind);
+
+                        // 3. Marker center position
+                        double markerCenterX = _padding + nestingIndentWidth + spaceBeforeMarkerWidth + (standardMarkerWidth / 2);
+                        spacing.MarkerStartX = markerCenterX;
+
+                        // 4. Fixed space after marker
+                        const double spacingAfterMarker = 4.0;
+                        spacing.SpacingAfterMarker = spacingAfterMarker;
+
+                        // For ordered items, use actual marker width for proper content positioning
+                        double actualMarkerWidth = prefixWidth;
+                        if (parsed.Kind != BlockKind.OrderedListItem)
+                        {
+                            // For bullets and checkboxes, use standard width
+                            actualMarkerWidth = standardMarkerWidth;
+                        }
+
+                        // 5. Text content start position
+                        spacing.ContentStartX = _padding + nestingIndentWidth + spaceBeforeMarkerWidth + actualMarkerWidth + spacingAfterMarker;
+
+                        spacing.MarkerWidth = standardMarkerWidth;
+                    }
+                    else
+                    {
+                        // Non-list markers (blockquotes, etc.)
+                        double baseX = textX;
+                        var aligner = new ContentBlockAligner(baseX, _measure.ListIndent);
+
+                        if (parsed.Kind == BlockKind.Blockquote)
+                        {
+                            spacing.MarkerStartX = aligner.GetBlockquoteBarX();
+                            spacing.MarkerWidth = 3;
+                            spacing.SpacingAfterMarker = aligner.GetSpacingAfterMarker();
+                            spacing.ContentStartX = aligner.GetBlockquoteContentIndentX();
+                        }
+                        else
+                        {
+                            spacing.MarkerStartX = textX;
+                            spacing.MarkerWidth = prefixWidth;
+                            spacing.SpacingAfterMarker = 0;
+                            spacing.ContentStartX = textX + prefixWidth;
+                        }
+                    }
                 }
                 else
                 {
@@ -1776,6 +1840,28 @@ public partial class DocsCanvas : FrameworkElement
             return _padding;
 
         return _visualLineSpacings[vlIndex]?.ContentStartX ?? _padding;
+    }
+
+    private BlockVisualSpacing? GetVisualLineSpacing(VisualLine vl)
+    {
+        if (!IsVisual || _visualLineSpacings == null || vl.BlockIndex < 0)
+            return null;
+
+        // Find the index of this VisualLine
+        int vlIndex = -1;
+        for (int i = 0; i < _visualLines.Count; i++)
+        {
+            if (_visualLines[i] == vl)
+            {
+                vlIndex = i;
+                break;
+            }
+        }
+
+        if (vlIndex < 0 || vlIndex >= _visualLineSpacings.Count)
+            return null;
+
+        return _visualLineSpacings[vlIndex];
     }
 
     private double CursorXInVisualLine(int vlIndex)
@@ -2172,21 +2258,33 @@ public partial class DocsCanvas : FrameworkElement
                             {
                                 if (parsed.Kind is BlockKind.TaskListItemUnchecked or BlockKind.TaskListItemChecked)
                                 {
-                                    double nestOff = _measure.ComputeNestingOffset(map.ReplacementPrefix!, map.PrefixMeasureKind);
-                                    DrawTaskListCheckbox(dc, parsed.Kind == BlockKind.TaskListItemChecked,
-                                        _padding, lineY - effectiveScroll, parsed.Kind, nestOff);
+                                    var spacing = GetVisualLineSpacing(vl);
+                                    if (spacing != null)
+                                    {
+                                        DrawTaskListCheckbox(dc, parsed.Kind == BlockKind.TaskListItemChecked,
+                                            new AbsoluteX(spacing.MarkerStartX), new AbsoluteY(lineY - effectiveScroll),
+                                            parsed.Kind);
+                                    }
                                 }
                                 else if (parsed.Kind == BlockKind.UnorderedListItem)
                                 {
-                                    double nestOff = _measure.ComputeNestingOffset(map.ReplacementPrefix!, map.PrefixMeasureKind);
-                                    DrawListBullet(dc, _padding, lineY - effectiveScroll,
-                                        parsed.Kind, parsed.ListNestingLevel, nestOff);
+                                    var spacing = GetVisualLineSpacing(vl);
+                                    if (spacing != null)
+                                    {
+                                        DrawListBullet(dc, new AbsoluteX(spacing.MarkerStartX),
+                                            new AbsoluteY(lineY - effectiveScroll),
+                                            parsed.Kind, parsed.ListNestingLevel);
+                                    }
                                 }
                                 else if (parsed.Kind == BlockKind.OrderedListItem)
                                 {
-                                    double nestOff = _measure.ComputeNestingOffset(map.ReplacementPrefix!, map.PrefixMeasureKind);
-                                    DrawOrderedListNumber(dc, _padding, lineY - effectiveScroll,
-                                        map.ReplacementPrefix!, fontSize, parsed.ListNestingLevel, nestOff);
+                                    var spacing = GetVisualLineSpacing(vl);
+                                    if (spacing != null)
+                                    {
+                                        DrawOrderedListNumber(dc, new AbsoluteX(spacing.MarkerStartX),
+                                            new AbsoluteY(lineY - effectiveScroll),
+                                            map.ReplacementPrefix!, fontSize, parsed.ListNestingLevel);
+                                    }
                                 }
                                 else
                                 {

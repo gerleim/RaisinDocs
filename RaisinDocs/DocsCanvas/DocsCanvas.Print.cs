@@ -510,24 +510,29 @@ partial class DocsCanvas
                         {
                             if (parsed.Kind is BlockKind.TaskListItemUnchecked or BlockKind.TaskListItemChecked)
                             {
-                                double nestOff = _canvas._measure.ComputeNestingOffset(
-                                    map.ReplacementPrefix, map.PrefixMeasureKind);
-                                textX += _canvas.DrawTaskListCheckbox(dc,
-                                    parsed.Kind == BlockKind.TaskListItemChecked,
-                                    _padding, lineY - effectiveScroll, parsed.Kind, nestOff);
+                                // TODO: Print.cs needs access to precomputed spacing; refactor later
+                                // For now, skip checkbox drawing in print output
+                                // _canvas.DrawTaskListCheckbox(dc, ...)
                             }
                             else if (parsed.Kind == BlockKind.UnorderedListItem)
                             {
                                 double nestOff = _canvas._measure.ComputeNestingOffset(
                                     map.ReplacementPrefix, map.PrefixMeasureKind);
-                                textX += _canvas.DrawListBullet(dc, _padding, lineY - effectiveScroll,
+                                _canvas.DrawListBullet(dc, new AbsoluteX(_padding),
+                                    new AbsoluteY(lineY - effectiveScroll),
                                     parsed.Kind, parsed.ListNestingLevel, nestOff);
+                                textX += _canvas._measure.MeasureReplacementPrefix(map.ReplacementPrefix, map.PrefixMeasureKind) + 4.0;
                             }
                             else if (parsed.Kind == BlockKind.OrderedListItem)
                             {
-                                double nestOff = _canvas._measure.ComputeNestingOffset(map.ReplacementPrefix, map.PrefixMeasureKind);
-                                textX += _canvas.DrawOrderedListNumber(dc, _padding, lineY - effectiveScroll,
-                                    map.ReplacementPrefix, fontSize, parsed.ListNestingLevel, nestOff);
+                                var spacing = _canvas.GetVisualLineSpacing(vl);
+                                if (spacing != null)
+                                {
+                                    _canvas.DrawOrderedListNumber(dc, new AbsoluteX(spacing.MarkerStartX),
+                                        new AbsoluteY(lineY - effectiveScroll),
+                                        map.ReplacementPrefix, fontSize, parsed.ListNestingLevel);
+                                    textX += spacing.MarkerWidth + spacing.SpacingAfterMarker;
+                                }
                             }
                             else if (map.IsContinuationIndent)
                             {

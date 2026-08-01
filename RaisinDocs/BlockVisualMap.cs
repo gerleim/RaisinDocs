@@ -155,7 +155,9 @@ public class BlockVisualMap
         if (prefixLen <= 0) return null;
         string number = text.Substring(0, prefixLen - 2);
         char delim = text[prefixLen - 2];
-        return NestingIndentString(nestingLevel) + "  " + number + delim + "  ";
+        // Pad single-digit numbers with leading space for consistent alignment with multi-digit numbers
+        string paddedNumber = number.Length == 1 ? " " + number : number;
+        return NestingIndentString(nestingLevel) + " " + paddedNumber + delim + "  ";
     }
 
     public static BlockVisualMap Compute(ParsedBlock parsed, string blockText,

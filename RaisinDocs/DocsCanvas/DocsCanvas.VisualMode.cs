@@ -1475,15 +1475,32 @@ public partial class DocsCanvas
         {
             if (parsed.Kind is BlockKind.TaskListItemUnchecked or BlockKind.TaskListItemChecked)
             {
-                double nestOff = _measure.ComputeNestingOffset(map.ReplacementPrefix, map.PrefixMeasureKind);
-                x += DrawTaskListCheckbox(dc, parsed.Kind == BlockKind.TaskListItemChecked,
-                    _padding, screenY, parsed.Kind, nestOff);
+                var spacing = GetVisualLineSpacing(vl);
+                if (spacing != null)
+                {
+                    DrawTaskListCheckbox(dc, parsed.Kind == BlockKind.TaskListItemChecked,
+                        new AbsoluteX(spacing.MarkerStartX), new AbsoluteY(screenY), parsed.Kind);
+                }
             }
             else if (parsed.Kind == BlockKind.UnorderedListItem)
             {
-                double nestOff = _measure.ComputeNestingOffset(map.ReplacementPrefix, map.PrefixMeasureKind);
-                x += DrawListBullet(dc, _padding, screenY,
-                    parsed.Kind, parsed.ListNestingLevel, nestOff);
+                var spacing = GetVisualLineSpacing(vl);
+                if (spacing != null)
+                {
+                    DrawListBullet(dc, new AbsoluteX(spacing.MarkerStartX), new AbsoluteY(screenY),
+                        parsed.Kind, parsed.ListNestingLevel);
+                }
+                x += _measure.MeasureReplacementPrefix(map.ReplacementPrefix, map.PrefixMeasureKind);
+            }
+            else if (parsed.Kind == BlockKind.OrderedListItem)
+            {
+                var spacing = GetVisualLineSpacing(vl);
+                if (spacing != null)
+                {
+                    DrawOrderedListNumber(dc, new AbsoluteX(spacing.MarkerStartX), new AbsoluteY(screenY),
+                        map.ReplacementPrefix, fontSize, parsed.ListNestingLevel);
+                }
+                x += _measure.MeasureReplacementPrefix(map.ReplacementPrefix, map.PrefixMeasureKind);
             }
             else if (map.IsContinuationIndent)
             {
@@ -1530,16 +1547,19 @@ public partial class DocsCanvas
             DrawTextSegment(dc, blockText, segStart, vlEnd, map, parsed, fontSize, baseTypeface, x, screenY);
     }
 
-    private double DrawTaskListCheckbox(DrawingContext dc, bool isChecked, double x, double screenY,
-        BlockKind blockKind, double nestingOffset = 0)
+    private void DrawTaskListCheckbox(DrawingContext dc, bool isChecked, AbsoluteX markerCenterX, AbsoluteY screenY,
+        BlockKind blockKind)
     {
         double lineH = _measure.GetLineHeight(blockKind);
+        double baseline = _measure.GetBaseline(blockKind);
+        double fontSize = _measure.GetBlockFontSize(blockKind);
+        double capHeight = fontSize * _measure.CapsHeightRatio;
         double boxSize = Math.Round(lineH * 0.65);
-        double yOffset = Math.Round((lineH - boxSize) / 2);
 
-        var aligner = new ContentBlockAligner(x, _measure.ListIndent);
-        double checkboxX = aligner.CalculateMarkerXForSize(boxSize, nestingOffset);
-        double checkboxY = screenY + yOffset;
+        // Align checkbox with text baseline, same as bullets
+        double checkboxCenterY = screenY.Value + baseline - capHeight / 2;
+        double checkboxX = markerCenterX.Value - boxSize / 2;
+        double checkboxY = Math.Round(checkboxCenterY - boxSize / 2);
         var rect = new Rect(checkboxX, checkboxY, boxSize, boxSize);
         double radius = 2.5;
 
@@ -1562,11 +1582,27 @@ public partial class DocsCanvas
             pen.Freeze();
             dc.DrawRoundedRectangle(null, pen, rect, radius, radius);
         }
-
-        return aligner.CalculateContentStartX(nestingOffset) - x;
     }
 
-    private double DrawListBullet(DrawingContext dc, double x, double screenY,
+    private void DrawListBullet(DrawingContext dc, AbsoluteX markerCenterX, AbsoluteY screenY,
+        BlockKind blockKind, int nestingLevel)
+    {
+        double lineH = _measure.GetLineHeight(blockKind);
+        double baseline = _measure.GetBaseline(blockKind);
+        double fontSize = _measure.GetBlockFontSize(blockKind);
+        double capHeight = fontSize * _measure.CapsHeightRatio;
+        double bulletSize = Math.Round(lineH * 0.32);
+
+        // markerCenterX is the center of the marker area; adjust to draw position
+        double bulletX = markerCenterX.Value - bulletSize / 2;
+        double bulletCenterY = screenY.Value + baseline - capHeight / 2;
+        double bulletY = Math.Round(bulletCenterY - bulletSize / 2);
+
+        DrawBulletAtPosition(dc, bulletX, bulletY, bulletSize, nestingLevel);
+    }
+
+    // Overload for backward compatibility with Print code
+    private void DrawListBullet(DrawingContext dc, AbsoluteX baseX, AbsoluteY screenY,
         BlockKind blockKind, int nestingLevel, double nestingOffset)
     {
         double lineH = _measure.GetLineHeight(blockKind);
@@ -1575,11 +1611,16 @@ public partial class DocsCanvas
         double capHeight = fontSize * _measure.CapsHeightRatio;
         double bulletSize = Math.Round(lineH * 0.32);
 
-        var aligner = new ContentBlockAligner(x, _measure.ListIndent);
+        var aligner = new ContentBlockAligner(baseX.Value, _measure.ListIndent);
         double bulletX = aligner.CalculateMarkerXForSize(bulletSize, nestingOffset);
-        double bulletCenterY = screenY + baseline - capHeight / 2;
+        double bulletCenterY = screenY.Value + baseline - capHeight / 2;
         double bulletY = Math.Round(bulletCenterY - bulletSize / 2);
 
+        DrawBulletAtPosition(dc, bulletX, bulletY, bulletSize, nestingLevel);
+    }
+
+    private void DrawBulletAtPosition(DrawingContext dc, double bulletX, double bulletY, double bulletSize, int nestingLevel)
+    {
         int shape = nestingLevel % 3;
         if (shape == 0)
         {
@@ -1597,17 +1638,13 @@ public partial class DocsCanvas
         {
             dc.DrawRectangle(_palette.Syntax, null, new Rect(bulletX, bulletY, bulletSize, bulletSize));
         }
-
-        return aligner.CalculateContentStartX(nestingOffset) - x;
     }
 
-    private double DrawOrderedListNumber(DrawingContext dc, double x, double screenY,
-        string replacementPrefix, double fontSize, int nestingLevel, double nestingOffset = 0)
+    private void DrawOrderedListNumber(DrawingContext dc, AbsoluteX markerCenterX, AbsoluteY screenY,
+        string replacementPrefix, double fontSize, int nestingLevel)
     {
         string trimmed = replacementPrefix.TrimStart();
         string numberText = trimmed.TrimEnd();
-
-        var aligner = new ContentBlockAligner(x, _measure.ListIndent);
 
         int delimiterPos = numberText.IndexOfAny(new[] { '.', ')' });
         string numberOnly = delimiterPos > 0 ? numberText.Substring(0, delimiterPos) : numberText;
@@ -1616,24 +1653,16 @@ public partial class DocsCanvas
             FlowDirection.LeftToRight, TextMeasurer.NormalTypeface, fontSize,
             _palette.Syntax, _measure.DpiScale);
 
-        var ftFullNumber = new FormattedText(numberText, CultureInfo.InvariantCulture,
-            FlowDirection.LeftToRight, TextMeasurer.NormalTypeface, fontSize,
-            _palette.Syntax, _measure.DpiScale);
+        // Center number at marker center position (adjusted for width)
+        double numberX = markerCenterX.Value - ftNumberOnly.WidthIncludingTrailingWhitespace / 2;
+        dc.DrawText(ftNumberOnly, new Point(numberX, screenY.Value));
 
-        // Center just the number digits at the marker center position (like bullets and checkboxes)
-        double numberX = aligner.CalculateMarkerXForSize(ftNumberOnly.WidthIncludingTrailingWhitespace, nestingOffset);
-        dc.DrawText(ftNumberOnly, new Point(numberX, screenY));
-
-        // Draw the delimiter after the centered digit
+        // Draw delimiter after number
         double delimiterX = numberX + ftNumberOnly.WidthIncludingTrailingWhitespace;
         var ftDelimiter = new FormattedText(numberText.Substring(numberOnly.Length), CultureInfo.InvariantCulture,
             FlowDirection.LeftToRight, TextMeasurer.NormalTypeface, fontSize,
             _palette.Syntax, _measure.DpiScale);
-        dc.DrawText(ftDelimiter, new Point(delimiterX, screenY));
-
-        // Text starts after the full number (including delimiter)
-        double textStartX = aligner.CalculateContentStartXForWidth(ftFullNumber.WidthIncludingTrailingWhitespace, nestingOffset);
-        return textStartX - x;
+        dc.DrawText(ftDelimiter, new Point(delimiterX, screenY.Value));
     }
 
     private double DrawTextSegment(DrawingContext dc, string blockText,
