@@ -194,9 +194,9 @@ public partial class DocsCanvas : FrameworkElement
     private readonly DispatcherTimer _blinkTimer;
     private readonly Dictionary<Color, SolidColorBrush> _brushCache = new();
 
-    private readonly record struct JoinSegment(int BlockIndex, int OffsetInJoined, int Length);
+    internal readonly record struct JoinSegment(int BlockIndex, int OffsetInJoined, int Length);
 
-    private sealed class ParagraphGroup
+    internal sealed class ParagraphGroup
     {
         public required JoinSegment[] Segments { get; init; }
         public required string JoinedText { get; init; }
@@ -240,7 +240,7 @@ public partial class DocsCanvas : FrameworkElement
         public int LastBlock => Segments[^1].BlockIndex;
     }
 
-    private record struct VisualLine(int BlockIndex, int StartOffset, int Length, BlockKind BlockKind)
+    internal record struct VisualLine(int BlockIndex, int StartOffset, int Length, BlockKind BlockKind)
     {
         public double OverrideHeight { get; init; }
         public ParagraphGroup? Group { get; init; }
@@ -2336,7 +2336,7 @@ public partial class DocsCanvas : FrameworkElement
         if (_spellCheckEnabled)
             DrawSpellingErrors(dc, effectiveScroll, viewTop, viewBottom);
 
-        if (_showPageBreaks)
+        if (ShowPageBreaks)
             DrawPageBreaks(dc, effectiveScroll, viewTop, viewBottom);
 
         if (_cursorVisible && IsFocused && _visualLines.Count > 0)
