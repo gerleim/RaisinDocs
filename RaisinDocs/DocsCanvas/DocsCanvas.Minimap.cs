@@ -206,4 +206,16 @@ public partial class DocsCanvas
         colorSpans = parsed.ColorSpans;
         return true;
     }
+
+    // --- IMinimapDataProvider implementation ---
+
+    List<VisualLine> IMinimapDataProvider.GetVisualLines() => _visualLines;
+
+    List<double> IMinimapDataProvider.GetLineYPositions() => _lineYPositions;
+
+    double IMinimapDataProvider.GetTotalContentHeight() => _totalContentHeight;
+
+    double IMinimapDataProvider.GetViewportHeight() => ActualHeight;
+
+    List<BlockVisualMap>? IMinimapDataProvider.GetVisualMaps() => _visualMaps;
 }

@@ -21,7 +21,7 @@ public enum ReformatActions
     NormalizeMarkers = 32,
 }
 
-public partial class DocsCanvas : FrameworkElement
+public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider
 {
     internal const double _padding = 10;
     private const double _paragraphGap = 8;
