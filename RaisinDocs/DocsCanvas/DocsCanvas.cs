@@ -41,7 +41,7 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider
     private static readonly ThemePalette _darkBluePalette;
     internal ThemePalette _palette = _darkPalette!;
 
-    private static readonly Brush _checkboxCheckedBrush;
+    internal static readonly Brush _checkboxCheckedBrush;
     private static readonly Brush _imagePlaceholderBrush;
     internal readonly TextMeasurer _measure = new();
     private SyntaxHighlighter _syntaxHighlighter = new(TextMateSharp.Grammars.ThemeName.DarkPlus);
@@ -289,6 +289,7 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider
     };
 
     private readonly LinkPopupController _linkPopup;
+    private readonly TableRenderer _tableRenderer;
 
     public enum SoftBreakMode { Relaxed, Strict }
     public enum HardBreakStyle { Backslash, TrailingSpaces }
@@ -727,6 +728,7 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider
     {
         _scroll = new ScrollController(InvalidateVisual, () => Math.Max(0, _totalContentHeight - ActualHeight));
         _linkPopup = new LinkPopupController(_doc, this);
+        _tableRenderer = new TableRenderer(this);
         Focusable = true;
         FocusVisualStyle = null;
         SnapsToDevicePixels = true;
@@ -1641,7 +1643,7 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider
         return text.Length - start;
     }
 
-    private const double _tableCellPadding = 8;
+    internal const double _tableCellPadding = 8;
 
     // --- Cursor ↔ visual line mapping ---
 
@@ -2564,7 +2566,7 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider
         }
     }
 
-    private SolidColorBrush GetCachedBrush(byte r, byte g, byte b)
+    internal SolidColorBrush GetCachedBrush(byte r, byte g, byte b)
     {
         var color = Color.FromRgb(r, g, b);
         if (!_brushCache.TryGetValue(color, out var brush))
