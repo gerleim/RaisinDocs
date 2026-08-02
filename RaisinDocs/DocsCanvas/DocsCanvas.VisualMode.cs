@@ -104,576 +104,57 @@ public partial class DocsCanvas
         return true;
     }
 
-    // --- Visual mode: cursor helpers ---
+    // --- Visual mode: cursor helpers (delegated to VisualModeManager) ---
 
     private void SkipCursorOverHiddenRanges(bool forward)
-    {
-        if (_visualMaps == null) return;
-        if (_doc.CursorBlock >= _visualMaps.Count) return;
-        var map = _visualMaps[_doc.CursorBlock];
-        int offset = _doc.CursorOffset;
-        int originalOffset = offset;
-
-        if (map.IsHidden(offset))
-        {
-            if (Logger?.IsDebugEnabled ?? false)
-                Logger.Log(DocsLogLevel.Debug, $"SkipCursorOverHiddenRanges: Block {_doc.CursorBlock} offset {originalOffset} is hidden. Ranges: {string.Join(", ", map.HiddenRanges.Select(r => $"[{r.Start},{r.Length})"))}");
-            if (forward)
-            {
-                int blockLen = _doc.GetBlockLength(_doc.CursorBlock);
-                offset = map.SkipHidden(offset, true);
-                while (offset < blockLen && map.IsHidden(offset))
-                    offset++;
-                if (Logger?.IsDebugEnabled ?? false)
-                    Logger.Log(DocsLogLevel.Debug, $"SkipCursorOverHiddenRanges: Forward skip {originalOffset} -> {offset}");
-            }
-            else
-            {
-                offset = map.SkipHidden(offset, false);
-                while (offset > 0 && map.IsHidden(offset))
-                    offset--;
-                if (offset == 0 && map.IsHidden(0))
-                {
-                    int blockLen = _doc.GetBlockLength(_doc.CursorBlock);
-                    offset = map.SkipHidden(0, true);
-                    while (offset < blockLen && map.IsHidden(offset))
-                        offset++;
-                    if (Logger?.IsDebugEnabled ?? false)
-                        Logger.Log(DocsLogLevel.Debug, $"SkipCursorOverHiddenRanges: Backward skip (at start) {originalOffset} -> {offset}");
-                }
-                else
-                {
-                    if (Logger?.IsDebugEnabled ?? false)
-                        Logger.Log(DocsLogLevel.Debug, $"SkipCursorOverHiddenRanges: Backward skip {originalOffset} -> {offset}");
-                }
-            }
-        }
-        else
-        {
-            if (Logger?.IsDebugEnabled ?? false)
-                Logger.Log(DocsLogLevel.Debug, $"SkipCursorOverHiddenRanges: Block {_doc.CursorBlock} offset {originalOffset} is NOT hidden");
-        }
-        _doc.CursorOffset = offset;
-    }
+        => _visualModeManager.SkipCursorOverHiddenRanges(forward);
 
     private void SkipCursorToVisible(bool forward)
-    {
-        if (_visualMaps == null) return;
-        if (_doc.CursorBlock >= _visualMaps.Count) return;
-        var map = _visualMaps[_doc.CursorBlock];
-        int offset = _doc.CursorOffset;
-        if (forward)
-        {
-            int blockLen = _doc.GetBlockLength(_doc.CursorBlock);
-            while (offset < blockLen && map.IsHidden(offset)) offset++;
-        }
-        else
-        {
-            while (offset > 0 && map.IsHidden(offset - 1)) offset--;
-        }
-        _doc.CursorOffset = offset;
-    }
+        => _visualModeManager.SkipCursorToVisible(forward);
 
     private void ClampCursorAwayFromHidden()
-    {
-        if (_visualMaps == null) return;
-        if (_doc.CursorBlock >= _visualMaps.Count) return;
-        if (_parsedBlocks != null && _doc.CursorBlock < _parsedBlocks.Count
-            && IsTableRow(_parsedBlocks[_doc.CursorBlock])) return;
-        var map = _visualMaps[_doc.CursorBlock];
-        int offset = _doc.CursorOffset;
-
-        if (map.IsHidden(offset))
-        {
-            int minOffset = 0;
-            if (map.HiddenRanges.Count > 0 && map.HiddenRanges[0].Start == 0)
-                minOffset = map.HiddenRanges[0].Length;
-            if (offset < minOffset)
-                offset = minOffset;
-            else
-            {
-                while (offset > 0 && map.IsHidden(offset))
-                    offset--;
-                offset++;
-            }
-            _doc.CursorOffset = offset;
-        }
-    }
+        => _visualModeManager.ClampCursorAwayFromHidden();
 
     private void ClampCursorBeforeTrailingHidden()
-    {
-        if (_visualMaps == null) return;
-        if (_doc.CursorBlock >= _visualMaps.Count) return;
-        if (_parsedBlocks != null && _doc.CursorBlock < _parsedBlocks.Count
-            && IsTableRow(_parsedBlocks[_doc.CursorBlock])) return;
-        var map = _visualMaps[_doc.CursorBlock];
-        int blockLen = _doc.GetBlockLength(_doc.CursorBlock);
-        if (blockLen == 0 || !map.IsHidden(blockLen - 1)) return;
-        int offset = _doc.CursorOffset;
-        offset = Math.Min(offset, blockLen);
-        int minOffset = 0;
-        if (map.HiddenRanges.Count > 0 && map.HiddenRanges[0].Start == 0)
-            minOffset = map.HiddenRanges[0].Length;
-        while (offset > minOffset && map.IsHidden(offset - 1))
-            offset--;
-        _doc.CursorOffset = offset;
-    }
+        => _visualModeManager.ClampCursorBeforeTrailingHidden();
 
     private void SkipBackspacePastHiddenVisual()
-    {
-        if (_visualMaps == null) return;
-        if (_doc.CursorBlock >= _visualMaps.Count) return;
-        var map = _visualMaps[_doc.CursorBlock];
-        int pos = _doc.CursorOffset - 1;
-        while (pos >= 0 && map.IsHidden(pos)) pos--;
-        if (pos >= 0)
-            _doc.CursorOffset = pos + 1;
-    }
+        => _visualModeManager.SkipBackspacePastHiddenVisual();
 
     private void SkipDeletePastHiddenVisual()
-    {
-        if (_visualMaps == null) return;
-        if (_doc.CursorBlock >= _visualMaps.Count) return;
-        var map = _visualMaps[_doc.CursorBlock];
-        int blockLen = _doc.GetBlockLength(_doc.CursorBlock);
-        int pos = _doc.CursorOffset;
-        while (pos < blockLen && map.IsHidden(pos)) pos++;
-        _doc.CursorOffset = pos;
-    }
+        => _visualModeManager.SkipDeletePastHiddenVisual();
 
     private void EnsureCursorOnVisibleBlock(bool? preferForward = null)
-    {
-        if (_parsedBlocks == null || _doc.CursorBlock >= _parsedBlocks.Count) return;
-        if (!_parsedBlocks[_doc.CursorBlock].IsSkippedInVisual) return;
+        => _visualModeManager.EnsureCursorOnVisibleBlock(preferForward);
 
-        bool forward = preferForward ?? true;
-        int limit = Math.Min(_doc.BlockCount, _parsedBlocks.Count);
-
-        if (forward)
-        {
-            for (int i = _doc.CursorBlock + 1; i < limit; i++)
-            {
-                if (!_parsedBlocks[i].IsSkippedInVisual)
-                {
-                    _doc.CursorBlock = i;
-                    _doc.CursorOffset = 0;
-                    return;
-                }
-            }
-        }
-        else
-        {
-            for (int i = _doc.CursorBlock - 1; i >= 0; i--)
-            {
-                if (!_parsedBlocks[i].IsSkippedInVisual)
-                {
-                    _doc.CursorBlock = i;
-                    _doc.CursorOffset = _doc.GetBlockLength(i);
-                    return;
-                }
-            }
-        }
-
-        if (preferForward != null) return;
-
-        if (forward)
-        {
-            for (int i = _doc.CursorBlock - 1; i >= 0; i--)
-            {
-                if (!_parsedBlocks[i].IsSkippedInVisual)
-                {
-                    _doc.CursorBlock = i;
-                    _doc.CursorOffset = _doc.GetBlockLength(i);
-                    return;
-                }
-            }
-        }
-        else
-        {
-            for (int i = _doc.CursorBlock + 1; i < limit; i++)
-            {
-                if (!_parsedBlocks[i].IsSkippedInVisual)
-                {
-                    _doc.CursorBlock = i;
-                    _doc.CursorOffset = 0;
-                    return;
-                }
-            }
-        }
-    }
-
-    // --- Visual mode: key handlers ---
+    // --- Visual mode: key handlers (delegated to VisualModeManager) ---
 
     private bool HandleBackVisual()
-    {
-        if (_parsedBlocks != null && IsTableRow(_parsedBlocks[_doc.CursorBlock]))
-        {
-            var parsed = _parsedBlocks[_doc.CursorBlock];
-            if (parsed.TableRow != null)
-            {
-                string blockText = _doc.GetBlockText(_doc.CursorBlock);
-                foreach (var cell in parsed.TableRow.Cells)
-                {
-                    var (s, e) = cell.TrimContent(blockText);
-                    if (_doc.CursorOffset > s && _doc.CursorOffset <= e)
-                        break;
-                    if (_doc.CursorOffset <= s)
-                        return false;
-                }
-            }
-        }
-
-        SkipBackspacePastHiddenVisual();
-        if (_doc.CursorOffset == 0 && _doc.CursorBlock > 0 && _parsedBlocks != null)
-        {
-            if (_parsedBlocks[_doc.CursorBlock - 1].IsSkippedInVisual)
-                return false;
-            if (IsTableRow(_parsedBlocks[_doc.CursorBlock]) || IsTableRow(_parsedBlocks[_doc.CursorBlock - 1]))
-                return false;
-        }
-
-        int prevBlock = _doc.CursorBlock;
-        int prevOffset = _doc.CursorOffset;
-        _doc.Backspace();
-        bool changed = _doc.CursorBlock != prevBlock || _doc.CursorOffset != prevOffset;
-        if (changed) _doc.CollapseSelection();
-
-        EnsureCursorOnVisibleBlock();
-        SkipCursorOverHiddenRanges(forward: false);
-        return changed;
-    }
+        => _visualModeManager.HandleBackVisual();
 
     private bool HandleDeleteVisual()
-    {
-        if (_parsedBlocks != null && IsTableRow(_parsedBlocks[_doc.CursorBlock]))
-        {
-            var parsed = _parsedBlocks[_doc.CursorBlock];
-            if (parsed.TableRow != null)
-            {
-                string blockText = _doc.GetBlockText(_doc.CursorBlock);
-                bool canDelete = false;
-                foreach (var cell in parsed.TableRow.Cells)
-                {
-                    var (s, e) = cell.TrimContent(blockText);
-                    if (_doc.CursorOffset >= s && _doc.CursorOffset < e)
-                    { canDelete = true; break; }
-                }
-                if (!canDelete) return false;
-            }
-        }
-
-        SkipDeletePastHiddenVisual();
-        if (_doc.CursorOffset >= _doc.GetBlockLength(_doc.CursorBlock) &&
-            _doc.CursorBlock < _doc.BlockCount - 1 && _parsedBlocks != null)
-        {
-            if (_parsedBlocks[_doc.CursorBlock + 1].IsSkippedInVisual)
-                return false;
-            if (IsTableRow(_parsedBlocks[_doc.CursorBlock]) || IsTableRow(_parsedBlocks[_doc.CursorBlock + 1]))
-                return false;
-        }
-
-        int prevBlocks = _doc.BlockCount;
-        int prevLen = _doc.GetBlockLength(_doc.CursorBlock);
-        _doc.Delete();
-        bool changed = _doc.BlockCount != prevBlocks ||
-                       _doc.GetBlockLength(_doc.CursorBlock) != prevLen;
-
-        EnsureCursorOnVisibleBlock();
-        SkipCursorOverHiddenRanges(forward: true);
-        return changed;
-    }
+        => _visualModeManager.HandleDeleteVisual();
 
     private void HandleLeftVisual(bool shift)
-    {
-        if (!shift && _doc.HasSelection)
-        {
-            var (sb, so, _, _) = _doc.GetOrderedSelection();
-            _doc.CursorBlock = sb;
-            _doc.CursorOffset = so;
-            _doc.CollapseSelection();
-            EnsureCursorOnVisibleBlock(preferForward: false);
-            if (_parsedBlocks != null && IsTableRow(_parsedBlocks[_doc.CursorBlock]))
-                ClampCursorToTableCell();
-            else
-                SkipCursorOverHiddenRanges(forward: false);
-        }
-        else if (_parsedBlocks != null && HandleTableArrow(_parsedBlocks[_doc.CursorBlock], forward: false))
-        {
-            if (!shift) _doc.CollapseSelection();
-        }
-        else
-        {
-            int origBlock = _doc.CursorBlock;
-            int origOffset = _doc.CursorOffset;
-            _doc.MoveLeft();
-            if (!shift) _doc.CollapseSelection();
-            EnsureCursorOnVisibleBlock(preferForward: false);
-            if (_parsedBlocks != null && _parsedBlocks[_doc.CursorBlock].IsSkippedInVisual)
-            {
-                _doc.CursorBlock = origBlock;
-                _doc.CursorOffset = origOffset;
-            }
-            if (_parsedBlocks != null && IsTableRow(_parsedBlocks[_doc.CursorBlock]))
-                ClampCursorToTableCell();
-            else
-            {
-                SkipCursorOverHiddenRanges(forward: false);
-                CrossToPreviousBlockIfHiddenStart();
-            }
-        }
-    }
+        => _visualModeManager.HandleLeftVisual(shift);
 
     private void HandleRightVisual(bool shift)
-    {
-        if (!shift && _doc.HasSelection)
-        {
-            var (_, _, eb, eo) = _doc.GetOrderedSelection();
-            _doc.CursorBlock = eb;
-            _doc.CursorOffset = eo;
-            _doc.CollapseSelection();
-            EnsureCursorOnVisibleBlock(preferForward: true);
-            if (_parsedBlocks != null && IsTableRow(_parsedBlocks[_doc.CursorBlock]))
-                ClampCursorToTableCell();
-            else
-                SkipCursorOverHiddenRanges(forward: true);
-        }
-        else if (_parsedBlocks != null && HandleTableArrow(_parsedBlocks[_doc.CursorBlock], forward: true))
-        {
-            if (!shift) _doc.CollapseSelection();
-        }
-        else
-        {
-            int origBlock = _doc.CursorBlock;
-            int origOffset = _doc.CursorOffset;
-            _doc.MoveRight();
-            if (!shift) _doc.CollapseSelection();
-            EnsureCursorOnVisibleBlock(preferForward: true);
-            if (_parsedBlocks != null && _parsedBlocks[_doc.CursorBlock].IsSkippedInVisual)
-            {
-                _doc.CursorBlock = origBlock;
-                _doc.CursorOffset = origOffset;
-            }
-            if (_parsedBlocks != null && IsTableRow(_parsedBlocks[_doc.CursorBlock]))
-                ClampCursorToTableCell();
-            else
-            {
-                SkipCursorOverHiddenRanges(forward: true);
-                CrossToNextBlockIfHiddenEnd();
-            }
-        }
-    }
+        => _visualModeManager.HandleRightVisual(shift);
 
     private bool HandleTableArrow(ParsedBlock parsed, bool forward)
-    {
-        if (parsed.TableRow == null) return false;
-        string blockText = _doc.GetBlockText(_doc.CursorBlock);
-        var cells = parsed.TableRow.Cells;
-
-        // find the trimmed content range for each cell
-        var cellRanges = new List<(int Start, int End)>();
-        foreach (var cell in cells)
-            cellRanges.Add(cell.TrimContent(blockText));
-
-        int offset = _doc.CursorOffset;
-
-        if (forward)
-        {
-            // find which cell the cursor is in or between
-            for (int c = 0; c < cellRanges.Count; c++)
-            {
-                var (cs, ce) = cellRanges[c];
-                if (offset < ce)
-                {
-                    // cursor is within this cell's content — move right by 1
-                    _doc.CursorOffset = offset + 1;
-                    return true;
-                }
-                if (offset == ce)
-                {
-                    // cursor is at end of this cell — jump to start of next cell
-                    if (c + 1 < cellRanges.Count)
-                    {
-                        _doc.CursorOffset = cellRanges[c + 1].Start;
-                        return true;
-                    }
-                    // at end of last cell — cross to next row or leave table
-                    if (MoveToAdjacentTableRow(parsed, forward: true))
-                        return true;
-                    return MoveOutOfTable(parsed, forward: true);
-                }
-            }
-            // cursor is past all cells — clamp to end of last cell
-            if (cellRanges.Count > 0)
-                _doc.CursorOffset = cellRanges[^1].End;
-            return true;
-        }
-        else
-        {
-            for (int c = cellRanges.Count - 1; c >= 0; c--)
-            {
-                var (cs, ce) = cellRanges[c];
-                if (offset > cs)
-                {
-                    // cursor is within this cell's content — move left by 1
-                    _doc.CursorOffset = offset - 1;
-                    return true;
-                }
-                if (offset == cs)
-                {
-                    // cursor is at start of this cell — jump to end of previous cell
-                    if (c > 0)
-                    {
-                        _doc.CursorOffset = cellRanges[c - 1].End;
-                        return true;
-                    }
-                    // at start of first cell — cross to previous row or leave table
-                    if (MoveToAdjacentTableRow(parsed, forward: false))
-                        return true;
-                    return MoveOutOfTable(parsed, forward: false);
-                }
-            }
-            // cursor is before all cells — clamp to start of first cell
-            if (cellRanges.Count > 0)
-                _doc.CursorOffset = cellRanges[0].Start;
-            return true;
-        }
-    }
-
-    private bool MoveToAdjacentTableRow(ParsedBlock parsed, bool forward)
-    {
-        if (_parsedBlocks == null || parsed.Table == null) return false;
-
-        if (forward)
-        {
-            for (int b = _doc.CursorBlock + 1; b < _doc.BlockCount; b++)
-            {
-                var p = _parsedBlocks[b];
-                if (p.Table != parsed.Table) break;
-                if (p.IsTableSeparator) continue;
-                if (p.TableRow != null)
-                {
-                    _doc.CursorBlock = b;
-                    string text = _doc.GetBlockText(b);
-                    var firstCell = p.TableRow.Cells[0];
-                    int s = firstCell.Start;
-                    while (s < firstCell.Start + firstCell.Length && text[s] == ' ') s++;
-                    _doc.CursorOffset = s;
-                    return true;
-                }
-            }
-        }
-        else
-        {
-            for (int b = _doc.CursorBlock - 1; b >= 0; b--)
-            {
-                var p = _parsedBlocks[b];
-                if (p.Table != parsed.Table) break;
-                if (p.IsTableSeparator) continue;
-                if (p.TableRow != null)
-                {
-                    _doc.CursorBlock = b;
-                    string text = _doc.GetBlockText(b);
-                    var lastCell = p.TableRow.Cells[^1];
-                    int e = lastCell.Start + lastCell.Length;
-                    while (e > lastCell.Start && text[e - 1] == ' ') e--;
-                    _doc.CursorOffset = e;
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
-
-    private bool MoveOutOfTable(ParsedBlock parsed, bool forward)
-    {
-        if (_parsedBlocks == null || parsed.Table == null) return false;
-
-        if (forward)
-        {
-            for (int b = _doc.CursorBlock + 1; b < _doc.BlockCount; b++)
-            {
-                if (_parsedBlocks[b].Table != parsed.Table)
-                {
-                    _doc.CursorBlock = b;
-                    _doc.CursorOffset = 0;
-                    SkipCursorOverHiddenRanges(forward: true);
-                    return true;
-                }
-            }
-        }
-        else
-        {
-            for (int b = _doc.CursorBlock - 1; b >= 0; b--)
-            {
-                if (_parsedBlocks[b].Table != parsed.Table)
-                {
-                    _doc.CursorBlock = b;
-                    _doc.CursorOffset = _doc.GetBlockLength(b);
-                    SkipCursorOverHiddenRanges(forward: false);
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
-
-    private void CrossToPreviousBlockIfHiddenStart()
-    {
-        if (_doc.CursorOffset != 0 || _doc.CursorBlock == 0) return;
-        if (_visualMaps == null || _doc.CursorBlock >= _visualMaps.Count) return;
-        if (!_visualMaps[_doc.CursorBlock].IsHidden(0)) return;
-        if (_parsedBlocks != null && IsTableRow(_parsedBlocks[_doc.CursorBlock])) return;
-
-        _doc.CursorBlock--;
-        _doc.CursorOffset = _doc.GetBlockLength(_doc.CursorBlock);
-        EnsureCursorOnVisibleBlock(preferForward: false);
-        SkipCursorOverHiddenRanges(forward: false);
-    }
-
-    private void CrossToNextBlockIfHiddenEnd()
-    {
-        int blockLen = _doc.GetBlockLength(_doc.CursorBlock);
-        if (_doc.CursorOffset != blockLen || blockLen == 0) return;
-        if (_doc.CursorBlock >= _doc.BlockCount - 1) return;
-        if (_visualMaps == null || _doc.CursorBlock >= _visualMaps.Count) return;
-        if (!_visualMaps[_doc.CursorBlock].IsHidden(blockLen - 1)) return;
-        if (_parsedBlocks != null && IsTableRow(_parsedBlocks[_doc.CursorBlock])) return;
-
-        _doc.CursorBlock++;
-        _doc.CursorOffset = 0;
-        EnsureCursorOnVisibleBlock(preferForward: true);
-        SkipCursorOverHiddenRanges(forward: true);
-    }
+        => _visualModeManager.HandleTableArrow(parsed, forward);
 
     private void HandleHomeVisual()
-    {
-        EnsureCursorOnVisibleBlock();
-        SkipCursorToVisible(forward: true);
-    }
+        => _visualModeManager.HandleHomeVisual();
 
     private void HandleEndVisual()
-    {
-        EnsureCursorOnVisibleBlock();
-        SkipCursorToVisible(forward: false);
-    }
+        => _visualModeManager.HandleEndVisual();
 
     private void HandleUpVisual()
-    {
-        EnsureCursorOnVisibleBlock(preferForward: false);
-        if (_parsedBlocks != null && IsTableRow(_parsedBlocks[_doc.CursorBlock]))
-            ClampCursorToTableCell();
-        else
-            SkipCursorOverHiddenRanges(forward: false);
-    }
+        => _visualModeManager.HandleUpVisual();
 
     private void HandleDownVisual()
-    {
-        EnsureCursorOnVisibleBlock(preferForward: true);
-        if (_parsedBlocks != null && IsTableRow(_parsedBlocks[_doc.CursorBlock]))
-            ClampCursorToTableCell();
-        else
-            SkipCursorOverHiddenRanges(forward: true);
-    }
+        => _visualModeManager.HandleDownVisual();
 
     // --- Visual mode: rectangular table selection ---
 
@@ -918,30 +399,7 @@ public partial class DocsCanvas
 
 
     private void ClampCursorToTableCell()
-    {
-        if (_parsedBlocks == null) return;
-        var parsed = _parsedBlocks[_doc.CursorBlock];
-        if (parsed.TableRow == null) return;
-        string blockText = _doc.GetBlockText(_doc.CursorBlock);
-        int offset = _doc.CursorOffset;
-
-        foreach (var cell in parsed.TableRow.Cells)
-        {
-            var (s, e) = cell.TrimContent(blockText);
-            if (offset >= s && offset <= e) return;
-        }
-
-        // cursor is in a hidden region — find nearest cell boundary
-        int best = 0;
-        int bestDist = int.MaxValue;
-        foreach (var cell in parsed.TableRow.Cells)
-        {
-            var (s, e) = cell.TrimContent(blockText);
-            if (Math.Abs(offset - s) < bestDist) { best = s; bestDist = Math.Abs(offset - s); }
-            if (Math.Abs(offset - e) < bestDist) { best = e; bestDist = Math.Abs(offset - e); }
-        }
-        _doc.CursorOffset = best;
-    }
+        => _visualModeManager.ClampCursorToTableCell();
 
     // --- Visual mode: rendering ---
 

@@ -290,6 +290,7 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider
 
     private readonly LinkPopupController _linkPopup;
     private readonly TableRenderer _tableRenderer;
+    private readonly VisualModeManager _visualModeManager;
 
     public enum SoftBreakMode { Relaxed, Strict }
     public enum HardBreakStyle { Backslash, TrailingSpaces }
@@ -729,6 +730,7 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider
         _scroll = new ScrollController(InvalidateVisual, () => Math.Max(0, _totalContentHeight - ActualHeight));
         _linkPopup = new LinkPopupController(_doc, this);
         _tableRenderer = new TableRenderer(this);
+        _visualModeManager = new VisualModeManager(this);
         Focusable = true;
         FocusVisualStyle = null;
         SnapsToDevicePixels = true;
