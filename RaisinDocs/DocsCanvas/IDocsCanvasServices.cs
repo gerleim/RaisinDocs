@@ -56,7 +56,7 @@ internal interface IRenderingServices
 
     /// <summary>Measures the width of a text range accounting for styles and visual maps.</summary>
     double MeasureRangeWidth(string text, int start, int length,
-        IReadOnlyList<StyledRun> runs, BlockKind blockKind, BlockVisualMap? map = null);
+        IReadOnlyList<StyledRun> runs, BlockKind blockKind, BlockVisualMap? map);
 
     /// <summary>Measures the width of a range in a joined/merged paragraph group.</summary>
     double MeasureJoinedRange(DocsCanvas.ParagraphGroup group, int start, int length);
@@ -84,7 +84,7 @@ internal interface IVisualModeServices
     void SkipCursorOverHiddenRanges(bool forward);
     void ClampCursorAwayFromHidden();
     void ClampCursorBeforeTrailingHidden();
-    void EnsureCursorOnVisibleBlock(bool? preferForward = null);
+    void EnsureCursorOnVisibleBlock(bool? preferForward);
 }
 
 /// <summary>
