@@ -1367,7 +1367,7 @@ public partial class DocsCanvas
         bool selectionIsMultiWord = _doc.HasSelection
             && _doc.GetSelectedText().AsSpan().IndexOfAny(' ', '\t') >= 0;
 
-        if (_spellCheckEnabled && !selectionIsMultiWord)
+        if (SpellCheckEnabled && !selectionIsMultiWord)
             AddSpellCheckMenuItems(menu, position);
 
         bool hasSelection = _doc.HasSelection;
@@ -1486,7 +1486,7 @@ public partial class DocsCanvas
             menu.Style = _contextMenuStyle;
     }
 
-    private void ApplyMenuItemStyle(MenuItem item)
+    internal void ApplyMenuItemStyle(MenuItem item)
     {
         _menuItemStyle ??= TryFindResource("DarkContextMenuItem") as Style;
         if (_menuItemStyle != null)

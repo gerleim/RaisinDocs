@@ -2126,7 +2126,7 @@ public partial class DocsCanvas : FrameworkElement
         return _visualLines.Count - 1;
     }
 
-    private void HitTestToPosition(Point pos, out int blockIndex, out int charOffset)
+    internal void HitTestToPosition(Point pos, out int blockIndex, out int charOffset)
     {
         if (_visualLines.Count == 0) { blockIndex = 0; charOffset = 0; return; }
         double effectiveScroll = _scroll.EffectiveOffset;
@@ -2333,7 +2333,7 @@ public partial class DocsCanvas : FrameworkElement
             }
         }
 
-        if (_spellCheckEnabled)
+        if (SpellCheckEnabled)
             DrawSpellingErrors(dc, effectiveScroll, viewTop, viewBottom);
 
         if (ShowPageBreaks)
