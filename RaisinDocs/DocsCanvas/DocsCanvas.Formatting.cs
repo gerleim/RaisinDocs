@@ -265,7 +265,7 @@ public partial class DocsCanvas
         SealAndStopTimer();
         ComputeLayout();
 
-        var existingLink = GetLinkAtCursor();
+        var existingLink = _linkHandler.GetLinkAtCursor();
         string? selText = null;
         int selStart = 0, selEnd = 0;
         if (existingLink == null && _doc.HasSelection)
@@ -382,20 +382,6 @@ public partial class DocsCanvas
         RaiseFormattingChanged();
     }
 
-    private InlineLink? GetLinkAtCursor()
-    {
-        if (_parsedBlocks == null || _doc.CursorBlock >= _parsedBlocks.Count) return null;
-        var parsed = _parsedBlocks[_doc.CursorBlock];
-        if (parsed.Links == null) return null;
-
-        int offset = _doc.CursorOffset;
-        foreach (var link in parsed.Links)
-        {
-            if (offset >= link.Start && offset < link.Start + link.Length)
-                return link;
-        }
-        return null;
-    }
 
     private string? GetSelectedText()
     {

@@ -253,7 +253,7 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider
     private bool _layoutDirty = true;
     private double _totalContentHeight;
     private double _layoutMaxWidth;
-    private readonly ScrollController _scroll;
+    internal readonly ScrollController _scroll;
 
     internal List<ParsedBlock>? _parsedBlocks;
     private VisualBlockStructure? _visualBlockStructure;
@@ -282,12 +282,8 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider
     public ImagePreviewMode CurrentImagePreview => _imagePreview;
     private InlineImage? _hoveredImage;
     private Point _hoverPosition;
-    private string? _hoveredLinkUrl;
-    private readonly ToolTip _linkToolTip = new()
-    {
-        Placement = PlacementMode.Relative,
-    };
 
+    private readonly LinkHandler _linkHandler;
     private readonly LinkPopupController _linkPopup;
     private readonly TableRenderer _tableRenderer;
     private readonly VisualModeManager _visualModeManager;
@@ -728,6 +724,7 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider
     public DocsCanvas()
     {
         _scroll = new ScrollController(InvalidateVisual, () => Math.Max(0, _totalContentHeight - ActualHeight));
+        _linkHandler = new LinkHandler(this);
         _linkPopup = new LinkPopupController(_doc, this);
         _tableRenderer = new TableRenderer(this);
         _visualModeManager = new VisualModeManager(this);
@@ -2118,7 +2115,7 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider
         return vl.StartOffset + vl.Length;
     }
 
-    private int HitTestVisualLine(double y)
+    internal int HitTestVisualLine(double y)
     {
         if (_visualLines.Count == 0) return 0;
         for (int i = 0; i < _visualLines.Count; i++)

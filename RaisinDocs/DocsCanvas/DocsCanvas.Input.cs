@@ -73,7 +73,7 @@ public partial class DocsCanvas
             return;
         }
 
-        if (Keyboard.Modifiers.HasFlag(ModifierKeys.Control) && TryOpenLinkAtClick(pos))
+        if (Keyboard.Modifiers.HasFlag(ModifierKeys.Control) && _linkHandler.TryOpenLinkAtClick(pos))
         {
             e.Handled = true;
             return;
@@ -123,37 +123,12 @@ public partial class DocsCanvas
         var pos = e.GetPosition(this);
         if (!IsMouseCaptured)
         {
-            {
-                ComputeLayout();
-                var hoverLink = GetLinkAtPosition(pos);
-                if (hoverLink != null)
-                {
-                    Cursor = Keyboard.Modifiers.HasFlag(ModifierKeys.Control) ? Cursors.Hand : Cursors.IBeam;
-                    var url = hoverLink.Value.Url;
-                    if (_hoveredLinkUrl != url)
-                    {
-                        _hoveredLinkUrl = url;
-                        double effectiveScroll = _scroll.EffectiveOffset;
-                        int vli = HitTestVisualLine(pos.Y + effectiveScroll);
-                        double lineY = _lineYPositions[vli] - effectiveScroll;
-                        double lineH = GetEffectiveLineHeight(_visualLines[vli]);
-                        _linkToolTip.Content = url;
-                        _linkToolTip.PlacementTarget = this;
-                        _linkToolTip.HorizontalOffset = _padding;
-                        _linkToolTip.VerticalOffset = lineY + lineH;
-                        _linkToolTip.IsOpen = true;
-                    }
-                }
-                else
-                {
-                    Cursor = Cursors.IBeam;
-                    if (_hoveredLinkUrl != null)
-                    {
-                        _hoveredLinkUrl = null;
-                        _linkToolTip.IsOpen = false;
-                    }
-                }
-            }
+            ComputeLayout();
+            _linkHandler.UpdateLinkTooltip(pos);
+            var hoverLink = _linkHandler.GetLinkAtPosition(pos);
+            Cursor = hoverLink != null && Keyboard.Modifiers.HasFlag(ModifierKeys.Control)
+                ? Cursors.Hand
+                : Cursors.IBeam;
             UpdateHoverImage(pos);
             return;
         }
@@ -216,11 +191,7 @@ public partial class DocsCanvas
             _hoveredImage = null;
             InvalidateVisual();
         }
-        if (_hoveredLinkUrl != null)
-        {
-            _hoveredLinkUrl = null;
-            _linkToolTip.IsOpen = false;
-        }
+        _linkHandler.HideLinkTooltip();
     }
 
     private void UpdateHoverImage(Point pos)
