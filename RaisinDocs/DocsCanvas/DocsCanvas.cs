@@ -23,13 +23,13 @@ public enum ReformatActions
 
 public partial class DocsCanvas : FrameworkElement
 {
-    private const double _padding = 10;
+    internal const double _padding = 10;
     private const double _paragraphGap = 8;
 
 
     public enum EditorTheme { Light, Dark, DarkBlue }
 
-    private sealed record ThemePalette(
+    internal sealed record ThemePalette(
         Brush Background, Brush Foreground, Pen CursorPen,
         Brush Selection, Brush ScrollTrack, Brush ScrollThumb,
         Brush Syntax, Brush CodeBackground,
@@ -39,11 +39,11 @@ public partial class DocsCanvas : FrameworkElement
     private static readonly ThemePalette _lightPalette;
     private static readonly ThemePalette _darkPalette;
     private static readonly ThemePalette _darkBluePalette;
-    private ThemePalette _palette = _darkPalette!;
+    internal ThemePalette _palette = _darkPalette!;
 
     private static readonly Brush _checkboxCheckedBrush;
     private static readonly Brush _imagePlaceholderBrush;
-    private readonly TextMeasurer _measure = new();
+    internal readonly TextMeasurer _measure = new();
     private SyntaxHighlighter _syntaxHighlighter = new(TextMateSharp.Grammars.ThemeName.DarkPlus);
     private readonly Dictionary<int, Brush> _syntaxBrushCache = new();
 
@@ -186,7 +186,7 @@ public partial class DocsCanvas : FrameworkElement
 
     public bool IsReadOnly { get; set; }
 
-    private readonly Document _doc = new();
+    internal readonly Document _doc = new();
 
     private bool _cursorVisible = true;
     private bool _cursorAtLineEnd;
@@ -247,17 +247,17 @@ public partial class DocsCanvas : FrameworkElement
         public int NestingDepth { get; init; }
         public int ParentContentColumn { get; init; }
     }
-    private readonly List<VisualLine> _visualLines = [];
-    private readonly List<double> _lineYPositions = [];
-    private readonly Dictionary<TableInfo, double[]> _tableColumnWidths = new();
+    internal readonly List<VisualLine> _visualLines = [];
+    internal readonly List<double> _lineYPositions = [];
+    internal readonly Dictionary<TableInfo, double[]> _tableColumnWidths = new();
     private bool _layoutDirty = true;
     private double _totalContentHeight;
     private double _layoutMaxWidth;
     private readonly ScrollController _scroll;
 
-    private List<ParsedBlock>? _parsedBlocks;
+    internal List<ParsedBlock>? _parsedBlocks;
     private VisualBlockStructure? _visualBlockStructure;
-    private List<BlockVisualMap>? _visualMaps;
+    internal List<BlockVisualMap>? _visualMaps;
     private List<BlockVisualSpacing?>? _visualLineSpacings;
     private Dictionary<int, ParagraphGroup>? _blockToGroup;
     private readonly ImageCache _imageCache = new();
@@ -506,7 +506,7 @@ public partial class DocsCanvas : FrameworkElement
     private static bool IsTableRow(ParsedBlock parsed) =>
         parsed.Kind is BlockKind.TableHeaderRow or BlockKind.TableDataRow or BlockKind.TableSeparatorRow;
 
-    private bool IsVisual => _editMode == EditMode.Visual;
+    internal bool IsVisual => _editMode == EditMode.Visual;
 
     internal int TestCursorBlock => _doc.CursorBlock;
     internal int TestCursorOffset => _doc.CursorOffset;
@@ -784,7 +784,7 @@ public partial class DocsCanvas : FrameworkElement
         ContentChanged?.Invoke(this, EventArgs.Empty);
     }
 
-    private void SealAndStopTimer()
+    internal void SealAndStopTimer()
     {
         _undoSealTimer.Stop();
         _doc.SealUndoGroup();
@@ -883,7 +883,7 @@ public partial class DocsCanvas : FrameworkElement
 
     public void PerformFindReplace() => OpenFind(showReplace: !IsReadOnly);
 
-    private double GetEffectiveLineHeight(VisualLine vl)
+    internal double GetEffectiveLineHeight(VisualLine vl)
     {
         double h = _measure.GetLineHeight(vl.BlockKind);
         return vl.OverrideHeight > h ? vl.OverrideHeight : h;
@@ -978,7 +978,7 @@ public partial class DocsCanvas : FrameworkElement
 
     // --- Layout ---
 
-    private void ComputeLayout()
+    internal void ComputeLayout()
     {
         if (!_layoutDirty) return;
         _layoutDirty = false;
@@ -1926,7 +1926,7 @@ public partial class DocsCanvas : FrameworkElement
         return x;
     }
 
-    private double MeasureJoinedRange(ParagraphGroup group, int start, int length)
+    internal double MeasureJoinedRange(ParagraphGroup group, int start, int length)
     {
         double width = MeasureRangeWidth(group.JoinedText, start, length,
             group.JoinedParsed.Runs, BlockKind.Paragraph, group.JoinedMap);
@@ -2198,7 +2198,7 @@ public partial class DocsCanvas : FrameworkElement
         if (IsVisual)
             DrawTableBackgrounds(dc, effectiveScroll, viewTop, viewBottom);
 
-        if (_searchMatches.Count > 0)
+        if (FindAndReplace.TestSearchMatchCount > 0)
             DrawSearchHighlights(dc, effectiveScroll);
 
         if (_doc.HasSelection)
@@ -3034,7 +3034,7 @@ public partial class DocsCanvas : FrameworkElement
                 new Rect(_padding + x1, lineY - effectiveScroll, selW, lineH));
     }
 
-    private double MeasureRangeWidth(string text, int start, int length,
+    internal double MeasureRangeWidth(string text, int start, int length,
         IReadOnlyList<StyledRun> runs, BlockKind blockKind, BlockVisualMap? map)
     {
         if (length <= 0) return 0;

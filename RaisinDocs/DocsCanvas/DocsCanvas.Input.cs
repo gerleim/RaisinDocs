@@ -1242,7 +1242,7 @@ public partial class DocsCanvas
                 break;
 
             case Key.F3:
-                if (_searchMatches.Count > 0) NavigateMatch(shift ? -1 : 1);
+                if (FindAndReplace.TestSearchMatchCount > 0) NavigateMatch(shift ? -1 : 1);
                 else handled = false;
                 break;
 

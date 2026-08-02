@@ -898,7 +898,7 @@ public partial class DocsCanvas
         );
     }
 
-    private double CursorXInTableRow(int blockIndex, ParsedBlock parsed, double[] colWidths, int cursorOffset)
+    internal double CursorXInTableRow(int blockIndex, ParsedBlock parsed, double[] colWidths, int cursorOffset)
     {
         var cells = parsed.TableRow!.Cells;
         string blockText = _doc.GetBlockText(blockIndex);
