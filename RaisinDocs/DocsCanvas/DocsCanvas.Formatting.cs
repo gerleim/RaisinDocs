@@ -1,5 +1,3 @@
-using System.Windows;
-
 namespace RaisinDocs;
 
 public partial class DocsCanvas
