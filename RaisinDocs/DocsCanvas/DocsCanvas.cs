@@ -42,7 +42,7 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider
     internal ThemePalette _palette = _darkPalette!;
 
     internal static readonly Brush _checkboxCheckedBrush;
-    private static readonly Brush _imagePlaceholderBrush;
+    internal static readonly Brush _imagePlaceholderBrush;
     internal readonly TextMeasurer _measure = new();
     private SyntaxHighlighter _syntaxHighlighter = new(TextMateSharp.Grammars.ThemeName.DarkPlus);
     private readonly Dictionary<int, Brush> _syntaxBrushCache = new();
@@ -288,6 +288,7 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider
     private readonly TableRenderer _tableRenderer;
     private readonly VisualModeManager _visualModeManager;
     private readonly LayoutEngine _layoutEngine;
+    private readonly RenderingContext _renderingContext;
 
     public enum SoftBreakMode { Relaxed, Strict }
     public enum HardBreakStyle { Backslash, TrailingSpaces }
@@ -730,6 +731,7 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider
         _tableRenderer = new TableRenderer(this);
         _visualModeManager = new VisualModeManager(this);
         _layoutEngine = new LayoutEngine(this);
+        _renderingContext = new RenderingContext(this);
         Focusable = true;
         FocusVisualStyle = null;
         SnapsToDevicePixels = true;
@@ -928,7 +930,7 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider
         InvalidateVisual();
     }
 
-    private (double Width, double Height) GetImageSize(InlineImage img, double maxWidth)
+    internal (double Width, double Height) GetImageSize(InlineImage img, double maxWidth)
     {
         var cached = _imageCache.Get(img.Url, DocumentBasePath, maxWidth);
         if (cached != null)
@@ -990,7 +992,7 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider
 
     // --- Cursor ↔ visual line mapping ---
 
-    private int CursorToVisualLineIndex()
+    internal int CursorToVisualLineIndex()
     {
         for (int i = _visualLines.Count - 1; i >= 0; i--)
         {
@@ -1019,7 +1021,7 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider
 
     private double GetTextStartXForVisualLine(VisualLine vl) => _layoutEngine.GetTextStartXForVisualLine(vl);
 
-    private BlockVisualSpacing? GetVisualLineSpacing(VisualLine vl)
+    internal BlockVisualSpacing? GetVisualLineSpacing(VisualLine vl)
     {
         if (!IsVisual || _visualLineSpacings == null || vl.BlockIndex < 0)
             return null;
@@ -1041,7 +1043,7 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider
         return _visualLineSpacings[vlIndex];
     }
 
-    private double CursorXInVisualLine(int vlIndex)
+    internal double CursorXInVisualLine(int vlIndex)
     {
         var vl = _visualLines[vlIndex];
 
@@ -1359,180 +1361,7 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider
 
     protected override void OnRender(DrawingContext dc)
     {
-        _measure.EnsureMeasured(this);
-        dc.DrawRectangle(_palette.Background, null, new Rect(0, 0, ActualWidth, ActualHeight));
-
-        if (_parsedBlocks == null)
-            return;
-
-        double effectiveScroll = Math.Round(_scroll.EffectiveOffset);
-        double viewTop = effectiveScroll;
-        double viewBottom = effectiveScroll + ActualHeight;
-
-        DrawCodeBlockBackgrounds(dc, effectiveScroll, viewTop, viewBottom);
-        DrawColorBlockBackgrounds(dc, effectiveScroll, viewTop, viewBottom);
-        DrawInlineColorBackgrounds(dc, effectiveScroll, viewTop, viewBottom);
-        if (IsVisual)
-            DrawTableBackgrounds(dc, effectiveScroll, viewTop, viewBottom);
-
-        if (FindAndReplace.TestSearchMatchCount > 0)
-            DrawSearchHighlights(dc, effectiveScroll);
-
-        if (_doc.HasSelection)
-            DrawSelection(dc, effectiveScroll);
-
-        for (int i = 0; i < _visualLines.Count; i++)
-        {
-            var vl = _visualLines[i];
-            double lineH = GetEffectiveLineHeight(vl);
-            double lineY = _lineYPositions[i];
-            if (lineY + lineH < viewTop) continue;
-            if (lineY > viewBottom) break;
-
-            if (vl.Length > 0)
-            {
-                if (vl.Group != null)
-                {
-                    DrawJoinedLine(dc, vl, lineY, effectiveScroll);
-                }
-                else
-                {
-                    var parsed = _parsedBlocks[vl.BlockIndex];
-                    string blockText = _doc.GetBlockText(vl.BlockIndex);
-                    double fontSize = _measure.GetBlockFontSize(parsed.Kind);
-                    var baseTypeface = TextMeasurer.GetBlockBaseTypeface(parsed.Kind);
-                    var map = IsVisual ? _visualMaps?[vl.BlockIndex] : null;
-
-                    double textX = GetTextStartXForVisualLine(vl);
-
-                    if (IsVisual && parsed.Kind == BlockKind.Blockquote && vl.StartOffset == 0)
-                    {
-                        DrawBlockquoteBar(dc, lineY, effectiveScroll);
-                    }
-
-                    if (IsVisual && parsed.Kind == BlockKind.ThematicBreak)
-                    {
-                        double ruleY = lineY - effectiveScroll + 10;
-                        double ruleRight = ActualWidth - _padding;
-                        dc.DrawLine(_palette.TableBorderPen, new Point(_padding, ruleY), new Point(ruleRight, ruleY));
-                    }
-                    else if (IsVisual && parsed.Table != null && parsed.TableRow != null)
-                    {
-                        DrawTableRow(dc, vl, blockText, parsed, lineY, effectiveScroll, fontSize, baseTypeface);
-                    }
-                    else if (map != null)
-                    {
-                        if (HasImagesOnLine(vl, map))
-                        {
-                            DrawVisualLineWithImages(dc, vl, blockText, parsed, map,
-                                lineY, effectiveScroll, fontSize, baseTypeface);
-                        }
-                        else
-                        {
-                            // In source mode, only draw actual markdown syntax (bullets, numbers, etc)
-                            // but NOT continuation indentation - show raw text at column 0
-                            if (map.ReplacementPrefix != null && vl.StartOffset == 0 && !map.IsContinuationIndent)
-                            {
-                                if (parsed.Kind is BlockKind.TaskListItemUnchecked or BlockKind.TaskListItemChecked)
-                                {
-                                    var spacing = GetVisualLineSpacing(vl);
-                                    if (spacing != null)
-                                    {
-                                        DrawTaskListCheckbox(dc, parsed.Kind == BlockKind.TaskListItemChecked,
-                                            new AbsoluteX(spacing.MarkerStartX), new AbsoluteY(lineY - effectiveScroll),
-                                            parsed.Kind);
-                                    }
-                                }
-                                else if (parsed.Kind == BlockKind.UnorderedListItem)
-                                {
-                                    var spacing = GetVisualLineSpacing(vl);
-                                    if (spacing != null)
-                                    {
-                                        DrawListBullet(dc, new AbsoluteX(spacing.MarkerStartX),
-                                            new AbsoluteY(lineY - effectiveScroll),
-                                            parsed.Kind, parsed.ListNestingLevel);
-                                    }
-                                }
-                                else if (parsed.Kind == BlockKind.OrderedListItem)
-                                {
-                                    var spacing = GetVisualLineSpacing(vl);
-                                    if (spacing != null)
-                                    {
-                                        DrawOrderedListNumber(dc, new AbsoluteX(spacing.MarkerStartX),
-                                            new AbsoluteY(lineY - effectiveScroll),
-                                            map.ReplacementPrefix!, fontSize, parsed.ListNestingLevel);
-                                    }
-                                }
-                                else
-                                {
-                                    var prefixFt = new FormattedText(map.ReplacementPrefix!,
-                                        CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
-                                        TextMeasurer.NormalTypeface, fontSize, _palette.Syntax, _measure.DpiScale);
-                                    dc.DrawText(prefixFt, new Point(_padding, lineY - effectiveScroll));
-                                }
-                            }
-
-                            string displayText = map.BuildDisplayString(blockText, vl.StartOffset, vl.Length);
-                            if (displayText.Length > 0 || (parsed.Kind == BlockKind.HtmlBlock && parsed.CreateVisualSeparation))
-                            {
-                                if (displayText.Length > 0)
-                                {
-                                    var ft = new FormattedText(displayText, CultureInfo.InvariantCulture,
-                                        FlowDirection.LeftToRight, baseTypeface, fontSize,
-                                        _palette.Foreground, _measure.DpiScale);
-                                    ApplyInlineStylesVisual(ft, vl, parsed, map);
-                                    if (parsed.Kind == BlockKind.TaskListItemChecked)
-                                    {
-                                        ft.SetForegroundBrush(_palette.Syntax, 0, displayText.Length);
-                                        ft.SetTextDecorations(TextDecorations.Strikethrough, 0, displayText.Length);
-                                    }
-                                    dc.DrawText(ft, new Point(textX, lineY - effectiveScroll));
-                                }
-                            }
-                        }
-                    }
-                    else
-                    {
-                        string text = blockText.Substring(vl.StartOffset, vl.Length);
-                        var ft = new FormattedText(text, CultureInfo.InvariantCulture,
-                            FlowDirection.LeftToRight, baseTypeface, fontSize,
-                            _palette.Foreground, _measure.DpiScale);
-                        ApplyInlineStyles(ft, vl, parsed, blockText);
-                        dc.DrawText(ft, new Point(textX, lineY - effectiveScroll));
-
-                        if (_showWhitespace)
-                            DrawTrailingSpaceDots(dc, vl, blockText, parsed, textX, lineY - effectiveScroll);
-
-                        if (_imagePreview == ImagePreviewMode.Inline && parsed.Images != null)
-                            DrawSourceInlineImages(dc, vl, parsed.Images, lineY, effectiveScroll);
-                    }
-                }
-            }
-        }
-
-        if (SpellCheckEnabled)
-            DrawSpellingErrors(dc, effectiveScroll, viewTop, viewBottom);
-
-        if (ShowPageBreaks)
-            DrawPageBreaks(dc, effectiveScroll, viewTop, viewBottom);
-
-        if (_cursorVisible && IsFocused && _visualLines.Count > 0)
-        {
-            int vli = CursorToVisualLineIndex();
-            double cx = _padding + CursorXInVisualLine(vli);
-            double cy = _lineYPositions[vli] - effectiveScroll;
-            double lineH = GetEffectiveLineHeight(_visualLines[vli]);
-            dc.DrawLine(_palette.CursorPen, new Point(cx, cy), new Point(cx, cy + lineH));
-        }
-
-        if (!IsVisual && _imagePreview == ImagePreviewMode.OnHover && _hoveredImage != null)
-            DrawHoverImagePreview(dc);
-
-        Dispatcher.BeginInvoke(() =>
-        {
-            Minimap?.InvalidateVisual();
-            ScrollStateChanged?.Invoke();
-        });
+        _renderingContext.OnRender(dc);
     }
 
     private void DrawJoinedLine(DrawingContext dc, VisualLine vl,

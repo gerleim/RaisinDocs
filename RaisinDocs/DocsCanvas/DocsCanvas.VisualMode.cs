@@ -287,7 +287,7 @@ public partial class DocsCanvas
         return cells.Count - 1;
     }
 
-    private (int StartCol, int EndCol, int StartBlock, int EndBlock, TableInfo Table)?
+    internal (int StartCol, int EndCol, int StartBlock, int EndBlock, TableInfo Table)?
         TryGetTableRectSelection()
     {
         if (!IsVisual || _parsedBlocks == null || !_doc.HasSelection) return null;
