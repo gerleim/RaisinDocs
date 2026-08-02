@@ -725,13 +725,13 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider, IDocsC
     public DocsCanvas()
     {
         _scroll = new ScrollController(InvalidateVisual, () => Math.Max(0, _totalContentHeight - ActualHeight));
-        _linkHandler = new LinkHandler(this);
+        _linkHandler = new LinkHandler((IDocsCanvasServices)this);
         _linkPopup = new LinkPopupController(_doc, this);
-        _tableRenderer = new TableRenderer(this);
-        _visualModeManager = new VisualModeManager(this);
-        _layoutEngine = new LayoutEngine(this);
-        _renderingContext = new RenderingContext(this);
-        _navigationEngine = new CursorNavigationEngine(this);
+        _tableRenderer = new TableRenderer((IDocsCanvasServices)this);
+        _visualModeManager = new VisualModeManager((IDocsCanvasServices)this);
+        _layoutEngine = new LayoutEngine((IDocsCanvasServices)this);
+        _renderingContext = new RenderingContext((IDocsCanvasServices)this);
+        _navigationEngine = new CursorNavigationEngine((IDocsCanvasServices)this);
         Focusable = true;
         FocusVisualStyle = null;
         SnapsToDevicePixels = true;

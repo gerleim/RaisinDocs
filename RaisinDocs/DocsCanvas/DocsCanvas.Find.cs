@@ -7,7 +7,7 @@ public partial class DocsCanvas
     private FindAndReplaceController? _findAndReplaceController;
 
     internal FindAndReplaceController FindAndReplace =>
-        _findAndReplaceController ??= new FindAndReplaceController(this);
+        _findAndReplaceController ??= new FindAndReplaceController((IDocsCanvasServices)this);
 
     internal void OpenFind(bool showReplace)
     {

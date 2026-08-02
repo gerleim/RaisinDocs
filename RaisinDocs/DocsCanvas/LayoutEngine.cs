@@ -13,11 +13,11 @@ public partial class DocsCanvas
     /// </summary>
     internal class LayoutEngine
     {
-        private readonly DocsCanvas _canvas;
+        private readonly IDocsCanvasServices _services;
 
-        public LayoutEngine(DocsCanvas canvas)
+        public LayoutEngine(IDocsCanvasServices services)
         {
-            _canvas = canvas ?? throw new ArgumentNullException(nameof(canvas));
+            _services = services ?? throw new ArgumentNullException(nameof(services));
         }
 
         /// <summary>
@@ -26,54 +26,54 @@ public partial class DocsCanvas
         /// </summary>
         public void ComputeLayout()
         {
-            if (!_canvas._layoutDirty) return;
-            _canvas._layoutDirty = false;
-            _canvas._measure.EnsureMeasured(_canvas);
+            if (!((DocsCanvas)_services)._layoutDirty) return;
+            ((DocsCanvas)_services)._layoutDirty = false;
+            ((DocsCanvas)_services)._measure.EnsureMeasured((DocsCanvas)_services);
 
-            _canvas._parsedBlocks ??= MarkdownParser.Parse(i => _canvas._doc.GetBlockText(i), _canvas._doc.BlockCount, _canvas._syntaxHighlighter);
+            ((DocsCanvas)_services)._parsedBlocks ??= MarkdownParser.Parse(i => ((DocsCanvas)_services)._doc.GetBlockText(i), ((DocsCanvas)_services)._doc.BlockCount, ((DocsCanvas)_services)._syntaxHighlighter);
 
             // Merge paragraph lazy continuations in the Document (logical structure per CommonMark spec)
-            _canvas._doc.MergeParagraphContinuations(_canvas._parsedBlocks);
+            ((DocsCanvas)_services)._doc.MergeParagraphContinuations(((DocsCanvas)_services)._parsedBlocks);
 
             // After merging, always rebuild parsedBlocks to reflect current block structure and content
-            _canvas._parsedBlocks = MarkdownParser.Parse(i => _canvas._doc.GetBlockText(i), _canvas._doc.BlockCount, _canvas._syntaxHighlighter);
-            _canvas._visualMaps = null;
+            ((DocsCanvas)_services)._parsedBlocks = MarkdownParser.Parse(i => ((DocsCanvas)_services)._doc.GetBlockText(i), ((DocsCanvas)_services)._doc.BlockCount, ((DocsCanvas)_services)._syntaxHighlighter);
+            ((DocsCanvas)_services)._visualMaps = null;
 
             // Build visual block structure for visual mode rendering
-            if (_canvas.IsVisual)
+            if (_services.IsVisual)
             {
-                _canvas._visualBlockStructure = VisualBlockStructure.Build(_canvas._parsedBlocks, i => _canvas._doc.GetBlockText(i));
+                ((DocsCanvas)_services)._visualBlockStructure = VisualBlockStructure.Build(((DocsCanvas)_services)._parsedBlocks, i => ((DocsCanvas)_services)._doc.GetBlockText(i));
             }
 
-            if (_canvas.IsVisual && _canvas._visualMaps == null)
+            if (_services.IsVisual && ((DocsCanvas)_services)._visualMaps == null)
             {
-                _canvas._visualMaps = new List<BlockVisualMap>(_canvas._doc.BlockCount);
-                Func<int, string> getText = _canvas._doc.GetBlockText;
+                ((DocsCanvas)_services)._visualMaps = new List<BlockVisualMap>(((DocsCanvas)_services)._doc.BlockCount);
+                Func<int, string> getText = ((DocsCanvas)_services)._doc.GetBlockText;
 
                 // Build parent map for O(1) parent lookup during visual map computation
-                var parentMap = BlockVisualMap.BuildParentMap(_canvas._parsedBlocks);
+                var parentMap = BlockVisualMap.BuildParentMap(((DocsCanvas)_services)._parsedBlocks);
 
-                for (int i = 0; i < _canvas._doc.BlockCount; i++)
-                    _canvas._visualMaps.Add(BlockVisualMap.Compute(_canvas._parsedBlocks[i], getText(i), _canvas._parsedBlocks, getText, parentMap));
+                for (int i = 0; i < ((DocsCanvas)_services)._doc.BlockCount; i++)
+                    ((DocsCanvas)_services)._visualMaps.Add(BlockVisualMap.Compute(((DocsCanvas)_services)._parsedBlocks[i], getText(i), ((DocsCanvas)_services)._parsedBlocks, getText, parentMap));
             }
 
-            ComputeLayoutCore(_canvas.ActualWidth - DocsCanvas._padding * 2);
+            ComputeLayoutCore(_services.ActualWidth - DocsCanvas._padding * 2);
 
-            if (_canvas.IsVisual)
-                _canvas.ClampCursorAwayFromHidden();
+            if (_services.IsVisual)
+                _services.ClampCursorAwayFromHidden();
         }
 
         private void BuildParagraphGroups()
         {
-            _canvas._blockToGroup = new Dictionary<int, DocsCanvas.ParagraphGroup>();
+            ((DocsCanvas)_services)._blockToGroup = new Dictionary<int, DocsCanvas.ParagraphGroup>();
 
             // If we have VisualBlockStructure, try to use it to identify merged paragraphs
-            if (_canvas._visualBlockStructure != null)
+            if (((DocsCanvas)_services)._visualBlockStructure != null)
             {
                 bool createdAnyGroups = false;
-                for (int vi = 0; vi < _canvas._visualBlockStructure.Blocks.Count; vi++)
+                for (int vi = 0; vi < ((DocsCanvas)_services)._visualBlockStructure.Blocks.Count; vi++)
                 {
-                    var vblock = _canvas._visualBlockStructure.Blocks[vi];
+                    var vblock = ((DocsCanvas)_services)._visualBlockStructure.Blocks[vi];
                     if (vblock.SourceBlockIndices.Count > 1)
                     {
                         EmitParagraphGroupFromVisualBlock(vblock);
@@ -89,15 +89,15 @@ public partial class DocsCanvas
             // Original logic: detect paragraph continuations by analyzing content
             var groupBlocks = new List<int>();
 
-            for (int bi = 0; bi <= _canvas._doc.BlockCount; bi++)
+            for (int bi = 0; bi <= ((DocsCanvas)_services)._doc.BlockCount; bi++)
             {
                 bool canContinue = false;
-                if (bi < _canvas._doc.BlockCount && _canvas._parsedBlocks![bi].Kind == BlockKind.Paragraph
-                    && _canvas._doc.GetBlockLength(bi) > 0 && groupBlocks.Count > 0)
+                if (bi < ((DocsCanvas)_services)._doc.BlockCount && ((DocsCanvas)_services)._parsedBlocks![bi].Kind == BlockKind.Paragraph
+                    && ((DocsCanvas)_services)._doc.GetBlockLength(bi) > 0 && groupBlocks.Count > 0)
                 {
                     int prev = groupBlocks[^1];
-                    string prevText = _canvas._doc.GetBlockText(prev);
-                    var prevParsed = _canvas._parsedBlocks![prev];
+                    string prevText = ((DocsCanvas)_services)._doc.GetBlockText(prev);
+                    var prevParsed = ((DocsCanvas)_services)._parsedBlocks![prev];
                     int prevContentEnd = MarkdownParser.GetContentEnd(prevText);
                     bool prevHardBreak = MarkdownParser.IsTrailingHardBreak(prevParsed, prevText)
                         || (prevContentEnd >= 2 && prevText[prevContentEnd - 1] == ' ' && prevText[prevContentEnd - 2] == ' ');
@@ -106,7 +106,7 @@ public partial class DocsCanvas
                         bool hasEmptyBetween = false;
                         for (int mid = prev + 1; mid < bi; mid++)
                         {
-                            if (_canvas._doc.GetBlockLength(mid) == 0) { hasEmptyBetween = true; break; }
+                            if (((DocsCanvas)_services)._doc.GetBlockLength(mid) == 0) { hasEmptyBetween = true; break; }
                         }
                         canContinue = !hasEmptyBetween;
                     }
@@ -121,32 +121,32 @@ public partial class DocsCanvas
                     if (groupBlocks.Count >= 2)
                         EmitParagraphGroup(groupBlocks);
                     groupBlocks.Clear();
-                    if (bi < _canvas._doc.BlockCount && _canvas._parsedBlocks![bi].Kind == BlockKind.Paragraph
-                        && _canvas._doc.GetBlockLength(bi) > 0)
+                    if (bi < ((DocsCanvas)_services)._doc.BlockCount && ((DocsCanvas)_services)._parsedBlocks![bi].Kind == BlockKind.Paragraph
+                        && ((DocsCanvas)_services)._doc.GetBlockLength(bi) > 0)
                         groupBlocks.Add(bi);
                 }
             }
 
             // After grouping consecutive blocks, check for single blocks that contain
             // internal newlines (merged continuations from MergeParagraphContinuations)
-            for (int bi = 0; bi < _canvas._doc.BlockCount; bi++)
+            for (int bi = 0; bi < ((DocsCanvas)_services)._doc.BlockCount; bi++)
             {
-                if (_canvas._blockToGroup != null && _canvas._blockToGroup.ContainsKey(bi))
+                if (((DocsCanvas)_services)._blockToGroup != null && ((DocsCanvas)_services)._blockToGroup.ContainsKey(bi))
                     continue;  // Already in a group
 
-                if (_canvas._parsedBlocks![bi].Kind == BlockKind.Paragraph)
+                if (((DocsCanvas)_services)._parsedBlocks![bi].Kind == BlockKind.Paragraph)
                 {
-                    string blockText = _canvas._doc.GetBlockText(bi);
+                    string blockText = ((DocsCanvas)_services)._doc.GetBlockText(bi);
                     // Skip empty blocks and blocks with consecutive newlines (merged empty blocks)
                     // Only process actual text continuations like "sad\ns"
                     if (blockText.Length > 0 && blockText.Contains('\n') && !blockText.Contains("\n\n"))
                     {
-                        _canvas.Logger?.Log(DocsLogLevel.Debug, $"Continuation: Block {bi} has internal newline");
+                        _services.Logger?.Log(DocsLogLevel.Debug, $"Continuation: Block {bi} has internal newline");
                         // This block has internal newlines - it's a merged continuation
                         // Create a group for it
                         var singleBlockGroup = new List<int> { bi };
                         EmitParagraphGroup(singleBlockGroup);
-                        _canvas.Logger?.Log(DocsLogLevel.Debug, $"Continuation: Created ParagraphGroup for block {bi}");
+                        _services.Logger?.Log(DocsLogLevel.Debug, $"Continuation: Created ParagraphGroup for block {bi}");
                     }
                 }
             }
@@ -173,18 +173,18 @@ public partial class DocsCanvas
                 }
 
                 int bi = blockIndices[i];
-                string text = _canvas._doc.GetBlockText(bi);
+                string text = ((DocsCanvas)_services)._doc.GetBlockText(bi);
                 segments[i] = new DocsCanvas.JoinSegment(bi, currentOffset, text.Length);
                 currentOffset += text.Length;
             }
 
             // Create BlockVisualMap for the merged text
             var mergedHiddenRanges = new List<HiddenRange>();
-            if (_canvas.IsVisual && _canvas._visualMaps != null)
+            if (_services.IsVisual && ((DocsCanvas)_services)._visualMaps != null)
             {
                 for (int i = 0; i < blockIndices.Count; i++)
                 {
-                    var map = _canvas._visualMaps[blockIndices[i]];
+                    var map = ((DocsCanvas)_services)._visualMaps[blockIndices[i]];
                     foreach (var hr in map.HiddenRanges)
                         mergedHiddenRanges.Add(new HiddenRange(hr.Start + segments[i].OffsetInJoined, hr.Length));
                 }
@@ -212,7 +212,7 @@ public partial class DocsCanvas
             };
 
             foreach (var seg in segments)
-                _canvas._blockToGroup![seg.BlockIndex] = group;
+                ((DocsCanvas)_services)._blockToGroup![seg.BlockIndex] = group;
         }
 
         private void EmitParagraphGroup(List<int> blockIndices)
@@ -231,7 +231,7 @@ public partial class DocsCanvas
                     sb.Append("¶");  // pilcrow only (visual space is rendered, not in text)
                 }
                 int bi = blockIndices[i];
-                string text = _canvas._doc.GetBlockText(bi);
+                string text = ((DocsCanvas)_services)._doc.GetBlockText(bi);
                 int startPos = sb.Length;
                 var posMap = new Dictionary<int, int>();
 
@@ -286,8 +286,8 @@ public partial class DocsCanvas
             for (int i = 0; i < segments.Length; i++)
             {
                 var seg = segments[i];
-                var parsed = _canvas._parsedBlocks![seg.BlockIndex];
-                var map = _canvas._visualMaps![seg.BlockIndex];
+                var parsed = ((DocsCanvas)_services)._parsedBlocks![seg.BlockIndex];
+                var map = ((DocsCanvas)_services)._visualMaps![seg.BlockIndex];
                 var posMap = positionMaps[i];
 
                 foreach (var run in parsed.Runs)
@@ -347,7 +347,7 @@ public partial class DocsCanvas
             };
 
             foreach (var seg in segments)
-                _canvas._blockToGroup![seg.BlockIndex] = group;
+                ((DocsCanvas)_services)._blockToGroup![seg.BlockIndex] = group;
         }
 
         private (int displayStart, int displayLength) MapOffset(int sourceStart, int sourceLength, Dictionary<int, int> posMap, int segOffset)
@@ -385,32 +385,32 @@ public partial class DocsCanvas
 
         internal void ComputeLayoutCore(double maxWidth)
         {
-            _canvas._visualLines.Clear();
-            _canvas._lineYPositions.Clear();
-            _canvas._tableColumnWidths.Clear();
+            ((DocsCanvas)_services)._visualLines.Clear();
+            ((DocsCanvas)_services)._lineYPositions.Clear();
+            ((DocsCanvas)_services)._tableColumnWidths.Clear();
             maxWidth = Math.Max(0, maxWidth);
-            _canvas._layoutMaxWidth = maxWidth;
+            ((DocsCanvas)_services)._layoutMaxWidth = maxWidth;
 
-            if (_canvas.IsVisual)
+            if (_services.IsVisual)
             {
-                _canvas._visualLineSpacings = [];
-                _canvas._tableRenderer.ComputeAllTableColumnWidths(maxWidth);
+                ((DocsCanvas)_services)._visualLineSpacings = [];
+                ((DocsCanvas)_services)._tableRenderer.ComputeAllTableColumnWidths(maxWidth);
                 BuildParagraphGroups();
             }
 
             // Identify which blocks are children of containers (used to skip during iteration)
             var childBlockIndices = new HashSet<int>();
-            for (int bi = 0; bi < _canvas._doc.BlockCount; bi++)
+            for (int bi = 0; bi < ((DocsCanvas)_services)._doc.BlockCount; bi++)
             {
-                var parsed = _canvas._parsedBlocks![bi];
+                var parsed = ((DocsCanvas)_services)._parsedBlocks![bi];
                 if (parsed.Children != null)
                 {
                     foreach (var child in parsed.Children)
                     {
                         // Find the flat index of this child
-                        for (int ci = 0; ci < _canvas._doc.BlockCount; ci++)
+                        for (int ci = 0; ci < ((DocsCanvas)_services)._doc.BlockCount; ci++)
                         {
-                            if (_canvas._parsedBlocks![ci] == child)
+                            if (((DocsCanvas)_services)._parsedBlocks![ci] == child)
                             {
                                 childBlockIndices.Add(ci);
                                 break;
@@ -421,11 +421,11 @@ public partial class DocsCanvas
             }
 
             // Process blocks, using hierarchy when available
-            for (int bi = 0; bi < _canvas._doc.BlockCount; bi++)
+            for (int bi = 0; bi < ((DocsCanvas)_services)._doc.BlockCount; bi++)
             {
-                var parsed = _canvas._parsedBlocks![bi];
+                var parsed = ((DocsCanvas)_services)._parsedBlocks![bi];
 
-                if (_canvas.IsVisual && parsed.IsSkippedInVisual)
+                if (_services.IsVisual && parsed.IsSkippedInVisual)
                     continue;
 
                 // Skip blocks that are children - they'll be processed via their parent's Children
@@ -437,67 +437,67 @@ public partial class DocsCanvas
             }
 
             double y = DocsCanvas._padding;
-            for (int i = 0; i < _canvas._visualLines.Count; i++)
+            for (int i = 0; i < ((DocsCanvas)_services)._visualLines.Count; i++)
             {
-                int bi = _canvas._visualLines[i].BlockIndex;
-                if (i > 0 && bi != _canvas._visualLines[i - 1].BlockIndex)
+                int bi = ((DocsCanvas)_services)._visualLines[i].BlockIndex;
+                if (i > 0 && bi != ((DocsCanvas)_services)._visualLines[i - 1].BlockIndex)
                 {
-                    var curGroup = _canvas._visualLines[i].Group;
-                    var prevGroup = _canvas._visualLines[i - 1].Group;
+                    var curGroup = ((DocsCanvas)_services)._visualLines[i].Group;
+                    var prevGroup = ((DocsCanvas)_services)._visualLines[i - 1].Group;
                     bool sameGroup = curGroup != null && prevGroup == curGroup;
 
                     if (!sameGroup)
                     {
                         bool paragraphBreak = false;
-                        for (int prev = _canvas._visualLines[i - 1].BlockIndex; prev < bi && !paragraphBreak; prev++)
+                        for (int prev = ((DocsCanvas)_services)._visualLines[i - 1].BlockIndex; prev < bi && !paragraphBreak; prev++)
                         {
-                            if (_canvas._doc.GetBlockLength(prev) == 0)
+                            if (((DocsCanvas)_services)._doc.GetBlockLength(prev) == 0)
                                 paragraphBreak = true;
                         }
-                        if (paragraphBreak && _canvas._doc.GetBlockLength(_canvas._visualLines[i - 1].BlockIndex) > 0)
+                        if (paragraphBreak && ((DocsCanvas)_services)._doc.GetBlockLength(((DocsCanvas)_services)._visualLines[i - 1].BlockIndex) > 0)
                             y += DocsCanvas._paragraphGap;
                     }
                 }
-                _canvas._lineYPositions.Add(y);
-                var lineVl = _canvas._visualLines[i];
-                double lineH = _canvas._measure.GetLineHeight(lineVl.BlockKind);
+                ((DocsCanvas)_services)._lineYPositions.Add(y);
+                var lineVl = ((DocsCanvas)_services)._visualLines[i];
+                double lineH = ((DocsCanvas)_services)._measure.GetLineHeight(lineVl.BlockKind);
                 if (lineVl.OverrideHeight > lineH) lineH = lineVl.OverrideHeight;
                 y += lineH;
             }
-            _canvas._totalContentHeight = y + DocsCanvas._padding;
+            ((DocsCanvas)_services)._totalContentHeight = y + DocsCanvas._padding;
 
             // Compute and cache spacing for each visual line (visual mode only)
-            if (_canvas.IsVisual && _canvas._visualLineSpacings != null)
+            if (_services.IsVisual && ((DocsCanvas)_services)._visualLineSpacings != null)
             {
-                foreach (var vl in _canvas._visualLines)
+                foreach (var vl in ((DocsCanvas)_services)._visualLines)
                 {
-                    _canvas._visualLineSpacings.Add(ComputeVisualLineSpacing(vl));
+                    ((DocsCanvas)_services)._visualLineSpacings.Add(ComputeVisualLineSpacing(vl));
                 }
             }
 
-            _canvas._layoutVersion++;
+            ((DocsCanvas)_services)._layoutVersion++;
         }
 
         private void ProcessBlockAndChildren(int blockIndex, ParsedBlock parsed, double maxWidth, int nestingDepth, int parentContentCol)
         {
-            if (_canvas.IsVisual && _canvas._blockToGroup != null && _canvas._blockToGroup.TryGetValue(blockIndex, out var group))
+            if (_services.IsVisual && ((DocsCanvas)_services)._blockToGroup != null && ((DocsCanvas)_services)._blockToGroup.TryGetValue(blockIndex, out var group))
             {
-                _canvas.Logger?.Log(DocsLogLevel.Debug, $"ProcessBlockAndChildren: Block {blockIndex} is in a ParagraphGroup");
+                _services.Logger?.Log(DocsLogLevel.Debug, $"ProcessBlockAndChildren: Block {blockIndex} is in a ParagraphGroup");
                 if (blockIndex == group.FirstBlock)
                 {
-                    _canvas.Logger?.Log(DocsLogLevel.Debug, $"ProcessBlockAndChildren: Block {blockIndex} is FirstBlock, wrapping as joined");
+                    _services.Logger?.Log(DocsLogLevel.Debug, $"ProcessBlockAndChildren: Block {blockIndex} is FirstBlock, wrapping as joined");
                     WrapSegmentJoined(group, maxWidth);
                 }
                 return;
             }
 
-            _canvas.Logger?.Log(DocsLogLevel.Debug, $"ProcessBlockAndChildren: Block {blockIndex} is NOT in a ParagraphGroup");
+            _services.Logger?.Log(DocsLogLevel.Debug, $"ProcessBlockAndChildren: Block {blockIndex} is NOT in a ParagraphGroup");
 
-            string text = _canvas._doc.GetBlockText(blockIndex);
+            string text = ((DocsCanvas)_services)._doc.GetBlockText(blockIndex);
 
             if (text.Length == 0)
             {
-                _canvas._visualLines.Add(new DocsCanvas.VisualLine(blockIndex, 0, 0, parsed.Kind)
+                ((DocsCanvas)_services)._visualLines.Add(new DocsCanvas.VisualLine(blockIndex, 0, 0, parsed.Kind)
                 {
                     OverrideHeight = DocsCanvas._paragraphGap,
                     NestingDepth = nestingDepth,
@@ -518,11 +518,11 @@ public partial class DocsCanvas
                 return;
             }
 
-            var map = _canvas.IsVisual ? _canvas._visualMaps?[blockIndex] : null;
+            var map = _services.IsVisual ? ((DocsCanvas)_services)._visualMaps?[blockIndex] : null;
 
-            if (_canvas.IsVisual && parsed.Kind == BlockKind.ThematicBreak)
+            if (_services.IsVisual && parsed.Kind == BlockKind.ThematicBreak)
             {
-                _canvas._visualLines.Add(new DocsCanvas.VisualLine(blockIndex, 0, text.Length, parsed.Kind)
+                ((DocsCanvas)_services)._visualLines.Add(new DocsCanvas.VisualLine(blockIndex, 0, text.Length, parsed.Kind)
                 {
                     OverrideHeight = 20,
                     NestingDepth = nestingDepth,
@@ -531,9 +531,9 @@ public partial class DocsCanvas
                 return;
             }
 
-            if (_canvas.IsVisual && parsed.Table != null && parsed.Kind is BlockKind.TableHeaderRow or BlockKind.TableDataRow)
+            if (_services.IsVisual && parsed.Table != null && parsed.Kind is BlockKind.TableHeaderRow or BlockKind.TableDataRow)
             {
-                _canvas._visualLines.Add(new DocsCanvas.VisualLine(blockIndex, 0, text.Length, parsed.Kind)
+                ((DocsCanvas)_services)._visualLines.Add(new DocsCanvas.VisualLine(blockIndex, 0, text.Length, parsed.Kind)
                 {
                     NestingDepth = nestingDepth,
                     ParentContentColumn = parentContentCol
@@ -568,9 +568,9 @@ public partial class DocsCanvas
 
         private int FindBlockIndex(ParsedBlock block)
         {
-            for (int i = 0; i < _canvas._doc.BlockCount; i++)
+            for (int i = 0; i < ((DocsCanvas)_services)._doc.BlockCount; i++)
             {
-                if (_canvas._parsedBlocks![i] == block)
+                if (((DocsCanvas)_services)._parsedBlocks![i] == block)
                     return i;
             }
             return -1;
@@ -581,7 +581,7 @@ public partial class DocsCanvas
         {
             if (segment.Length == 0)
             {
-                _canvas._visualLines.Add(new DocsCanvas.VisualLine(blockIndex, startOffset, 0, parsed.Kind)
+                ((DocsCanvas)_services)._visualLines.Add(new DocsCanvas.VisualLine(blockIndex, startOffset, 0, parsed.Kind)
                 {
                     NestingDepth = nestingDepth,
                     ParentContentColumn = parentContentCol
@@ -591,7 +591,7 @@ public partial class DocsCanvas
 
             double prefixWidth = 0;
             if (map?.ReplacementPrefix != null)
-                prefixWidth = _canvas._measure.MeasureReplacementPrefix(map.ReplacementPrefix, map.PrefixMeasureKind);
+                prefixWidth = ((DocsCanvas)_services)._measure.MeasureReplacementPrefix(map.ReplacementPrefix, map.PrefixMeasureKind);
 
             int pos = 0;
             while (pos < segment.Length)
@@ -603,18 +603,18 @@ public partial class DocsCanvas
                     NestingDepth = nestingDepth,
                     ParentContentColumn = parentContentCol
                 };
-                if (_canvas.IsVisual && map?.Images != null)
+                if (_services.IsVisual && map?.Images != null)
                 {
                     double imgH = GetImageMaxLineHeight(vl, map);
                     if (imgH > 0) vl = vl with { OverrideHeight = imgH };
                 }
-                else if (!_canvas.IsVisual && _canvas._imagePreview == DocsCanvas.ImagePreviewMode.Inline && parsed.Images != null)
+                else if (!_services.IsVisual && ((DocsCanvas)_services)._imagePreview == DocsCanvas.ImagePreviewMode.Inline && parsed.Images != null)
                 {
                     double imgH = GetSourceInlineImageHeight(vl, parsed.Images);
                     if (imgH > 0)
-                        vl = vl with { OverrideHeight = _canvas._measure.GetLineHeight(parsed.Kind) + imgH };
+                        vl = vl with { OverrideHeight = ((DocsCanvas)_services)._measure.GetLineHeight(parsed.Kind) + imgH };
                 }
-                _canvas._visualLines.Add(vl);
+                ((DocsCanvas)_services)._visualLines.Add(vl);
                 pos += lineLen;
             }
         }
@@ -624,7 +624,7 @@ public partial class DocsCanvas
             string text = group.JoinedText;
             if (text.Length == 0)
             {
-                _canvas._visualLines.Add(new DocsCanvas.VisualLine(group.FirstBlock, 0, 0, BlockKind.Paragraph)
+                ((DocsCanvas)_services)._visualLines.Add(new DocsCanvas.VisualLine(group.FirstBlock, 0, 0, BlockKind.Paragraph)
                     { Group = group });
                 return;
             }
@@ -640,7 +640,7 @@ public partial class DocsCanvas
                     double imgH = GetImageMaxLineHeight(vl, group.JoinedMap);
                     if (imgH > 0) vl = vl with { OverrideHeight = imgH };
                 }
-                _canvas._visualLines.Add(vl);
+                ((DocsCanvas)_services)._visualLines.Add(vl);
                 pos += lineLen;
             }
         }
@@ -660,7 +660,7 @@ public partial class DocsCanvas
                     var img = FindImageAtRawOffset(map.Images, rawOffset);
                     if (img != null)
                     {
-                        var (imgW, _) = GetImageSize(img.Value, _canvas._layoutMaxWidth);
+                        var (imgW, _) = GetImageSize(img.Value, ((DocsCanvas)_services)._layoutMaxWidth);
                         if (width + imgW > maxWidth && anyVisible && i > start)
                         {
                             if (lastSpace >= start)
@@ -675,7 +675,7 @@ public partial class DocsCanvas
                 }
                 if (text[i] is ' ' or '¶') lastSpace = i;
                 var style = TextMeasurer.GetStyleAtOffset(parsed.Runs, rawOffset, ref runIdx);
-                width += _canvas._measure.MeasureCharWidth(text[i], parsed.Kind, style);
+                width += ((DocsCanvas)_services)._measure.MeasureCharWidth(text[i], parsed.Kind, style);
                 anyVisible = true;
                 if (width > maxWidth && anyVisible && i > start)
                 {
@@ -689,11 +689,11 @@ public partial class DocsCanvas
 
         internal BlockVisualSpacing ComputeVisualLineSpacing(DocsCanvas.VisualLine vl)
         {
-            if (!_canvas.IsVisual || _canvas._parsedBlocks == null || _canvas._visualMaps == null || vl.BlockIndex >= _canvas._parsedBlocks.Count || vl.BlockIndex >= _canvas._visualMaps.Count)
+            if (!_services.IsVisual || ((DocsCanvas)_services)._parsedBlocks == null || ((DocsCanvas)_services)._visualMaps == null || vl.BlockIndex >= ((DocsCanvas)_services)._parsedBlocks.Count || vl.BlockIndex >= ((DocsCanvas)_services)._visualMaps.Count)
                 return new BlockVisualSpacing { ContentStartX = DocsCanvas._padding };
 
-            var parsed = _canvas._parsedBlocks[vl.BlockIndex];
-            var map = _canvas._visualMaps[vl.BlockIndex];
+            var parsed = ((DocsCanvas)_services)._parsedBlocks[vl.BlockIndex];
+            var map = ((DocsCanvas)_services)._visualMaps[vl.BlockIndex];
 
             var spacing = new BlockVisualSpacing();
             double textX = DocsCanvas._padding;
@@ -702,7 +702,7 @@ public partial class DocsCanvas
             // For continuation blocks, skip this because the prefix width will serve as the indentation
             if (vl.NestingDepth > 0 && !map.IsContinuationIndent)
             {
-                double charWidth = _canvas._measure.MeasureCharWidth(' ', parsed.Kind, InlineStyle.Normal);
+                double charWidth = ((DocsCanvas)_services)._measure.MeasureCharWidth(' ', parsed.Kind, InlineStyle.Normal);
                 textX += vl.ParentContentColumn * charWidth;
             }
 
@@ -713,7 +713,7 @@ public partial class DocsCanvas
                 if (parsed.Kind == BlockKind.Blockquote)
                 {
                     // Blockquote bar positioning
-                    var aligner = new ContentBlockAligner(textX, _canvas._measure.ListIndent);
+                    var aligner = new ContentBlockAligner(textX, ((DocsCanvas)_services)._measure.ListIndent);
                     spacing.MarkerStartX = aligner.GetBlockquoteBarX();
                     spacing.MarkerWidth = 3;
                     spacing.SpacingAfterMarker = aligner.GetSpacingAfterMarker();
@@ -721,7 +721,7 @@ public partial class DocsCanvas
                 }
                 else if (map.ReplacementPrefix != null)
                 {
-                    double prefixWidth = _canvas._measure.MeasureReplacementPrefix(map.ReplacementPrefix, map.PrefixMeasureKind);
+                    double prefixWidth = ((DocsCanvas)_services)._measure.MeasureReplacementPrefix(map.ReplacementPrefix, map.PrefixMeasureKind);
 
                     if (!map.IsContinuationIndent)
                     {
@@ -737,7 +737,7 @@ public partial class DocsCanvas
 
                         if (isListItem)
                         {
-                            double spaceCharWidth = _canvas._measure.MeasureCharWidth(' ', parsed.Kind, InlineStyle.Normal);
+                            double spaceCharWidth = ((DocsCanvas)_services)._measure.MeasureCharWidth(' ', parsed.Kind, InlineStyle.Normal);
 
                             // 1. Nesting indentation (from ListNestingLevel)
                             double nestingIndentWidth = parsed.ListNestingLevel > 0
@@ -749,7 +749,7 @@ public partial class DocsCanvas
                             double spaceBeforeMarkerWidth = spacesBeforeMarker * spaceCharWidth;
 
                             // Use standard marker width (checked checkbox) for all types to align centers
-                            double standardMarkerWidth = _canvas._measure.MeasureReplacementPrefix("☑", parsed.Kind);
+                            double standardMarkerWidth = ((DocsCanvas)_services)._measure.MeasureReplacementPrefix("☑", parsed.Kind);
 
                             // 3. Marker center position
                             double markerCenterX = DocsCanvas._padding + nestingIndentWidth + spaceBeforeMarkerWidth + (standardMarkerWidth / 2);
@@ -776,7 +776,7 @@ public partial class DocsCanvas
                         {
                             // Non-list markers (blockquotes, etc.)
                             double baseX = textX;
-                            var aligner = new ContentBlockAligner(baseX, _canvas._measure.ListIndent);
+                            var aligner = new ContentBlockAligner(baseX, ((DocsCanvas)_services)._measure.ListIndent);
 
                             if (parsed.Kind == BlockKind.Blockquote)
                             {
@@ -823,7 +823,7 @@ public partial class DocsCanvas
                 if (map.ReplacementPrefix != null)
                 {
                     // Continuation line of a list/blockquote - indent to match first line content
-                    double prefixWidth = _canvas._measure.MeasureReplacementPrefix(map.ReplacementPrefix, map.PrefixMeasureKind);
+                    double prefixWidth = ((DocsCanvas)_services)._measure.MeasureReplacementPrefix(map.ReplacementPrefix, map.PrefixMeasureKind);
                     spacing.ContentStartX = textX + prefixWidth;
                 }
                 else
@@ -837,32 +837,32 @@ public partial class DocsCanvas
 
         internal double GetTextStartXForVisualLine(DocsCanvas.VisualLine vl)
         {
-            if (!_canvas.IsVisual || _canvas._visualLineSpacings == null || vl.BlockIndex < 0)
+            if (!_services.IsVisual || ((DocsCanvas)_services)._visualLineSpacings == null || vl.BlockIndex < 0)
                 return DocsCanvas._padding;
 
             // Find the index of this VisualLine
             int vlIndex = -1;
-            for (int i = 0; i < _canvas._visualLines.Count; i++)
+            for (int i = 0; i < ((DocsCanvas)_services)._visualLines.Count; i++)
             {
-                if (_canvas._visualLines[i] == vl)
+                if (((DocsCanvas)_services)._visualLines[i] == vl)
                 {
                     vlIndex = i;
                     break;
                 }
             }
 
-            if (vlIndex < 0 || vlIndex >= _canvas._visualLineSpacings.Count)
+            if (vlIndex < 0 || vlIndex >= ((DocsCanvas)_services)._visualLineSpacings.Count)
                 return DocsCanvas._padding;
 
-            return _canvas._visualLineSpacings[vlIndex]?.ContentStartX ?? DocsCanvas._padding;
+            return ((DocsCanvas)_services)._visualLineSpacings[vlIndex]?.ContentStartX ?? DocsCanvas._padding;
         }
 
         private (double Width, double Height) GetImageSize(InlineImage img, double maxWidth)
         {
-            var cached = _canvas._imageCache.Get(img.Url, _canvas.DocumentBasePath, maxWidth);
+            var cached = ((DocsCanvas)_services)._imageCache.Get(img.Url, _services.DocumentBasePath, maxWidth);
             if (cached != null)
                 return (cached.Value.Width, cached.Value.Height);
-            _canvas._imageCache.RequestLoad(img.Url, _canvas.DocumentBasePath, () => _canvas.InvalidateLayout());
+            ((DocsCanvas)_services)._imageCache.RequestLoad(img.Url, _services.DocumentBasePath, () => _services.InvalidateLayout());
             return (20, 20);
         }
 
@@ -886,7 +886,7 @@ public partial class DocsCanvas
             {
                 if (img.Start >= vl.StartOffset && img.Start < vlEnd)
                 {
-                    var (_, h) = GetImageSize(img, _canvas._layoutMaxWidth);
+                    var (_, h) = GetImageSize(img, ((DocsCanvas)_services)._layoutMaxWidth);
                     if (h > maxH) maxH = h;
                 }
             }
@@ -901,7 +901,7 @@ public partial class DocsCanvas
             {
                 if (img.Start >= vl.StartOffset && img.Start < vlEnd)
                 {
-                    var (_, h) = GetImageSize(img, _canvas._layoutMaxWidth);
+                    var (_, h) = GetImageSize(img, ((DocsCanvas)_services)._layoutMaxWidth);
                     totalH += h;
                 }
             }

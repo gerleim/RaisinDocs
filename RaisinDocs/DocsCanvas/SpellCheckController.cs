@@ -7,7 +7,7 @@ namespace RaisinDocs;
 
 internal sealed class SpellCheckController
 {
-    private readonly DocsCanvas _canvas;
+    private readonly IDocsCanvasServices _services;
     private bool _spellCheckEnabled;
     private SpellCheckService? _spellCheckService;
     private string? _projectFolder;
@@ -19,9 +19,9 @@ internal sealed class SpellCheckController
     public bool SpellCheckEnabled => _spellCheckEnabled;
     public string? ProjectFolder => _projectFolder;
 
-    public SpellCheckController(DocsCanvas canvas)
+    public SpellCheckController(IDocsCanvasServices services)
     {
-        _canvas = canvas;
+        _services = services ?? throw new ArgumentNullException(nameof(services));
     }
 
     public void SetSpellCheckEnabled(bool enabled)
@@ -40,7 +40,7 @@ internal sealed class SpellCheckController
             _spellCheckTimer?.Stop();
         }
 
-        _canvas.InvalidateVisual();
+        ((DocsCanvas)_services).InvalidateVisual();
     }
 
     public void Cleanup()
@@ -73,17 +73,17 @@ internal sealed class SpellCheckController
             if (_spellCheckEnabled)
             {
                 RecheckAllBlocks();
-                _canvas.InvalidateVisual();
+                ((DocsCanvas)_services).InvalidateVisual();
             }
         }
     }
 
     private void ResolveAndLoadProjectDictionary()
     {
-        if (_canvas.DocumentBasePath is not null)
+        if (((DocsCanvas)_services).DocumentBasePath is not null)
         {
-            var root = RaisinDocsPaths.FindProjectRoot(_canvas.DocumentBasePath);
-            _projectFolder = root ?? _canvas.DocumentBasePath;
+            var root = RaisinDocsPaths.FindProjectRoot(((DocsCanvas)_services).DocumentBasePath);
+            _projectFolder = root ?? ((DocsCanvas)_services).DocumentBasePath;
         }
         else
         {
@@ -116,8 +116,8 @@ internal sealed class SpellCheckController
     {
         if (!_spellCheckEnabled || _spellCheckService is null) return;
 
-        int from = Math.Min(_canvas._doc.AnchorBlock, _canvas._doc.CursorBlock);
-        int to = Math.Max(_canvas._doc.AnchorBlock, _canvas._doc.CursorBlock);
+        int from = Math.Min(((DocsCanvas)_services)._doc.AnchorBlock, ((DocsCanvas)_services)._doc.CursorBlock);
+        int to = Math.Max(((DocsCanvas)_services)._doc.AnchorBlock, ((DocsCanvas)_services)._doc.CursorBlock);
         for (int i = from; i <= to; i++)
             _dirtySpellBlocks.Add(i);
 
@@ -130,31 +130,31 @@ internal sealed class SpellCheckController
         _spellCheckTimer!.Stop();
         if (!_spellCheckEnabled || _spellCheckService is null) return;
 
-        _canvas.ComputeLayout();
+        ((DocsCanvas)_services).ComputeLayout();
 
-        if (_blockSpellingErrors is null || _blockSpellingErrors.Count != _canvas._doc.BlockCount)
+        if (_blockSpellingErrors is null || _blockSpellingErrors.Count != ((DocsCanvas)_services)._doc.BlockCount)
         {
             RecheckAllBlocks();
-            _canvas.InvalidateVisual();
+            ((DocsCanvas)_services).InvalidateVisual();
             return;
         }
 
         foreach (var blockIdx in _dirtySpellBlocks)
         {
-            if (blockIdx >= _canvas._doc.BlockCount) continue;
+            if (blockIdx >= ((DocsCanvas)_services)._doc.BlockCount) continue;
             RecheckBlock(blockIdx);
         }
 
         _dirtySpellBlocks.Clear();
-        _canvas.InvalidateVisual();
+        ((DocsCanvas)_services).InvalidateVisual();
     }
 
     private void RecheckBlock(int blockIndex)
     {
-        if (_canvas._parsedBlocks is null || blockIndex >= _canvas._parsedBlocks.Count) return;
+        if (((DocsCanvas)_services)._parsedBlocks is null || blockIndex >= ((DocsCanvas)_services)._parsedBlocks.Count) return;
 
-        var text = _canvas._doc.GetBlockText(blockIndex);
-        var parsed = _canvas._parsedBlocks[blockIndex];
+        var text = ((DocsCanvas)_services)._doc.GetBlockText(blockIndex);
+        var parsed = ((DocsCanvas)_services)._parsedBlocks[blockIndex];
         var words = MarkdownParser.ExtractCheckableWords(text, parsed);
         var errors = new List<SpellingError>();
 
@@ -174,12 +174,12 @@ internal sealed class SpellCheckController
     {
         if (_spellCheckService is null) return;
 
-        _canvas.ComputeLayout();
+        ((DocsCanvas)_services).ComputeLayout();
 
         _blockSpellingErrors = new List<IReadOnlyList<SpellingError>?>(
-            Enumerable.Repeat<IReadOnlyList<SpellingError>?>(null, _canvas._doc.BlockCount));
+            Enumerable.Repeat<IReadOnlyList<SpellingError>?>(null, ((DocsCanvas)_services)._doc.BlockCount));
 
-        for (int i = 0; i < _canvas._doc.BlockCount; i++)
+        for (int i = 0; i < ((DocsCanvas)_services)._doc.BlockCount; i++)
             RecheckBlock(i);
 
         _dirtySpellBlocks.Clear();
@@ -190,11 +190,11 @@ internal sealed class SpellCheckController
     {
         if (_blockSpellingErrors is null || _spellErrorPen is null) return;
 
-        for (int i = 0; i < _canvas._visualLines.Count; i++)
+        for (int i = 0; i < ((DocsCanvas)_services)._visualLines.Count; i++)
         {
-            var vl = _canvas._visualLines[i];
-            double lineH = _canvas.GetEffectiveLineHeight(vl);
-            double lineY = _canvas._lineYPositions[i];
+            var vl = ((DocsCanvas)_services)._visualLines[i];
+            double lineH = ((DocsCanvas)_services).GetEffectiveLineHeight(vl);
+            double lineY = ((DocsCanvas)_services)._lineYPositions[i];
             if (lineY + lineH < viewTop) continue;
             if (lineY > viewBottom) break;
 
@@ -208,9 +208,9 @@ internal sealed class SpellCheckController
             var errors = _blockSpellingErrors[vl.BlockIndex];
             if (errors is null) continue;
 
-            string blockText = _canvas._doc.GetBlockText(vl.BlockIndex);
-            var parsed = _canvas._parsedBlocks![vl.BlockIndex];
-            var map = _canvas.IsVisual ? _canvas._visualMaps?[vl.BlockIndex] : null;
+            string blockText = ((DocsCanvas)_services)._doc.GetBlockText(vl.BlockIndex);
+            var parsed = ((DocsCanvas)_services)._parsedBlocks![vl.BlockIndex];
+            var map = ((DocsCanvas)_services).IsVisual ? ((DocsCanvas)_services)._visualMaps?[vl.BlockIndex] : null;
             int vlEnd = vl.StartOffset + vl.Length;
 
             foreach (var err in errors)
@@ -222,25 +222,25 @@ internal sealed class SpellCheckController
                 int hlEnd = Math.Min(errEnd, vlEnd);
 
                 double x1, x2;
-                if (_canvas.IsVisual && parsed.Table != null && parsed.TableRow != null)
+                if (((DocsCanvas)_services).IsVisual && parsed.Table != null && parsed.TableRow != null)
                 {
-                    if (_canvas._tableColumnWidths.TryGetValue(parsed.Table, out var colWidths))
+                    if (((DocsCanvas)_services)._tableColumnWidths.TryGetValue(parsed.Table, out var colWidths))
                     {
-                        x1 = _canvas.CursorXInTableRow(vl.BlockIndex, parsed, colWidths, hlStart);
-                        x2 = _canvas.CursorXInTableRow(vl.BlockIndex, parsed, colWidths, hlEnd);
+                        x1 = ((DocsCanvas)_services).CursorXInTableRow(vl.BlockIndex, parsed, colWidths, hlStart);
+                        x2 = ((DocsCanvas)_services).CursorXInTableRow(vl.BlockIndex, parsed, colWidths, hlEnd);
                     }
                     else continue;
                 }
                 else
                 {
-                    x1 = _canvas.MeasureRangeWidth(blockText, vl.StartOffset, hlStart - vl.StartOffset,
+                    x1 = ((DocsCanvas)_services).MeasureRangeWidth(blockText, vl.StartOffset, hlStart - vl.StartOffset,
                         parsed.Runs, parsed.Kind, map);
-                    x2 = _canvas.MeasureRangeWidth(blockText, vl.StartOffset, hlEnd - vl.StartOffset,
+                    x2 = ((DocsCanvas)_services).MeasureRangeWidth(blockText, vl.StartOffset, hlEnd - vl.StartOffset,
                         parsed.Runs, parsed.Kind, map);
 
                     if (map?.ReplacementPrefix != null && vl.StartOffset == 0)
                     {
-                        double prefixW = _canvas._measure.MeasureReplacementPrefix(
+                        double prefixW = ((DocsCanvas)_services)._measure.MeasureReplacementPrefix(
                             map.ReplacementPrefix!, map.PrefixMeasureKind);
                         x1 += prefixW;
                         x2 += prefixW;
@@ -281,8 +281,8 @@ internal sealed class SpellCheckController
                 int hlStart = Math.Max(vlStart, startJoined);
                 int hlEnd = Math.Min(vlEnd, endJoined);
 
-                double x1 = _canvas.MeasureJoinedRange(group, vlStart, hlStart - vlStart);
-                double x2 = _canvas.MeasureJoinedRange(group, vlStart, hlEnd - vlStart);
+                double x1 = ((DocsCanvas)_services).MeasureJoinedRange(group, vlStart, hlStart - vlStart);
+                double x2 = ((DocsCanvas)_services).MeasureJoinedRange(group, vlStart, hlEnd - vlStart);
 
                 double w = x2 - x1;
                 if (w > 0)
@@ -334,7 +334,7 @@ internal sealed class SpellCheckController
     {
         if (_spellCheckService is null || _blockSpellingErrors is null) return false;
 
-        _canvas.HitTestToPosition(position, out int blockIndex, out int charOffset);
+        ((DocsCanvas)_services).HitTestToPosition(position, out int blockIndex, out int charOffset);
         var error = FindSpellingErrorAt(blockIndex, charOffset);
         if (error is null) return false;
 
@@ -346,14 +346,14 @@ internal sealed class SpellCheckController
             foreach (var suggestion in suggestions)
             {
                 var item = new MenuItem { Header = suggestion, FontWeight = FontWeights.Bold };
-                _canvas.ApplyMenuItemStyle(item);
+                ((DocsCanvas)_services).ApplyMenuItemStyle(item);
                 var capturedSuggestion = suggestion;
                 var capturedBlock = blockIndex;
                 var capturedErr = err;
                 item.Click += (_, _) =>
                 {
                     ReplaceWord(capturedBlock, capturedErr.StartOffset, capturedErr.Length, capturedSuggestion);
-                    _canvas.Focus();
+                    ((DocsCanvas)_services).Focus();
                 };
                 menu.Items.Add(item);
             }
@@ -361,45 +361,45 @@ internal sealed class SpellCheckController
         else
         {
             var noSuggestions = new MenuItem { Header = "(no suggestions)", IsEnabled = false };
-            _canvas.ApplyMenuItemStyle(noSuggestions);
+            ((DocsCanvas)_services).ApplyMenuItemStyle(noSuggestions);
             menu.Items.Add(noSuggestions);
         }
 
         menu.Items.Add(new Separator());
 
         var ignoreItem = new MenuItem { Header = "Ignore All" };
-        _canvas.ApplyMenuItemStyle(ignoreItem);
+        ((DocsCanvas)_services).ApplyMenuItemStyle(ignoreItem);
         var wordToIgnore = err.Word;
         ignoreItem.Click += (_, _) =>
         {
             _spellCheckService.IgnoreAll(wordToIgnore);
             RecheckAllBlocks();
-            _canvas.InvalidateVisual();
-            _canvas.Focus();
+            ((DocsCanvas)_services).InvalidateVisual();
+            ((DocsCanvas)_services).Focus();
         };
         menu.Items.Add(ignoreItem);
 
         var addItem = new MenuItem { Header = "Add to Dictionary" };
-        _canvas.ApplyMenuItemStyle(addItem);
+        ((DocsCanvas)_services).ApplyMenuItemStyle(addItem);
         var wordToAdd = err.Word;
         addItem.Click += (_, _) =>
         {
             _spellCheckService.AddToUserDictionary(wordToAdd);
             RecheckAllBlocks();
-            _canvas.InvalidateVisual();
-            _canvas.Focus();
+            ((DocsCanvas)_services).InvalidateVisual();
+            ((DocsCanvas)_services).Focus();
         };
         menu.Items.Add(addItem);
 
         var addProjectItem = new MenuItem { Header = "Add to Project Dictionary" };
-        _canvas.ApplyMenuItemStyle(addProjectItem);
+        ((DocsCanvas)_services).ApplyMenuItemStyle(addProjectItem);
         var wordForProject = err.Word;
         addProjectItem.Click += (_, _) =>
         {
             _spellCheckService.AddToProjectDictionary(wordForProject);
             RecheckAllBlocks();
-            _canvas.InvalidateVisual();
-            _canvas.Focus();
+            ((DocsCanvas)_services).InvalidateVisual();
+            ((DocsCanvas)_services).Focus();
         };
         menu.Items.Add(addProjectItem);
 
@@ -408,16 +408,16 @@ internal sealed class SpellCheckController
 
     private void ReplaceWord(int blockIndex, int offset, int length, string replacement)
     {
-        _canvas._doc.BeginUndoGroup();
-        _canvas._doc.RemoveTextAt(blockIndex, offset, length);
-        _canvas._doc.InsertTextAt(blockIndex, offset, replacement);
-        _canvas._doc.CursorBlock = blockIndex;
-        _canvas._doc.CursorOffset = offset + replacement.Length;
-        _canvas._doc.AnchorBlock = blockIndex;
-        _canvas._doc.AnchorOffset = offset + replacement.Length;
-        _canvas._doc.SealUndoGroup();
-        _canvas.InvalidateLayout();
-        _canvas.EnsureCursorVisible();
+        ((DocsCanvas)_services)._doc.BeginUndoGroup();
+        ((DocsCanvas)_services)._doc.RemoveTextAt(blockIndex, offset, length);
+        ((DocsCanvas)_services)._doc.InsertTextAt(blockIndex, offset, replacement);
+        ((DocsCanvas)_services)._doc.CursorBlock = blockIndex;
+        ((DocsCanvas)_services)._doc.CursorOffset = offset + replacement.Length;
+        ((DocsCanvas)_services)._doc.AnchorBlock = blockIndex;
+        ((DocsCanvas)_services)._doc.AnchorOffset = offset + replacement.Length;
+        ((DocsCanvas)_services)._doc.SealUndoGroup();
+        ((DocsCanvas)_services).InvalidateLayout();
+        ((DocsCanvas)_services).EnsureCursorVisible();
     }
 
     public static string? UserDictionaryPath => RaisinDocsPaths.GetUserDictionaryPath();

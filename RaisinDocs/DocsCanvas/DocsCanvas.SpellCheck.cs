@@ -9,7 +9,7 @@ public partial class DocsCanvas
     private SpellCheckController? _spellCheckController;
 
     internal SpellCheckController SpellCheck =>
-        _spellCheckController ??= new SpellCheckController(this);
+        _spellCheckController ??= new SpellCheckController((IDocsCanvasServices)this);
 
     public bool SpellCheckEnabled => SpellCheck.SpellCheckEnabled;
     public string? ProjectFolder => SpellCheck.ProjectFolder;

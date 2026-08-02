@@ -9,16 +9,16 @@ namespace RaisinDocs;
 /// </summary>
 internal class LinkHandler
 {
-    private readonly DocsCanvas _canvas;
+    private readonly IDocsCanvasServices _services;
     private string? _hoveredLinkUrl;
     private readonly ToolTip _linkToolTip = new()
     {
         Placement = System.Windows.Controls.Primitives.PlacementMode.Relative,
     };
 
-    public LinkHandler(DocsCanvas canvas)
+    public LinkHandler(IDocsCanvasServices services)
     {
-        _canvas = canvas;
+        _services = services ?? throw new ArgumentNullException(nameof(services));
     }
 
     /// <summary>
@@ -27,13 +27,13 @@ internal class LinkHandler
     /// </summary>
     public bool TryOpenLinkAtClick(Point pos)
     {
-        if (_canvas._parsedBlocks == null) return false;
+        if (((DocsCanvas)_services)._parsedBlocks == null) return false;
 
-        _canvas.ComputeLayout();
-        _canvas.HitTestToPosition(pos, out int block, out int offset);
-        if (block >= _canvas._parsedBlocks.Count) return false;
+        ((DocsCanvas)_services).ComputeLayout();
+        ((DocsCanvas)_services).HitTestToPosition(pos, out int block, out int offset);
+        if (block >= ((DocsCanvas)_services)._parsedBlocks.Count) return false;
 
-        var parsed = _canvas._parsedBlocks[block];
+        var parsed = ((DocsCanvas)_services)._parsedBlocks[block];
         if (parsed.Links == null) return false;
 
         foreach (var link in parsed.Links)
@@ -61,12 +61,12 @@ internal class LinkHandler
     /// </summary>
     public InlineLink? GetLinkAtPosition(Point pos)
     {
-        if (_canvas._parsedBlocks == null) return null;
+        if (((DocsCanvas)_services)._parsedBlocks == null) return null;
 
-        _canvas.HitTestToPosition(pos, out int block, out int offset);
-        if (block >= _canvas._parsedBlocks.Count) return null;
+        ((DocsCanvas)_services).HitTestToPosition(pos, out int block, out int offset);
+        if (block >= ((DocsCanvas)_services)._parsedBlocks.Count) return null;
 
-        var parsed = _canvas._parsedBlocks[block];
+        var parsed = ((DocsCanvas)_services)._parsedBlocks[block];
         if (parsed.Links == null) return null;
 
         foreach (var link in parsed.Links)
@@ -89,12 +89,12 @@ internal class LinkHandler
             if (_hoveredLinkUrl != url)
             {
                 _hoveredLinkUrl = url;
-                double effectiveScroll = _canvas._scroll.EffectiveOffset;
-                int vli = _canvas.HitTestVisualLine(pos.Y + effectiveScroll);
-                double lineY = _canvas._lineYPositions[vli] - effectiveScroll;
-                double lineH = _canvas.GetEffectiveLineHeight(_canvas._visualLines[vli]);
+                double effectiveScroll = ((DocsCanvas)_services)._scroll.EffectiveOffset;
+                int vli = ((DocsCanvas)_services).HitTestVisualLine(pos.Y + effectiveScroll);
+                double lineY = ((DocsCanvas)_services)._lineYPositions[vli] - effectiveScroll;
+                double lineH = ((DocsCanvas)_services).GetEffectiveLineHeight(((DocsCanvas)_services)._visualLines[vli]);
                 _linkToolTip.Content = url;
-                _linkToolTip.PlacementTarget = _canvas;
+                _linkToolTip.PlacementTarget = (DocsCanvas)_services;
                 _linkToolTip.HorizontalOffset = DocsCanvas._padding;
                 _linkToolTip.VerticalOffset = lineY + lineH;
                 _linkToolTip.IsOpen = true;
@@ -127,13 +127,13 @@ internal class LinkHandler
     /// </summary>
     public InlineLink? GetLinkAtCursor()
     {
-        if (_canvas._parsedBlocks == null || _canvas._doc.CursorBlock >= _canvas._parsedBlocks.Count)
+        if (((DocsCanvas)_services)._parsedBlocks == null || ((DocsCanvas)_services)._doc.CursorBlock >= ((DocsCanvas)_services)._parsedBlocks.Count)
             return null;
 
-        var parsed = _canvas._parsedBlocks[_canvas._doc.CursorBlock];
+        var parsed = ((DocsCanvas)_services)._parsedBlocks[((DocsCanvas)_services)._doc.CursorBlock];
         if (parsed.Links == null) return null;
 
-        int offset = _canvas._doc.CursorOffset;
+        int offset = ((DocsCanvas)_services)._doc.CursorOffset;
         foreach (var link in parsed.Links)
         {
             if (offset >= link.Start && offset < link.Start + link.Length)
@@ -148,7 +148,7 @@ internal class LinkHandler
     /// </summary>
     private bool IsLinkHit(InlineLink link, int offset)
     {
-        if (_canvas.IsVisual)
+        if (((DocsCanvas)_services).IsVisual)
         {
             GetLinkTextRange(link, out int textStart, out int textEnd);
             return offset >= textStart && offset < textEnd;

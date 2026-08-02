@@ -12,11 +12,11 @@ public partial class DocsCanvas
     /// </summary>
     internal class TableRenderer
     {
-        private readonly DocsCanvas _canvas;
+        private readonly IDocsCanvasServices _services;
 
-    public TableRenderer(DocsCanvas canvas)
+    public TableRenderer(IDocsCanvasServices services)
     {
-        _canvas = canvas ?? throw new ArgumentNullException(nameof(canvas));
+        _services = services ?? throw new ArgumentNullException(nameof(services));
     }
 
     /// <summary>
@@ -26,23 +26,23 @@ public partial class DocsCanvas
     public void ComputeAllTableColumnWidths(double maxWidth)
     {
         var seen = new HashSet<TableInfo>();
-        for (int bi = 0; bi < _canvas._doc.BlockCount; bi++)
+        for (int bi = 0; bi < ((DocsCanvas)_services)._doc.BlockCount; bi++)
         {
-            var parsed = _canvas._parsedBlocks![bi];
+            var parsed = ((DocsCanvas)_services)._parsedBlocks![bi];
             if (parsed.Table == null || parsed.TableRow == null) continue;
             if (!seen.Add(parsed.Table)) continue;
 
             int colCount = parsed.Table.ColumnCount;
             var widths = new double[colCount];
 
-            for (int bj = bi; bj < _canvas._doc.BlockCount; bj++)
+            for (int bj = bi; bj < ((DocsCanvas)_services)._doc.BlockCount; bj++)
             {
-                var p = _canvas._parsedBlocks[bj];
+                var p = ((DocsCanvas)_services)._parsedBlocks[bj];
                 if (p.Table != parsed.Table) break;
                 if (p.IsTableSeparator || p.TableRow == null) continue;
 
-                string text = _canvas._doc.GetBlockText(bj);
-                BlockVisualMap? map = (_canvas._visualMaps != null && bj < _canvas._visualMaps.Count) ? _canvas._visualMaps[bj] : null;
+                string text = ((DocsCanvas)_services)._doc.GetBlockText(bj);
+                BlockVisualMap? map = (((DocsCanvas)_services)._visualMaps != null && bj < ((DocsCanvas)_services)._visualMaps.Count) ? ((DocsCanvas)_services)._visualMaps[bj] : null;
                 for (int c = 0; c < Math.Min(p.TableRow.Cells.Count, colCount); c++)
                 {
                     var cell = p.TableRow.Cells[c];
@@ -53,7 +53,7 @@ public partial class DocsCanvas
                     string cellText = map != null
                         ? map.BuildDisplayString(text, s, e - s)
                         : text.Substring(s, e - s);
-                    double w = _canvas._measure.MeasureStringWidth(cellText, p.Kind, p.Runs, s);
+                    double w = ((DocsCanvas)_services)._measure.MeasureStringWidth(cellText, p.Kind, p.Runs, s);
                     if (w > widths[c]) widths[c] = w;
                 }
             }
@@ -61,7 +61,7 @@ public partial class DocsCanvas
             for (int c = 0; c < colCount; c++)
                 widths[c] += DocsCanvas._tableCellPadding * 2;
 
-            _canvas._tableColumnWidths[parsed.Table] = widths;
+            ((DocsCanvas)_services)._tableColumnWidths[parsed.Table] = widths;
         }
     }
 
@@ -73,16 +73,16 @@ public partial class DocsCanvas
         double viewTop, double viewBottom)
     {
         int i = 0;
-        while (i < _canvas._visualLines.Count)
+        while (i < ((DocsCanvas)_services)._visualLines.Count)
         {
-            var vl = _canvas._visualLines[i];
+            var vl = ((DocsCanvas)_services)._visualLines[i];
             // Safety check: skip if block index is out of range (can happen after merging)
-            if (_canvas._parsedBlocks == null || vl.BlockIndex >= _canvas._parsedBlocks.Count)
+            if (((DocsCanvas)_services)._parsedBlocks == null || vl.BlockIndex >= ((DocsCanvas)_services)._parsedBlocks.Count)
             {
                 i++;
                 continue;
             }
-            var parsed = _canvas._parsedBlocks[vl.BlockIndex];
+            var parsed = ((DocsCanvas)_services)._parsedBlocks[vl.BlockIndex];
             if (parsed.Table == null || parsed.Kind is not (BlockKind.TableHeaderRow or BlockKind.TableDataRow))
             {
                 i++;
@@ -92,20 +92,20 @@ public partial class DocsCanvas
             var tableInfo = parsed.Table;
             int tableStart = i;
             int tableEnd = i;
-            while (tableEnd < _canvas._visualLines.Count)
+            while (tableEnd < ((DocsCanvas)_services)._visualLines.Count)
             {
-                var p = _canvas._parsedBlocks[_canvas._visualLines[tableEnd].BlockIndex];
+                var p = ((DocsCanvas)_services)._parsedBlocks[((DocsCanvas)_services)._visualLines[tableEnd].BlockIndex];
                 if (p.Table != tableInfo) break;
                 tableEnd++;
             }
 
-            double tableY = _canvas._lineYPositions[tableStart];
+            double tableY = ((DocsCanvas)_services)._lineYPositions[tableStart];
             double tableBottom = tableEnd > 0
-                ? _canvas._lineYPositions[tableEnd - 1] + _canvas.GetEffectiveLineHeight(_canvas._visualLines[tableEnd - 1])
+                ? ((DocsCanvas)_services)._lineYPositions[tableEnd - 1] + ((DocsCanvas)_services).GetEffectiveLineHeight(((DocsCanvas)_services)._visualLines[tableEnd - 1])
                 : tableY;
 
             if (tableBottom >= viewTop && tableY <= viewBottom
-                && _canvas._tableColumnWidths.TryGetValue(tableInfo, out var colWidths))
+                && ((DocsCanvas)_services)._tableColumnWidths.TryGetValue(tableInfo, out var colWidths))
             {
                 double tableWidth = 0;
                 foreach (var w in colWidths) tableWidth += w;
@@ -113,21 +113,21 @@ public partial class DocsCanvas
                 double yTop = tableY - effectiveScroll;
                 double tableH = tableBottom - tableY;
 
-                dc.DrawRectangle(_canvas._palette.TableBackground, null,
+                dc.DrawRectangle(((DocsCanvas)_services)._palette.TableBackground, null,
                     new Rect(tableX, yTop, tableWidth, tableH));
 
-                double headerH = _canvas._measure.GetLineHeight(_canvas._visualLines[tableStart].BlockKind);
-                dc.DrawRectangle(_canvas._palette.TableHeaderBackground, null,
+                double headerH = ((DocsCanvas)_services)._measure.GetLineHeight(((DocsCanvas)_services)._visualLines[tableStart].BlockKind);
+                dc.DrawRectangle(((DocsCanvas)_services)._palette.TableHeaderBackground, null,
                     new Rect(tableX, yTop, tableWidth, headerH));
 
-                dc.DrawRectangle(null, _canvas._palette.TableBorderPen,
+                dc.DrawRectangle(null, ((DocsCanvas)_services)._palette.TableBorderPen,
                     new Rect(tableX, yTop, tableWidth, tableH));
 
                 for (int row = tableStart; row < tableEnd; row++)
                 {
-                    double rowY = _canvas._lineYPositions[row] - effectiveScroll;
+                    double rowY = ((DocsCanvas)_services)._lineYPositions[row] - effectiveScroll;
                     if (row > tableStart)
-                        dc.DrawLine(_canvas._palette.TableBorderPen,
+                        dc.DrawLine(((DocsCanvas)_services)._palette.TableBorderPen,
                             new Point(tableX, rowY), new Point(tableX + tableWidth, rowY));
                 }
 
@@ -135,7 +135,7 @@ public partial class DocsCanvas
                 for (int c = 0; c < colWidths.Length - 1; c++)
                 {
                     cx += colWidths[c];
-                    dc.DrawLine(_canvas._palette.TableBorderPen,
+                    dc.DrawLine(((DocsCanvas)_services)._palette.TableBorderPen,
                         new Point(cx, yTop), new Point(cx, yTop + tableH));
                 }
             }
@@ -152,15 +152,15 @@ public partial class DocsCanvas
         double fontSize, Typeface baseTypeface)
     {
         if (parsed.TableRow == null || parsed.Table == null) return;
-        if (!_canvas._tableColumnWidths.TryGetValue(parsed.Table, out var colWidths)) return;
+        if (!((DocsCanvas)_services)._tableColumnWidths.TryGetValue(parsed.Table, out var colWidths)) return;
 
         BlockVisualMap? map = null;
-        if (_canvas._visualMaps != null && vl.BlockIndex < _canvas._visualMaps.Count)
-            map = _canvas._visualMaps[vl.BlockIndex];
+        if (((DocsCanvas)_services)._visualMaps != null && vl.BlockIndex < ((DocsCanvas)_services)._visualMaps.Count)
+            map = ((DocsCanvas)_services)._visualMaps[vl.BlockIndex];
 
         double x = DocsCanvas._padding;
         double y = lineY - effectiveScroll;
-        double lineH = _canvas._measure.GetLineHeight(vl.BlockKind);
+        double lineH = ((DocsCanvas)_services)._measure.GetLineHeight(vl.BlockKind);
         bool isHeader = parsed.Kind == BlockKind.TableHeaderRow;
 
         for (int c = 0; c < Math.Min(parsed.TableRow.Cells.Count, colWidths.Length); c++)
@@ -176,7 +176,7 @@ public partial class DocsCanvas
             var cellTypeface = isHeader ? TextMeasurer.BoldTypeface : baseTypeface;
             var ft = new FormattedText(cellText, CultureInfo.InvariantCulture,
                 FlowDirection.LeftToRight, cellTypeface, fontSize,
-                _canvas._palette.Foreground, _canvas._measure.DpiScale);
+                ((DocsCanvas)_services)._palette.Foreground, ((DocsCanvas)_services)._measure.DpiScale);
 
             if (map != null)
                 ApplyInlineStylesForCell(ft, parsed, map, s, e);
@@ -206,8 +206,8 @@ public partial class DocsCanvas
 
                     int rawStart = Math.Max(cs.Start, s);
                     int rawEnd = Math.Min(csEnd, e);
-                    double bgX1 = _canvas.MeasureRangeWidth(blockText, s, rawStart - s, parsed.Runs, parsed.Kind, map);
-                    double bgX2 = _canvas.MeasureRangeWidth(blockText, s, rawEnd - s, parsed.Runs, parsed.Kind, map);
+                    double bgX1 = ((DocsCanvas)_services).MeasureRangeWidth(blockText, s, rawStart - s, parsed.Runs, parsed.Kind, map);
+                    double bgX2 = ((DocsCanvas)_services).MeasureRangeWidth(blockText, s, rawEnd - s, parsed.Runs, parsed.Kind, map);
                     if (bgX2 <= bgX1) continue;
 
                     var bg = cs.Background.Value;
@@ -231,8 +231,8 @@ public partial class DocsCanvas
     internal double CursorXInTableRow(int blockIndex, ParsedBlock parsed, double[] colWidths, int cursorOffset)
     {
         var cells = parsed.TableRow!.Cells;
-        string blockText = _canvas._doc.GetBlockText(blockIndex);
-        BlockVisualMap? map = (_canvas._visualMaps != null && blockIndex < _canvas._visualMaps.Count) ? _canvas._visualMaps[blockIndex] : null;
+        string blockText = ((DocsCanvas)_services)._doc.GetBlockText(blockIndex);
+        BlockVisualMap? map = (((DocsCanvas)_services)._visualMaps != null && blockIndex < ((DocsCanvas)_services)._visualMaps.Count) ? ((DocsCanvas)_services)._visualMaps[blockIndex] : null;
 
         double x = 0;
         for (int c = 0; c < cells.Count && c < colWidths.Length; c++)
@@ -259,12 +259,12 @@ public partial class DocsCanvas
                 }
 
                 bool isHeader = parsed.Kind == BlockKind.TableHeaderRow;
-                double fontSize = _canvas._measure.GetBlockFontSize(parsed.Kind);
+                double fontSize = ((DocsCanvas)_services)._measure.GetBlockFontSize(parsed.Kind);
                 var cellTypeface = isHeader ? TextMeasurer.BoldTypeface : TextMeasurer.GetBlockBaseTypeface(parsed.Kind);
 
                 var ft = new FormattedText(cellText, CultureInfo.InvariantCulture,
                     FlowDirection.LeftToRight, cellTypeface, fontSize,
-                    _canvas._palette.Foreground, _canvas._measure.DpiScale);
+                    ((DocsCanvas)_services)._palette.Foreground, ((DocsCanvas)_services)._measure.DpiScale);
 
                 if (map != null)
                     ApplyInlineStylesForCell(ft, parsed, map, trimStart, trimEnd);
@@ -299,8 +299,8 @@ public partial class DocsCanvas
     internal int HitTestInTableRow(VisualLine vl, ParsedBlock parsed, double[] colWidths, double x)
     {
         var cells = parsed.TableRow!.Cells;
-        string blockText = _canvas._doc.GetBlockText(vl.BlockIndex);
-        BlockVisualMap? map = (_canvas._visualMaps != null && vl.BlockIndex < _canvas._visualMaps.Count) ? _canvas._visualMaps[vl.BlockIndex] : null;
+        string blockText = ((DocsCanvas)_services)._doc.GetBlockText(vl.BlockIndex);
+        BlockVisualMap? map = (((DocsCanvas)_services)._visualMaps != null && vl.BlockIndex < ((DocsCanvas)_services)._visualMaps.Count) ? ((DocsCanvas)_services)._visualMaps[vl.BlockIndex] : null;
         double cx = 0;
 
         for (int c = 0; c < cells.Count && c < colWidths.Length; c++)
@@ -319,13 +319,13 @@ public partial class DocsCanvas
                     {
                         if (map.IsHidden(rawI)) continue;
                         var style = TextMeasurer.GetStyleAtOffset(parsed.Runs, rawI, ref ri);
-                        fullTextW += _canvas._measure.MeasureCharWidth(blockText[rawI], parsed.Kind, style);
+                        fullTextW += ((DocsCanvas)_services)._measure.MeasureCharWidth(blockText[rawI], parsed.Kind, style);
                     }
                 }
                 else
                 {
                     string cellContent = blockText.Substring(trimStart, trimEnd - trimStart);
-                    fullTextW = _canvas._measure.MeasureStringWidth(cellContent, parsed.Kind, parsed.Runs, trimStart);
+                    fullTextW = ((DocsCanvas)_services)._measure.MeasureStringWidth(cellContent, parsed.Kind, parsed.Runs, trimStart);
                 }
 
                 var align = parsed.Table!.Alignments[c];
@@ -347,7 +347,7 @@ public partial class DocsCanvas
                     {
                         if (map.IsHidden(rawI)) continue;
                         var style = TextMeasurer.GetStyleAtOffset(parsed.Runs, rawI, ref runIdx);
-                        double charW = _canvas._measure.MeasureCharWidth(blockText[rawI], parsed.Kind, style);
+                        double charW = ((DocsCanvas)_services)._measure.MeasureCharWidth(blockText[rawI], parsed.Kind, style);
                         if (localX < accum + charW / 2)
                             return rawI;
                         accum += charW;
@@ -360,7 +360,7 @@ public partial class DocsCanvas
                     for (int i = 0; i < cellContent.Length; i++)
                     {
                         var style = TextMeasurer.GetStyleAtOffset(parsed.Runs, trimStart + i, ref runIdx);
-                        double charW = _canvas._measure.MeasureCharWidth(cellContent[i], parsed.Kind, style);
+                        double charW = ((DocsCanvas)_services)._measure.MeasureCharWidth(cellContent[i], parsed.Kind, style);
                         if (localX < accum + charW / 2)
                             return trimStart + i;
                         accum += charW;
@@ -417,7 +417,7 @@ public partial class DocsCanvas
 
         if (parsed.BlockColor?.Foreground is { } blockFg)
         {
-            if (ftLen > 0) ft.SetForegroundBrush(_canvas.GetCachedBrush(blockFg.R, blockFg.G, blockFg.B), 0, ftLen);
+            if (ftLen > 0) ft.SetForegroundBrush(((DocsCanvas)_services).GetCachedBrush(blockFg.R, blockFg.G, blockFg.B), 0, ftLen);
         }
 
         if (map.ColorSpans != null)
@@ -437,7 +437,7 @@ public partial class DocsCanvas
 
                 if (cs.Foreground is { } fg)
                 {
-                    ft.SetForegroundBrush(_canvas.GetCachedBrush(fg.R, fg.G, fg.B), visStart, count);
+                    ft.SetForegroundBrush(((DocsCanvas)_services).GetCachedBrush(fg.R, fg.G, fg.B), visStart, count);
                 }
             }
         }

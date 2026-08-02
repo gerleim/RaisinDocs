@@ -6,7 +6,7 @@ namespace RaisinDocs;
 
 internal class PageBreakManager
 {
-    private readonly DocsCanvas _canvas;
+    private readonly IDocsCanvasServices _services;
     private bool _showPageBreaks;
     private readonly List<double> _pageBreakYs = [];
     private int _pageBreakLayoutVersion = -1;
@@ -17,9 +17,9 @@ internal class PageBreakManager
     private static readonly Pen _pageBreakPen = BuildPageBreakPen();
     private static readonly Brush _pageBreakLabelBrush = BuildPageBreakLabelBrush();
 
-    public PageBreakManager(DocsCanvas canvas)
+    public PageBreakManager(IDocsCanvasServices services)
     {
-        _canvas = canvas;
+        _services = services ?? throw new ArgumentNullException(nameof(services));
     }
 
     public bool ShowPageBreaks => _showPageBreaks;
@@ -28,7 +28,7 @@ internal class PageBreakManager
     {
         if (_showPageBreaks == show) return;
         _showPageBreaks = show;
-        _canvas.InvalidateVisual();
+        ((DocsCanvas)_services).InvalidateVisual();
     }
 
     internal List<double> TestGetPageBreakYs()
@@ -41,27 +41,27 @@ internal class PageBreakManager
 
     public void ComputePageBreakPositions()
     {
-        if (_pageBreakLayoutVersion == _canvas.TestLayoutVersion) return;
-        _pageBreakLayoutVersion = _canvas.TestLayoutVersion;
+        if (_pageBreakLayoutVersion == ((DocsCanvas)_services).TestLayoutVersion) return;
+        _pageBreakLayoutVersion = ((DocsCanvas)_services).TestLayoutVersion;
         _pageBreakYs.Clear();
 
-        if (_canvas.TestVisualLineCount == 0) return;
+        if (((DocsCanvas)_services).TestVisualLineCount == 0) return;
 
         double pageContentH = DefaultPageHeight - PageBreakMarginY * 2;
-        double pageTopY = _canvas.TestLineYPositions[0];
+        double pageTopY = ((DocsCanvas)_services).TestLineYPositions[0];
         int pageStartLine = 0;
-        int prevBlockIndex = _canvas.TestVisualLines[0].BlockIndex;
+        int prevBlockIndex = ((DocsCanvas)_services).TestVisualLines[0].BlockIndex;
 
-        for (int i = 1; i < _canvas.TestVisualLineCount; i++)
+        for (int i = 1; i < ((DocsCanvas)_services).TestVisualLineCount; i++)
         {
-            int bi = _canvas.TestVisualLines[i].BlockIndex;
+            int bi = ((DocsCanvas)_services).TestVisualLines[i].BlockIndex;
 
-            if (_canvas.TestParsedBlocks != null && bi > prevBlockIndex)
+            if (((DocsCanvas)_services).TestParsedBlocks != null && bi > prevBlockIndex)
             {
                 bool hasExplicitBreak = false;
                 for (int b = prevBlockIndex; b < bi; b++)
                 {
-                    if (_canvas.TestParsedBlocks[b].Kind == BlockKind.PageBreak)
+                    if (((DocsCanvas)_services).TestParsedBlocks[b].Kind == BlockKind.PageBreak)
                     {
                         hasExplicitBreak = true;
                         break;
@@ -69,20 +69,20 @@ internal class PageBreakManager
                 }
                 if (hasExplicitBreak)
                 {
-                    _pageBreakYs.Add(_canvas.TestLineYPositions[i]);
-                    pageTopY = _canvas.TestLineYPositions[i];
+                    _pageBreakYs.Add(((DocsCanvas)_services).TestLineYPositions[i]);
+                    pageTopY = ((DocsCanvas)_services).TestLineYPositions[i];
                     pageStartLine = i;
                     prevBlockIndex = bi;
                     continue;
                 }
             }
 
-            double lineBottom = _canvas.TestLineYPositions[i] + _canvas.GetEffectiveLineHeightPublic(_canvas.TestVisualLines[i]) - pageTopY;
+            double lineBottom = ((DocsCanvas)_services).TestLineYPositions[i] + ((DocsCanvas)_services).GetEffectiveLineHeightPublic(((DocsCanvas)_services).TestVisualLines[i]) - pageTopY;
             if (lineBottom > pageContentH && i > pageStartLine)
             {
-                int breakAt = AvoidOrphanedHeading(i, pageStartLine, _canvas.TestVisualLines);
-                _pageBreakYs.Add(_canvas.TestLineYPositions[breakAt]);
-                pageTopY = _canvas.TestLineYPositions[breakAt];
+                int breakAt = AvoidOrphanedHeading(i, pageStartLine, ((DocsCanvas)_services).TestVisualLines);
+                _pageBreakYs.Add(((DocsCanvas)_services).TestLineYPositions[breakAt]);
+                pageTopY = ((DocsCanvas)_services).TestLineYPositions[breakAt];
                 pageStartLine = breakAt;
             }
 
@@ -113,7 +113,7 @@ internal class PageBreakManager
         if (_pageBreakYs.Count == 0) return;
 
         var pen = _pageBreakPen;
-        double width = _canvas.ActualWidth;
+        double width = ((DocsCanvas)_services).ActualWidth;
 
         for (int i = 0; i < _pageBreakYs.Count; i++)
         {
@@ -127,7 +127,7 @@ internal class PageBreakManager
             string label = $"Page {i + 2}";
             var ft = new FormattedText(label, CultureInfo.InvariantCulture,
                 FlowDirection.LeftToRight, TextMeasurer.NormalTypeface, 10,
-                _pageBreakLabelBrush, _canvas.TestMeasure.DpiScale);
+                _pageBreakLabelBrush, ((DocsCanvas)_services).TestMeasure.DpiScale);
             dc.DrawText(ft, new Point(width - ft.Width - 6, screenY + 2));
         }
     }
