@@ -289,6 +289,7 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider
     private readonly VisualModeManager _visualModeManager;
     private readonly LayoutEngine _layoutEngine;
     private readonly RenderingContext _renderingContext;
+    private readonly CursorNavigationEngine _navigationEngine;
 
     public enum SoftBreakMode { Relaxed, Strict }
     public enum HardBreakStyle { Backslash, TrailingSpaces }
@@ -732,6 +733,7 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider
         _visualModeManager = new VisualModeManager(this);
         _layoutEngine = new LayoutEngine(this);
         _renderingContext = new RenderingContext(this);
+        _navigationEngine = new CursorNavigationEngine(this);
         Focusable = true;
         FocusVisualStyle = null;
         SnapsToDevicePixels = true;
@@ -992,342 +994,31 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider
 
     // --- Cursor ↔ visual line mapping ---
 
-    internal int CursorToVisualLineIndex()
-    {
-        for (int i = _visualLines.Count - 1; i >= 0; i--)
-        {
-            var vl = _visualLines[i];
-            if (vl.Group != null)
-            {
-                int joined = vl.Group.SourceToJoined(_doc.CursorBlock, _doc.CursorOffset);
-                if (joined >= 0 && joined >= vl.StartOffset && joined <= vl.StartOffset + vl.Length)
-                {
-                    if (_cursorAtLineEnd && joined == vl.StartOffset && i > 0
-                        && _visualLines[i - 1].Group == vl.Group)
-                        continue;
-                    return i;
-                }
-            }
-            else if (vl.BlockIndex == _doc.CursorBlock && vl.StartOffset <= _doc.CursorOffset)
-            {
-                if (_cursorAtLineEnd && vl.StartOffset == _doc.CursorOffset && i > 0
-                    && _visualLines[i - 1].BlockIndex == vl.BlockIndex)
-                    continue;
-                return i;
-            }
-        }
-        return 0;
-    }
+    internal int CursorToVisualLineIndex() => _navigationEngine.CursorToVisualLineIndex();
 
     private double GetTextStartXForVisualLine(VisualLine vl) => _layoutEngine.GetTextStartXForVisualLine(vl);
 
-    internal BlockVisualSpacing? GetVisualLineSpacing(VisualLine vl)
-    {
-        if (!IsVisual || _visualLineSpacings == null || vl.BlockIndex < 0)
-            return null;
+    internal BlockVisualSpacing? GetVisualLineSpacing(VisualLine vl) => _navigationEngine.GetVisualLineSpacing(vl);
 
-        // Find the index of this VisualLine
-        int vlIndex = -1;
-        for (int i = 0; i < _visualLines.Count; i++)
-        {
-            if (_visualLines[i] == vl)
-            {
-                vlIndex = i;
-                break;
-            }
-        }
-
-        if (vlIndex < 0 || vlIndex >= _visualLineSpacings.Count)
-            return null;
-
-        return _visualLineSpacings[vlIndex];
-    }
-
-    internal double CursorXInVisualLine(int vlIndex)
-    {
-        var vl = _visualLines[vlIndex];
-
-        if (vl.Group != null)
-        {
-            int joinedOffset = vl.Group.SourceToJoined(_doc.CursorBlock, _doc.CursorOffset);
-            int localOffset = Math.Clamp(joinedOffset - vl.StartOffset, 0, vl.Length);
-            if (localOffset == 0) return 0;
-            return MeasureJoinedRange(vl.Group, vl.StartOffset, localOffset);
-        }
-
-        int localOff = Math.Clamp(_doc.CursorOffset - vl.StartOffset, 0, vl.Length);
-        var map = IsVisual ? _visualMaps?[vl.BlockIndex] : null;
-
-        var parsed = _parsedBlocks![vl.BlockIndex];
-        if (IsVisual && parsed.Table != null && parsed.TableRow != null
-            && _tableColumnWidths.TryGetValue(parsed.Table, out var colWidths))
-        {
-            return CursorXInTableRow(vl.BlockIndex, parsed, colWidths, localOff);
-        }
-
-        string blockText = _doc.GetBlockText(vl.BlockIndex);
-        double x = GetTextStartXForVisualLine(vl);
-
-        // Subtract padding since we're returning cursor x relative to control left edge
-        // (ContentStartX from cache already accounts for ReplacementPrefix width)
-        x -= _padding;
-
-        if (localOff == 0) return x;
-
-        if (map == null)
-        {
-            string lineText = blockText.Substring(vl.StartOffset, vl.Length);
-            var ft = new FormattedText(lineText, CultureInfo.InvariantCulture,
-                FlowDirection.LeftToRight, TextMeasurer.GetBlockBaseTypeface(vl.BlockKind),
-                _measure.GetBlockFontSize(vl.BlockKind), _palette.Foreground, _measure.DpiScale);
-            ApplyInlineStyles(ft, vl, parsed, blockText);
-            var geom = ft.BuildHighlightGeometry(new Point(0, 0), 0, localOff);
-            return x + (geom != null ? geom.Bounds.Right : ft.WidthIncludingTrailingWhitespace);
-        }
-
-        int runIdx = 0;
-        for (int i = vl.StartOffset; i < vl.StartOffset + localOff; i++)
-        {
-            if (map.IsHidden(i))
-            {
-                var img = FindImageAtRawOffset(map.Images, i);
-                if (img != null)
-                {
-                    var (imgW, _) = GetImageSize(img.Value, _layoutMaxWidth);
-                    x += imgW;
-                    i += img.Value.Length - 1;
-                }
-                continue;
-            }
-            var style = TextMeasurer.GetStyleAtOffset(parsed.Runs, i, ref runIdx);
-            x += _measure.MeasureCharWidth(blockText[i], parsed.Kind, style);
-        }
-        return x;
-    }
+    internal double CursorXInVisualLine(int vlIndex) => _navigationEngine.CursorXInVisualLine(vlIndex);
 
     internal double MeasureJoinedRange(ParagraphGroup group, int start, int length)
-    {
-        double width = MeasureRangeWidth(group.JoinedText, start, length,
-            group.JoinedParsed.Runs, BlockKind.Paragraph, group.JoinedMap);
+        => _navigationEngine.MeasureJoinedRange(group, start, length);
 
-        // Add visual space width for soft breaks that fall within the range
-        var softBreaks = new HashSet<int>(group.SoftBreakOffsets);
-        int runIdx = 0;
-        for (int i = start; i < start + length; i++)
-        {
-            if (softBreaks.Contains(i) && i < group.JoinedText.Length && group.JoinedText[i] == '¶')
-            {
-                // Add visual space width after each pilcrow
-                var style = TextMeasurer.GetStyleAtOffset(group.JoinedParsed.Runs, i, ref runIdx);
-                double spaceW = _measure.MeasureCharWidth(' ', BlockKind.Paragraph, style);
-                width += spaceW;
-            }
-        }
-
-        return width;
-    }
 
     private int HitTestInVisualLineProper(int vlIndex, double clickX)
-    {
-        var vl = _visualLines[vlIndex];
-        if (vl.Length == 0) return vl.StartOffset;
-
-        var parsed = _parsedBlocks![vl.BlockIndex];
-        var map = IsVisual ? _visualMaps?[vl.BlockIndex] : null;
-        string blockText = _doc.GetBlockText(vl.BlockIndex);
-
-        // Account for where text actually starts on screen
-        double textStartX = GetTextStartXForVisualLine(vl);
-
-        // clickX is already adjusted by _padding, so adjust textStartX to match
-        // (textStartX is in screen coordinates, so we need to remove padding to match clickX)
-        double offsetFromTextStart = clickX - (textStartX - _padding);
-
-        // Measure x position for each visible character and find closest to offsetFromTextStart
-        // Start at 0 since offsetFromTextStart is already relative to where text starts
-        double accum = 0;
-
-        int runIdx = 0;
-        double closestDist = double.MaxValue;
-        int closestOffset = vl.StartOffset;
-
-        for (int i = vl.StartOffset; i < vl.StartOffset + vl.Length; i++)
-        {
-            double charStart = accum;
-
-            if (map != null && map.IsHidden(i))
-            {
-                var img = FindImageAtRawOffset(map.Images, i);
-                if (img != null)
-                {
-                    var (imgW, _) = GetImageSize(img.Value, _layoutMaxWidth);
-                    accum += imgW;
-                }
-                continue;
-            }
-
-            var style = TextMeasurer.GetStyleAtOffset(parsed.Runs, i, ref runIdx);
-            double charW = _measure.MeasureCharWidth(blockText[i], parsed.Kind, style);
-            double charEnd = accum + charW;
-
-            // Check if click is closer to this char's start or end
-            double distToStart = Math.Abs(offsetFromTextStart - charStart);
-            double distToEnd = Math.Abs(offsetFromTextStart - charEnd);
-            double minDist = Math.Min(distToStart, distToEnd);
-
-            if (minDist < closestDist)
-            {
-                closestDist = minDist;
-                closestOffset = i + (distToEnd < distToStart ? 1 : 0);
-            }
-
-            accum = charEnd;
-        }
-
-        return Math.Min(closestOffset, vl.StartOffset + vl.Length);
-    }
+        => _navigationEngine.HitTestInVisualLineProper(vlIndex, clickX);
 
     private int HitTestInVisualLine(int vlIndex, double x)
-    {
-        var vl = _visualLines[vlIndex];
-        if (vl.Length == 0) return vl.StartOffset;
-
-        if (vl.Group != null)
-            return HitTestInJoinedLine(vl, x);
-
-        var parsed = _parsedBlocks![vl.BlockIndex];
-        if (IsVisual && parsed.Table != null && parsed.TableRow != null
-            && _tableColumnWidths.TryGetValue(parsed.Table, out var colWidths))
-        {
-            return HitTestInTableRow(vl, parsed, colWidths, x);
-        }
-
-        var map = IsVisual ? _visualMaps?[vl.BlockIndex] : null;
-        string blockText = _doc.GetBlockText(vl.BlockIndex);
-
-        double accum = 0;
-
-        if (map != null && map.ReplacementPrefix != null && vl.StartOffset == 0)
-        {
-            double prefixW = _measure.MeasureReplacementPrefix(map.ReplacementPrefix!, map.PrefixMeasureKind);
-            Logger?.Log(DocsLogLevel.Debug, $"HitTestInVisualLine: Block {vl.BlockIndex} has replacement prefix, prefixW={prefixW}, x={x}");
-            if (x < prefixW)
-            {
-                Logger?.Log(DocsLogLevel.Debug, $"HitTestInVisualLine: Click in prefix area, returning StartOffset={vl.StartOffset}");
-                return vl.StartOffset;
-            }
-            accum = prefixW;
-        }
-
-        int runIdx = 0;
-        for (int i = 0; i < vl.Length; i++)
-        {
-            int offset = vl.StartOffset + i;
-            if (map != null && map.IsHidden(offset))
-            {
-                var img = FindImageAtRawOffset(map.Images, offset);
-                if (img != null)
-                {
-                    var (imgW, _) = GetImageSize(img.Value, _layoutMaxWidth);
-                    if (x < accum + imgW / 2)
-                        return offset;
-                    accum += imgW;
-                    i += img.Value.Length - 1;
-                }
-                continue;
-            }
-            var style = TextMeasurer.GetStyleAtOffset(parsed.Runs, offset, ref runIdx);
-            double charW = _measure.MeasureCharWidth(blockText[offset], parsed.Kind, style);
-            if (x < accum + charW / 2)
-            {
-                Logger?.Log(DocsLogLevel.Debug, $"HitTestInVisualLine: Block {vl.BlockIndex} matched char at offset {offset} (accum={accum}, charW={charW})");
-                return offset;
-            }
-            accum += charW;
-        }
-        Logger?.Log(DocsLogLevel.Debug, $"HitTestInVisualLine: Block {vl.BlockIndex} past all chars, returning end offset {vl.StartOffset + vl.Length} (accum={accum}, x={x})");
-        return vl.StartOffset + vl.Length;
-    }
+        => _navigationEngine.HitTestInVisualLine(vlIndex, x);
 
     private int HitTestInJoinedLine(VisualLine vl, double x)
-    {
-        var group = vl.Group!;
-        var softBreaks = new HashSet<int>(group.SoftBreakOffsets);
-        double accum = 0;
-        int runIdx = 0;
+        => _navigationEngine.HitTestInJoinedLine(vl, x);
 
-        for (int i = 0; i < vl.Length; i++)
-        {
-            int offset = vl.StartOffset + i;
-            if (group.JoinedMap.IsHidden(offset))
-            {
-                var img = FindImageAtRawOffset(group.JoinedMap.Images, offset);
-                if (img != null)
-                {
-                    var (imgW, _) = GetImageSize(img.Value, _layoutMaxWidth);
-                    if (x < accum + imgW / 2)
-                        return offset;
-                    accum += imgW;
-                    i += img.Value.Length - 1;
-                }
-                continue;
-            }
-            var style = TextMeasurer.GetStyleAtOffset(group.JoinedParsed.Runs, offset, ref runIdx);
-            double charW = _measure.MeasureCharWidth(group.JoinedText[offset], BlockKind.Paragraph, style);
-
-            // For soft breaks, account for visual space when hit-testing
-            double testWidth = charW;
-            if (softBreaks.Contains(offset) && group.JoinedText[offset] == '¶')
-            {
-                double spaceW = _measure.MeasureCharWidth(' ', BlockKind.Paragraph, style);
-                testWidth += spaceW;  // Use full visual width for hit-testing
-            }
-
-            // Check if click is in this character's area
-            if (x < accum + testWidth / 2)
-                return offset;
-
-            // Advance by character width only (not visual space - that's rendering-only)
-            accum += charW;
-        }
-        return vl.StartOffset + vl.Length;
-    }
-
-    internal int HitTestVisualLine(double y)
-    {
-        if (_visualLines.Count == 0) return 0;
-        for (int i = 0; i < _visualLines.Count; i++)
-        {
-            double lineH = GetEffectiveLineHeight(_visualLines[i]);
-            if (y < _lineYPositions[i] + lineH)
-                return i;
-        }
-        return _visualLines.Count - 1;
-    }
+    internal int HitTestVisualLine(double y) => _navigationEngine.HitTestVisualLine(y);
 
     internal void HitTestToPosition(Point pos, out int blockIndex, out int charOffset)
-    {
-        if (_visualLines.Count == 0) { blockIndex = 0; charOffset = 0; return; }
-        double effectiveScroll = _scroll.EffectiveOffset;
-        int vli = HitTestVisualLine(pos.Y + effectiveScroll);
-        var vl = _visualLines[vli];
-        double xForHitTest = pos.X - _padding;
-
-        int rawOffset = IsVisual ? HitTestInVisualLineProper(vli, xForHitTest) : HitTestInVisualLine(vli, xForHitTest);
-
-        if (vl.Group != null)
-        {
-            var (bi, bo) = vl.Group.JoinedToSource(rawOffset);
-            blockIndex = bi;
-            charOffset = bo;
-        }
-        else
-        {
-            blockIndex = vl.BlockIndex;
-            charOffset = rawOffset;
-        }
-        Logger?.Log(DocsLogLevel.Debug, $"HitTestToPosition: Click at ({pos.X}, {pos.Y}) -> Block {blockIndex}, Offset {charOffset}");
-    }
+        => _navigationEngine.HitTestToPosition(pos, out blockIndex, out charOffset);
 
     // --- Scroll ---
 

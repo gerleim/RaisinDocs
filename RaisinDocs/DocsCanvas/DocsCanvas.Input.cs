@@ -362,260 +362,29 @@ public partial class DocsCanvas
     }
 
     private void HandleLeft(bool shift, bool ctrl = false)
-    {
-        SealAndStopTimer();
-        if (ctrl)
-        {
-            if (!shift && _doc.HasSelection)
-            {
-                var (sb, so, _, _) = _doc.GetOrderedSelection();
-                _doc.CursorBlock = sb;
-                _doc.CursorOffset = so;
-                _doc.CollapseSelection();
-            }
-            else
-            {
-                _doc.MoveWordLeft();
-            }
-            if (IsVisual)
-            {
-                if (_parsedBlocks != null && IsTableRow(_parsedBlocks[_doc.CursorBlock]))
-                    ClampCursorToTableCell();
-                else
-                    SkipCursorOverHiddenRanges(forward: false);
-            }
-            if (!shift) _doc.CollapseSelection();
-        }
-        else
-        {
-            if (IsVisual) HandleLeftVisual(shift);
-            else HandleLeftSource(shift);
-            if (!shift) _doc.CollapseSelection();
-        }
-    }
+        => _navigationEngine.HandleLeft(shift, ctrl);
 
     private void HandleRight(bool shift, bool ctrl = false)
-    {
-        SealAndStopTimer();
-        if (ctrl)
-        {
-            if (!shift && _doc.HasSelection)
-            {
-                var (_, _, eb, eo) = _doc.GetOrderedSelection();
-                _doc.CursorBlock = eb;
-                _doc.CursorOffset = eo;
-                _doc.CollapseSelection();
-            }
-            else
-            {
-                _doc.MoveWordRight();
-            }
-            if (IsVisual)
-            {
-                if (_parsedBlocks != null && IsTableRow(_parsedBlocks[_doc.CursorBlock]))
-                    ClampCursorToTableCell();
-                else
-                    SkipCursorOverHiddenRanges(forward: true);
-            }
-            if (!shift) _doc.CollapseSelection();
-        }
-        else
-        {
-            if (IsVisual) HandleRightVisual(shift);
-            else HandleRightSource(shift);
-            if (!shift) _doc.CollapseSelection();
-        }
-    }
+        => _navigationEngine.HandleRight(shift, ctrl);
 
     private void HandleHome(bool shift, bool ctrl)
-    {
-        SealAndStopTimer();
-        if (ctrl)
-        {
-            _doc.CursorBlock = 0;
-            _doc.CursorOffset = 0;
-        }
-        else
-        {
-            int vli = CursorToVisualLineIndex();
-            var vl = _visualLines[vli];
-            if (vl.Group != null)
-            {
-                var (targetBi, targetBo) = vl.Group.JoinedToSource(vl.StartOffset);
-                if (_doc.CursorBlock == targetBi && _doc.CursorOffset == targetBo
-                    && vli > 0 && _visualLines[vli - 1].Group == vl.Group)
-                {
-                    var (firstBi, firstBo) = vl.Group.JoinedToSource(0);
-                    _doc.CursorBlock = firstBi;
-                    _doc.CursorOffset = firstBo;
-                }
-                else
-                {
-                    _doc.CursorBlock = targetBi;
-                    _doc.CursorOffset = targetBo;
-                }
-            }
-            else
-            {
-                if (_doc.CursorOffset == vl.StartOffset
-                    && vli > 0 && _visualLines[vli - 1].BlockIndex == vl.BlockIndex)
-                {
-                    _doc.CursorOffset = 0;
-                }
-                else
-                {
-                    _doc.CursorOffset = vl.StartOffset;
-                }
-            }
-        }
-        if (IsVisual) HandleHomeVisual();
-        if (!shift) _doc.CollapseSelection();
-    }
+        => _navigationEngine.HandleHome(shift, ctrl);
 
     private void HandleEnd(bool shift, bool ctrl)
-    {
-        SealAndStopTimer();
-        _cursorAtLineEnd = false;
-        if (ctrl)
-        {
-            _doc.CursorBlock = _doc.BlockCount - 1;
-            _doc.CursorOffset = _doc.GetBlockLength(_doc.CursorBlock);
-        }
-        else
-        {
-            int vli = CursorToVisualLineIndex();
-            var vl = _visualLines[vli];
-            int endOffset = vl.StartOffset + vl.Length;
-            if (vl.Group != null)
-            {
-                bool isWrap = vli + 1 < _visualLines.Count
-                    && _visualLines[vli + 1].Group == vl.Group;
-                if (isWrap)
-                {
-                    string text = vl.Group.JoinedText;
-                    while (endOffset > vl.StartOffset && text[endOffset - 1] == ' ')
-                        endOffset--;
-                }
-                var (targetBi, targetBo) = vl.Group.JoinedToSource(endOffset);
-                if (_doc.CursorBlock == targetBi && _doc.CursorOffset == targetBo && isWrap)
-                {
-                    var last = vl.Group.Segments[^1];
-                    _doc.CursorBlock = last.BlockIndex;
-                    _doc.CursorOffset = last.Length;
-                }
-                else
-                {
-                    _doc.CursorBlock = targetBi;
-                    _doc.CursorOffset = targetBo;
-                }
-            }
-            else
-            {
-                bool isWrap = vli + 1 < _visualLines.Count
-                    && _visualLines[vli + 1].BlockIndex == vl.BlockIndex;
-                if (isWrap)
-                {
-                    string text = _doc.GetBlockText(vl.BlockIndex);
-                    while (endOffset > vl.StartOffset && text[endOffset - 1] == ' ')
-                        endOffset--;
-                }
-                if (_doc.CursorOffset == endOffset && isWrap)
-                {
-                    _doc.CursorOffset = _doc.GetBlockLength(vl.BlockIndex);
-                }
-                else
-                {
-                    _doc.CursorOffset = endOffset;
-                }
-            }
-            _cursorAtLineEnd = true;
-        }
-        if (IsVisual) HandleEndVisual();
-        if (!shift) _doc.CollapseSelection();
-    }
+        => _navigationEngine.HandleEnd(shift, ctrl);
 
     private void HandleUp(bool shift)
-    {
-        SealAndStopTimer();
-        int vli = CursorToVisualLineIndex();
-        if (vli > 0)
-        {
-            double x = CursorXInVisualLine(vli);
-            vli--;
-            SetCursorFromVisualLine(vli, x);
-        }
-        if (IsVisual) HandleUpVisual();
-        if (!shift) _doc.CollapseSelection();
-    }
+        => _navigationEngine.HandleUp(shift);
 
     private void HandleDown(bool shift)
-    {
-        SealAndStopTimer();
-        int vli = CursorToVisualLineIndex();
-        if (vli < _visualLines.Count - 1)
-        {
-            double x = CursorXInVisualLine(vli);
-            vli++;
-            SetCursorFromVisualLine(vli, x);
-        }
-        if (IsVisual) HandleDownVisual();
-        if (!shift) _doc.CollapseSelection();
-    }
+        => _navigationEngine.HandleDown(shift);
 
     private void HandlePageUp(bool shift)
-    {
-        SealAndStopTimer();
-        int vli = CursorToVisualLineIndex();
-        double x = CursorXInVisualLine(vli);
-        double cursorY = _lineYPositions[vli];
-        double relativeY = cursorY - _scroll.Offset;
-        double lineH = GetEffectiveLineHeight(_visualLines[vli]);
-        double pageAmount = Math.Max(lineH, ActualHeight - 3 * lineH);
-
-        _scroll.Offset -= pageAmount;
-        _scroll.Clamp();
-
-        int targetVli = HitTestVisualLine(_scroll.Offset + relativeY);
-        SetCursorFromVisualLine(targetVli, x);
-        if (IsVisual) HandleUpVisual();
-        if (!shift) _doc.CollapseSelection();
-    }
+        => _navigationEngine.HandlePageUp(shift);
 
     private void HandlePageDown(bool shift)
-    {
-        SealAndStopTimer();
-        int vli = CursorToVisualLineIndex();
-        double x = CursorXInVisualLine(vli);
-        double cursorY = _lineYPositions[vli];
-        double relativeY = cursorY - _scroll.Offset;
-        double lineH = GetEffectiveLineHeight(_visualLines[vli]);
-        double pageAmount = Math.Max(lineH, ActualHeight - 3 * lineH);
+        => _navigationEngine.HandlePageDown(shift);
 
-        _scroll.Offset += pageAmount;
-        _scroll.Clamp();
-
-        int targetVli = HitTestVisualLine(_scroll.Offset + relativeY);
-        SetCursorFromVisualLine(targetVli, x);
-        if (IsVisual) HandleDownVisual();
-        if (!shift) _doc.CollapseSelection();
-    }
-
-    private void SetCursorFromVisualLine(int vli, double x)
-    {
-        var vl = _visualLines[vli];
-        int rawOffset = HitTestInVisualLine(vli, x);
-        if (vl.Group != null)
-        {
-            var (bi, bo) = vl.Group.JoinedToSource(rawOffset);
-            _doc.CursorBlock = bi;
-            _doc.CursorOffset = bo;
-        }
-        else
-        {
-            _doc.CursorBlock = vl.BlockIndex;
-            _doc.CursorOffset = rawOffset;
-        }
-    }
 
     private void HandleEnter(bool shift, bool ctrl)
     {
