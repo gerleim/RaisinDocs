@@ -286,6 +286,7 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider, IDocsC
     private readonly TableInputHandler _tableInputHandler;
     private readonly TableRenderer _tableRenderer;
     private readonly VisualModeManager _visualModeManager;
+    private readonly ColorFormattingManager _colorFormatter;
     private readonly LayoutEngine _layoutEngine;
     private readonly RenderingContext _renderingContext;
     private readonly CursorNavigationEngine _navigationEngine;
@@ -731,6 +732,7 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider, IDocsC
         _tableInputHandler = new TableInputHandler((IDocsCanvasServices)this);
         _tableRenderer = new TableRenderer((IDocsCanvasServices)this);
         _visualModeManager = new VisualModeManager((IDocsCanvasServices)this);
+        _colorFormatter = new ColorFormattingManager((IDocsCanvasServices)this);
         _layoutEngine = new LayoutEngine((IDocsCanvasServices)this);
         _renderingContext = new RenderingContext((IDocsCanvasServices)this);
         _navigationEngine = new CursorNavigationEngine((IDocsCanvasServices)this);

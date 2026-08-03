@@ -289,95 +289,32 @@ public partial class DocsCanvas
 
     public void InsertFgColor(string colorName)
     {
-        InsertColorWrapper($"<!--@fg:{colorName}-->", "<!--/@fg-->", $"fg:{colorName}");
+        _colorFormatter.InsertFgColor(colorName);
     }
 
     public void InsertBgColor(string colorName)
     {
-        InsertColorWrapper($"<!--@bg:{colorName}-->", "<!--/@bg-->", $"bg:{colorName}");
-    }
-
-    private void InsertColorWrapper(string opener, string closer, string divProperty)
-    {
-        SealAndStopTimer();
-        _doc.BeginUndoGroup();
-
-        if (_doc.HasSelection)
-        {
-            var (sb, so, eb, eo) = _doc.GetOrderedSelection();
-            if (sb == eb)
-            {
-                _doc.InsertTextAt(sb, eo, closer);
-                _doc.InsertTextAt(sb, so, opener);
-                _doc.CursorBlock = sb;
-                _doc.CursorOffset = eo + opener.Length;
-                _doc.AnchorBlock = sb;
-                _doc.AnchorOffset = _doc.CursorOffset;
-            }
-            else
-            {
-                string divOpen = $"<!--@div {divProperty}-->";
-                _doc.InsertBlockAt(eb + 1, "<!--/@div-->");
-                _doc.InsertBlockAt(sb, divOpen);
-                _doc.CursorBlock = eb + 1;
-                _doc.CursorOffset = eo;
-                _doc.AnchorBlock = _doc.CursorBlock;
-                _doc.AnchorOffset = _doc.CursorOffset;
-            }
-        }
-        else
-        {
-            int block = _doc.CursorBlock;
-            int offset = _doc.CursorOffset;
-            _doc.InsertTextAt(block, offset, opener + closer);
-            _doc.CursorOffset = offset + opener.Length;
-            _doc.AnchorBlock = block;
-            _doc.AnchorOffset = _doc.CursorOffset;
-        }
-
-        _doc.SealUndoGroup();
-        InvalidateLayout();
-        EnsureCursorVisible();
-        RaiseFormattingChanged();
+        _colorFormatter.InsertBgColor(colorName);
     }
 
     internal bool SelectionHasBackground()
     {
-        ComputeLayout();
-        if (_parsedBlocks == null) return false;
-        return BackgroundHelper.SelectionHasBackground(_doc, _parsedBlocks);
+        return _colorFormatter.SelectionHasBackground();
     }
 
     internal bool CursorHasBackground()
     {
-        ComputeLayout();
-        if (_parsedBlocks == null) return false;
-        return BackgroundHelper.CursorHasBackground(_doc, _parsedBlocks);
+        return _colorFormatter.CursorHasBackground();
     }
 
     public void RemoveBackgroundAtCursor()
     {
-        ComputeLayout();
-        SealAndStopTimer();
-        _doc.BeginUndoGroup();
-        BackgroundHelper.RemoveBackgroundAtCursor(_doc, _parsedBlocks);
-        _doc.SealUndoGroup();
-        InvalidateLayout();
-        EnsureCursorVisible();
-        RaiseFormattingChanged();
+        _colorFormatter.RemoveBackgroundAtCursor();
     }
 
     public void RemoveBackgroundFromSelection()
     {
-        if (!_doc.HasSelection) return;
-        ComputeLayout();
-        SealAndStopTimer();
-        _doc.BeginUndoGroup();
-        BackgroundHelper.RemoveBackgroundFromSelection(_doc, _parsedBlocks);
-        _doc.SealUndoGroup();
-        InvalidateLayout();
-        EnsureCursorVisible();
-        RaiseFormattingChanged();
+        _colorFormatter.RemoveBackgroundFromSelection();
     }
 
 
