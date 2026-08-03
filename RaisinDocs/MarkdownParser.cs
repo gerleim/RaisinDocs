@@ -365,9 +365,14 @@ public static class MarkdownParser
 
             result.Add(new ParsedBlock
             {
-                Kind = kind, Runs = runs, Images = images, Links = links,
-                EmphasisMarkers = emphasisMarkers, ColorSpans = colorSpans,
-                DivOpenColor = divOpenColor, HasDivClose = blockHasDivClose,
+                Kind = kind,
+                Runs = runs,
+                Images = images,
+                Links = links,
+                EmphasisMarkers = emphasisMarkers,
+                ColorSpans = colorSpans,
+                DivOpenColor = divOpenColor,
+                HasDivClose = blockHasDivClose,
                 LeadingSpaces = leadingSpaces,
                 ContentColumn = GetContentColumn(kind, text, leadingSpaces, leadingColumns),
             });
@@ -1194,7 +1199,9 @@ public static class MarkdownParser
         {
             Kind = BlockKind.Paragraph,
             Runs = ParseInlines(text, out var imgs, out var lnks, out var emph, defs),
-            Images = imgs, Links = lnks, EmphasisMarkers = emph,
+            Images = imgs,
+            Links = lnks,
+            EmphasisMarkers = emph,
         };
     }
 

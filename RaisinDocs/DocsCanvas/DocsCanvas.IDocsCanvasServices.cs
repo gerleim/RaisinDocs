@@ -27,6 +27,15 @@ public partial class DocsCanvas
     void ILayoutDataServices.ComputeLayout() => ComputeLayout();
     BlockVisualSpacing? ILayoutDataServices.GetVisualLineSpacing(VisualLine vl) => GetVisualLineSpacing(vl);
 
+    // Test-only properties for ILayoutDataServices
+    int ILayoutDataServices.TestLayoutVersion => _layoutVersion;
+    int ILayoutDataServices.TestVisualLineCount => _visualLines.Count;
+    List<double> ILayoutDataServices.TestLineYPositions => _lineYPositions;
+    List<VisualLine> ILayoutDataServices.TestVisualLines => _visualLines;
+    List<ParsedBlock>? ILayoutDataServices.TestParsedBlocks => _parsedBlocks;
+    TextMeasurer ILayoutDataServices.TestMeasure => _measure;
+    double ILayoutDataServices.GetEffectiveLineHeightPublic(VisualLine vl) => GetEffectiveLineHeight(vl);
+
     // ====== IRenderingServices ======
     ThemePalette IRenderingServices.Palette => _palette;
     TextMeasurer IRenderingServices.Measure => _measure;
@@ -96,4 +105,5 @@ public partial class DocsCanvas
         remove { ScrollStateChanged -= value; }
     }
     void ICanvasOperations.SealAndStopTimer() => SealAndStopTimer();
+    void ICanvasOperations.RaiseFormattingChanged() => FormattingChanged?.Invoke(this, EventArgs.Empty);
 }

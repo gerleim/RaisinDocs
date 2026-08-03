@@ -625,7 +625,7 @@ public partial class DocsCanvas
             if (text.Length == 0)
             {
                 ((DocsCanvas)_services)._visualLines.Add(new DocsCanvas.VisualLine(group.FirstBlock, 0, 0, BlockKind.Paragraph)
-                    { Group = group });
+                { Group = group });
                 return;
             }
 

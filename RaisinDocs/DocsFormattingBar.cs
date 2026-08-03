@@ -693,7 +693,8 @@ public class DocsFormattingBar : Control
         {
             var swatch = new Border
             {
-                Width = 14, Height = 14,
+                Width = 14,
+                Height = 14,
                 Background = new SolidColorBrush(color),
                 CornerRadius = new CornerRadius(2),
                 Margin = new Thickness(0, 0, 6, 0),
@@ -835,14 +836,19 @@ public class DocsFormattingBar : Control
                 var grid = new Grid { Width = 16, Height = 16 };
                 grid.Children.Add(new TextBlock
                 {
-                    Text = "A", FontWeight = FontWeights.Bold, FontSize = 13,
+                    Text = "A",
+                    FontWeight = FontWeights.Bold,
+                    FontSize = 13,
                     HorizontalAlignment = HorizontalAlignment.Center,
-                    VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, -1, 0, 0),
+                    VerticalAlignment = VerticalAlignment.Top,
+                    Margin = new Thickness(0, -1, 0, 0),
                 });
                 grid.Children.Add(new Border
                 {
-                    Height = 3, VerticalAlignment = VerticalAlignment.Bottom,
-                    Background = _colorBar?.Background ?? Brushes.Red, CornerRadius = new CornerRadius(1),
+                    Height = 3,
+                    VerticalAlignment = VerticalAlignment.Bottom,
+                    Background = _colorBar?.Background ?? Brushes.Red,
+                    CornerRadius = new CornerRadius(1),
                 });
                 return grid;
             });
@@ -998,60 +1004,60 @@ public class DocsFormattingBar : Control
         switch (e.Key)
         {
             case Key.Left:
-            {
-                int next = FindNextAccessible(_keyboardFocusIndex, forward: false, wrap: true);
-                if (next >= 0) FocusButton(next);
-                e.Handled = true;
-                break;
-            }
+                {
+                    int next = FindNextAccessible(_keyboardFocusIndex, forward: false, wrap: true);
+                    if (next >= 0) FocusButton(next);
+                    e.Handled = true;
+                    break;
+                }
 
             case Key.Right:
-            {
-                int next = FindNextAccessible(_keyboardFocusIndex, forward: true, wrap: true);
-                if (next >= 0) FocusButton(next);
-                e.Handled = true;
-                break;
-            }
+                {
+                    int next = FindNextAccessible(_keyboardFocusIndex, forward: true, wrap: true);
+                    if (next >= 0) FocusButton(next);
+                    e.Handled = true;
+                    break;
+                }
 
             case Key.Home:
-            {
-                int first = FindNextAccessible(-1, forward: true);
-                if (first >= 0) FocusButton(first);
-                e.Handled = true;
-                break;
-            }
+                {
+                    int first = FindNextAccessible(-1, forward: true);
+                    if (first >= 0) FocusButton(first);
+                    e.Handled = true;
+                    break;
+                }
 
             case Key.End:
-            {
-                int last = FindNextAccessible(_navigableButtons.Count, forward: false);
-                if (last >= 0) FocusButton(last);
-                e.Handled = true;
-                break;
-            }
+                {
+                    int last = FindNextAccessible(_navigableButtons.Count, forward: false);
+                    if (last >= 0) FocusButton(last);
+                    e.Handled = true;
+                    break;
+                }
 
             case Key.Enter:
             case Key.Space:
-            {
-                if (_keyboardFocusIndex >= 0 && _keyboardFocusIndex < _navigableButtons.Count)
-                    _navigableButtons[_keyboardFocusIndex].Action();
-                e.Handled = true;
-                break;
-            }
+                {
+                    if (_keyboardFocusIndex >= 0 && _keyboardFocusIndex < _navigableButtons.Count)
+                        _navigableButtons[_keyboardFocusIndex].Action();
+                    e.Handled = true;
+                    break;
+                }
 
             case Key.Tab:
-            {
-                bool shift = Keyboard.Modifiers.HasFlag(ModifierKeys.Shift);
-                int next = FindNextAccessible(_keyboardFocusIndex, forward: !shift);
-                if (next >= 0)
-                    FocusButton(next);
-                else
                 {
-                    DeactivateKeyboardNavigation();
-                    Canvas?.Focus();
+                    bool shift = Keyboard.Modifiers.HasFlag(ModifierKeys.Shift);
+                    int next = FindNextAccessible(_keyboardFocusIndex, forward: !shift);
+                    if (next >= 0)
+                        FocusButton(next);
+                    else
+                    {
+                        DeactivateKeyboardNavigation();
+                        Canvas?.Focus();
+                    }
+                    e.Handled = true;
+                    break;
                 }
-                e.Handled = true;
-                break;
-            }
 
             case Key.Escape:
             case Key.LeftAlt:
