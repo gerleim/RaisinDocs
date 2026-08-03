@@ -1,15 +1,212 @@
 using System.Collections.Generic;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 
 namespace RaisinDocs;
 
+/// <summary>
+/// Record structs for integration data.
+/// </summary>
+internal readonly record struct TocEntry(int BlockIndex, int HeadingLevel, string Text);
 internal readonly record struct MinimapTableCell(string Text, double XOffset, int RawStart);
 
+/// <summary>
+/// Partial class containing Find/Replace, Table of Contents, Spell Check, and Minimap integrations.
+/// </summary>
 public partial class DocsCanvas
 {
-    // --- Minimap support ---
+    #region Find and Replace
+
+    private FindAndReplaceController? _findAndReplaceController;
+
+    internal FindAndReplaceController FindAndReplace =>
+        _findAndReplaceController ??= new FindAndReplaceController((IDocsCanvasServices)this);
+
+    internal void OpenFind(bool showReplace)
+    {
+        string? initialText = null;
+        if (_doc.HasSelection)
+        {
+            var (sb, so, eb, eo) = _doc.GetOrderedSelection();
+            if (sb == eb)
+                initialText = _doc.GetBlockText(sb).Substring(so, eo - so);
+        }
+        FindBar?.Open(showReplace, initialText);
+        FindBar?.ApplyTheme(_palette.Background, _palette.Foreground, _palette.Syntax, _palette.CodeBackground);
+    }
+
+    internal void CloseFind()
+    {
+        FindAndReplace.ClearMatches();
+        FindBar?.Close();
+        InvalidateVisual();
+    }
+
+    internal void ExecuteSearch(string query, bool caseSensitive) =>
+        FindAndReplace.ExecuteSearch(query, caseSensitive);
+
+    internal void NavigateMatch(int direction) =>
+        FindAndReplace.NavigateMatch(direction);
+
+    internal void ReplaceCurrent(string replacement) =>
+        FindAndReplace.ReplaceCurrent(replacement);
+
+    internal void ReplaceAll(string replacement) =>
+        FindAndReplace.ReplaceAll(replacement);
+
+    private void InvalidateSearchOnContentChange() =>
+        FindAndReplace.InvalidateSearchOnContentChange();
+
+    private void DrawSearchHighlights(DrawingContext dc, double effectiveScroll) =>
+        FindAndReplace.DrawSearchHighlights(dc, effectiveScroll);
+
+    // Test hooks
+    internal int TestSearchMatchCount => FindAndReplace.TestSearchMatchCount;
+    internal int TestCurrentMatchIndex => FindAndReplace.TestCurrentMatchIndex;
+    internal void TestExecuteSearch(string query, bool caseSensitive) => FindAndReplace.TestExecuteSearch(query, caseSensitive);
+
+    #endregion
+
+    #region Table of Contents
+
+    internal TocPanel? TocPanel { get; set; }
+    internal bool IsTocVisible { get; set; }
+
+    internal void InitTocTheme()
+    {
+        TocPanel?.ApplyTheme(_palette.Background, _palette.Foreground, _palette.Syntax, _palette.CodeBackground);
+    }
+
+    public void ToggleToc()
+    {
+        var editor = FindParentEditor();
+        if (editor != null)
+            editor.ShowToc = !editor.ShowToc;
+    }
+
+    internal List<TocEntry> GetTocEntries()
+    {
+        ComputeLayout();
+        var entries = new List<TocEntry>();
+        if (_parsedBlocks == null) return entries;
+        for (int bi = 0; bi < _parsedBlocks.Count; bi++)
+        {
+            var kind = _parsedBlocks[bi].Kind;
+            if (kind >= BlockKind.Heading1 && kind <= BlockKind.Heading6)
+            {
+                int level = kind - BlockKind.Heading1 + 1;
+                string raw = _doc.GetBlockText(bi);
+                entries.Add(new TocEntry(bi, level, StripHeadingPrefix(raw, level)));
+            }
+        }
+        return entries;
+    }
+
+    internal int GetCurrentHeadingBlock()
+    {
+        ComputeLayout();
+        int cursorBlock = _doc.CursorBlock;
+        if (_parsedBlocks == null) return -1;
+        for (int bi = Math.Min(cursorBlock, _parsedBlocks.Count - 1); bi >= 0; bi--)
+        {
+            var kind = _parsedBlocks[bi].Kind;
+            if (kind >= BlockKind.Heading1 && kind <= BlockKind.Heading6)
+                return bi;
+        }
+        return -1;
+    }
+
+    internal void NavigateToBlock(int blockIndex)
+    {
+        if (blockIndex < 0 || blockIndex >= _doc.BlockCount) return;
+        _doc.CursorBlock = blockIndex;
+        _doc.CursorOffset = 0;
+        _doc.CollapseSelection();
+        ComputeLayout();
+        ScrollBlockToTop(blockIndex);
+        InvalidateVisual();
+    }
+
+    private void ScrollBlockToTop(int blockIndex)
+    {
+        _scroll.StopWheelCoast();
+        _scroll.CancelSmooth();
+        if (_visualLines.Count == 0) return;
+        int vli = CursorToVisualLineIndex();
+        _scroll.Offset = _lineYPositions[vli] - _padding;
+        _scroll.Clamp();
+    }
+
+    private static string StripHeadingPrefix(string text, int level)
+    {
+        int i = 0;
+        while (i < text.Length && text[i] == ' ') i++;
+        int hashEnd = i + level;
+        if (hashEnd < text.Length && text[hashEnd] == ' ')
+            hashEnd++;
+        return hashEnd <= text.Length ? text[hashEnd..].TrimEnd() : text.TrimEnd();
+    }
+
+    #endregion
+
+    #region Spell Check
+
+    private SpellCheckController? _spellCheckController;
+
+    internal SpellCheckController SpellCheck =>
+        _spellCheckController ??= new SpellCheckController((IDocsCanvasServices)this);
+
+    public bool SpellCheckEnabled => SpellCheck.SpellCheckEnabled;
+    public string? ProjectFolder => SpellCheck.ProjectFolder;
+
+    public void SetSpellCheckEnabled(bool enabled)
+    {
+        SpellCheck.SetSpellCheckEnabled(enabled);
+    }
+
+    private void CleanupSpellCheck()
+    {
+        _spellCheckController?.Cleanup();
+    }
+
+    internal void OnDocumentBasePathChanged()
+    {
+        _spellCheckController?.OnDocumentBasePathChanged();
+    }
+
+    public void SetProjectFolder(string folder)
+    {
+        SpellCheck.SetProjectFolder(folder);
+    }
+
+    private void OnContentChangedForSpellCheck()
+    {
+        _spellCheckController?.OnContentChanged();
+    }
+
+    private void DrawSpellingErrors(DrawingContext dc, double effectiveScroll,
+        double viewTop, double viewBottom)
+    {
+        _spellCheckController?.DrawSpellingErrors(dc, effectiveScroll, viewTop, viewBottom);
+    }
+
+    private bool AddSpellCheckMenuItems(ContextMenu menu, Point position)
+    {
+        return _spellCheckController?.AddSpellCheckMenuItems(menu, position) ?? false;
+    }
+
+    public static string? UserDictionaryPath => SpellCheckController.UserDictionaryPath;
+    public string? ProjectDictionaryPath => SpellCheck.ProjectDictionaryPath;
+
+    internal SpellCheckService? TestSpellCheckService => _spellCheckController?.TestSpellCheckService;
+    internal IReadOnlyList<SpellingError>? TestGetSpellingErrors(int blockIndex)
+        => _spellCheckController?.TestGetSpellingErrors(blockIndex);
+
+    #endregion
+
+    #region Minimap
 
     internal MinimapScrollbar? Minimap { get; set; }
     internal bool IsMinimapVisible { get; set; }
@@ -218,4 +415,6 @@ public partial class DocsCanvas
     double IMinimapDataProvider.GetViewportHeight() => ActualHeight;
 
     List<BlockVisualMap>? IMinimapDataProvider.GetVisualMaps() => _visualMaps;
+
+    #endregion
 }
