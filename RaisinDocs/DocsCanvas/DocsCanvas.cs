@@ -283,6 +283,7 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider, IDocsC
 
     private readonly LinkHandler _linkHandler;
     private readonly LinkPopupController _linkPopup;
+    private readonly TableInputHandler _tableInputHandler;
     private readonly TableRenderer _tableRenderer;
     private readonly VisualModeManager _visualModeManager;
     private readonly LayoutEngine _layoutEngine;
@@ -708,7 +709,7 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider, IDocsC
     internal bool TestHandleTableEnter()
     {
         ComputeLayout();
-        return HandleTableEnter(out _);
+        return _tableInputHandler.HandleTableEnter(out _);
     }
     internal void TestHandleEnter(bool shift = false, bool ctrl = false)
     {
@@ -727,6 +728,7 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider, IDocsC
         _scroll = new ScrollController(InvalidateVisual, () => Math.Max(0, _totalContentHeight - ActualHeight));
         _linkHandler = new LinkHandler((IDocsCanvasServices)this);
         _linkPopup = new LinkPopupController(_doc, this);
+        _tableInputHandler = new TableInputHandler((IDocsCanvasServices)this);
         _tableRenderer = new TableRenderer((IDocsCanvasServices)this);
         _visualModeManager = new VisualModeManager((IDocsCanvasServices)this);
         _layoutEngine = new LayoutEngine((IDocsCanvasServices)this);

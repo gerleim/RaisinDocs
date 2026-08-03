@@ -568,91 +568,6 @@ public partial class DocsCanvas
         }
     }
 
-    private bool HandleTableTab(bool shift, out bool textChanged)
-    {
-        textChanged = false;
-        if (_parsedBlocks == null) return false;
-        var parsed = _parsedBlocks[_doc.CursorBlock];
-        if (parsed.TableRow == null || parsed.Table == null) return false;
-
-        SealAndStopTimer();
-        var cells = parsed.TableRow.Cells;
-        string blockText = _doc.GetBlockText(_doc.CursorBlock);
-        int colCount = parsed.Table.ColumnCount;
-
-        int curCell = -1;
-        for (int c = 0; c < cells.Count; c++)
-        {
-            if (_doc.CursorOffset >= cells[c].Start &&
-                _doc.CursorOffset <= cells[c].Start + cells[c].Length)
-            { curCell = c; break; }
-        }
-        if (curCell < 0) curCell = 0;
-
-        if (!shift)
-        {
-            if (curCell + 1 < cells.Count)
-            {
-                var next = cells[curCell + 1];
-                MoveCursorToCell(next, blockText);
-            }
-            else
-            {
-                for (int b = _doc.CursorBlock + 1; b < _doc.BlockCount; b++)
-                {
-                    var p = _parsedBlocks[b];
-                    if (p.IsTableSeparator) continue;
-                    if (p.TableRow != null && p.Table == parsed.Table)
-                    {
-                        _doc.CursorBlock = b;
-                        var nextBlockText = _doc.GetBlockText(b);
-                        MoveCursorToCell(p.TableRow.Cells[0], nextBlockText);
-                        break;
-                    }
-                    break;
-                }
-            }
-        }
-        else
-        {
-            if (curCell > 0)
-            {
-                var prev = cells[curCell - 1];
-                MoveCursorToCell(prev, blockText);
-            }
-            else
-            {
-                for (int b = _doc.CursorBlock - 1; b >= 0; b--)
-                {
-                    var p = _parsedBlocks[b];
-                    if (p.IsTableSeparator) continue;
-                    if (p.TableRow != null && p.Table == parsed.Table)
-                    {
-                        _doc.CursorBlock = b;
-                        var prevBlockText = _doc.GetBlockText(b);
-                        var lastCell = p.TableRow.Cells[^1];
-                        MoveCursorToCell(lastCell, prevBlockText);
-                        break;
-                    }
-                    break;
-                }
-            }
-        }
-
-        _doc.CollapseSelection();
-        return true;
-    }
-
-    private void MoveCursorToCell(TableCellInfo cell, string blockText)
-    {
-        int start = cell.Start;
-        int end = cell.Start + cell.Length;
-        while (start < end && blockText[start] == ' ') start++;
-        while (end > start && blockText[end - 1] == ' ') end--;
-        _doc.CursorOffset = start;
-        _doc.AnchorBlock = _doc.CursorBlock;
-        _doc.AnchorOffset = end;
-    }
 
     private void HandleTabIndent(bool shift)
     {
@@ -718,41 +633,6 @@ public partial class DocsCanvas
         };
     }
 
-    private bool HandleTableEnter(out bool textChanged)
-    {
-        textChanged = false;
-        if (_parsedBlocks == null) return false;
-        var parsed = _parsedBlocks[_doc.CursorBlock];
-        if (parsed.Table == null) return false;
-
-        int colCount = parsed.Table.ColumnCount;
-        string newRow = "|" + string.Concat(Enumerable.Repeat("  |", colCount));
-
-        _doc.BeginUndoGroup();
-        if (_doc.HasSelection) _doc.DeleteSelection();
-        _doc.CollapseSelection();
-
-        int insertAfter = _doc.CursorBlock;
-        if (parsed.Kind == BlockKind.TableHeaderRow || parsed.Kind == BlockKind.TableSeparatorRow)
-        {
-            for (int b = insertAfter + 1; b < _doc.BlockCount; b++)
-            {
-                if (_parsedBlocks[b].Kind == BlockKind.TableSeparatorRow) { insertAfter = b; continue; }
-                break;
-            }
-        }
-
-        _doc.CursorBlock = insertAfter;
-        _doc.CursorOffset = _doc.GetBlockLength(insertAfter);
-        _doc.InsertParagraphBreak();
-        _doc.Paste(newRow);
-        _doc.CursorOffset = 2;
-        _doc.CollapseSelection();
-        _doc.SealUndoGroup();
-        textChanged = true;
-        return true;
-    }
-
     // --- Keyboard ---
 
     private bool _altKeyAlone;
@@ -789,7 +669,7 @@ public partial class DocsCanvas
                 break;
             case Key.Tab:
                 if (IsReadOnly) { handled = false; break; }
-                if (HandleTableTab(shift, out textChanged))
+                if (_tableInputHandler.HandleTableTab(shift, out textChanged))
                     break;
                 HandleTabIndent(shift);
                 textChanged = true;
@@ -798,7 +678,7 @@ public partial class DocsCanvas
             case Key.Return:
                 if (IsReadOnly) { handled = false; break; }
                 SealAndStopTimer();
-                if (HandleTableEnter(out textChanged))
+                if (_tableInputHandler.HandleTableEnter(out textChanged))
                     break;
                 HandleEnter(shift, ctrl);
                 textChanged = true;
