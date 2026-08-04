@@ -8,35 +8,41 @@ namespace RaisinDocs;
 /// </summary>
 internal class VisualModeManager
 {
-    private readonly IDocsCanvasServices _services;
+    private readonly IVisualModeServices _visual;
+    private readonly IDocumentServices _doc;
+    private readonly IParsedContentServices _content;
+    private readonly ILoggingServices _logging;
 
-    public VisualModeManager(IDocsCanvasServices services)
+    public VisualModeManager(IVisualModeServices visual, IDocumentServices doc, IParsedContentServices content, ILoggingServices logging)
     {
-        _services = services ?? throw new ArgumentNullException(nameof(services));
+        _visual = visual ?? throw new ArgumentNullException(nameof(visual));
+        _doc = doc ?? throw new ArgumentNullException(nameof(doc));
+        _content = content ?? throw new ArgumentNullException(nameof(content));
+        _logging = logging ?? throw new ArgumentNullException(nameof(logging));
     }
 
     // --- Visual mode: cursor helpers ---
 
     internal void SkipCursorOverHiddenRanges(bool forward)
     {
-        if (((DocsCanvas)_services)._visualMaps == null) return;
-        if (((DocsCanvas)_services)._doc.CursorBlock >= ((DocsCanvas)_services)._visualMaps.Count) return;
-        var map = ((DocsCanvas)_services)._visualMaps[((DocsCanvas)_services)._doc.CursorBlock];
-        int offset = ((DocsCanvas)_services)._doc.CursorOffset;
+        if (_visual.VisualMaps == null) return;
+        if (_doc.Document.CursorBlock >= _visual.VisualMaps.Count) return;
+        var map = _visual.VisualMaps[_doc.Document.CursorBlock];
+        int offset = _doc.Document.CursorOffset;
         int originalOffset = offset;
 
         if (map.IsHidden(offset))
         {
-            if (_services.Logger?.IsDebugEnabled ?? false)
-                _services.Logger.Log(DocsLogLevel.Debug, $"SkipCursorOverHiddenRanges: Block {((DocsCanvas)_services)._doc.CursorBlock} offset {originalOffset} is hidden. Ranges: {string.Join(", ", map.HiddenRanges.Select(r => $"[{r.Start},{r.Length})"))}");
+            if (_logging.Logger?.IsDebugEnabled ?? false)
+                _logging.Logger.Log(DocsLogLevel.Debug, $"SkipCursorOverHiddenRanges: Block {_doc.Document.CursorBlock} offset {originalOffset} is hidden. Ranges: {string.Join(", ", map.HiddenRanges.Select(r => $"[{r.Start},{r.Length})"))}");
             if (forward)
             {
-                int blockLen = ((DocsCanvas)_services)._doc.GetBlockLength(((DocsCanvas)_services)._doc.CursorBlock);
+                int blockLen = _doc.GetBlockLength(_doc.Document.CursorBlock);
                 offset = map.SkipHidden(offset, true);
                 while (offset < blockLen && map.IsHidden(offset))
                     offset++;
-                if (_services.Logger?.IsDebugEnabled ?? false)
-                    _services.Logger.Log(DocsLogLevel.Debug, $"SkipCursorOverHiddenRanges: Forward skip {originalOffset} -> {offset}");
+                if (_logging.Logger?.IsDebugEnabled ?? false)
+                    _logging.Logger.Log(DocsLogLevel.Debug, $"SkipCursorOverHiddenRanges: Forward skip {originalOffset} -> {offset}");
             }
             else
             {
@@ -45,54 +51,54 @@ internal class VisualModeManager
                     offset--;
                 if (offset == 0 && map.IsHidden(0))
                 {
-                    int blockLen = ((DocsCanvas)_services)._doc.GetBlockLength(((DocsCanvas)_services)._doc.CursorBlock);
+                    int blockLen = _doc.GetBlockLength(_doc.Document.CursorBlock);
                     offset = map.SkipHidden(0, true);
                     while (offset < blockLen && map.IsHidden(offset))
                         offset++;
-                    if (_services.Logger?.IsDebugEnabled ?? false)
-                        _services.Logger.Log(DocsLogLevel.Debug, $"SkipCursorOverHiddenRanges: Backward skip (at start) {originalOffset} -> {offset}");
+                    if (_logging.Logger?.IsDebugEnabled ?? false)
+                        _logging.Logger.Log(DocsLogLevel.Debug, $"SkipCursorOverHiddenRanges: Backward skip (at start) {originalOffset} -> {offset}");
                 }
                 else
                 {
-                    if (_services.Logger?.IsDebugEnabled ?? false)
-                        _services.Logger.Log(DocsLogLevel.Debug, $"SkipCursorOverHiddenRanges: Backward skip {originalOffset} -> {offset}");
+                    if (_logging.Logger?.IsDebugEnabled ?? false)
+                        _logging.Logger.Log(DocsLogLevel.Debug, $"SkipCursorOverHiddenRanges: Backward skip {originalOffset} -> {offset}");
                 }
             }
         }
         else
         {
-            if (_services.Logger?.IsDebugEnabled ?? false)
-                _services.Logger.Log(DocsLogLevel.Debug, $"SkipCursorOverHiddenRanges: Block {((DocsCanvas)_services)._doc.CursorBlock} offset {originalOffset} is NOT hidden");
+            if (_logging.Logger?.IsDebugEnabled ?? false)
+                _logging.Logger.Log(DocsLogLevel.Debug, $"SkipCursorOverHiddenRanges: Block {_doc.Document.CursorBlock} offset {originalOffset} is NOT hidden");
         }
-        ((DocsCanvas)_services)._doc.CursorOffset = offset;
+        _doc.Document.CursorOffset = offset;
     }
 
     internal void SkipCursorToVisible(bool forward)
     {
-        if (((DocsCanvas)_services)._visualMaps == null) return;
-        if (((DocsCanvas)_services)._doc.CursorBlock >= ((DocsCanvas)_services)._visualMaps.Count) return;
-        var map = ((DocsCanvas)_services)._visualMaps[((DocsCanvas)_services)._doc.CursorBlock];
-        int offset = ((DocsCanvas)_services)._doc.CursorOffset;
+        if (_visual.VisualMaps == null) return;
+        if (_doc.Document.CursorBlock >= _visual.VisualMaps.Count) return;
+        var map = _visual.VisualMaps[_doc.Document.CursorBlock];
+        int offset = _doc.Document.CursorOffset;
         if (forward)
         {
-            int blockLen = ((DocsCanvas)_services)._doc.GetBlockLength(((DocsCanvas)_services)._doc.CursorBlock);
+            int blockLen = _doc.GetBlockLength(_doc.Document.CursorBlock);
             while (offset < blockLen && map.IsHidden(offset)) offset++;
         }
         else
         {
             while (offset > 0 && map.IsHidden(offset - 1)) offset--;
         }
-        ((DocsCanvas)_services)._doc.CursorOffset = offset;
+        _doc.Document.CursorOffset = offset;
     }
 
     internal void ClampCursorAwayFromHidden()
     {
-        if (((DocsCanvas)_services)._visualMaps == null) return;
-        if (((DocsCanvas)_services)._doc.CursorBlock >= ((DocsCanvas)_services)._visualMaps.Count) return;
-        if (((DocsCanvas)_services)._parsedBlocks != null && ((DocsCanvas)_services)._doc.CursorBlock < ((DocsCanvas)_services)._parsedBlocks.Count
-            && IsTableRow(((DocsCanvas)_services)._parsedBlocks[((DocsCanvas)_services)._doc.CursorBlock])) return;
-        var map = ((DocsCanvas)_services)._visualMaps[((DocsCanvas)_services)._doc.CursorBlock];
-        int offset = ((DocsCanvas)_services)._doc.CursorOffset;
+        if (_visual.VisualMaps == null) return;
+        if (_doc.Document.CursorBlock >= _visual.VisualMaps.Count) return;
+        if (_content.ParsedBlocks != null && _doc.Document.CursorBlock < _content.ParsedBlocks.Count
+            && IsTableRow(_content.ParsedBlocks[_doc.Document.CursorBlock])) return;
+        var map = _visual.VisualMaps[_doc.Document.CursorBlock];
+        int offset = _doc.Document.CursorOffset;
 
         if (map.IsHidden(offset))
         {
@@ -107,79 +113,79 @@ internal class VisualModeManager
                     offset--;
                 offset++;
             }
-            ((DocsCanvas)_services)._doc.CursorOffset = offset;
+            _doc.Document.CursorOffset = offset;
         }
     }
 
     internal void ClampCursorBeforeTrailingHidden()
     {
-        if (((DocsCanvas)_services)._visualMaps == null) return;
-        if (((DocsCanvas)_services)._doc.CursorBlock >= ((DocsCanvas)_services)._visualMaps.Count) return;
-        if (((DocsCanvas)_services)._parsedBlocks != null && ((DocsCanvas)_services)._doc.CursorBlock < ((DocsCanvas)_services)._parsedBlocks.Count
-            && IsTableRow(((DocsCanvas)_services)._parsedBlocks[((DocsCanvas)_services)._doc.CursorBlock])) return;
-        var map = ((DocsCanvas)_services)._visualMaps[((DocsCanvas)_services)._doc.CursorBlock];
-        int blockLen = ((DocsCanvas)_services)._doc.GetBlockLength(((DocsCanvas)_services)._doc.CursorBlock);
+        if (_visual.VisualMaps == null) return;
+        if (_doc.Document.CursorBlock >= _visual.VisualMaps.Count) return;
+        if (_content.ParsedBlocks != null && _doc.Document.CursorBlock < _content.ParsedBlocks.Count
+            && IsTableRow(_content.ParsedBlocks[_doc.Document.CursorBlock])) return;
+        var map = _visual.VisualMaps[_doc.Document.CursorBlock];
+        int blockLen = _doc.GetBlockLength(_doc.Document.CursorBlock);
         if (blockLen == 0 || !map.IsHidden(blockLen - 1)) return;
-        int offset = ((DocsCanvas)_services)._doc.CursorOffset;
+        int offset = _doc.Document.CursorOffset;
         offset = System.Math.Min(offset, blockLen);
         int minOffset = 0;
         if (map.HiddenRanges.Count > 0 && map.HiddenRanges[0].Start == 0)
             minOffset = map.HiddenRanges[0].Length;
         while (offset > minOffset && map.IsHidden(offset - 1))
             offset--;
-        ((DocsCanvas)_services)._doc.CursorOffset = offset;
+        _doc.Document.CursorOffset = offset;
     }
 
     internal void SkipBackspacePastHiddenVisual()
     {
-        if (((DocsCanvas)_services)._visualMaps == null) return;
-        if (((DocsCanvas)_services)._doc.CursorBlock >= ((DocsCanvas)_services)._visualMaps.Count) return;
-        var map = ((DocsCanvas)_services)._visualMaps[((DocsCanvas)_services)._doc.CursorBlock];
-        int pos = ((DocsCanvas)_services)._doc.CursorOffset - 1;
+        if (_visual.VisualMaps == null) return;
+        if (_doc.Document.CursorBlock >= _visual.VisualMaps.Count) return;
+        var map = _visual.VisualMaps[_doc.Document.CursorBlock];
+        int pos = _doc.Document.CursorOffset - 1;
         while (pos >= 0 && map.IsHidden(pos)) pos--;
         if (pos >= 0)
-            ((DocsCanvas)_services)._doc.CursorOffset = pos + 1;
+            _doc.Document.CursorOffset = pos + 1;
     }
 
     internal void SkipDeletePastHiddenVisual()
     {
-        if (((DocsCanvas)_services)._visualMaps == null) return;
-        if (((DocsCanvas)_services)._doc.CursorBlock >= ((DocsCanvas)_services)._visualMaps.Count) return;
-        var map = ((DocsCanvas)_services)._visualMaps[((DocsCanvas)_services)._doc.CursorBlock];
-        int blockLen = ((DocsCanvas)_services)._doc.GetBlockLength(((DocsCanvas)_services)._doc.CursorBlock);
-        int pos = ((DocsCanvas)_services)._doc.CursorOffset;
+        if (_visual.VisualMaps == null) return;
+        if (_doc.Document.CursorBlock >= _visual.VisualMaps.Count) return;
+        var map = _visual.VisualMaps[_doc.Document.CursorBlock];
+        int blockLen = _doc.GetBlockLength(_doc.Document.CursorBlock);
+        int pos = _doc.Document.CursorOffset;
         while (pos < blockLen && map.IsHidden(pos)) pos++;
-        ((DocsCanvas)_services)._doc.CursorOffset = pos;
+        _doc.Document.CursorOffset = pos;
     }
 
     internal void EnsureCursorOnVisibleBlock(bool? preferForward = null)
     {
-        if (((DocsCanvas)_services)._parsedBlocks == null || ((DocsCanvas)_services)._doc.CursorBlock >= ((DocsCanvas)_services)._parsedBlocks.Count) return;
-        if (!((DocsCanvas)_services)._parsedBlocks[((DocsCanvas)_services)._doc.CursorBlock].IsSkippedInVisual) return;
+        if (_content.ParsedBlocks == null || _doc.Document.CursorBlock >= _content.ParsedBlocks.Count) return;
+        if (!_content.ParsedBlocks[_doc.Document.CursorBlock].IsSkippedInVisual) return;
 
         bool forward = preferForward ?? true;
-        int limit = System.Math.Min(((DocsCanvas)_services)._doc.BlockCount, ((DocsCanvas)_services)._parsedBlocks.Count);
+        int limit = System.Math.Min(_doc.Document.BlockCount, _content.ParsedBlocks.Count);
 
         if (forward)
         {
-            for (int i = ((DocsCanvas)_services)._doc.CursorBlock + 1; i < limit; i++)
+            for (int i = _doc.Document.CursorBlock + 1; i < limit; i++)
             {
-                if (!((DocsCanvas)_services)._parsedBlocks[i].IsSkippedInVisual)
+                if (!_content.ParsedBlocks[i].IsSkippedInVisual)
                 {
-                    ((DocsCanvas)_services)._doc.CursorBlock = i;
-                    ((DocsCanvas)_services)._doc.CursorOffset = 0;
+                    _doc.Document.CursorBlock = i;
+                    _doc.Document.CursorOffset = 0;
                     return;
                 }
             }
         }
         else
         {
-            for (int i = ((DocsCanvas)_services)._doc.CursorBlock - 1; i >= 0; i--)
+            for (int i = _doc.Document.CursorBlock - 1; i >= 0; i--)
             {
-                if (!((DocsCanvas)_services)._parsedBlocks[i].IsSkippedInVisual)
+                if (!_content.ParsedBlocks[i].IsSkippedInVisual)
                 {
-                    ((DocsCanvas)_services)._doc.CursorBlock = i;
-                    ((DocsCanvas)_services)._doc.CursorOffset = ((DocsCanvas)_services)._doc.GetBlockLength(i);
+                    _doc.Document.CursorBlock = i;
+                    _doc.Document.CursorOffset = _doc.Document.GetBlockLength(i);
                     return;
                 }
             }
@@ -189,24 +195,24 @@ internal class VisualModeManager
 
         if (forward)
         {
-            for (int i = ((DocsCanvas)_services)._doc.CursorBlock - 1; i >= 0; i--)
+            for (int i = _doc.Document.CursorBlock - 1; i >= 0; i--)
             {
-                if (!((DocsCanvas)_services)._parsedBlocks[i].IsSkippedInVisual)
+                if (!_content.ParsedBlocks[i].IsSkippedInVisual)
                 {
-                    ((DocsCanvas)_services)._doc.CursorBlock = i;
-                    ((DocsCanvas)_services)._doc.CursorOffset = ((DocsCanvas)_services)._doc.GetBlockLength(i);
+                    _doc.Document.CursorBlock = i;
+                    _doc.Document.CursorOffset = _doc.Document.GetBlockLength(i);
                     return;
                 }
             }
         }
         else
         {
-            for (int i = ((DocsCanvas)_services)._doc.CursorBlock + 1; i < limit; i++)
+            for (int i = _doc.Document.CursorBlock + 1; i < limit; i++)
             {
-                if (!((DocsCanvas)_services)._parsedBlocks[i].IsSkippedInVisual)
+                if (!_content.ParsedBlocks[i].IsSkippedInVisual)
                 {
-                    ((DocsCanvas)_services)._doc.CursorBlock = i;
-                    ((DocsCanvas)_services)._doc.CursorOffset = 0;
+                    _doc.Document.CursorBlock = i;
+                    _doc.Document.CursorOffset = 0;
                     return;
                 }
             }
@@ -217,37 +223,37 @@ internal class VisualModeManager
 
     internal bool HandleBackVisual()
     {
-        if (((DocsCanvas)_services)._parsedBlocks != null && ((DocsCanvas)_services)._doc.CursorBlock < ((DocsCanvas)_services)._parsedBlocks.Count && IsTableRow(((DocsCanvas)_services)._parsedBlocks[((DocsCanvas)_services)._doc.CursorBlock]))
+        if (_content.ParsedBlocks != null && _doc.Document.CursorBlock < _content.ParsedBlocks.Count && IsTableRow(_content.ParsedBlocks[_doc.Document.CursorBlock]))
         {
-            var parsed = ((DocsCanvas)_services)._parsedBlocks[((DocsCanvas)_services)._doc.CursorBlock];
+            var parsed = _content.ParsedBlocks[_doc.Document.CursorBlock];
             if (parsed.TableRow != null)
             {
-                string blockText = ((DocsCanvas)_services)._doc.GetBlockText(((DocsCanvas)_services)._doc.CursorBlock);
+                string blockText = _doc.Document.GetBlockText(_doc.Document.CursorBlock);
                 foreach (var cell in parsed.TableRow.Cells)
                 {
                     var (s, e) = cell.TrimContent(blockText);
-                    if (((DocsCanvas)_services)._doc.CursorOffset > s && ((DocsCanvas)_services)._doc.CursorOffset <= e)
+                    if (_doc.Document.CursorOffset > s && _doc.Document.CursorOffset <= e)
                         break;
-                    if (((DocsCanvas)_services)._doc.CursorOffset <= s)
+                    if (_doc.Document.CursorOffset <= s)
                         return false;
                 }
             }
         }
 
         SkipBackspacePastHiddenVisual();
-        if (((DocsCanvas)_services)._doc.CursorOffset == 0 && ((DocsCanvas)_services)._doc.CursorBlock > 0 && ((DocsCanvas)_services)._parsedBlocks != null)
+        if (_doc.Document.CursorOffset == 0 && _doc.Document.CursorBlock > 0 && _content.ParsedBlocks != null)
         {
-            if (((DocsCanvas)_services)._doc.CursorBlock - 1 < ((DocsCanvas)_services)._parsedBlocks.Count && ((DocsCanvas)_services)._parsedBlocks[((DocsCanvas)_services)._doc.CursorBlock - 1].IsSkippedInVisual)
+            if (_doc.Document.CursorBlock - 1 < _content.ParsedBlocks.Count && _content.ParsedBlocks[_doc.Document.CursorBlock - 1].IsSkippedInVisual)
                 return false;
-            if (((DocsCanvas)_services)._doc.CursorBlock < ((DocsCanvas)_services)._parsedBlocks.Count && (IsTableRow(((DocsCanvas)_services)._parsedBlocks[((DocsCanvas)_services)._doc.CursorBlock]) || ((((DocsCanvas)_services)._doc.CursorBlock - 1 >= 0) && IsTableRow(((DocsCanvas)_services)._parsedBlocks[((DocsCanvas)_services)._doc.CursorBlock - 1]))))
+            if (_doc.Document.CursorBlock < _content.ParsedBlocks.Count && (IsTableRow(_content.ParsedBlocks[_doc.Document.CursorBlock]) || ((_doc.Document.CursorBlock - 1 >= 0) && IsTableRow(_content.ParsedBlocks[_doc.Document.CursorBlock - 1]))))
                 return false;
         }
 
-        int prevBlock = ((DocsCanvas)_services)._doc.CursorBlock;
-        int prevOffset = ((DocsCanvas)_services)._doc.CursorOffset;
-        ((DocsCanvas)_services)._doc.Backspace();
-        bool changed = ((DocsCanvas)_services)._doc.CursorBlock != prevBlock || ((DocsCanvas)_services)._doc.CursorOffset != prevOffset;
-        if (changed) ((DocsCanvas)_services)._doc.CollapseSelection();
+        int prevBlock = _doc.Document.CursorBlock;
+        int prevOffset = _doc.Document.CursorOffset;
+        _doc.Document.Backspace();
+        bool changed = _doc.Document.CursorBlock != prevBlock || _doc.Document.CursorOffset != prevOffset;
+        if (changed) _doc.Document.CollapseSelection();
 
         EnsureCursorOnVisibleBlock();
         SkipCursorOverHiddenRanges(forward: false);
@@ -256,17 +262,17 @@ internal class VisualModeManager
 
     internal bool HandleDeleteVisual()
     {
-        if (((DocsCanvas)_services)._parsedBlocks != null && ((DocsCanvas)_services)._doc.CursorBlock < ((DocsCanvas)_services)._parsedBlocks.Count && IsTableRow(((DocsCanvas)_services)._parsedBlocks[((DocsCanvas)_services)._doc.CursorBlock]))
+        if (_content.ParsedBlocks != null && _doc.Document.CursorBlock < _content.ParsedBlocks.Count && IsTableRow(_content.ParsedBlocks[_doc.Document.CursorBlock]))
         {
-            var parsed = ((DocsCanvas)_services)._parsedBlocks[((DocsCanvas)_services)._doc.CursorBlock];
+            var parsed = _content.ParsedBlocks[_doc.Document.CursorBlock];
             if (parsed.TableRow != null)
             {
-                string blockText = ((DocsCanvas)_services)._doc.GetBlockText(((DocsCanvas)_services)._doc.CursorBlock);
+                string blockText = _doc.Document.GetBlockText(_doc.Document.CursorBlock);
                 bool canDelete = false;
                 foreach (var cell in parsed.TableRow.Cells)
                 {
                     var (s, e) = cell.TrimContent(blockText);
-                    if (((DocsCanvas)_services)._doc.CursorOffset >= s && ((DocsCanvas)_services)._doc.CursorOffset < e)
+                    if (_doc.Document.CursorOffset >= s && _doc.Document.CursorOffset < e)
                     { canDelete = true; break; }
                 }
                 if (!canDelete) return false;
@@ -274,20 +280,20 @@ internal class VisualModeManager
         }
 
         SkipDeletePastHiddenVisual();
-        if (((DocsCanvas)_services)._doc.CursorOffset >= ((DocsCanvas)_services)._doc.GetBlockLength(((DocsCanvas)_services)._doc.CursorBlock) &&
-            ((DocsCanvas)_services)._doc.CursorBlock < ((DocsCanvas)_services)._doc.BlockCount - 1 && ((DocsCanvas)_services)._parsedBlocks != null)
+        if (_doc.Document.CursorOffset >= _doc.Document.GetBlockLength(_doc.Document.CursorBlock) &&
+            _doc.Document.CursorBlock < _doc.Document.BlockCount - 1 && _content.ParsedBlocks != null)
         {
-            if (((DocsCanvas)_services)._doc.CursorBlock + 1 < ((DocsCanvas)_services)._parsedBlocks.Count && ((DocsCanvas)_services)._parsedBlocks[((DocsCanvas)_services)._doc.CursorBlock + 1].IsSkippedInVisual)
+            if (_doc.Document.CursorBlock + 1 < _content.ParsedBlocks.Count && _content.ParsedBlocks[_doc.Document.CursorBlock + 1].IsSkippedInVisual)
                 return false;
-            if (((DocsCanvas)_services)._doc.CursorBlock < ((DocsCanvas)_services)._parsedBlocks.Count && (IsTableRow(((DocsCanvas)_services)._parsedBlocks[((DocsCanvas)_services)._doc.CursorBlock]) || ((((DocsCanvas)_services)._doc.CursorBlock + 1 < ((DocsCanvas)_services)._parsedBlocks.Count) && IsTableRow(((DocsCanvas)_services)._parsedBlocks[((DocsCanvas)_services)._doc.CursorBlock + 1]))))
+            if (_doc.Document.CursorBlock < _content.ParsedBlocks.Count && (IsTableRow(_content.ParsedBlocks[_doc.Document.CursorBlock]) || ((_doc.Document.CursorBlock + 1 < _content.ParsedBlocks.Count) && IsTableRow(_content.ParsedBlocks[_doc.Document.CursorBlock + 1]))))
                 return false;
         }
 
-        int prevBlocks = ((DocsCanvas)_services)._doc.BlockCount;
-        int prevLen = ((DocsCanvas)_services)._doc.GetBlockLength(((DocsCanvas)_services)._doc.CursorBlock);
-        ((DocsCanvas)_services)._doc.Delete();
-        bool changed = ((DocsCanvas)_services)._doc.BlockCount != prevBlocks ||
-                       ((DocsCanvas)_services)._doc.GetBlockLength(((DocsCanvas)_services)._doc.CursorBlock) != prevLen;
+        int prevBlocks = _doc.Document.BlockCount;
+        int prevLen = _doc.Document.GetBlockLength(_doc.Document.CursorBlock);
+        _doc.Document.Delete();
+        bool changed = _doc.Document.BlockCount != prevBlocks ||
+                       _doc.Document.GetBlockLength(_doc.Document.CursorBlock) != prevLen;
 
         EnsureCursorOnVisibleBlock();
         SkipCursorOverHiddenRanges(forward: true);
@@ -296,35 +302,35 @@ internal class VisualModeManager
 
     internal void HandleLeftVisual(bool shift)
     {
-        if (!shift && ((DocsCanvas)_services)._doc.HasSelection)
+        if (!shift && _doc.Document.HasSelection)
         {
-            var (sb, so, _, _) = ((DocsCanvas)_services)._doc.GetOrderedSelection();
-            ((DocsCanvas)_services)._doc.CursorBlock = sb;
-            ((DocsCanvas)_services)._doc.CursorOffset = so;
-            ((DocsCanvas)_services)._doc.CollapseSelection();
+            var (sb, so, _, _) = _doc.Document.GetOrderedSelection();
+            _doc.Document.CursorBlock = sb;
+            _doc.Document.CursorOffset = so;
+            _doc.Document.CollapseSelection();
             EnsureCursorOnVisibleBlock(preferForward: false);
-            if (((DocsCanvas)_services)._parsedBlocks != null && ((DocsCanvas)_services)._doc.CursorBlock < ((DocsCanvas)_services)._parsedBlocks.Count && IsTableRow(((DocsCanvas)_services)._parsedBlocks[((DocsCanvas)_services)._doc.CursorBlock]))
+            if (_content.ParsedBlocks != null && _doc.Document.CursorBlock < _content.ParsedBlocks.Count && IsTableRow(_content.ParsedBlocks[_doc.Document.CursorBlock]))
                 ClampCursorToTableCell();
             else
                 SkipCursorOverHiddenRanges(forward: false);
         }
-        else if (((DocsCanvas)_services)._parsedBlocks != null && ((DocsCanvas)_services)._doc.CursorBlock < ((DocsCanvas)_services)._parsedBlocks.Count && HandleTableArrow(((DocsCanvas)_services)._parsedBlocks[((DocsCanvas)_services)._doc.CursorBlock], forward: false))
+        else if (_content.ParsedBlocks != null && _doc.Document.CursorBlock < _content.ParsedBlocks.Count && HandleTableArrow(_content.ParsedBlocks[_doc.Document.CursorBlock], forward: false))
         {
-            if (!shift) ((DocsCanvas)_services)._doc.CollapseSelection();
+            if (!shift) _doc.Document.CollapseSelection();
         }
         else
         {
-            int origBlock = ((DocsCanvas)_services)._doc.CursorBlock;
-            int origOffset = ((DocsCanvas)_services)._doc.CursorOffset;
-            ((DocsCanvas)_services)._doc.MoveLeft();
-            if (!shift) ((DocsCanvas)_services)._doc.CollapseSelection();
+            int origBlock = _doc.Document.CursorBlock;
+            int origOffset = _doc.Document.CursorOffset;
+            _doc.Document.MoveLeft();
+            if (!shift) _doc.Document.CollapseSelection();
             EnsureCursorOnVisibleBlock(preferForward: false);
-            if (((DocsCanvas)_services)._parsedBlocks != null && ((DocsCanvas)_services)._doc.CursorBlock < ((DocsCanvas)_services)._parsedBlocks.Count && ((DocsCanvas)_services)._parsedBlocks[((DocsCanvas)_services)._doc.CursorBlock].IsSkippedInVisual)
+            if (_content.ParsedBlocks != null && _doc.Document.CursorBlock < _content.ParsedBlocks.Count && _content.ParsedBlocks[_doc.Document.CursorBlock].IsSkippedInVisual)
             {
-                ((DocsCanvas)_services)._doc.CursorBlock = origBlock;
-                ((DocsCanvas)_services)._doc.CursorOffset = origOffset;
+                _doc.Document.CursorBlock = origBlock;
+                _doc.Document.CursorOffset = origOffset;
             }
-            if (((DocsCanvas)_services)._parsedBlocks != null && ((DocsCanvas)_services)._doc.CursorBlock < ((DocsCanvas)_services)._parsedBlocks.Count && IsTableRow(((DocsCanvas)_services)._parsedBlocks[((DocsCanvas)_services)._doc.CursorBlock]))
+            if (_content.ParsedBlocks != null && _doc.Document.CursorBlock < _content.ParsedBlocks.Count && IsTableRow(_content.ParsedBlocks[_doc.Document.CursorBlock]))
                 ClampCursorToTableCell();
             else
             {
@@ -336,35 +342,35 @@ internal class VisualModeManager
 
     internal void HandleRightVisual(bool shift)
     {
-        if (!shift && ((DocsCanvas)_services)._doc.HasSelection)
+        if (!shift && _doc.Document.HasSelection)
         {
-            var (_, _, eb, eo) = ((DocsCanvas)_services)._doc.GetOrderedSelection();
-            ((DocsCanvas)_services)._doc.CursorBlock = eb;
-            ((DocsCanvas)_services)._doc.CursorOffset = eo;
-            ((DocsCanvas)_services)._doc.CollapseSelection();
+            var (_, _, eb, eo) = _doc.Document.GetOrderedSelection();
+            _doc.Document.CursorBlock = eb;
+            _doc.Document.CursorOffset = eo;
+            _doc.Document.CollapseSelection();
             EnsureCursorOnVisibleBlock(preferForward: true);
-            if (((DocsCanvas)_services)._parsedBlocks != null && ((DocsCanvas)_services)._doc.CursorBlock < ((DocsCanvas)_services)._parsedBlocks.Count && IsTableRow(((DocsCanvas)_services)._parsedBlocks[((DocsCanvas)_services)._doc.CursorBlock]))
+            if (_content.ParsedBlocks != null && _doc.Document.CursorBlock < _content.ParsedBlocks.Count && IsTableRow(_content.ParsedBlocks[_doc.Document.CursorBlock]))
                 ClampCursorToTableCell();
             else
                 SkipCursorOverHiddenRanges(forward: true);
         }
-        else if (((DocsCanvas)_services)._parsedBlocks != null && ((DocsCanvas)_services)._doc.CursorBlock < ((DocsCanvas)_services)._parsedBlocks.Count && HandleTableArrow(((DocsCanvas)_services)._parsedBlocks[((DocsCanvas)_services)._doc.CursorBlock], forward: true))
+        else if (_content.ParsedBlocks != null && _doc.Document.CursorBlock < _content.ParsedBlocks.Count && HandleTableArrow(_content.ParsedBlocks[_doc.Document.CursorBlock], forward: true))
         {
-            if (!shift) ((DocsCanvas)_services)._doc.CollapseSelection();
+            if (!shift) _doc.Document.CollapseSelection();
         }
         else
         {
-            int origBlock = ((DocsCanvas)_services)._doc.CursorBlock;
-            int origOffset = ((DocsCanvas)_services)._doc.CursorOffset;
-            ((DocsCanvas)_services)._doc.MoveRight();
-            if (!shift) ((DocsCanvas)_services)._doc.CollapseSelection();
+            int origBlock = _doc.Document.CursorBlock;
+            int origOffset = _doc.Document.CursorOffset;
+            _doc.Document.MoveRight();
+            if (!shift) _doc.Document.CollapseSelection();
             EnsureCursorOnVisibleBlock(preferForward: true);
-            if (((DocsCanvas)_services)._parsedBlocks != null && ((DocsCanvas)_services)._doc.CursorBlock < ((DocsCanvas)_services)._parsedBlocks.Count && ((DocsCanvas)_services)._parsedBlocks[((DocsCanvas)_services)._doc.CursorBlock].IsSkippedInVisual)
+            if (_content.ParsedBlocks != null && _doc.Document.CursorBlock < _content.ParsedBlocks.Count && _content.ParsedBlocks[_doc.Document.CursorBlock].IsSkippedInVisual)
             {
-                ((DocsCanvas)_services)._doc.CursorBlock = origBlock;
-                ((DocsCanvas)_services)._doc.CursorOffset = origOffset;
+                _doc.Document.CursorBlock = origBlock;
+                _doc.Document.CursorOffset = origOffset;
             }
-            if (((DocsCanvas)_services)._parsedBlocks != null && ((DocsCanvas)_services)._doc.CursorBlock < ((DocsCanvas)_services)._parsedBlocks.Count && IsTableRow(((DocsCanvas)_services)._parsedBlocks[((DocsCanvas)_services)._doc.CursorBlock]))
+            if (_content.ParsedBlocks != null && _doc.Document.CursorBlock < _content.ParsedBlocks.Count && IsTableRow(_content.ParsedBlocks[_doc.Document.CursorBlock]))
                 ClampCursorToTableCell();
             else
             {
@@ -377,7 +383,7 @@ internal class VisualModeManager
     internal bool HandleTableArrow(ParsedBlock parsed, bool forward)
     {
         if (parsed.TableRow == null) return false;
-        string blockText = ((DocsCanvas)_services)._doc.GetBlockText(((DocsCanvas)_services)._doc.CursorBlock);
+        string blockText = _doc.Document.GetBlockText(_doc.Document.CursorBlock);
         var cells = parsed.TableRow.Cells;
 
         // find the trimmed content range for each cell
@@ -385,7 +391,7 @@ internal class VisualModeManager
         foreach (var cell in cells)
             cellRanges.Add(cell.TrimContent(blockText));
 
-        int offset = ((DocsCanvas)_services)._doc.CursorOffset;
+        int offset = _doc.Document.CursorOffset;
 
         if (forward)
         {
@@ -396,7 +402,7 @@ internal class VisualModeManager
                 if (offset < ce)
                 {
                     // cursor is within this cell's content — move right by 1
-                    ((DocsCanvas)_services)._doc.CursorOffset = offset + 1;
+                    _doc.Document.CursorOffset = offset + 1;
                     return true;
                 }
                 if (offset == ce)
@@ -404,7 +410,7 @@ internal class VisualModeManager
                     // cursor is at end of this cell — jump to start of next cell
                     if (c + 1 < cellRanges.Count)
                     {
-                        ((DocsCanvas)_services)._doc.CursorOffset = cellRanges[c + 1].Start;
+                        _doc.Document.CursorOffset = cellRanges[c + 1].Start;
                         return true;
                     }
                     // at end of last cell — cross to next row or leave table
@@ -415,7 +421,7 @@ internal class VisualModeManager
             }
             // cursor is past all cells — clamp to end of last cell
             if (cellRanges.Count > 0)
-                ((DocsCanvas)_services)._doc.CursorOffset = cellRanges[^1].End;
+                _doc.Document.CursorOffset = cellRanges[^1].End;
             return true;
         }
         else
@@ -426,7 +432,7 @@ internal class VisualModeManager
                 if (offset > cs)
                 {
                     // cursor is within this cell's content — move left by 1
-                    ((DocsCanvas)_services)._doc.CursorOffset = offset - 1;
+                    _doc.Document.CursorOffset = offset - 1;
                     return true;
                 }
                 if (offset == cs)
@@ -434,7 +440,7 @@ internal class VisualModeManager
                     // cursor is at start of this cell — jump to end of previous cell
                     if (c > 0)
                     {
-                        ((DocsCanvas)_services)._doc.CursorOffset = cellRanges[c - 1].End;
+                        _doc.Document.CursorOffset = cellRanges[c - 1].End;
                         return true;
                     }
                     // at start of first cell — cross to previous row or leave table
@@ -445,49 +451,49 @@ internal class VisualModeManager
             }
             // cursor is before all cells — clamp to start of first cell
             if (cellRanges.Count > 0)
-                ((DocsCanvas)_services)._doc.CursorOffset = cellRanges[0].Start;
+                _doc.Document.CursorOffset = cellRanges[0].Start;
             return true;
         }
     }
 
     private bool MoveToAdjacentTableRow(ParsedBlock parsed, bool forward)
     {
-        if (((DocsCanvas)_services)._parsedBlocks == null || parsed.Table == null) return false;
+        if (_content.ParsedBlocks == null || parsed.Table == null) return false;
 
         if (forward)
         {
-            for (int b = ((DocsCanvas)_services)._doc.CursorBlock + 1; b < ((DocsCanvas)_services)._doc.BlockCount; b++)
+            for (int b = _doc.Document.CursorBlock + 1; b < _doc.Document.BlockCount; b++)
             {
-                var p = ((DocsCanvas)_services)._parsedBlocks[b];
+                var p = _content.ParsedBlocks[b];
                 if (p.Table != parsed.Table) break;
                 if (p.IsTableSeparator) continue;
                 if (p.TableRow != null)
                 {
-                    ((DocsCanvas)_services)._doc.CursorBlock = b;
-                    string text = ((DocsCanvas)_services)._doc.GetBlockText(b);
+                    _doc.Document.CursorBlock = b;
+                    string text = _doc.Document.GetBlockText(b);
                     var firstCell = p.TableRow.Cells[0];
                     int s = firstCell.Start;
                     while (s < firstCell.Start + firstCell.Length && text[s] == ' ') s++;
-                    ((DocsCanvas)_services)._doc.CursorOffset = s;
+                    _doc.Document.CursorOffset = s;
                     return true;
                 }
             }
         }
         else
         {
-            for (int b = ((DocsCanvas)_services)._doc.CursorBlock - 1; b >= 0; b--)
+            for (int b = _doc.Document.CursorBlock - 1; b >= 0; b--)
             {
-                var p = ((DocsCanvas)_services)._parsedBlocks[b];
+                var p = _content.ParsedBlocks[b];
                 if (p.Table != parsed.Table) break;
                 if (p.IsTableSeparator) continue;
                 if (p.TableRow != null)
                 {
-                    ((DocsCanvas)_services)._doc.CursorBlock = b;
-                    string text = ((DocsCanvas)_services)._doc.GetBlockText(b);
+                    _doc.Document.CursorBlock = b;
+                    string text = _doc.Document.GetBlockText(b);
                     var lastCell = p.TableRow.Cells[^1];
                     int e = lastCell.Start + lastCell.Length;
                     while (e > lastCell.Start && text[e - 1] == ' ') e--;
-                    ((DocsCanvas)_services)._doc.CursorOffset = e;
+                    _doc.Document.CursorOffset = e;
                     return true;
                 }
             }
@@ -497,16 +503,16 @@ internal class VisualModeManager
 
     private bool MoveOutOfTable(ParsedBlock parsed, bool forward)
     {
-        if (((DocsCanvas)_services)._parsedBlocks == null || parsed.Table == null) return false;
+        if (_content.ParsedBlocks == null || parsed.Table == null) return false;
 
         if (forward)
         {
-            for (int b = ((DocsCanvas)_services)._doc.CursorBlock + 1; b < ((DocsCanvas)_services)._doc.BlockCount; b++)
+            for (int b = _doc.Document.CursorBlock + 1; b < _doc.Document.BlockCount; b++)
             {
-                if (((DocsCanvas)_services)._parsedBlocks[b].Table != parsed.Table)
+                if (_content.ParsedBlocks[b].Table != parsed.Table)
                 {
-                    ((DocsCanvas)_services)._doc.CursorBlock = b;
-                    ((DocsCanvas)_services)._doc.CursorOffset = 0;
+                    _doc.Document.CursorBlock = b;
+                    _doc.Document.CursorOffset = 0;
                     SkipCursorOverHiddenRanges(forward: true);
                     return true;
                 }
@@ -514,12 +520,12 @@ internal class VisualModeManager
         }
         else
         {
-            for (int b = ((DocsCanvas)_services)._doc.CursorBlock - 1; b >= 0; b--)
+            for (int b = _doc.Document.CursorBlock - 1; b >= 0; b--)
             {
-                if (((DocsCanvas)_services)._parsedBlocks[b].Table != parsed.Table)
+                if (_content.ParsedBlocks[b].Table != parsed.Table)
                 {
-                    ((DocsCanvas)_services)._doc.CursorBlock = b;
-                    ((DocsCanvas)_services)._doc.CursorOffset = ((DocsCanvas)_services)._doc.GetBlockLength(b);
+                    _doc.Document.CursorBlock = b;
+                    _doc.Document.CursorOffset = _doc.Document.GetBlockLength(b);
                     SkipCursorOverHiddenRanges(forward: false);
                     return true;
                 }
@@ -530,28 +536,28 @@ internal class VisualModeManager
 
     private void CrossToPreviousBlockIfHiddenStart()
     {
-        if (((DocsCanvas)_services)._doc.CursorOffset != 0 || ((DocsCanvas)_services)._doc.CursorBlock == 0) return;
-        if (((DocsCanvas)_services)._visualMaps == null || ((DocsCanvas)_services)._doc.CursorBlock >= ((DocsCanvas)_services)._visualMaps.Count) return;
-        if (!((DocsCanvas)_services)._visualMaps[((DocsCanvas)_services)._doc.CursorBlock].IsHidden(0)) return;
-        if (((DocsCanvas)_services)._parsedBlocks != null && IsTableRow(((DocsCanvas)_services)._parsedBlocks[((DocsCanvas)_services)._doc.CursorBlock])) return;
+        if (_doc.Document.CursorOffset != 0 || _doc.Document.CursorBlock == 0) return;
+        if (_visual.VisualMaps == null || _doc.Document.CursorBlock >= _visual.VisualMaps.Count) return;
+        if (!_visual.VisualMaps[_doc.Document.CursorBlock].IsHidden(0)) return;
+        if (_content.ParsedBlocks != null && IsTableRow(_content.ParsedBlocks[_doc.Document.CursorBlock])) return;
 
-        ((DocsCanvas)_services)._doc.CursorBlock--;
-        ((DocsCanvas)_services)._doc.CursorOffset = ((DocsCanvas)_services)._doc.GetBlockLength(((DocsCanvas)_services)._doc.CursorBlock);
+        _doc.Document.CursorBlock--;
+        _doc.Document.CursorOffset = _doc.Document.GetBlockLength(_doc.Document.CursorBlock);
         EnsureCursorOnVisibleBlock(preferForward: false);
         SkipCursorOverHiddenRanges(forward: false);
     }
 
     private void CrossToNextBlockIfHiddenEnd()
     {
-        int blockLen = ((DocsCanvas)_services)._doc.GetBlockLength(((DocsCanvas)_services)._doc.CursorBlock);
-        if (((DocsCanvas)_services)._doc.CursorOffset != blockLen || blockLen == 0) return;
-        if (((DocsCanvas)_services)._doc.CursorBlock >= ((DocsCanvas)_services)._doc.BlockCount - 1) return;
-        if (((DocsCanvas)_services)._visualMaps == null || ((DocsCanvas)_services)._doc.CursorBlock >= ((DocsCanvas)_services)._visualMaps.Count) return;
-        if (!((DocsCanvas)_services)._visualMaps[((DocsCanvas)_services)._doc.CursorBlock].IsHidden(blockLen - 1)) return;
-        if (((DocsCanvas)_services)._parsedBlocks != null && IsTableRow(((DocsCanvas)_services)._parsedBlocks[((DocsCanvas)_services)._doc.CursorBlock])) return;
+        int blockLen = _doc.Document.GetBlockLength(_doc.Document.CursorBlock);
+        if (_doc.Document.CursorOffset != blockLen || blockLen == 0) return;
+        if (_doc.Document.CursorBlock >= _doc.Document.BlockCount - 1) return;
+        if (_visual.VisualMaps == null || _doc.Document.CursorBlock >= _visual.VisualMaps.Count) return;
+        if (!_visual.VisualMaps[_doc.Document.CursorBlock].IsHidden(blockLen - 1)) return;
+        if (_content.ParsedBlocks != null && IsTableRow(_content.ParsedBlocks[_doc.Document.CursorBlock])) return;
 
-        ((DocsCanvas)_services)._doc.CursorBlock++;
-        ((DocsCanvas)_services)._doc.CursorOffset = 0;
+        _doc.Document.CursorBlock++;
+        _doc.Document.CursorOffset = 0;
         EnsureCursorOnVisibleBlock(preferForward: true);
         SkipCursorOverHiddenRanges(forward: true);
     }
@@ -571,7 +577,7 @@ internal class VisualModeManager
     internal void HandleUpVisual()
     {
         EnsureCursorOnVisibleBlock(preferForward: false);
-        if (((DocsCanvas)_services)._parsedBlocks != null && ((DocsCanvas)_services)._doc.CursorBlock < ((DocsCanvas)_services)._parsedBlocks.Count && IsTableRow(((DocsCanvas)_services)._parsedBlocks[((DocsCanvas)_services)._doc.CursorBlock]))
+        if (_content.ParsedBlocks != null && _doc.Document.CursorBlock < _content.ParsedBlocks.Count && IsTableRow(_content.ParsedBlocks[_doc.Document.CursorBlock]))
             ClampCursorToTableCell();
         else
             SkipCursorOverHiddenRanges(forward: false);
@@ -580,7 +586,7 @@ internal class VisualModeManager
     internal void HandleDownVisual()
     {
         EnsureCursorOnVisibleBlock(preferForward: true);
-        if (((DocsCanvas)_services)._parsedBlocks != null && ((DocsCanvas)_services)._doc.CursorBlock < ((DocsCanvas)_services)._parsedBlocks.Count && IsTableRow(((DocsCanvas)_services)._parsedBlocks[((DocsCanvas)_services)._doc.CursorBlock]))
+        if (_content.ParsedBlocks != null && _doc.Document.CursorBlock < _content.ParsedBlocks.Count && IsTableRow(_content.ParsedBlocks[_doc.Document.CursorBlock]))
             ClampCursorToTableCell();
         else
             SkipCursorOverHiddenRanges(forward: true);
@@ -588,11 +594,11 @@ internal class VisualModeManager
 
     internal void ClampCursorToTableCell()
     {
-        if (((DocsCanvas)_services)._parsedBlocks == null) return;
-        var parsed = ((DocsCanvas)_services)._parsedBlocks[((DocsCanvas)_services)._doc.CursorBlock];
+        if (_content.ParsedBlocks == null) return;
+        var parsed = _content.ParsedBlocks[_doc.Document.CursorBlock];
         if (parsed.TableRow == null) return;
-        string blockText = ((DocsCanvas)_services)._doc.GetBlockText(((DocsCanvas)_services)._doc.CursorBlock);
-        int offset = ((DocsCanvas)_services)._doc.CursorOffset;
+        string blockText = _doc.Document.GetBlockText(_doc.Document.CursorBlock);
+        int offset = _doc.Document.CursorOffset;
 
         foreach (var cell in parsed.TableRow.Cells)
         {
@@ -609,7 +615,7 @@ internal class VisualModeManager
             if (System.Math.Abs(offset - s) < bestDist) { best = s; bestDist = System.Math.Abs(offset - s); }
             if (System.Math.Abs(offset - e) < bestDist) { best = e; bestDist = System.Math.Abs(offset - e); }
         }
-        ((DocsCanvas)_services)._doc.CursorOffset = best;
+        _doc.Document.CursorOffset = best;
     }
 
     // --- Helper ---
