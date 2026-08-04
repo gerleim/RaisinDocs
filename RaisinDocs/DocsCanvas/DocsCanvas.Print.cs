@@ -14,13 +14,13 @@ partial class DocsCanvas
 
     public void SetShowPageBreaks(bool show)
     {
-        _pageBreakManager ??= new PageBreakManager((IDocsCanvasServices)this);
+        _pageBreakManager ??= new PageBreakManager((ILayoutDataServices)this, (IRenderingServices)this);
         _pageBreakManager.SetShowPageBreaks(show);
     }
 
     internal List<double> TestGetPageBreakYs()
     {
-        _pageBreakManager ??= new PageBreakManager((IDocsCanvasServices)this);
+        _pageBreakManager ??= new PageBreakManager((ILayoutDataServices)this, (IRenderingServices)this);
         return _pageBreakManager.TestGetPageBreakYs();
     }
 
@@ -47,7 +47,7 @@ partial class DocsCanvas
     private void DrawPageBreaks(DrawingContext dc, double effectiveScroll,
         double viewTop, double viewBottom)
     {
-        _pageBreakManager ??= new PageBreakManager((IDocsCanvasServices)this);
+        _pageBreakManager ??= new PageBreakManager((ILayoutDataServices)this, (IRenderingServices)this);
         _pageBreakManager.DrawPageBreaks(dc, effectiveScroll, viewTop, viewBottom);
     }
 
