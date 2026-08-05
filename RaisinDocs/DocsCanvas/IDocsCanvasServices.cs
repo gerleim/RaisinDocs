@@ -168,7 +168,7 @@ internal interface ILoggingServices
     IDocsLogger? Logger { get; }
 }
 
-/// <summary>
+/// <summary>1
 /// Core canvas operations: state management, rendering control, UI components.
 /// Used by: RenderingContext, FindAndReplaceController, and extracted classes for operations
 /// </summary>

@@ -101,6 +101,29 @@ internal static class HtmlToMarkdownConverter
                 // If close tag not found, fall through to regular tag handling
             }
 
+            // Handle paragraphs - ensure newline after </p> to separate from next block
+            if (IsOpenTag(tag, "p"))
+            {
+                int closeTagStart = html.IndexOf("</p>", tagEnd, StringComparison.OrdinalIgnoreCase);
+                if (closeTagStart > 0)
+                {
+                    // Append the paragraph tag and content as-is (ParseHtmlFragment will handle formatting)
+                    result.Append(html[pos..(closeTagStart + 4)]);  // Include closing </p>
+
+                    // Add newline after paragraph to separate from next block element
+                    // (but only if next character isn't already whitespace or end of string)
+                    int afterClose = closeTagStart + 4;
+                    if (afterClose < html.Length && !char.IsWhiteSpace(html[afterClose]))
+                    {
+                        result.Append('\n');
+                    }
+
+                    pos = afterClose;
+                    continue;
+                }
+                // If close tag not found, fall through to regular tag handling
+            }
+
             // Handle horizontal rule
             if (IsHrTag(tag))
             {
@@ -230,6 +253,18 @@ internal static class HtmlToMarkdownConverter
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// Checks if a tag is an opening tag of a specific type (e.g., "p", "div").
+    /// </summary>
+    private static bool IsOpenTag(string tag, string tagName)
+    {
+        string lowerTag = tag.ToLowerInvariant();
+        string openingPattern = $"<{tagName.ToLowerInvariant()}";
+
+        return (lowerTag == $"<{tagName.ToLowerInvariant()}>" ||
+                (lowerTag.StartsWith(openingPattern) && lowerTag.EndsWith(">")));
     }
 
     /// <summary>
