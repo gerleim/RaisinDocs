@@ -1021,6 +1021,48 @@ public class HtmlToMarkdownConverterTests
         result.Should().Contain("Level 2");
         result.Should().Contain("Level 3");
     }
+
+    [Fact]
+    public void SampleFile_LegWrackAnalysis_ConvertsCorrectly()
+    {
+        // Test with the actual sample HTML file
+        var samplePath = Path.Combine(
+            Path.GetDirectoryName(typeof(HtmlToMarkdownConverterTests).Assembly.Location) ?? "",
+            "..", "..", "..", "..", "design", "leg-wrack-analysis.html");
+
+        if (!File.Exists(samplePath))
+        {
+            // Try alternative path
+            samplePath = @"D:\Sources\Raisin\RaisinDocs\design\leg-wrack-analysis.html";
+        }
+
+        if (File.Exists(samplePath))
+        {
+            var cfHtml = File.ReadAllText(samplePath);
+            var result = HtmlToMarkdownConverter.ConvertToColoredMarkdown(cfHtml);
+
+            result.Should().NotBeNull();
+            result.Should().Contain("RAW (Chronicles of Darkness)");
+            result.Should().Contain("One Leg Wrack");
+
+            // Extract the "One Leg Wrack" section to check formatting
+            var oneLegIdx = result.IndexOf("One Leg Wrack", StringComparison.Ordinal);
+            if (oneLegIdx > 0)
+            {
+                var sectionEnd = result.IndexOf("##", oneLegIdx + 1); // Find next section
+                if (sectionEnd < 0) sectionEnd = result.Length;
+
+                var oneLegSection = result.Substring(oneLegIdx, sectionEnd - oneLegIdx);
+
+                // Test that bold formatting is correct (with proper ** on both sides)
+                // This verifies the fix for handling HTML tag attributes worked
+                // Note: The period is INSIDE the bold tag in the HTML, so it's correct here
+                oneLegSection.Should().Contain("**Speed is halved**");
+                oneLegSection.Should().Contain("**Defense is reduced by 2.**");
+                oneLegSection.Should().Contain("**Physical rolls that require movement are reduced to a chance die.**");
+            }
+        }
+    }
 }
 
 
