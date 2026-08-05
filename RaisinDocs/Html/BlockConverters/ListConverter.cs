@@ -184,20 +184,21 @@ internal static class ListConverter
 
     /// <summary>
     /// Converts inline HTML tags to markdown syntax (e.g., &lt;strong&gt; to **, &lt;em&gt; to *).
+    /// Handles tags with attributes (e.g., &lt;strong data-start="0"&gt;).
     /// </summary>
     private static string ConvertInlineHtml(string content)
     {
-        // Convert <strong> and <b> to **
-        content = Regex.Replace(content, @"</?(?:strong|b)>", "**", RegexOptions.IgnoreCase);
+        // Convert <strong> and <b> to ** (handle attributes with [^>]*)
+        content = Regex.Replace(content, @"</?(?:strong|b)(?:\s[^>]*)?>", "**", RegexOptions.IgnoreCase);
 
         // Convert <em> and <i> to *
-        content = Regex.Replace(content, @"</?(?:em|i)>", "*", RegexOptions.IgnoreCase);
+        content = Regex.Replace(content, @"</?(?:em|i)(?:\s[^>]*)?>", "*", RegexOptions.IgnoreCase);
 
         // Convert <code> to backticks
-        content = Regex.Replace(content, @"</?code>", "`", RegexOptions.IgnoreCase);
+        content = Regex.Replace(content, @"</?code(?:\s[^>]*)?>", "`", RegexOptions.IgnoreCase);
 
         // Convert <del> or <s> to ~~
-        content = Regex.Replace(content, @"</?(?:del|s)>", "~~", RegexOptions.IgnoreCase);
+        content = Regex.Replace(content, @"</?(?:del|s)(?:\s[^>]*)?>", "~~", RegexOptions.IgnoreCase);
 
         // Remove any remaining tags (like <br>, <span>, etc.)
         content = Regex.Replace(content, @"<[^>]+>", "");
