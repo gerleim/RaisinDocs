@@ -129,12 +129,18 @@ public partial class MainWindow : Window
                 e.Handled = true;
                 break;
             case Key.PageUp:
-                ActiveTab?.Editor.Canvas.PageUp();
-                e.Handled = true;
+                if (ActiveTab?.Editor.Canvas.IsFocused != true)
+                {
+                    ActiveTab?.Editor.Canvas.PageUpScroll();
+                    e.Handled = true;
+                }
                 break;
             case Key.PageDown:
-                ActiveTab?.Editor.Canvas.PageDown();
-                e.Handled = true;
+                if (ActiveTab?.Editor.Canvas.IsFocused != true)
+                {
+                    ActiveTab?.Editor.Canvas.PageDownScroll();
+                    e.Handled = true;
+                }
                 break;
         }
 

@@ -488,7 +488,31 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider, IDocsC
     public void ZoomOut(double anchorViewportY = -1) => SetZoom(_measure.ZoomFactor - 0.1, anchorViewportY);
     public void ZoomReset() => SetZoom(1.0);
 
+    /// <summary>Fast scroll-only page up (used for global shortcuts, minimap-like speed)</summary>
+    public void PageUpScroll()
+    {
+        ComputeLayout();
+        double lineH = _visualLines.Count > 0 ? GetEffectiveLineHeight(_visualLines[0]) : 20;
+        double pageAmount = Math.Max(lineH, ActualHeight - 3 * lineH);
+        _scroll.Offset -= pageAmount;
+        _scroll.Clamp();
+        InvalidateVisual();
+    }
+
+    /// <summary>Fast scroll-only page down (used for global shortcuts, minimap-like speed)</summary>
+    public void PageDownScroll()
+    {
+        ComputeLayout();
+        double lineH = _visualLines.Count > 0 ? GetEffectiveLineHeight(_visualLines[0]) : 20;
+        double pageAmount = Math.Max(lineH, ActualHeight - 3 * lineH);
+        _scroll.Offset += pageAmount;
+        _scroll.Clamp();
+        InvalidateVisual();
+    }
+
+    /// <summary>Page up with cursor repositioning (used when canvas has focus)</summary>
     public void PageUp() => HandlePageUp(shift: false);
+    /// <summary>Page down with cursor repositioning (used when canvas has focus)</summary>
     public void PageDown() => HandlePageDown(shift: false);
 
     public void ToggleShowWhitespace()

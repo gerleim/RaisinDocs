@@ -78,12 +78,18 @@ public partial class MainWindow : Window
                 e.Handled = true;
                 break;
             case Key.PageUp:
-                Viewer.Canvas.PageUp();
-                e.Handled = true;
+                if (Viewer.Canvas.IsFocused != true)
+                {
+                    Viewer.Canvas.PageUpScroll();
+                    e.Handled = true;
+                }
                 break;
             case Key.PageDown:
-                Viewer.Canvas.PageDown();
-                e.Handled = true;
+                if (Viewer.Canvas.IsFocused != true)
+                {
+                    Viewer.Canvas.PageDownScroll();
+                    e.Handled = true;
+                }
                 break;
         }
 

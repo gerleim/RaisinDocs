@@ -7,11 +7,24 @@ namespace RaisinDocs;
 /// </summary>
 internal class ColorFormattingManager
 {
-    private readonly IDocsCanvasServices _services;
+    private readonly IDocumentServices _doc;
+    private readonly IParsedContentServices _content;
+    private readonly ILayoutDataServices _layout;
+    private readonly ICanvasOperations _canvas;
+    private readonly IScrollServices _scroll;
 
-    public ColorFormattingManager(IDocsCanvasServices services)
+    public ColorFormattingManager(
+        IDocumentServices doc,
+        IParsedContentServices content,
+        ILayoutDataServices layout,
+        ICanvasOperations canvas,
+        IScrollServices scroll)
     {
-        _services = services ?? throw new ArgumentNullException(nameof(services));
+        _doc = doc ?? throw new ArgumentNullException(nameof(doc));
+        _content = content ?? throw new ArgumentNullException(nameof(content));
+        _layout = layout ?? throw new ArgumentNullException(nameof(layout));
+        _canvas = canvas ?? throw new ArgumentNullException(nameof(canvas));
+        _scroll = scroll ?? throw new ArgumentNullException(nameof(scroll));
     }
 
     /// <summary>
@@ -35,9 +48,9 @@ internal class ColorFormattingManager
     /// </summary>
     public bool SelectionHasBackground()
     {
-        ((DocsCanvas)_services).ComputeLayout();
-        if (((DocsCanvas)_services)._parsedBlocks == null) return false;
-        return BackgroundHelper.SelectionHasBackground(((DocsCanvas)_services)._doc, ((DocsCanvas)_services)._parsedBlocks);
+        _layout.ComputeLayout();
+        if (_content.ParsedBlocks == null) return false;
+        return BackgroundHelper.SelectionHasBackground(_doc.Document, _content.ParsedBlocks);
     }
 
     /// <summary>
@@ -45,9 +58,9 @@ internal class ColorFormattingManager
     /// </summary>
     public bool CursorHasBackground()
     {
-        ((DocsCanvas)_services).ComputeLayout();
-        if (((DocsCanvas)_services)._parsedBlocks == null) return false;
-        return BackgroundHelper.CursorHasBackground(((DocsCanvas)_services)._doc, ((DocsCanvas)_services)._parsedBlocks);
+        _layout.ComputeLayout();
+        if (_content.ParsedBlocks == null) return false;
+        return BackgroundHelper.CursorHasBackground(_doc.Document, _content.ParsedBlocks);
     }
 
     /// <summary>
