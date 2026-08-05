@@ -882,7 +882,7 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider, IDocsC
         if (!_doc.HasSelection) return;
         var rect = TryGetTableRectSelection();
         string text = rect != null ? GetTableRectSelectedText(rect.Value) : _doc.GetSelectedText();
-        var cfHtml = HtmlColorParser.ConvertToHtmlClipboard(text);
+        var cfHtml = HtmlToMarkdownConverter.ConvertToHtmlClipboard(text);
         if (cfHtml != null)
             ClipboardHelper.SetTextAndHtml(text, cfHtml, Logger);
         else
@@ -917,7 +917,7 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider, IDocsC
         {
             string? html = ClipboardHelper.GetHtml(Logger);
             if (html != null)
-                pasteText = HtmlColorParser.ConvertToColoredMarkdown(html);
+                pasteText = HtmlToMarkdownConverter.ConvertToColoredMarkdown(html);
         }
         pasteText ??= ClipboardHelper.GetText(Logger);
         if (!string.IsNullOrEmpty(pasteText))

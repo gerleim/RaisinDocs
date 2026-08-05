@@ -742,7 +742,7 @@ public partial class DocsCanvas
                     string copyText = rectC != null
                         ? GetTableRectSelectedText(rectC.Value)
                         : _doc.GetSelectedText();
-                    var cfHtml = HtmlColorParser.ConvertToHtmlClipboard(copyText);
+                    var cfHtml = HtmlToMarkdownConverter.ConvertToHtmlClipboard(copyText);
                     if (cfHtml != null)
                         ClipboardHelper.SetTextAndHtml(copyText, cfHtml, Logger);
                     else
@@ -784,7 +784,7 @@ public partial class DocsCanvas
                     {
                         string? html = ClipboardHelper.GetHtml(Logger);
                         if (html != null)
-                            pasteText = HtmlColorParser.ConvertToColoredMarkdown(html);
+                            pasteText = HtmlToMarkdownConverter.ConvertToColoredMarkdown(html);
                     }
                     pasteText ??= ClipboardHelper.GetText(Logger);
                     if (!string.IsNullOrEmpty(pasteText))

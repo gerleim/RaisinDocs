@@ -2,22 +2,40 @@ using System.Text;
 
 namespace RaisinDocs;
 
-internal static class HtmlColorParser
+/// <summary>
+/// Converts HTML content (typically from clipboard) to RaisinDocs markdown.
+/// Handles structural elements (headers, blockquotes, rules) and inline formatting (bold, italic, colors).
+///
+/// Conversion pipeline:
+/// 1. Extract HTML fragment from CF_HTML clipboard format
+/// 2. Preprocess block-level elements (headers, hr, blockquotes)
+/// 3. Parse HTML into typed segments with formatting information
+/// 4. Convert segments to markdown with appropriate syntax
+/// 5. Merge adjacent segments and apply div color wrapping
+/// </summary>
+internal static class HtmlToMarkdownConverter
 {
-    private readonly record struct ColoredSegment(
-        string Text, RgbColor? Foreground, RgbColor? Background, bool Bold, bool Italic);
-
+    /// <summary>
+    /// Converts HTML from clipboard format to RaisinDocs markdown with color support.
+    /// Returns null if no formatting is detected in the HTML.
+    /// </summary>
     internal static string? ConvertToColoredMarkdown(string cfHtml)
     {
         var fragment = ExtractFragment(cfHtml);
         if (fragment == null) return null;
 
-        var lines = ParseHtmlFragment(fragment);
+        // Preprocess block-level elements
+        var preprocessed = PreprocessBlockElements(fragment);
+
+        var lines = ParseHtmlFragment(preprocessed);
         if (lines == null) return null;
 
         return ConvertToMarkdown(lines);
     }
 
+    /// <summary>
+    /// Extracts the HTML fragment from CF_HTML clipboard format (strips header and delimiters).
+    /// </summary>
     internal static string? ExtractFragment(string cfHtml)
     {
         const string startMarker = "<!--StartFragment-->";
@@ -31,6 +49,206 @@ internal static class HtmlColorParser
         if (end < 0) return null;
 
         return cfHtml[start..end];
+    }
+
+    /// <summary>
+    /// Preprocesses block-level HTML elements by converting them to markdown and wrapping in markers.
+    /// This allows the downstream parser to recognize and handle them appropriately.
+    /// </summary>
+    private static string PreprocessBlockElements(string html)
+    {
+        var result = new StringBuilder();
+        int pos = 0;
+
+        while (pos < html.Length)
+        {
+            int tagStart = html.IndexOf('<', pos);
+            if (tagStart < 0)
+            {
+                result.Append(html[pos..]);
+                break;
+            }
+
+            // Append text before tag
+            if (tagStart > pos)
+                result.Append(html[pos..tagStart]);
+
+            // Find tag end
+            int tagEnd = html.IndexOf('>', tagStart);
+            if (tagEnd < 0)
+            {
+                result.Append(html[tagStart..]);
+                break;
+            }
+
+            string tag = html[tagStart..(tagEnd + 1)];
+
+            // Handle headers
+            if (IsHeaderTag(tag, out int headerLevel))
+            {
+                string closeTagStr = $"</h{headerLevel}>";
+                int closeTagStart = html.IndexOf(closeTagStr, tagEnd, StringComparison.OrdinalIgnoreCase);
+                if (closeTagStart > 0)
+                {
+                    string headerContent = html[(tagEnd + 1)..closeTagStart];
+                    string markdown = new string('#', headerLevel) + " " + StripTags(headerContent).Trim();
+                    result.Append("<!--@MARKDOWN_BLOCK-->");
+                    result.Append(markdown);
+                    result.Append("<!--/@MARKDOWN_BLOCK-->");
+                    pos = closeTagStart + closeTagStr.Length;
+                    continue;
+                }
+                // If close tag not found, fall through to regular tag handling
+            }
+
+            // Handle horizontal rule
+            if (IsHrTag(tag))
+            {
+                result.Append("<!--@MARKDOWN_BLOCK-->---<!--/@MARKDOWN_BLOCK-->");
+                pos = tagEnd + 1;
+                continue;
+            }
+
+            // Handle blockquote
+            if (IsBlockquoteOpenTag(tag))
+            {
+                int closeTagStart = html.IndexOf("</blockquote>", tagEnd, StringComparison.OrdinalIgnoreCase);
+                if (closeTagStart > 0)
+                {
+                    string quoteContent = html[(tagEnd + 1)..closeTagStart];
+                    // Extract text from nested p tags
+                    string plainText = ExtractTextFromBlockquote(quoteContent);
+                    var lines = plainText.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
+                    result.Append("<!--@MARKDOWN_BLOCK-->");
+                    foreach (var line in lines)
+                    {
+                        var trimmed = line.Trim();
+                        if (!string.IsNullOrEmpty(trimmed))
+                        {
+                            if (result[^1] != '\n')
+                                result.Append('\n');
+                            result.Append("> ").Append(trimmed);
+                        }
+                    }
+                    result.Append("<!--/@MARKDOWN_BLOCK-->");
+                    pos = closeTagStart + "</blockquote>".Length;
+                    continue;
+                }
+            }
+
+            result.Append(tag);
+            pos = tagEnd + 1;
+        }
+
+        return result.ToString();
+    }
+
+    private static bool IsHeaderTag(string tag, out int level)
+    {
+        level = 0;
+        if (tag.Length < 4) return false;
+
+        // Check for <h1> through <h6> - handle both <h1> and <h1 ...>
+        if ((tag[1] == 'h' || tag[1] == 'H') && char.IsDigit(tag[2]))
+        {
+            level = tag[2] - '0';
+            // Check what comes after the digit: > or space (for attributes)
+            if (level >= 1 && level <= 6)
+            {
+                if (tag.Length == 3) return false; // Just <h
+                char nextChar = tag[3];
+                if (nextChar == '>' || char.IsWhiteSpace(nextChar))
+                    return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool IsHrTag(string tag)
+    {
+        return tag.StartsWith("<hr", StringComparison.OrdinalIgnoreCase) &&
+               (tag.Contains("/>") || tag.EndsWith(">"));
+    }
+
+    private static bool IsBlockquoteOpenTag(string tag)
+    {
+        return tag.Equals("<blockquote>", StringComparison.OrdinalIgnoreCase) ||
+               (tag.StartsWith("<blockquote", StringComparison.OrdinalIgnoreCase) && tag.EndsWith(">"));
+    }
+
+    private static string StripTags(string html)
+    {
+        var result = new StringBuilder();
+        int pos = 0;
+
+        while (pos < html.Length)
+        {
+            int tagStart = html.IndexOf('<', pos);
+            if (tagStart < 0)
+            {
+                result.Append(html[pos..]);
+                break;
+            }
+
+            result.Append(html[pos..tagStart]);
+
+            int tagEnd = html.IndexOf('>', tagStart);
+            if (tagEnd < 0) break;
+
+            string tagName = html.Substring(tagStart + 1, Math.Min(tagEnd - tagStart - 1, 10)).Split(' ', '/')[0].ToLowerInvariant();
+
+            // Preserve inline formatting tags
+            if (tagName == "strong" || tagName == "b" || tagName == "em" || tagName == "i")
+            {
+                result.Append(html[tagStart..(tagEnd + 1)]);
+            }
+
+            pos = tagEnd + 1;
+        }
+
+        return result.ToString();
+    }
+
+    private static string ExtractTextFromBlockquote(string html)
+    {
+        var result = new StringBuilder();
+        int pos = 0;
+
+        while (pos < html.Length)
+        {
+            // Look for <p> tags
+            int pStart = html.IndexOf("<p", pos, StringComparison.OrdinalIgnoreCase);
+            if (pStart < 0)
+            {
+                // No more <p> tags, add remaining text
+                var remaining = StripTags(html[pos..]);
+                if (!string.IsNullOrWhiteSpace(remaining))
+                    result.Append(remaining.Trim());
+                break;
+            }
+
+            // Find end of <p> tag
+            int pTagEnd = html.IndexOf('>', pStart);
+            if (pTagEnd < 0) break;
+
+            // Find </p>
+            int pCloseStart = html.IndexOf("</p>", pTagEnd, StringComparison.OrdinalIgnoreCase);
+            if (pCloseStart < 0) break;
+
+            string pContent = html[(pTagEnd + 1)..pCloseStart];
+            var text = StripTags(pContent).Trim();
+            if (!string.IsNullOrWhiteSpace(text))
+            {
+                if (result.Length > 0)
+                    result.Append('\n');
+                result.Append(text);
+            }
+
+            pos = pCloseStart + 4;
+        }
+
+        return result.ToString();
     }
 
     private static List<List<ColoredSegment>>? ParseHtmlFragment(string html)
@@ -71,10 +289,45 @@ internal static class HtmlColorParser
 
             if (c == '<')
             {
+                // Handle markdown blocks - check for the marker string
+                const string markdownBlockStart = "<!--@MARKDOWN_BLOCK-->";
+                const string markdownBlockEnd = "<!--/@MARKDOWN_BLOCK-->";
+                if (pos + markdownBlockStart.Length <= contentEnd &&
+                    html.AsSpan(pos, markdownBlockStart.Length).Equals(markdownBlockStart.AsSpan(), StringComparison.Ordinal))
+                {
+                    var cur = HtmlParsingContext.CurrentStyle(styleStack);
+                    HtmlParsingContext.FlushText(textBuf, currentLine, cur.fg, cur.bg, cur.bold, cur.italic);
+
+                    int blockEnd = html.IndexOf(markdownBlockEnd, pos + markdownBlockStart.Length, StringComparison.Ordinal);
+                    if (blockEnd > 0)
+                    {
+                        string markdownContent = html[(pos + markdownBlockStart.Length)..blockEnd];
+                        var markdownLines = markdownContent.Split('\n');
+
+                        foreach (var mdLine in markdownLines)
+                        {
+                            if (currentLine.Count > 0 || mdLine.Length > 0)
+                            {
+                                HtmlParsingContext.FlushText(textBuf, currentLine, null, null, false, false);
+                                currentLine = new List<ColoredSegment>();
+                                lines.Add(currentLine);
+                            }
+                            if (!string.IsNullOrEmpty(mdLine))
+                            {
+                                currentLine.Add(new ColoredSegment(mdLine, null, null, false, false));
+                                hasAnyFormatting = true;
+                            }
+                        }
+
+                        pos = blockEnd + markdownBlockEnd.Length;
+                        continue;
+                    }
+                }
+
                 if (pos + 4 <= contentEnd && html.AsSpan(pos, 4).Equals("<!--".AsSpan(), StringComparison.Ordinal))
                 {
-                    var cur = CurrentStyle(styleStack);
-                    FlushText(textBuf, currentLine, cur.fg, cur.bg, cur.bold, cur.italic);
+                    var cur = HtmlParsingContext.CurrentStyle(styleStack);
+                    HtmlParsingContext.FlushText(textBuf, currentLine, cur.fg, cur.bg, cur.bold, cur.italic);
                     int commentEnd = html.IndexOf("-->", pos + 4, StringComparison.Ordinal);
                     pos = commentEnd >= 0 ? commentEnd + 3 : contentEnd;
                     continue;
@@ -93,18 +346,18 @@ internal static class HtmlColorParser
                 int tagClose = html.IndexOf('>', pos + 1);
                 if (tagClose < 0) break;
 
-                var curStyle = CurrentStyle(styleStack);
+                var curStyle = HtmlParsingContext.CurrentStyle(styleStack);
 
                 if (tagName.Equals("span".AsSpan(), StringComparison.OrdinalIgnoreCase))
                 {
-                    FlushText(textBuf, currentLine, curStyle.fg, curStyle.bg, curStyle.bold, curStyle.italic);
+                    HtmlParsingContext.FlushText(textBuf, currentLine, curStyle.fg, curStyle.bg, curStyle.bold, curStyle.italic);
                     if (closing)
                     {
                         if (styleStack.Count > 0) styleStack.RemoveAt(styleStack.Count - 1);
                     }
                     else
                     {
-                        var (fg, bg, bold, italic) = ParseStyleFromTag(html.AsSpan(pos, tagClose - pos + 1));
+                        var (fg, bg, bold, italic) = HtmlParsingContext.ParseStyleFromTag(html.AsSpan(pos, tagClose - pos + 1));
                         fg ??= curStyle.fg;
                         bg ??= curStyle.bg;
                         bold = bold || curStyle.bold;
@@ -113,9 +366,9 @@ internal static class HtmlColorParser
                         styleStack.Add((fg, bg, bold, italic));
                     }
                 }
-                else if (IsBoldTag(tagName))
+                else if (HtmlParsingContext.IsBoldTag(tagName))
                 {
-                    FlushText(textBuf, currentLine, curStyle.fg, curStyle.bg, curStyle.bold, curStyle.italic);
+                    HtmlParsingContext.FlushText(textBuf, currentLine, curStyle.fg, curStyle.bg, curStyle.bold, curStyle.italic);
                     if (closing)
                     {
                         if (styleStack.Count > 0) styleStack.RemoveAt(styleStack.Count - 1);
@@ -126,9 +379,9 @@ internal static class HtmlColorParser
                         hasAnyFormatting = true;
                     }
                 }
-                else if (IsItalicTag(tagName))
+                else if (HtmlParsingContext.IsItalicTag(tagName))
                 {
-                    FlushText(textBuf, currentLine, curStyle.fg, curStyle.bg, curStyle.bold, curStyle.italic);
+                    HtmlParsingContext.FlushText(textBuf, currentLine, curStyle.fg, curStyle.bg, curStyle.bold, curStyle.italic);
                     if (closing)
                     {
                         if (styleStack.Count > 0) styleStack.RemoveAt(styleStack.Count - 1);
@@ -143,7 +396,7 @@ internal static class HtmlColorParser
                 {
                     if (hadParagraph)
                     {
-                        FlushText(textBuf, currentLine, curStyle.fg, curStyle.bg, curStyle.bold, curStyle.italic);
+                        HtmlParsingContext.FlushText(textBuf, currentLine, curStyle.fg, curStyle.bg, curStyle.bold, curStyle.italic);
                         currentLine = new List<ColoredSegment>();
                         lines.Add(currentLine);
                     }
@@ -151,7 +404,7 @@ internal static class HtmlColorParser
                 }
                 else if (!closing && tagName.Equals("br".AsSpan(), StringComparison.OrdinalIgnoreCase))
                 {
-                    FlushText(textBuf, currentLine, curStyle.fg, curStyle.bg, curStyle.bold, curStyle.italic);
+                    HtmlParsingContext.FlushText(textBuf, currentLine, curStyle.fg, curStyle.bg, curStyle.bold, curStyle.italic);
                     currentLine = new List<ColoredSegment>();
                     lines.Add(currentLine);
                 }
@@ -162,8 +415,8 @@ internal static class HtmlColorParser
             {
                 if (preMode)
                 {
-                    var cur = CurrentStyle(styleStack);
-                    FlushText(textBuf, currentLine, cur.fg, cur.bg, cur.bold, cur.italic);
+                    var cur = HtmlParsingContext.CurrentStyle(styleStack);
+                    HtmlParsingContext.FlushText(textBuf, currentLine, cur.fg, cur.bg, cur.bold, cur.italic);
                     currentLine = new List<ColoredSegment>();
                     lines.Add(currentLine);
                 }
@@ -179,7 +432,7 @@ internal static class HtmlColorParser
             }
             else if (c == '&')
             {
-                pos += DecodeEntity(html, pos, textBuf);
+                pos += HtmlParsingContext.DecodeEntity(html, pos, textBuf);
             }
             else
             {
@@ -188,177 +441,14 @@ internal static class HtmlColorParser
             }
         }
 
-        var finalStyle = CurrentStyle(styleStack);
-        FlushText(textBuf, currentLine, finalStyle.fg, finalStyle.bg, finalStyle.bold, finalStyle.italic);
+        var finalStyle = HtmlParsingContext.CurrentStyle(styleStack);
+        HtmlParsingContext.FlushText(textBuf, currentLine, finalStyle.fg, finalStyle.bg, finalStyle.bold, finalStyle.italic);
 
         if (!hasAnyFormatting) return null;
 
-        MergeAdjacentSegments(lines);
+        HtmlParsingContext.MergeAdjacentSegments(lines);
 
         return lines;
-    }
-
-    private static (RgbColor? fg, RgbColor? bg, bool bold, bool italic) CurrentStyle(
-        List<(RgbColor? fg, RgbColor? bg, bool bold, bool italic)> stack)
-    {
-        return stack.Count > 0 ? stack[^1] : default;
-    }
-
-    private static bool IsBoldTag(ReadOnlySpan<char> tagName) =>
-        tagName.Equals("b".AsSpan(), StringComparison.OrdinalIgnoreCase) ||
-        tagName.Equals("strong".AsSpan(), StringComparison.OrdinalIgnoreCase);
-
-    private static bool IsItalicTag(ReadOnlySpan<char> tagName) =>
-        tagName.Equals("i".AsSpan(), StringComparison.OrdinalIgnoreCase) ||
-        tagName.Equals("em".AsSpan(), StringComparison.OrdinalIgnoreCase);
-
-    private static void FlushText(StringBuilder buf, List<ColoredSegment> line,
-        RgbColor? fg, RgbColor? bg, bool bold, bool italic)
-    {
-        if (buf.Length == 0) return;
-        line.Add(new ColoredSegment(buf.ToString(), fg, bg, bold, italic));
-        buf.Clear();
-    }
-
-    private static (RgbColor? fg, RgbColor? bg, bool bold, bool italic) ParseStyleFromTag(ReadOnlySpan<char> tag)
-    {
-        int styleIdx = tag.IndexOf("style=".AsSpan(), StringComparison.OrdinalIgnoreCase);
-        if (styleIdx < 0) return (null, null, false, false);
-        int quotePos = styleIdx + 6;
-        if (quotePos >= tag.Length) return (null, null, false, false);
-        char quote = tag[quotePos];
-        if (quote != '"' && quote != '\'') return (null, null, false, false);
-        int styleStart = quotePos + 1;
-
-        int styleEnd = tag[styleStart..].IndexOf(quote);
-        if (styleEnd < 0) return (null, null, false, false);
-
-        var style = tag[styleStart..(styleStart + styleEnd)];
-
-        RgbColor? fg = null;
-        RgbColor? bg = null;
-
-        int bgIdx = style.IndexOf("background-color:".AsSpan(), StringComparison.OrdinalIgnoreCase);
-        int fgIdx = style.IndexOf("color:".AsSpan(), StringComparison.OrdinalIgnoreCase);
-
-        if (bgIdx >= 0)
-            bg = ParseCssColor(style[(bgIdx + 17)..]);
-
-        if (fgIdx >= 0)
-        {
-            bool isBgPrefix = fgIdx > 0 && style[fgIdx - 1] == '-';
-            if (!isBgPrefix)
-                fg = ParseCssColor(style[(fgIdx + 6)..]);
-        }
-
-        bool bold = style.IndexOf("font-weight:bold".AsSpan(), StringComparison.OrdinalIgnoreCase) >= 0;
-        bool italic = style.IndexOf("font-style:italic".AsSpan(), StringComparison.OrdinalIgnoreCase) >= 0;
-
-        return (fg, bg, bold, italic);
-    }
-
-    private static RgbColor? ParseCssColor(ReadOnlySpan<char> value)
-    {
-        value = value.Trim();
-        if (value.Length == 0) return null;
-
-        if (value[0] == '#')
-        {
-            int end = 1;
-            while (end < value.Length && char.IsAsciiHexDigit(value[end])) end++;
-
-            var hex = value[1..end];
-            if (hex.Length == 6)
-            {
-                byte r = (byte)((HexVal(hex[0]) << 4) | HexVal(hex[1]));
-                byte g = (byte)((HexVal(hex[2]) << 4) | HexVal(hex[3]));
-                byte b = (byte)((HexVal(hex[4]) << 4) | HexVal(hex[5]));
-                return new RgbColor(r, g, b);
-            }
-            if (hex.Length == 3)
-            {
-                byte r = (byte)((HexVal(hex[0]) << 4) | HexVal(hex[0]));
-                byte g = (byte)((HexVal(hex[1]) << 4) | HexVal(hex[1]));
-                byte b = (byte)((HexVal(hex[2]) << 4) | HexVal(hex[2]));
-                return new RgbColor(r, g, b);
-            }
-            return null;
-        }
-
-        int nameEnd = 0;
-        while (nameEnd < value.Length && char.IsLetter(value[nameEnd])) nameEnd++;
-        if (nameEnd > 0 && MarkdownParser.TryGetNamedColor(value[..nameEnd], out var color))
-            return color;
-
-        return null;
-    }
-
-    private static int HexVal(char c) => c switch
-    {
-        >= '0' and <= '9' => c - '0',
-        >= 'a' and <= 'f' => c - 'a' + 10,
-        >= 'A' and <= 'F' => c - 'A' + 10,
-        _ => 0
-    };
-
-    private static int DecodeEntity(string html, int pos, StringBuilder output)
-    {
-        int semi = html.IndexOf(';', pos + 1);
-        if (semi < 0 || semi - pos > 10)
-        {
-            output.Append(html[pos]);
-            return 1;
-        }
-
-        var entity = html.AsSpan(pos, semi - pos + 1);
-        if (entity.Equals("&lt;".AsSpan(), StringComparison.Ordinal)) output.Append('<');
-        else if (entity.Equals("&gt;".AsSpan(), StringComparison.Ordinal)) output.Append('>');
-        else if (entity.Equals("&amp;".AsSpan(), StringComparison.Ordinal)) output.Append('&');
-        else if (entity.Equals("&quot;".AsSpan(), StringComparison.Ordinal)) output.Append('"');
-        else if (entity.Equals("&nbsp;".AsSpan(), StringComparison.OrdinalIgnoreCase)) output.Append(' ');
-        else if (entity.Length > 3 && entity[1] == '#')
-        {
-            var numPart = entity[2..^1];
-            int codePoint;
-            if (numPart[0] == 'x' || numPart[0] == 'X')
-                int.TryParse(numPart[1..].ToString(), System.Globalization.NumberStyles.HexNumber, null, out codePoint);
-            else
-                int.TryParse(numPart.ToString(), out codePoint);
-            if (codePoint > 0) output.Append(char.ConvertFromUtf32(codePoint));
-            else output.Append(entity);
-        }
-        else
-        {
-            output.Append(entity);
-        }
-
-        return semi - pos + 1;
-    }
-
-    private static void MergeAdjacentSegments(List<List<ColoredSegment>> lines)
-    {
-        for (int i = 0; i < lines.Count; i++)
-        {
-            var line = lines[i];
-            if (line.Count <= 1) continue;
-
-            var merged = new List<ColoredSegment>(line.Count);
-            merged.Add(line[0]);
-
-            for (int j = 1; j < line.Count; j++)
-            {
-                var prev = merged[^1];
-                var cur = line[j];
-                if (prev.Foreground == cur.Foreground && prev.Background == cur.Background
-                    && prev.Bold == cur.Bold && prev.Italic == cur.Italic)
-                    merged[^1] = new ColoredSegment(
-                        prev.Text + cur.Text, prev.Foreground, prev.Background, prev.Bold, prev.Italic);
-                else
-                    merged.Add(cur);
-            }
-
-            lines[i] = merged;
-        }
     }
 
     private static string ConvertToMarkdown(List<List<ColoredSegment>> lines)
@@ -529,6 +619,10 @@ internal static class HtmlColorParser
 
     // --- Copy-out: markdown → HTML clipboard ---
 
+    /// <summary>
+    /// Converts RaisinDocs markdown to HTML for clipboard (reverse direction).
+    /// Handles bold, italic, colors, and RaisinDocs color comment syntax.
+    /// </summary>
     internal static string? ConvertToHtmlClipboard(string markdownText)
     {
         if (!markdownText.Contains("<!--@") && !markdownText.Contains('*'))
@@ -549,7 +643,7 @@ internal static class HtmlColorParser
                 var tagText = line[..divOpenTagEnd].TrimEnd();
                 var props = tagText.AsSpan().Trim();
                 props = props[9..^3]; // strip <!--@div  and -->
-                ParseColorProps(props, out divFg, out divBg);
+                HtmlParsingContext.ParseColorProps(props, out divFg, out divBg);
                 anyFormatting = true;
             }
 
@@ -606,7 +700,7 @@ internal static class HtmlColorParser
                     int end = line.IndexOf("-->", pos + 6, StringComparison.Ordinal);
                     if (end >= 0)
                     {
-                        FlushText(textBuf, segments, fg, bg, bold, italic);
+                        HtmlParsingContext.FlushText(textBuf, segments, fg, bg, bold, italic);
                         var closeTag = line.AsSpan(pos + 6, end - pos - 6);
                         if (closeTag.Equals("fg".AsSpan(), StringComparison.Ordinal))
                             fg = divFg;
@@ -627,9 +721,9 @@ internal static class HtmlColorParser
                     int end = line.IndexOf("-->", pos + 5, StringComparison.Ordinal);
                     if (end >= 0)
                     {
-                        FlushText(textBuf, segments, fg, bg, bold, italic);
+                        HtmlParsingContext.FlushText(textBuf, segments, fg, bg, bold, italic);
                         var props = line.AsSpan(pos + 5, end - pos - 5);
-                        ParseColorProps(props, out var inlineFg, out var inlineBg);
+                        HtmlParsingContext.ParseColorProps(props, out var inlineFg, out var inlineBg);
                         fg = inlineFg ?? divFg;
                         bg = inlineBg ?? divBg;
                         pos = end + 3;
@@ -651,7 +745,7 @@ internal static class HtmlColorParser
                     continue;
                 }
 
-                FlushText(textBuf, segments, fg, bg, bold, italic);
+                HtmlParsingContext.FlushText(textBuf, segments, fg, bg, bold, italic);
                 if (starCount >= 3) { bold = !bold; italic = !italic; }
                 else if (starCount == 2) bold = !bold;
                 else italic = !italic;
@@ -663,7 +757,7 @@ internal static class HtmlColorParser
             pos++;
         }
 
-        FlushText(textBuf, segments, fg, bg, bold, italic);
+        HtmlParsingContext.FlushText(textBuf, segments, fg, bg, bold, italic);
 
         var html = new StringBuilder();
         foreach (var seg in segments)
@@ -689,28 +783,6 @@ internal static class HtmlColorParser
         }
 
         return (html.ToString(), hadFormatting);
-    }
-
-    private static void ParseColorProps(ReadOnlySpan<char> props, out RgbColor? fg, out RgbColor? bg)
-    {
-        fg = null;
-        bg = null;
-        int fgIdx = props.IndexOf("fg:".AsSpan());
-        if (fgIdx >= 0)
-        {
-            var val = props[(fgIdx + 3)..];
-            int end = val.IndexOf(' ');
-            if (end >= 0) val = val[..end];
-            fg = ParseCssColor(val);
-        }
-        int bgIdx = props.IndexOf("bg:".AsSpan());
-        if (bgIdx >= 0)
-        {
-            var val = props[(bgIdx + 3)..];
-            int end = val.IndexOf(' ');
-            if (end >= 0) val = val[..end];
-            bg = ParseCssColor(val);
-        }
     }
 
     private static string HtmlEncode(string text)
