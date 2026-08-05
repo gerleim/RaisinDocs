@@ -1112,4 +1112,7 @@ public partial class DocsCanvas
         if (_menuItemStyle != null)
             item.Style = _menuItemStyle;
     }
+
+    void ICanvasOperations.StyleMenuItem(MenuItem item) => ApplyMenuItemStyle(item);
+    void ICanvasOperations.FocusCanvas() => Focus();
 }

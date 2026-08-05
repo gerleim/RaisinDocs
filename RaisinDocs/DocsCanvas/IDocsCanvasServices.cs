@@ -174,6 +174,8 @@ internal interface ICanvasOperations
     event System.Action? ScrollStateChanged;
     void SealAndStopTimer();
     void RaiseFormattingChanged();
+    void StyleMenuItem(System.Windows.Controls.MenuItem item);
+    void FocusCanvas();
 }
 
 /// <summary>

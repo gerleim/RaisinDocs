@@ -165,7 +165,17 @@ public partial class DocsCanvas
     private SpellCheckController? _spellCheckController;
 
     internal SpellCheckController SpellCheck =>
-        _spellCheckController ??= new SpellCheckController((IDocsCanvasServices)this);
+        _spellCheckController ??= new SpellCheckController(
+            (ICanvasOperations)this,
+            (IImageServices)this,
+            (IDocumentServices)this,
+            (IRenderingServices)this,
+            (ILayoutDataServices)this,
+            (IParsedContentServices)this,
+            (ITableServices)this,
+            (INavigationServices)this,
+            (IVisualModeServices)this,
+            (IScrollServices)this);
 
     public bool SpellCheckEnabled => SpellCheck.SpellCheckEnabled;
     public string? ProjectFolder => SpellCheck.ProjectFolder;
