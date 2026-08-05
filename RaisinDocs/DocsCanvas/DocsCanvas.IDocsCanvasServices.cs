@@ -19,9 +19,36 @@ public partial class DocsCanvas
     // ====== ILayoutDataServices ======
     List<VisualLine> ILayoutDataServices.VisualLines => _visualLines;
     List<double> ILayoutDataServices.LineYPositions => _lineYPositions;
-    List<BlockVisualSpacing>? ILayoutDataServices.VisualLineSpacings => _visualLineSpacings!;
-    double ILayoutDataServices.LayoutMaxWidth => _layoutMaxWidth;
-    int ILayoutDataServices.LayoutVersion => _layoutVersion;
+    List<BlockVisualSpacing>? ILayoutDataServices.VisualLineSpacings
+    {
+        get => _visualLineSpacings!;
+        set => _visualLineSpacings = value;
+    }
+    double ILayoutDataServices.LayoutMaxWidth
+    {
+        get => _layoutMaxWidth;
+        set => _layoutMaxWidth = value;
+    }
+    int ILayoutDataServices.LayoutVersion
+    {
+        get => _layoutVersion;
+        set => _layoutVersion = value;
+    }
+    double ILayoutDataServices.TotalContentHeight
+    {
+        get => _totalContentHeight;
+        set => _totalContentHeight = value;
+    }
+    bool ILayoutDataServices.LayoutDirty
+    {
+        get => _layoutDirty;
+        set => _layoutDirty = value;
+    }
+    Dictionary<int, ParagraphGroup>? ILayoutDataServices.BlockToGroup
+    {
+        get => _blockToGroup;
+        set => _blockToGroup = value;
+    }
     double ILayoutDataServices.GetEffectiveLineHeight(VisualLine vl) => GetEffectiveLineHeight(vl);
     void ILayoutDataServices.InvalidateLayout() => InvalidateLayout();
     void ILayoutDataServices.ComputeLayout() => ComputeLayout();
@@ -39,6 +66,7 @@ public partial class DocsCanvas
     // ====== IRenderingServices ======
     ThemePalette IRenderingServices.Palette => _palette;
     TextMeasurer IRenderingServices.Measure => _measure;
+    SyntaxHighlighter IRenderingServices.SyntaxHighlighter => _syntaxHighlighter;
     double IRenderingServices.ActualWidth => ActualWidth;
     double IRenderingServices.ActualHeight => ActualHeight;
     void IRenderingServices.InvalidateVisual() => InvalidateVisual();
@@ -50,9 +78,21 @@ public partial class DocsCanvas
         => MeasureJoinedRange(group, start, length);
 
     // ====== IParsedContentServices ======
-    List<ParsedBlock>? IParsedContentServices.ParsedBlocks => _parsedBlocks;
-    List<BlockVisualMap>? IParsedContentServices.VisualMaps => _visualMaps;
-    VisualBlockStructure? IParsedContentServices.VisualBlockStructure => _visualBlockStructure;
+    List<ParsedBlock>? IParsedContentServices.ParsedBlocks
+    {
+        get => _parsedBlocks;
+        set => _parsedBlocks = value;
+    }
+    List<BlockVisualMap>? IParsedContentServices.VisualMaps
+    {
+        get => _visualMaps;
+        set => _visualMaps = value;
+    }
+    VisualBlockStructure? IParsedContentServices.VisualBlockStructure
+    {
+        get => _visualBlockStructure;
+        set => _visualBlockStructure = value;
+    }
 
     // ====== IVisualModeServices ======
     List<BlockVisualMap>? IVisualModeServices.VisualMaps => _visualMaps;

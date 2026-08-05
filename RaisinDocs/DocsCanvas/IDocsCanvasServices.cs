@@ -30,9 +30,12 @@ internal interface ILayoutDataServices
 {
     List<DocsCanvas.VisualLine> VisualLines { get; }
     List<double> LineYPositions { get; }
-    List<BlockVisualSpacing>? VisualLineSpacings { get; }
-    double LayoutMaxWidth { get; }
-    int LayoutVersion { get; }
+    List<BlockVisualSpacing>? VisualLineSpacings { get; set; }
+    double LayoutMaxWidth { get; set; }
+    int LayoutVersion { get; set; }
+    double TotalContentHeight { get; set; }
+    bool LayoutDirty { get; set; }
+    Dictionary<int, DocsCanvas.ParagraphGroup>? BlockToGroup { get; set; }
     double GetEffectiveLineHeight(DocsCanvas.VisualLine vl);
     double GetTextStartXForVisualLine(DocsCanvas.VisualLine vl);
     void InvalidateLayout();
@@ -51,12 +54,13 @@ internal interface ILayoutDataServices
 
 /// <summary>
 /// Rendering support: palette (colors/brushes), text measurement, caching, and line height queries.
-/// Used by: RenderingContext, TableRenderer, CursorNavigationEngine, SpellCheckController, FindAndReplaceController
+/// Used by: RenderingContext, TableRenderer, CursorNavigationEngine, SpellCheckController, FindAndReplaceController, LayoutEngine
 /// </summary>
 internal interface IRenderingServices
 {
     DocsCanvas.ThemePalette Palette { get; }
     TextMeasurer Measure { get; }
+    SyntaxHighlighter SyntaxHighlighter { get; }
     double ActualWidth { get; }
     double ActualHeight { get; }
     void InvalidateVisual();
@@ -78,9 +82,9 @@ internal interface IRenderingServices
 /// </summary>
 internal interface IParsedContentServices
 {
-    List<ParsedBlock>? ParsedBlocks { get; }
-    List<BlockVisualMap>? VisualMaps { get; }
-    VisualBlockStructure? VisualBlockStructure { get; }
+    List<ParsedBlock>? ParsedBlocks { get; set; }
+    List<BlockVisualMap>? VisualMaps { get; set; }
+    VisualBlockStructure? VisualBlockStructure { get; set; }
 }
 
 /// <summary>

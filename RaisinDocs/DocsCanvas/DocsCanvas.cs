@@ -758,7 +758,16 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider, IDocsC
         _tableRenderer = new TableRenderer((ITableServices)this, (IRenderingServices)this, (IDocumentServices)this, (IParsedContentServices)this, (ILayoutDataServices)this);
         _visualModeManager = new VisualModeManager((IVisualModeServices)this, (IDocumentServices)this, (IParsedContentServices)this, (ILoggingServices)this);
         _colorFormatter = new ColorFormattingManager((IDocumentServices)this, (IParsedContentServices)this, (ILayoutDataServices)this, (ICanvasOperations)this, (IScrollServices)this);
-        _layoutEngine = new LayoutEngine((IDocsCanvasServices)this);
+        _layoutEngine = new LayoutEngine(
+            (ILayoutDataServices)this,
+            (IDocumentServices)this,
+            (IRenderingServices)this,
+            (IParsedContentServices)this,
+            (IVisualModeServices)this,
+            (ILoggingServices)this,
+            (ITableServices)this,
+            (IImageServices)this,
+            this);
         _renderingContext = new RenderingContext(
             (IRenderingServices)this,
             (ILayoutDataServices)this,
