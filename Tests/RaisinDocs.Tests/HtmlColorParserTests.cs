@@ -1023,6 +1023,47 @@ public class HtmlToMarkdownConverterTests
     }
 
     [Fact]
+    public void Header_FollowedByParagraph_KeepsSeparate()
+    {
+        // Test that headers and paragraphs remain separate (CommonMark compliance)
+        var html = @"<html><body>
+<!--StartFragment--><h3>RPG.net</h3>
+<p>Nothing substantial.</p>
+<hr>
+<h3>Onyx Path forums</h3>
+<p>No detailed RAW analysis.</p><!--EndFragment-->
+</body></html>";
+
+        var result = HtmlToMarkdownConverter.ConvertToColoredMarkdown(html);
+
+        result.Should().NotBeNull();
+
+        // Verify headers and paragraphs are on separate lines
+        result.Should().Contain("### RPG.net");
+        result.Should().Contain("Nothing substantial.");
+        result.Should().Contain("### Onyx Path forums");
+        result.Should().Contain("No detailed RAW analysis.");
+
+        // Verify proper structure: header line, then paragraph line
+        var lines = result!.Split('\n').Where(l => !string.IsNullOrWhiteSpace(l)).ToList();
+
+        // Should have at least: header, paragraph, hr, header, paragraph
+        lines.Should().HaveCountGreaterThanOrEqualTo(5);
+
+        // Find RPG.net header and verify next non-empty line is the paragraph (not another header)
+        var rpgIdx = lines.FindIndex(l => l.Contains("RPG.net"));
+        rpgIdx.Should().BeGreaterThanOrEqualTo(0);
+
+        // Next line should be the paragraph content, not another header
+        if (rpgIdx >= 0 && rpgIdx + 1 < lines.Count)
+        {
+            var nextLine = lines[rpgIdx + 1];
+            nextLine.Should().Contain("Nothing substantial.");
+            nextLine.Should().NotStartWith("#");  // Should not be a header
+        }
+    }
+
+    [Fact]
     public void SampleFile_LegWrackAnalysis_ConvertsCorrectly()
     {
         // Test with the actual sample HTML file

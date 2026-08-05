@@ -94,7 +94,7 @@ internal static class HtmlToMarkdownConverter
                     string markdown = new string('#', headerLevel) + " " + StripTags(headerContent).Trim();
                     result.Append("<!--@MARKDOWN_BLOCK-->");
                     result.Append(markdown);
-                    result.Append("<!--/@MARKDOWN_BLOCK-->");
+                    result.Append("<!--/@MARKDOWN_BLOCK-->\n");  // Add newline to separate from next block
                     pos = closeTagStart + closeTagStr.Length;
                     continue;
                 }
@@ -104,7 +104,7 @@ internal static class HtmlToMarkdownConverter
             // Handle horizontal rule
             if (IsHrTag(tag))
             {
-                result.Append("<!--@MARKDOWN_BLOCK-->---<!--/@MARKDOWN_BLOCK-->");
+                result.Append("<!--@MARKDOWN_BLOCK-->---<!--/@MARKDOWN_BLOCK-->\n");  // Add newline
                 pos = tagEnd + 1;
                 continue;
             }
@@ -130,7 +130,7 @@ internal static class HtmlToMarkdownConverter
                             result.Append("> ").Append(trimmed);
                         }
                     }
-                    result.Append("<!--/@MARKDOWN_BLOCK-->");
+                    result.Append("<!--/@MARKDOWN_BLOCK-->\n");  // Add newline
                     pos = closeTagStart + "</blockquote>".Length;
                     continue;
                 }
@@ -146,7 +146,7 @@ internal static class HtmlToMarkdownConverter
                     string markdown = ListConverter.ConvertList(listContent, false, 0).Trim();
                     result.Append("<!--@MARKDOWN_BLOCK-->");
                     result.Append(markdown);
-                    result.Append("<!--/@MARKDOWN_BLOCK-->");
+                    result.Append("<!--/@MARKDOWN_BLOCK-->\n");  // Add newline
                     pos = closeTagStart + "</ul>".Length;
                     continue;
                 }
@@ -162,7 +162,7 @@ internal static class HtmlToMarkdownConverter
                     string markdown = ListConverter.ConvertList(listContent, true, 0).Trim();
                     result.Append("<!--@MARKDOWN_BLOCK-->");
                     result.Append(markdown);
-                    result.Append("<!--/@MARKDOWN_BLOCK-->");
+                    result.Append("<!--/@MARKDOWN_BLOCK-->\n");  // Add newline
                     pos = closeTagStart + "</ol>".Length;
                     continue;
                 }
