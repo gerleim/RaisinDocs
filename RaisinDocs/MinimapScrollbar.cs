@@ -8,7 +8,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 
-public class MinimapScrollbar : FrameworkElement
+public class MinimapScrollbar : FrameworkElement, IMinimapDataProvider
 {
     private const double CharHeight = 4.0;
     private const int GlyphH = 3;
@@ -893,5 +893,32 @@ public class MinimapScrollbar : FrameworkElement
             ReleaseMouseCapture();
             e.Handled = true;
         }
+    }
+
+    // ====== IMinimapDataProvider Implementation ======
+
+    List<DocsCanvas.VisualLine> IMinimapDataProvider.GetVisualLines()
+    {
+        return Canvas?._visualLines ?? new List<DocsCanvas.VisualLine>();
+    }
+
+    List<double> IMinimapDataProvider.GetLineYPositions()
+    {
+        return Canvas?._lineYPositions ?? new List<double>();
+    }
+
+    double IMinimapDataProvider.GetTotalContentHeight()
+    {
+        return Canvas?.TotalContentHeight ?? 0;
+    }
+
+    double IMinimapDataProvider.GetViewportHeight()
+    {
+        return Canvas?.ActualHeight ?? 0;
+    }
+
+    List<BlockVisualMap>? IMinimapDataProvider.GetVisualMaps()
+    {
+        return Canvas?._visualMaps;
     }
 }
