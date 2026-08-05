@@ -5,7 +5,16 @@ namespace RaisinDocs;
 
 internal class FindAndReplaceController
 {
-    private readonly IDocsCanvasServices _services;
+    private readonly ISearchServices _search;
+    private readonly IDocumentServices _doc;
+    private readonly ICanvasOperations _canvas;
+    private readonly IRenderingServices _rendering;
+    private readonly ILayoutDataServices _layout;
+    private readonly IScrollServices _scroll;
+    private readonly IParsedContentServices _content;
+    private readonly IVisualModeServices _visual;
+    private readonly ITableServices _table;
+
     private List<SearchMatch> _searchMatches = [];
     private int _currentMatchIndex = -1;
     private string _lastSearchQuery = "";
@@ -14,9 +23,26 @@ internal class FindAndReplaceController
 
     internal record struct SearchMatch(int Block, int Offset, int Length);
 
-    public FindAndReplaceController(IDocsCanvasServices services)
+    public FindAndReplaceController(
+        ISearchServices search,
+        IDocumentServices doc,
+        ICanvasOperations canvas,
+        IRenderingServices rendering,
+        ILayoutDataServices layout,
+        IScrollServices scroll,
+        IParsedContentServices content,
+        IVisualModeServices visual,
+        ITableServices table)
     {
-        _services = services ?? throw new ArgumentNullException(nameof(services));
+        _search = search ?? throw new ArgumentNullException(nameof(search));
+        _doc = doc ?? throw new ArgumentNullException(nameof(doc));
+        _canvas = canvas ?? throw new ArgumentNullException(nameof(canvas));
+        _rendering = rendering ?? throw new ArgumentNullException(nameof(rendering));
+        _layout = layout ?? throw new ArgumentNullException(nameof(layout));
+        _scroll = scroll ?? throw new ArgumentNullException(nameof(scroll));
+        _content = content ?? throw new ArgumentNullException(nameof(content));
+        _visual = visual ?? throw new ArgumentNullException(nameof(visual));
+        _table = table ?? throw new ArgumentNullException(nameof(table));
     }
 
     // --- Public API ---
@@ -31,8 +57,8 @@ internal class FindAndReplaceController
         if (string.IsNullOrEmpty(query))
         {
             _currentMatchIndex = -1;
-            ((DocsCanvas)_services).FindBar?.UpdateMatchInfo(-1, 0);
-            ((DocsCanvas)_services).InvalidateVisual();
+            _search.FindBar?.UpdateMatchInfo(-1, 0);
+            _rendering.InvalidateVisual();
             return;
         }
 
@@ -40,9 +66,9 @@ internal class FindAndReplaceController
             ? StringComparison.Ordinal
             : StringComparison.OrdinalIgnoreCase;
 
-        for (int b = 0; b < ((DocsCanvas)_services)._doc.BlockCount; b++)
+        for (int b = 0; b < _doc.BlockCount; b++)
         {
-            string blockText = ((DocsCanvas)_services)._doc.GetBlockText(b);
+            string blockText = _doc.GetBlockText(b);
             int pos = 0;
             while (pos <= blockText.Length - query.Length)
             {
@@ -57,7 +83,7 @@ internal class FindAndReplaceController
         for (int i = 0; i < _searchMatches.Count; i++)
         {
             var m = _searchMatches[i];
-            if (Document.ComparePositions(m.Block, m.Offset, ((DocsCanvas)_services)._doc.CursorBlock, ((DocsCanvas)_services)._doc.CursorOffset) >= 0)
+            if (Document.ComparePositions(m.Block, m.Offset, _doc.Document.CursorBlock, _doc.Document.CursorOffset) >= 0)
             {
                 _currentMatchIndex = i;
                 break;
@@ -66,12 +92,12 @@ internal class FindAndReplaceController
         if (_currentMatchIndex == -1 && _searchMatches.Count > 0)
             _currentMatchIndex = 0;
 
-        ((DocsCanvas)_services).FindBar?.UpdateMatchInfo(_currentMatchIndex, _searchMatches.Count);
+        _search.FindBar?.UpdateMatchInfo(_currentMatchIndex, _searchMatches.Count);
 
         if (_currentMatchIndex >= 0)
             ScrollToMatch(_currentMatchIndex);
         else
-            ((DocsCanvas)_services).InvalidateVisual();
+            _rendering.InvalidateVisual();
     }
 
     public void NavigateMatch(int direction)
@@ -83,7 +109,7 @@ internal class FindAndReplaceController
         else if (_currentMatchIndex < 0)
             _currentMatchIndex = _searchMatches.Count - 1;
         ScrollToMatch(_currentMatchIndex);
-        ((DocsCanvas)_services).FindBar?.UpdateMatchInfo(_currentMatchIndex, _searchMatches.Count);
+        _search.FindBar?.UpdateMatchInfo(_currentMatchIndex, _searchMatches.Count);
     }
 
     public void ReplaceCurrent(string replacement)
@@ -92,14 +118,14 @@ internal class FindAndReplaceController
 
         var match = _searchMatches[_currentMatchIndex];
 
-        ((DocsCanvas)_services).SealAndStopTimer();
-        ((DocsCanvas)_services)._doc.BeginUndoGroup();
-        ((DocsCanvas)_services)._doc.RemoveTextAt(match.Block, match.Offset, match.Length);
-        ((DocsCanvas)_services)._doc.InsertTextAt(match.Block, match.Offset, replacement);
-        ((DocsCanvas)_services)._doc.CursorBlock = match.Block;
-        ((DocsCanvas)_services)._doc.CursorOffset = match.Offset + replacement.Length;
-        ((DocsCanvas)_services)._doc.CollapseSelection();
-        ((DocsCanvas)_services)._doc.SealUndoGroup();
+        _canvas.SealAndStopTimer();
+        _doc.Document.BeginUndoGroup();
+        _doc.Document.RemoveTextAt(match.Block, match.Offset, match.Length);
+        _doc.Document.InsertTextAt(match.Block, match.Offset, replacement);
+        _doc.Document.CursorBlock = match.Block;
+        _doc.Document.CursorOffset = match.Offset + replacement.Length;
+        _doc.Document.CollapseSelection();
+        _doc.Document.SealUndoGroup();
 
         int savedIndex = _currentMatchIndex;
         ExecuteSearch(_lastSearchQuery, _lastSearchCaseSensitive);
@@ -107,30 +133,30 @@ internal class FindAndReplaceController
         {
             _currentMatchIndex = Math.Min(savedIndex, _searchMatches.Count - 1);
             ScrollToMatch(_currentMatchIndex);
-            ((DocsCanvas)_services).FindBar?.UpdateMatchInfo(_currentMatchIndex, _searchMatches.Count);
+            _search.FindBar?.UpdateMatchInfo(_currentMatchIndex, _searchMatches.Count);
         }
 
-        ((DocsCanvas)_services).InvalidateLayout();
+        _layout.InvalidateLayout();
     }
 
     public void ReplaceAll(string replacement)
     {
         if (_searchMatches.Count == 0) return;
 
-        ((DocsCanvas)_services).SealAndStopTimer();
-        ((DocsCanvas)_services)._doc.BeginUndoGroup();
+        _canvas.SealAndStopTimer();
+        _doc.Document.BeginUndoGroup();
 
         for (int i = _searchMatches.Count - 1; i >= 0; i--)
         {
             var match = _searchMatches[i];
-            ((DocsCanvas)_services)._doc.RemoveTextAt(match.Block, match.Offset, match.Length);
-            ((DocsCanvas)_services)._doc.InsertTextAt(match.Block, match.Offset, replacement);
+            _doc.Document.RemoveTextAt(match.Block, match.Offset, match.Length);
+            _doc.Document.InsertTextAt(match.Block, match.Offset, replacement);
         }
 
-        ((DocsCanvas)_services)._doc.SealUndoGroup();
+        _doc.Document.SealUndoGroup();
 
         ExecuteSearch(_lastSearchQuery, _lastSearchCaseSensitive);
-        ((DocsCanvas)_services).InvalidateLayout();
+        _layout.InvalidateLayout();
     }
 
     public void ClearMatches()
@@ -138,7 +164,7 @@ internal class FindAndReplaceController
         _searchMatches.Clear();
         _currentMatchIndex = -1;
         _lastSearchQuery = "";
-        ((DocsCanvas)_services).InvalidateVisual();
+        _rendering.InvalidateVisual();
     }
 
     // --- Internal API ---
@@ -160,7 +186,7 @@ internal class FindAndReplaceController
         if (_searchMatches.Count == 0) return;
 
         double viewTop = effectiveScroll;
-        double viewBottom = effectiveScroll + ((DocsCanvas)_services).ActualHeight;
+        double viewBottom = effectiveScroll + _rendering.ActualHeight;
 
         for (int pass = 0; pass < 2; pass++)
         {
@@ -171,7 +197,7 @@ internal class FindAndReplaceController
                 if (pass == 1 && !isCurrent) continue;
 
                 var match = _searchMatches[mi];
-                var brush = isCurrent ? ((DocsCanvas)_services)._palette.CurrentSearchMatch : ((DocsCanvas)_services)._palette.SearchMatch;
+                var brush = isCurrent ? _rendering.Palette.CurrentSearchMatch : _rendering.Palette.SearchMatch;
                 DrawMatchOnVisualLines(dc, match, brush, effectiveScroll, viewTop, viewBottom);
             }
         }
@@ -184,14 +210,14 @@ internal class FindAndReplaceController
         if (matchIndex < 0 || matchIndex >= _searchMatches.Count) return;
         var match = _searchMatches[matchIndex];
 
-        ((DocsCanvas)_services)._doc.AnchorBlock = match.Block;
-        ((DocsCanvas)_services)._doc.AnchorOffset = match.Offset;
-        ((DocsCanvas)_services)._doc.CursorBlock = match.Block;
-        ((DocsCanvas)_services)._doc.CursorOffset = match.Offset + match.Length;
+        _doc.Document.AnchorBlock = match.Block;
+        _doc.Document.AnchorOffset = match.Offset;
+        _doc.Document.CursorBlock = match.Block;
+        _doc.Document.CursorOffset = match.Offset + match.Length;
 
-        ((DocsCanvas)_services).ComputeLayout();
-        ((DocsCanvas)_services).EnsureCursorVisible();
-        ((DocsCanvas)_services).InvalidateVisual();
+        _layout.ComputeLayout();
+        _scroll.EnsureCursorVisible();
+        _rendering.InvalidateVisual();
     }
 
     private void DrawMatchOnVisualLines(DrawingContext dc, SearchMatch match, Brush brush,
@@ -199,11 +225,11 @@ internal class FindAndReplaceController
     {
         int matchEnd = match.Offset + match.Length;
 
-        for (int i = 0; i < ((DocsCanvas)_services)._visualLines.Count; i++)
+        for (int i = 0; i < _layout.VisualLines.Count; i++)
         {
-            var vl = ((DocsCanvas)_services)._visualLines[i];
-            double lineH = ((DocsCanvas)_services).GetEffectiveLineHeight(vl);
-            double lineY = ((DocsCanvas)_services)._lineYPositions[i];
+            var vl = _layout.VisualLines[i];
+            double lineH = _layout.GetEffectiveLineHeight(vl);
+            double lineY = _layout.LineYPositions[i];
             if (lineY + lineH < viewTop) continue;
             if (lineY > viewBottom) break;
 
@@ -221,30 +247,30 @@ internal class FindAndReplaceController
             int hlStart = Math.Max(match.Offset, vl.StartOffset);
             int hlEnd = Math.Min(matchEnd, vlEnd);
 
-            string blockText = ((DocsCanvas)_services)._doc.GetBlockText(vl.BlockIndex);
-            var parsed = ((DocsCanvas)_services)._parsedBlocks![vl.BlockIndex];
-            var map = ((DocsCanvas)_services).IsVisual ? ((DocsCanvas)_services)._visualMaps?[vl.BlockIndex] : null;
+            string blockText = _doc.GetBlockText(vl.BlockIndex);
+            var parsed = _content.ParsedBlocks![vl.BlockIndex];
+            var map = _visual.IsVisual ? _content.VisualMaps?[vl.BlockIndex] : null;
 
             double x1, x2;
-            if (((DocsCanvas)_services).IsVisual && parsed.Table != null && parsed.TableRow != null)
+            if (_visual.IsVisual && parsed.Table != null && parsed.TableRow != null)
             {
-                if (((DocsCanvas)_services)._tableColumnWidths.TryGetValue(parsed.Table, out var colWidths))
+                if (_table.TableColumnWidths.TryGetValue(parsed.Table, out var colWidths))
                 {
-                    x1 = ((DocsCanvas)_services).CursorXInTableRow(vl.BlockIndex, parsed, colWidths, hlStart);
-                    x2 = ((DocsCanvas)_services).CursorXInTableRow(vl.BlockIndex, parsed, colWidths, hlEnd);
+                    x1 = _table.CursorXInTableRow(vl.BlockIndex, parsed, colWidths, hlStart);
+                    x2 = _table.CursorXInTableRow(vl.BlockIndex, parsed, colWidths, hlEnd);
                 }
                 else continue;
             }
             else
             {
-                x1 = ((DocsCanvas)_services).MeasureRangeWidth(blockText, vl.StartOffset, hlStart - vl.StartOffset,
+                x1 = _rendering.MeasureRangeWidth(blockText, vl.StartOffset, hlStart - vl.StartOffset,
                     parsed.Runs, parsed.Kind, map);
-                x2 = ((DocsCanvas)_services).MeasureRangeWidth(blockText, vl.StartOffset, hlEnd - vl.StartOffset,
+                x2 = _rendering.MeasureRangeWidth(blockText, vl.StartOffset, hlEnd - vl.StartOffset,
                     parsed.Runs, parsed.Kind, map);
 
                 if (map?.ReplacementPrefix != null && vl.StartOffset == 0)
                 {
-                    double prefixW = ((DocsCanvas)_services)._measure.MeasureReplacementPrefix(map.ReplacementPrefix!, map.PrefixMeasureKind);
+                    double prefixW = _rendering.Measure.MeasureReplacementPrefix(map.ReplacementPrefix!, map.PrefixMeasureKind);
                     x1 += prefixW;
                     x2 += prefixW;
                 }
@@ -260,7 +286,7 @@ internal class FindAndReplaceController
     private void DrawMatchOnJoinedLine(DrawingContext dc, int visualLineIndex,
         SearchMatch match, Brush brush, double lineY, double lineH, double effectiveScroll)
     {
-        var vl = ((DocsCanvas)_services)._visualLines[visualLineIndex];
+        var vl = _layout.VisualLines[visualLineIndex];
         var group = vl.Group!;
         int matchStartJoined = group.SourceToJoined(match.Block, match.Offset);
         int matchEndJoined = group.SourceToJoined(match.Block, match.Offset + match.Length);
@@ -274,8 +300,8 @@ internal class FindAndReplaceController
         int hlStart = Math.Max(vlStart, matchStartJoined);
         int hlEnd = Math.Min(vlEnd, matchEndJoined);
 
-        double x1 = ((DocsCanvas)_services).MeasureJoinedRange(group, vlStart, hlStart - vlStart);
-        double x2 = ((DocsCanvas)_services).MeasureJoinedRange(group, vlStart, hlEnd - vlStart);
+        double x1 = _rendering.MeasureJoinedRange(group, vlStart, hlStart - vlStart);
+        double x2 = _rendering.MeasureJoinedRange(group, vlStart, hlEnd - vlStart);
 
         double w = Math.Max(0, x2 - x1);
         if (w > 0)

@@ -22,7 +22,16 @@ public partial class DocsCanvas
     private FindAndReplaceController? _findAndReplaceController;
 
     internal FindAndReplaceController FindAndReplace =>
-        _findAndReplaceController ??= new FindAndReplaceController((IDocsCanvasServices)this);
+        _findAndReplaceController ??= new FindAndReplaceController(
+            (ISearchServices)this,
+            (IDocumentServices)this,
+            (ICanvasOperations)this,
+            (IRenderingServices)this,
+            (ILayoutDataServices)this,
+            (IScrollServices)this,
+            (IParsedContentServices)this,
+            (IVisualModeServices)this,
+            (ITableServices)this);
 
     internal void OpenFind(bool showReplace)
     {
