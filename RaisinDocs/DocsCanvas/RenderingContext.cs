@@ -14,11 +14,48 @@ public partial class DocsCanvas
     /// </summary>
     internal class RenderingContext
     {
-        private readonly IDocsCanvasServices _services;
+        private readonly IRenderingServices _rendering;
+        private readonly ILayoutDataServices _layout;
+        private readonly IParsedContentServices _content;
+        private readonly IDocumentServices _doc;
+        private readonly IScrollServices _scroll;
+        private readonly ITableServices _table;
+        private readonly IVisualModeServices _visual;
+        private readonly IImageServices _images;
+        private readonly ISearchServices _search;
+        private readonly ILoggingServices _logging;
+        private readonly ICanvasOperations _canvas;
+        private readonly INavigationServices _navigation;
+        private readonly DocsCanvas _docsCanvas;
 
-        public RenderingContext(IDocsCanvasServices services)
+        public RenderingContext(
+            IRenderingServices rendering,
+            ILayoutDataServices layout,
+            IParsedContentServices content,
+            IDocumentServices doc,
+            IScrollServices scroll,
+            ITableServices table,
+            IVisualModeServices visual,
+            IImageServices images,
+            ISearchServices search,
+            ILoggingServices logging,
+            ICanvasOperations canvas,
+            INavigationServices navigation,
+            DocsCanvas docsCanvas)
         {
-            _services = services ?? throw new ArgumentNullException(nameof(services));
+            _rendering = rendering ?? throw new ArgumentNullException(nameof(rendering));
+            _layout = layout ?? throw new ArgumentNullException(nameof(layout));
+            _content = content ?? throw new ArgumentNullException(nameof(content));
+            _doc = doc ?? throw new ArgumentNullException(nameof(doc));
+            _scroll = scroll ?? throw new ArgumentNullException(nameof(scroll));
+            _table = table ?? throw new ArgumentNullException(nameof(table));
+            _visual = visual ?? throw new ArgumentNullException(nameof(visual));
+            _images = images ?? throw new ArgumentNullException(nameof(images));
+            _search = search ?? throw new ArgumentNullException(nameof(search));
+            _logging = logging ?? throw new ArgumentNullException(nameof(logging));
+            _canvas = canvas ?? throw new ArgumentNullException(nameof(canvas));
+            _navigation = navigation ?? throw new ArgumentNullException(nameof(navigation));
+            _docsCanvas = docsCanvas ?? throw new ArgumentNullException(nameof(docsCanvas));
         }
 
         /// <summary>
@@ -26,34 +63,34 @@ public partial class DocsCanvas
         /// </summary>
         public void OnRender(DrawingContext dc)
         {
-            ((DocsCanvas)_services)._measure.EnsureMeasured((DocsCanvas)_services);
-            dc.DrawRectangle(((DocsCanvas)_services)._palette.Background, null,
-                new Rect(0, 0, _services.ActualWidth, _services.ActualHeight));
+            _rendering.Measure.EnsureMeasured(_docsCanvas);
+            dc.DrawRectangle(_rendering.Palette.Background, null,
+                new Rect(0, 0, _rendering.ActualWidth, _rendering.ActualHeight));
 
-            if (((DocsCanvas)_services)._parsedBlocks == null)
+            if (_content.ParsedBlocks == null)
                 return;
 
-            double effectiveScroll = Math.Round(((DocsCanvas)_services)._scroll.EffectiveOffset);
+            double effectiveScroll = Math.Round(_scroll.Scroll.EffectiveOffset);
             double viewTop = effectiveScroll;
-            double viewBottom = effectiveScroll + _services.ActualHeight;
+            double viewBottom = effectiveScroll + _rendering.ActualHeight;
 
             DrawCodeBlockBackgrounds(dc, effectiveScroll, viewTop, viewBottom);
             DrawColorBlockBackgrounds(dc, effectiveScroll, viewTop, viewBottom);
             DrawInlineColorBackgrounds(dc, effectiveScroll, viewTop, viewBottom);
-            if (_services.IsVisual)
-                ((DocsCanvas)_services)._tableRenderer.DrawTableBackgrounds(dc, effectiveScroll, viewTop, viewBottom);
+            if (_visual.IsVisual)
+                _table.TableRenderer.DrawTableBackgrounds(dc, effectiveScroll, viewTop, viewBottom);
 
-            if (_services.TestSearchMatchCount > 0)
+            if (_search.TestSearchMatchCount > 0)
                 DrawSearchHighlights(dc, effectiveScroll);
 
-            if (((DocsCanvas)_services)._doc.HasSelection)
+            if (_doc.Document.HasSelection)
                 DrawSelection(dc, effectiveScroll);
 
-            for (int i = 0; i < ((DocsCanvas)_services)._visualLines.Count; i++)
+            for (int i = 0; i < _layout.VisualLines.Count; i++)
             {
-                var vl = ((DocsCanvas)_services)._visualLines[i];
-                double lineH = ((DocsCanvas)_services).GetEffectiveLineHeight(vl);
-                double lineY = ((DocsCanvas)_services)._lineYPositions[i];
+                var vl = _layout.VisualLines[i];
+                double lineH = _layout.GetEffectiveLineHeight(vl);
+                double lineY = _layout.LineYPositions[i];
                 if (lineY + lineH < viewTop) continue;
                 if (lineY > viewBottom) break;
 
@@ -65,28 +102,28 @@ public partial class DocsCanvas
                     }
                     else
                     {
-                        var parsed = ((DocsCanvas)_services)._parsedBlocks[vl.BlockIndex];
-                        string blockText = ((DocsCanvas)_services)._doc.GetBlockText(vl.BlockIndex);
-                        double fontSize = ((DocsCanvas)_services)._measure.GetBlockFontSize(parsed.Kind);
+                        var parsed = _content.ParsedBlocks[vl.BlockIndex];
+                        string blockText = _doc.Document.GetBlockText(vl.BlockIndex);
+                        double fontSize = _rendering.Measure.GetBlockFontSize(parsed.Kind);
                         var baseTypeface = TextMeasurer.GetBlockBaseTypeface(parsed.Kind);
-                        var map = _services.IsVisual ? ((DocsCanvas)_services)._visualMaps?[vl.BlockIndex] : null;
+                        var map = _visual.IsVisual ? _content.VisualMaps?[vl.BlockIndex] : null;
 
-                        double textX = ((DocsCanvas)_services)._layoutEngine.GetTextStartXForVisualLine(vl);
+                        double textX = _docsCanvas._layoutEngine.GetTextStartXForVisualLine(vl);
 
-                        if (_services.IsVisual && parsed.Kind == BlockKind.Blockquote && vl.StartOffset == 0)
+                        if (_visual.IsVisual && parsed.Kind == BlockKind.Blockquote && vl.StartOffset == 0)
                         {
                             DrawBlockquoteBar(dc, lineY, effectiveScroll);
                         }
 
-                        if (_services.IsVisual && parsed.Kind == BlockKind.ThematicBreak)
+                        if (_visual.IsVisual && parsed.Kind == BlockKind.ThematicBreak)
                         {
                             double ruleY = lineY - effectiveScroll + 10;
-                            double ruleRight = _services.ActualWidth - DocsCanvas._padding;
-                            dc.DrawLine(((DocsCanvas)_services)._palette.TableBorderPen, new Point(DocsCanvas._padding, ruleY), new Point(ruleRight, ruleY));
+                            double ruleRight = _rendering.ActualWidth - DocsCanvas._padding;
+                            dc.DrawLine(_rendering.Palette.TableBorderPen, new Point(DocsCanvas._padding, ruleY), new Point(ruleRight, ruleY));
                         }
-                        else if (_services.IsVisual && parsed.Table != null && parsed.TableRow != null)
+                        else if (_visual.IsVisual && parsed.Table != null && parsed.TableRow != null)
                         {
-                            ((DocsCanvas)_services)._tableRenderer.DrawTableRow(dc, vl, blockText, parsed, lineY, effectiveScroll, fontSize, baseTypeface);
+                            _table.TableRenderer.DrawTableRow(dc, vl, blockText, parsed, lineY, effectiveScroll, fontSize, baseTypeface);
                         }
                         else if (map != null)
                         {
@@ -103,7 +140,7 @@ public partial class DocsCanvas
                                 {
                                     if (parsed.Kind is BlockKind.TaskListItemUnchecked or BlockKind.TaskListItemChecked)
                                     {
-                                        var spacing = _services.GetVisualLineSpacing(vl);
+                                        var spacing = _layout.GetVisualLineSpacing(vl);
                                         if (spacing != null)
                                         {
                                             DrawTaskListCheckbox(dc, parsed.Kind == BlockKind.TaskListItemChecked,
@@ -113,7 +150,7 @@ public partial class DocsCanvas
                                     }
                                     else if (parsed.Kind == BlockKind.UnorderedListItem)
                                     {
-                                        var spacing = _services.GetVisualLineSpacing(vl);
+                                        var spacing = _layout.GetVisualLineSpacing(vl);
                                         if (spacing != null)
                                         {
                                             DrawListBullet(dc, new AbsoluteX(spacing.MarkerStartX),
@@ -123,7 +160,7 @@ public partial class DocsCanvas
                                     }
                                     else if (parsed.Kind == BlockKind.OrderedListItem)
                                     {
-                                        var spacing = _services.GetVisualLineSpacing(vl);
+                                        var spacing = _layout.GetVisualLineSpacing(vl);
                                         if (spacing != null)
                                         {
                                             DrawOrderedListNumber(dc, new AbsoluteX(spacing.MarkerStartX),
@@ -135,7 +172,7 @@ public partial class DocsCanvas
                                     {
                                         var prefixFt = new FormattedText(map.ReplacementPrefix!,
                                             CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
-                                            TextMeasurer.NormalTypeface, fontSize, ((DocsCanvas)_services)._palette.Syntax, ((DocsCanvas)_services)._measure.DpiScale);
+                                            TextMeasurer.NormalTypeface, fontSize, _rendering.Palette.Syntax, _rendering.Measure.DpiScale);
                                         dc.DrawText(prefixFt, new Point(DocsCanvas._padding, lineY - effectiveScroll));
                                     }
                                 }
@@ -147,11 +184,11 @@ public partial class DocsCanvas
                                     {
                                         var ft = new FormattedText(displayText, CultureInfo.InvariantCulture,
                                             FlowDirection.LeftToRight, baseTypeface, fontSize,
-                                            ((DocsCanvas)_services)._palette.Foreground, ((DocsCanvas)_services)._measure.DpiScale);
+                                            _rendering.Palette.Foreground, _rendering.Measure.DpiScale);
                                         ApplyInlineStylesVisual(ft, vl, parsed, map);
                                         if (parsed.Kind == BlockKind.TaskListItemChecked)
                                         {
-                                            ft.SetForegroundBrush(((DocsCanvas)_services)._palette.Syntax, 0, displayText.Length);
+                                            ft.SetForegroundBrush(_rendering.Palette.Syntax, 0, displayText.Length);
                                             ft.SetTextDecorations(TextDecorations.Strikethrough, 0, displayText.Length);
                                         }
                                         dc.DrawText(ft, new Point(textX, lineY - effectiveScroll));
@@ -164,42 +201,43 @@ public partial class DocsCanvas
                             string text = blockText.Substring(vl.StartOffset, vl.Length);
                             var ft = new FormattedText(text, CultureInfo.InvariantCulture,
                                 FlowDirection.LeftToRight, baseTypeface, fontSize,
-                                ((DocsCanvas)_services)._palette.Foreground, ((DocsCanvas)_services)._measure.DpiScale);
+                                _rendering.Palette.Foreground, _rendering.Measure.DpiScale);
                             ApplyInlineStyles(ft, vl, parsed, blockText);
                             dc.DrawText(ft, new Point(textX, lineY - effectiveScroll));
 
-                            if (((DocsCanvas)_services)._showWhitespace)
+                            if (_docsCanvas._showWhitespace)
                                 DrawTrailingSpaceDots(dc, vl, blockText, parsed, textX, lineY - effectiveScroll);
 
-                            if (((DocsCanvas)_services)._imagePreview == DocsCanvas.ImagePreviewMode.Inline && parsed.Images != null)
+                            if (_images.ImagePreview == DocsCanvas.ImagePreviewMode.Inline && parsed.Images != null)
                                 DrawSourceInlineImages(dc, vl, parsed.Images, lineY, effectiveScroll);
                         }
                     }
                 }
             }
 
-            if (((DocsCanvas)_services).SpellCheckEnabled)
+            if (_docsCanvas.SpellCheckEnabled)
                 DrawSpellingErrors(dc, effectiveScroll, viewTop, viewBottom);
 
-            if (((DocsCanvas)_services).ShowPageBreaks)
+            if (_docsCanvas.ShowPageBreaks)
                 DrawPageBreaks(dc, effectiveScroll, viewTop, viewBottom);
 
-            if (((DocsCanvas)_services)._cursorVisible && ((DocsCanvas)_services).IsFocused && ((DocsCanvas)_services)._visualLines.Count > 0)
+            if (_docsCanvas._cursorVisible && _docsCanvas.IsFocused && _layout.VisualLines.Count > 0)
             {
-                int vli = ((DocsCanvas)_services).CursorToVisualLineIndex();
-                double cx = DocsCanvas._padding + ((DocsCanvas)_services).CursorXInVisualLine(vli);
-                double cy = ((DocsCanvas)_services)._lineYPositions[vli] - effectiveScroll;
-                double lineH = ((DocsCanvas)_services).GetEffectiveLineHeight(((DocsCanvas)_services)._visualLines[vli]);
-                dc.DrawLine(((DocsCanvas)_services)._palette.CursorPen, new Point(cx, cy), new Point(cx, cy + lineH));
+                int vli = _docsCanvas.CursorToVisualLineIndex();
+                double cx = DocsCanvas._padding + _docsCanvas.CursorXInVisualLine(vli);
+                double cy = _layout.LineYPositions[vli] - effectiveScroll;
+                double lineH = _layout.GetEffectiveLineHeight(_layout.VisualLines[vli]);
+                dc.DrawLine(_rendering.Palette.CursorPen, new Point(cx, cy), new Point(cx, cy + lineH));
             }
 
-            if (!_services.IsVisual && ((DocsCanvas)_services)._imagePreview == DocsCanvas.ImagePreviewMode.OnHover && ((DocsCanvas)_services)._hoveredImage != null)
+            if (!_visual.IsVisual && _images.ImagePreview == DocsCanvas.ImagePreviewMode.OnHover && _docsCanvas._hoveredImage != null)
                 DrawHoverImagePreview(dc);
 
-            ((DocsCanvas)_services).Dispatcher.BeginInvoke(() =>
+            _canvas.Dispatcher.BeginInvoke(() =>
             {
-                ((DocsCanvas)_services).Minimap?.InvalidateVisual();
-                ((DocsCanvas)_services).ScrollStateChanged?.Invoke();
+                if (_canvas.Minimap is FrameworkElement fe)
+                    fe.InvalidateVisual();
+                _docsCanvas.ScrollStateChanged?.Invoke();
             });
         }
 
@@ -207,13 +245,13 @@ public partial class DocsCanvas
             double lineY, double effectiveScroll)
         {
             var group = vl.Group!;
-            _services.Logger?.Log(DocsLogLevel.Debug, $"DrawJoinedLine: Rendering joined line with text '{group.JoinedText}'");
+            _logging.Logger?.Log(DocsLogLevel.Debug, $"DrawJoinedLine: Rendering joined line with text '{group.JoinedText}'");
 
             if (HasImagesOnLine(vl, group.JoinedMap))
             {
                 DrawVisualLineWithImages(dc, vl, group.JoinedText, group.JoinedParsed,
                     group.JoinedMap, lineY, effectiveScroll,
-                    ((DocsCanvas)_services)._measure.GetBlockFontSize(BlockKind.Paragraph), TextMeasurer.GetBlockBaseTypeface(BlockKind.Paragraph));
+                    _rendering.Measure.GetBlockFontSize(BlockKind.Paragraph), TextMeasurer.GetBlockBaseTypeface(BlockKind.Paragraph));
                 return;
             }
 
@@ -242,12 +280,12 @@ public partial class DocsCanvas
             string displayText = sb.ToString();
             if (displayText.Length == 0) return;
 
-            double fontSize = ((DocsCanvas)_services)._measure.GetBlockFontSize(BlockKind.Paragraph);
+            double fontSize = _rendering.Measure.GetBlockFontSize(BlockKind.Paragraph);
             var baseTypeface = TextMeasurer.GetBlockBaseTypeface(BlockKind.Paragraph);
 
             var ft = new FormattedText(displayText, CultureInfo.InvariantCulture,
                 FlowDirection.LeftToRight, baseTypeface, fontSize,
-                ((DocsCanvas)_services)._palette.Foreground, ((DocsCanvas)_services)._measure.DpiScale);
+                _rendering.Palette.Foreground, _rendering.Measure.DpiScale);
             ApplyInlineStylesVisual(ft, vl, group.JoinedParsed, group.JoinedMap);
 
             // Color soft breaks (pilcrow + visual space)
@@ -258,7 +296,7 @@ public partial class DocsCanvas
                 if (group.JoinedMap.IsHidden(i)) continue;
 
                 if (softBreaks.Contains(i) && displayPos < displayText.Length)
-                    ft.SetForegroundBrush(((DocsCanvas)_services)._palette.Syntax, displayPos, 2);  // color pilcrow + visual space
+                    ft.SetForegroundBrush(_rendering.Palette.Syntax, displayPos, 2);  // color pilcrow + visual space
 
                 // Advance display position (by 2 if soft break with visual space, else by 1)
                 displayPos += (softBreaks.Contains(i)) ? 2 : 1;
@@ -353,7 +391,7 @@ public partial class DocsCanvas
 
         private Brush GetSyntaxBrush(int argb)
         {
-            if (((DocsCanvas)_services)._syntaxBrushCache.TryGetValue(argb, out var cached))
+            if (_docsCanvas._syntaxBrushCache.TryGetValue(argb, out var cached))
                 return cached;
 
             byte a = (byte)((argb >> 24) & 0xFF);
@@ -362,7 +400,7 @@ public partial class DocsCanvas
             byte b = (byte)(argb & 0xFF);
             var brush = new SolidColorBrush(Color.FromArgb(a, r, g, b));
             brush.Freeze();
-            ((DocsCanvas)_services)._syntaxBrushCache[argb] = brush;
+            _docsCanvas._syntaxBrushCache[argb] = brush;
             return brush;
         }
 
@@ -379,7 +417,7 @@ public partial class DocsCanvas
             {
                 int len = Math.Min(vl.Length, hardBreakClip - vl.StartOffset);
                 if (len > 0)
-                    ft.SetForegroundBrush(_services.GetCachedBrush(blockFg.R, blockFg.G, blockFg.B), 0, len);
+                    ft.SetForegroundBrush(_rendering.GetCachedBrush(blockFg.R, blockFg.G, blockFg.B), 0, len);
             }
 
             if (parsed.ColorSpans != null)
@@ -397,7 +435,7 @@ public partial class DocsCanvas
 
                     if (cs.Foreground is { } fg)
                     {
-                        ft.SetForegroundBrush(_services.GetCachedBrush(fg.R, fg.G, fg.B), localStart, count);
+                        ft.SetForegroundBrush(_rendering.GetCachedBrush(fg.R, fg.G, fg.B), localStart, count);
                     }
                 }
             }
@@ -419,24 +457,24 @@ public partial class DocsCanvas
                     int localStart = Math.Max(0, 0 - vl.StartOffset);
                     int localEnd = Math.Min(vl.Length, totalPrefix - vl.StartOffset);
                     if (localEnd > localStart)
-                        ft.SetForegroundBrush(((DocsCanvas)_services)._palette.Syntax, localStart, localEnd - localStart);
+                        ft.SetForegroundBrush(_rendering.Palette.Syntax, localStart, localEnd - localStart);
                 }
             }
 
             if (parsed.Kind is BlockKind.TaskListItemUnchecked or BlockKind.TaskListItemChecked && vl.StartOffset == 0 && vl.Length >= ls + 6)
             {
-                ft.SetForegroundBrush(((DocsCanvas)_services)._palette.Syntax, 0, ls + 6);
+                ft.SetForegroundBrush(_rendering.Palette.Syntax, 0, ls + 6);
             }
             else if (parsed.Kind == BlockKind.UnorderedListItem && vl.StartOffset == 0 && vl.Length >= ls + 2)
             {
-                ft.SetForegroundBrush(((DocsCanvas)_services)._palette.Syntax, 0, ls + 2);
+                ft.SetForegroundBrush(_rendering.Palette.Syntax, 0, ls + 2);
             }
             else if (parsed.Kind == BlockKind.OrderedListItem && vl.StartOffset == 0)
             {
                 var stripped = ls > 0 ? blockText[ls..] : blockText;
                 int prefixLen = MarkdownParser.GetOrderedListPrefixLength(stripped);
                 if (prefixLen > 0 && vl.Length >= ls + prefixLen)
-                    ft.SetForegroundBrush(((DocsCanvas)_services)._palette.Syntax, 0, ls + prefixLen);
+                    ft.SetForegroundBrush(_rendering.Palette.Syntax, 0, ls + prefixLen);
             }
 
             if (parsed.Kind == BlockKind.Blockquote && vl.StartOffset == 0)
@@ -448,19 +486,19 @@ public partial class DocsCanvas
                     if (stripped.Length > 1 && stripped[1] == ' ')
                         dimLength += 1;
                     if (vl.Length >= dimLength)
-                        ft.SetForegroundBrush(((DocsCanvas)_services)._palette.Syntax, 0, dimLength);
+                        ft.SetForegroundBrush(_rendering.Palette.Syntax, 0, dimLength);
                 }
             }
 
             if (parsed.Kind == BlockKind.LinkDefinition)
-                ft.SetForegroundBrush(((DocsCanvas)_services)._palette.Syntax, 0, vl.Length);
+                ft.SetForegroundBrush(_rendering.Palette.Syntax, 0, vl.Length);
 
             if (parsed.Kind is BlockKind.ThemeDefinition or BlockKind.ColorDivOpen or BlockKind.ColorDivClose)
-                ft.SetForegroundBrush(((DocsCanvas)_services)._palette.Syntax, 0, vl.Length);
+                ft.SetForegroundBrush(_rendering.Palette.Syntax, 0, vl.Length);
 
             if (parsed.Kind is BlockKind.TableSeparatorRow or BlockKind.ThematicBreak or BlockKind.SetextUnderline)
             {
-                ft.SetForegroundBrush(((DocsCanvas)_services)._palette.Syntax, 0, vl.Length);
+                ft.SetForegroundBrush(_rendering.Palette.Syntax, 0, vl.Length);
             }
             else if (parsed.Kind is BlockKind.TableHeaderRow or BlockKind.TableDataRow)
             {
@@ -609,7 +647,7 @@ public partial class DocsCanvas
             {
                 int vlVisLen = Math.Min(ftLen, map.RawToVisual(vl.StartOffset + vl.Length) - map.RawToVisual(vl.StartOffset));
                 if (vlVisLen > 0)
-                    ft.SetForegroundBrush(_services.GetCachedBrush(blockFg.R, blockFg.G, blockFg.B), 0, vlVisLen);
+                    ft.SetForegroundBrush(_rendering.GetCachedBrush(blockFg.R, blockFg.G, blockFg.B), 0, vlVisLen);
             }
 
             var colorSpans = map.ColorSpans;
@@ -633,7 +671,7 @@ public partial class DocsCanvas
 
                 if (cs.Foreground is { } fg)
                 {
-                    ft.SetForegroundBrush(_services.GetCachedBrush(fg.R, fg.G, fg.B), visStart, count);
+                    ft.SetForegroundBrush(_rendering.GetCachedBrush(fg.R, fg.G, fg.B), visStart, count);
                 }
             }
         }
@@ -658,14 +696,14 @@ public partial class DocsCanvas
 
             double x = DocsCanvas._padding;
             double screenY = lineY - effectiveScroll;
-            double textLineH = ((DocsCanvas)_services)._measure.GetLineHeight(vl.BlockKind);
+            double textLineH = _rendering.Measure.GetLineHeight(vl.BlockKind);
             double totalLineH = vl.OverrideHeight > textLineH ? vl.OverrideHeight : textLineH;
 
             if (map.ReplacementPrefix != null && vl.StartOffset == 0)
             {
                 if (parsed.Kind is BlockKind.TaskListItemUnchecked or BlockKind.TaskListItemChecked)
                 {
-                    var spacing = _services.GetVisualLineSpacing(vl);
+                    var spacing = _layout.GetVisualLineSpacing(vl);
                     if (spacing != null)
                     {
                         DrawTaskListCheckbox(dc, parsed.Kind == BlockKind.TaskListItemChecked,
@@ -674,35 +712,35 @@ public partial class DocsCanvas
                 }
                 else if (parsed.Kind == BlockKind.UnorderedListItem)
                 {
-                    var spacing = _services.GetVisualLineSpacing(vl);
+                    var spacing = _layout.GetVisualLineSpacing(vl);
                     if (spacing != null)
                     {
                         DrawListBullet(dc, new AbsoluteX(spacing.MarkerStartX), new AbsoluteY(screenY),
                             parsed.Kind, parsed.ListNestingLevel);
                     }
-                    x += ((DocsCanvas)_services)._measure.MeasureReplacementPrefix(map.ReplacementPrefix, map.PrefixMeasureKind);
+                    x += _rendering.Measure.MeasureReplacementPrefix(map.ReplacementPrefix, map.PrefixMeasureKind);
                 }
                 else if (parsed.Kind == BlockKind.OrderedListItem)
                 {
-                    var spacing = _services.GetVisualLineSpacing(vl);
+                    var spacing = _layout.GetVisualLineSpacing(vl);
                     if (spacing != null)
                     {
                         DrawOrderedListNumber(dc, new AbsoluteX(spacing.MarkerStartX), new AbsoluteY(screenY),
                             map.ReplacementPrefix, fontSize, parsed.ListNestingLevel);
                     }
-                    x += ((DocsCanvas)_services)._measure.MeasureReplacementPrefix(map.ReplacementPrefix, map.PrefixMeasureKind);
+                    x += _rendering.Measure.MeasureReplacementPrefix(map.ReplacementPrefix, map.PrefixMeasureKind);
                 }
                 else if (map.IsContinuationIndent)
                 {
-                    x += ((DocsCanvas)_services)._measure.MeasureReplacementPrefix(map.ReplacementPrefix, map.PrefixMeasureKind);
+                    x += _rendering.Measure.MeasureReplacementPrefix(map.ReplacementPrefix, map.PrefixMeasureKind);
                 }
                 else
                 {
                     var prefixFt = new FormattedText(map.ReplacementPrefix,
                         CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
-                        TextMeasurer.NormalTypeface, fontSize, ((DocsCanvas)_services)._palette.Syntax, ((DocsCanvas)_services)._measure.DpiScale);
+                        TextMeasurer.NormalTypeface, fontSize, _rendering.Palette.Syntax, _rendering.Measure.DpiScale);
                     dc.DrawText(prefixFt, new Point(DocsCanvas._padding, screenY));
-                    x += ((DocsCanvas)_services)._measure.MeasureReplacementPrefix(map.ReplacementPrefix, map.PrefixMeasureKind);
+                    x += _rendering.Measure.MeasureReplacementPrefix(map.ReplacementPrefix, map.PrefixMeasureKind);
                 }
             }
 
@@ -717,8 +755,8 @@ public partial class DocsCanvas
                 if (segStart < img.Start)
                     x = DrawTextSegment(dc, blockText, segStart, img.Start, map, parsed, fontSize, baseTypeface, x, screenY);
 
-                var (imgW, imgH) = ((DocsCanvas)_services).GetImageSize(img, ((DocsCanvas)_services)._layoutMaxWidth);
-                var cached = ((DocsCanvas)_services)._imageCache.Get(img.Url, ((DocsCanvas)_services).DocumentBasePath, ((DocsCanvas)_services)._layoutMaxWidth);
+                var (imgW, imgH) = _images.GetImageSize(img, _layout.LayoutMaxWidth);
+                var cached = _images.ImageCache.Get(img.Url, _images.DocumentBasePath, _layout.LayoutMaxWidth);
                 double imgY = screenY + totalLineH - imgH;
                 if (cached != null)
                 {
@@ -746,7 +784,7 @@ public partial class DocsCanvas
 
             var ft = new FormattedText(displayText, CultureInfo.InvariantCulture,
                 FlowDirection.LeftToRight, baseTypeface, fontSize,
-                ((DocsCanvas)_services)._palette.Foreground, ((DocsCanvas)_services)._measure.DpiScale);
+                _rendering.Palette.Foreground, _rendering.Measure.DpiScale);
 
             int visBase = 0;
             int runIdx = 0;
@@ -786,10 +824,10 @@ public partial class DocsCanvas
         private void DrawTaskListCheckbox(DrawingContext dc, bool isChecked, AbsoluteX markerCenterX, AbsoluteY screenY,
             BlockKind blockKind)
         {
-            double lineH = ((DocsCanvas)_services)._measure.GetLineHeight(blockKind);
-            double baseline = ((DocsCanvas)_services)._measure.GetBaseline(blockKind);
-            double fontSize = ((DocsCanvas)_services)._measure.GetBlockFontSize(blockKind);
-            double capHeight = fontSize * ((DocsCanvas)_services)._measure.CapsHeightRatio;
+            double lineH = _rendering.Measure.GetLineHeight(blockKind);
+            double baseline = _rendering.Measure.GetBaseline(blockKind);
+            double fontSize = _rendering.Measure.GetBlockFontSize(blockKind);
+            double capHeight = fontSize * _rendering.Measure.CapsHeightRatio;
             double boxSize = Math.Round(lineH * 0.65);
 
             // Align checkbox with text baseline, same as bullets
@@ -802,7 +840,7 @@ public partial class DocsCanvas
             if (isChecked)
             {
                 dc.DrawRoundedRectangle(DocsCanvas._checkboxCheckedBrush, null, rect, radius, radius);
-                var pen = new Pen(((DocsCanvas)_services)._palette.Background, 1.6);
+                var pen = new Pen(_rendering.Palette.Background, 1.6);
                 pen.Freeze();
                 double cx = checkboxX, cy = checkboxY, s = boxSize;
                 dc.DrawLine(pen,
@@ -814,7 +852,7 @@ public partial class DocsCanvas
             }
             else
             {
-                var pen = new Pen(((DocsCanvas)_services)._palette.Syntax, 1.2);
+                var pen = new Pen(_rendering.Palette.Syntax, 1.2);
                 pen.Freeze();
                 dc.DrawRoundedRectangle(null, pen, rect, radius, radius);
             }
@@ -823,10 +861,10 @@ public partial class DocsCanvas
         private void DrawListBullet(DrawingContext dc, AbsoluteX markerCenterX, AbsoluteY screenY,
             BlockKind blockKind, int nestingLevel)
         {
-            double lineH = ((DocsCanvas)_services)._measure.GetLineHeight(blockKind);
-            double baseline = ((DocsCanvas)_services)._measure.GetBaseline(blockKind);
-            double fontSize = ((DocsCanvas)_services)._measure.GetBlockFontSize(blockKind);
-            double capHeight = fontSize * ((DocsCanvas)_services)._measure.CapsHeightRatio;
+            double lineH = _rendering.Measure.GetLineHeight(blockKind);
+            double baseline = _rendering.Measure.GetBaseline(blockKind);
+            double fontSize = _rendering.Measure.GetBlockFontSize(blockKind);
+            double capHeight = fontSize * _rendering.Measure.CapsHeightRatio;
             double bulletSize = Math.Round(lineH * 0.32);
 
             // markerCenterX is the center of the marker area; adjust to draw position
@@ -842,19 +880,19 @@ public partial class DocsCanvas
             int shape = nestingLevel % 3;
             if (shape == 0)
             {
-                dc.DrawEllipse(((DocsCanvas)_services)._palette.Syntax, null, new Point(bulletX + bulletSize / 2, bulletY + bulletSize / 2),
+                dc.DrawEllipse(_rendering.Palette.Syntax, null, new Point(bulletX + bulletSize / 2, bulletY + bulletSize / 2),
                     bulletSize / 2, bulletSize / 2);
             }
             else if (shape == 1)
             {
-                var pen = new Pen(((DocsCanvas)_services)._palette.Syntax, 1.2);
+                var pen = new Pen(_rendering.Palette.Syntax, 1.2);
                 pen.Freeze();
                 dc.DrawEllipse(null, pen, new Point(bulletX + bulletSize / 2, bulletY + bulletSize / 2),
                     bulletSize / 2, bulletSize / 2);
             }
             else
             {
-                dc.DrawRectangle(((DocsCanvas)_services)._palette.Syntax, null, new Rect(bulletX, bulletY, bulletSize, bulletSize));
+                dc.DrawRectangle(_rendering.Palette.Syntax, null, new Rect(bulletX, bulletY, bulletSize, bulletSize));
             }
         }
 
@@ -869,7 +907,7 @@ public partial class DocsCanvas
 
             var ftNumberOnly = new FormattedText(numberOnly, CultureInfo.InvariantCulture,
                 FlowDirection.LeftToRight, TextMeasurer.NormalTypeface, fontSize,
-                ((DocsCanvas)_services)._palette.Syntax, ((DocsCanvas)_services)._measure.DpiScale);
+                _rendering.Palette.Syntax, _rendering.Measure.DpiScale);
 
             // Center number at marker center position (adjusted for width)
             double numberX = markerCenterX.Value - ftNumberOnly.WidthIncludingTrailingWhitespace / 2;
@@ -879,17 +917,17 @@ public partial class DocsCanvas
             double delimiterX = numberX + ftNumberOnly.WidthIncludingTrailingWhitespace;
             var ftDelimiter = new FormattedText(numberText.Substring(numberOnly.Length), CultureInfo.InvariantCulture,
                 FlowDirection.LeftToRight, TextMeasurer.NormalTypeface, fontSize,
-                ((DocsCanvas)_services)._palette.Syntax, ((DocsCanvas)_services)._measure.DpiScale);
+                _rendering.Palette.Syntax, _rendering.Measure.DpiScale);
             dc.DrawText(ftDelimiter, new Point(delimiterX, screenY.Value));
         }
 
         private void DrawBlockquoteBar(DrawingContext dc, double lineY, double effectiveScroll)
         {
-            var aligner = new ContentBlockAligner(DocsCanvas._padding, ((DocsCanvas)_services)._measure.ListIndent);
+            var aligner = new ContentBlockAligner(DocsCanvas._padding, _rendering.Measure.ListIndent);
             double barX = aligner.GetBlockquoteBarX();
             double barWidth = 3;
             double barY = lineY - effectiveScroll;
-            double barHeight = ((DocsCanvas)_services)._measure.GetLineHeight(BlockKind.Blockquote);
+            double barHeight = _rendering.Measure.GetLineHeight(BlockKind.Blockquote);
             var barBrush = new SolidColorBrush(Color.FromArgb(80, 150, 150, 150));
             barBrush.Freeze();
             dc.DrawRectangle(barBrush, null, new Rect(barX, barY, barWidth, barHeight));
@@ -898,19 +936,19 @@ public partial class DocsCanvas
         private void DrawCodeBlockBackgrounds(DrawingContext dc, double effectiveScroll,
             double viewTop, double viewBottom)
         {
-            double contentWidth = _services.ActualWidth;
+            double contentWidth = _rendering.ActualWidth;
 
-            for (int i = 0; i < ((DocsCanvas)_services)._visualLines.Count; i++)
+            for (int i = 0; i < _layout.VisualLines.Count; i++)
             {
-                var vl = ((DocsCanvas)_services)._visualLines[i];
+                var vl = _layout.VisualLines[i];
                 if (vl.BlockKind is not BlockKind.FencedCodeLine and not BlockKind.IndentedCodeLine) continue;
 
-                double lineH = ((DocsCanvas)_services)._measure.GetLineHeight(vl.BlockKind);
-                double lineY = ((DocsCanvas)_services)._lineYPositions[i];
+                double lineH = _rendering.Measure.GetLineHeight(vl.BlockKind);
+                double lineY = _layout.LineYPositions[i];
                 if (lineY + lineH < viewTop) continue;
                 if (lineY > viewBottom) break;
 
-                dc.DrawRectangle(((DocsCanvas)_services)._palette.CodeBackground, null,
+                dc.DrawRectangle(_rendering.Palette.CodeBackground, null,
                     new Rect(0, lineY - effectiveScroll, contentWidth, lineH));
             }
         }
@@ -918,23 +956,23 @@ public partial class DocsCanvas
         private void DrawColorBlockBackgrounds(DrawingContext dc, double effectiveScroll,
             double viewTop, double viewBottom)
         {
-            if (((DocsCanvas)_services)._parsedBlocks == null) return;
-            double contentWidth = _services.ActualWidth;
+            if (_content.ParsedBlocks == null) return;
+            double contentWidth = _rendering.ActualWidth;
 
-            for (int i = 0; i < ((DocsCanvas)_services)._visualLines.Count; i++)
+            for (int i = 0; i < _layout.VisualLines.Count; i++)
             {
-                var vl = ((DocsCanvas)_services)._visualLines[i];
-                if (vl.BlockIndex >= ((DocsCanvas)_services)._parsedBlocks.Count) continue;
-                var parsed = ((DocsCanvas)_services)._parsedBlocks[vl.BlockIndex];
+                var vl = _layout.VisualLines[i];
+                if (vl.BlockIndex >= _content.ParsedBlocks.Count) continue;
+                var parsed = _content.ParsedBlocks[vl.BlockIndex];
                 if (parsed.Kind is BlockKind.FencedCodeLine or BlockKind.IndentedCodeLine) continue;
                 if (parsed.BlockColor?.Background is not { } bg) continue;
 
-                double lineH = ((DocsCanvas)_services).GetEffectiveLineHeight(vl);
-                double lineY = ((DocsCanvas)_services)._lineYPositions[i];
+                double lineH = _layout.GetEffectiveLineHeight(vl);
+                double lineY = _layout.LineYPositions[i];
                 if (lineY + lineH < viewTop) continue;
                 if (lineY > viewBottom) break;
 
-                dc.DrawRectangle(((DocsCanvas)_services).GetCachedBrush(40, bg.R, bg.G, bg.B), null,
+                dc.DrawRectangle(_docsCanvas.GetCachedBrush(40, bg.R, bg.G, bg.B), null,
                     new Rect(0, lineY - effectiveScroll, contentWidth, lineH));
             }
         }
@@ -942,13 +980,13 @@ public partial class DocsCanvas
         private void DrawInlineColorBackgrounds(DrawingContext dc, double effectiveScroll,
             double viewTop, double viewBottom)
         {
-            if (((DocsCanvas)_services)._parsedBlocks == null) return;
+            if (_content.ParsedBlocks == null) return;
 
-            for (int i = 0; i < ((DocsCanvas)_services)._visualLines.Count; i++)
+            for (int i = 0; i < _layout.VisualLines.Count; i++)
             {
-                var vl = ((DocsCanvas)_services)._visualLines[i];
-                double lineH = ((DocsCanvas)_services).GetEffectiveLineHeight(vl);
-                double lineY = ((DocsCanvas)_services)._lineYPositions[i];
+                var vl = _layout.VisualLines[i];
+                double lineH = _layout.GetEffectiveLineHeight(vl);
+                double lineY = _layout.LineYPositions[i];
                 if (lineY + lineH < viewTop) continue;
                 if (lineY > viewBottom) break;
 
@@ -967,16 +1005,16 @@ public partial class DocsCanvas
                 }
                 else
                 {
-                    if (vl.BlockIndex >= ((DocsCanvas)_services)._parsedBlocks.Count) continue;
-                    parsed = ((DocsCanvas)_services)._parsedBlocks[vl.BlockIndex];
+                    if (vl.BlockIndex >= _content.ParsedBlocks.Count) continue;
+                    parsed = _content.ParsedBlocks[vl.BlockIndex];
                     if (parsed.Kind is BlockKind.FencedCodeLine or BlockKind.IndentedCodeLine) continue;
-                    blockText = ((DocsCanvas)_services)._doc.GetBlockText(vl.BlockIndex);
-                    map = _services.IsVisual ? ((DocsCanvas)_services)._visualMaps?[vl.BlockIndex] : null;
-                    colorSpans = _services.IsVisual ? map?.ColorSpans : parsed.ColorSpans;
+                    blockText = _doc.Document.GetBlockText(vl.BlockIndex);
+                    map = _visual.IsVisual ? _content.VisualMaps?[vl.BlockIndex] : null;
+                    colorSpans = _visual.IsVisual ? map?.ColorSpans : parsed.ColorSpans;
                 }
 
                 if (colorSpans == null) continue;
-                if (_services.IsVisual && parsed.Table != null && parsed.TableRow != null) continue;
+                if (_visual.IsVisual && parsed.Table != null && parsed.TableRow != null) continue;
 
                 int hardBreakClip = MarkdownParser.IsTrailingHardBreak(parsed, blockText)
                     ? MarkdownParser.GetContentEnd(blockText) - 1
@@ -992,14 +1030,14 @@ public partial class DocsCanvas
                     int rangeStart = Math.Max(cs.Start, vl.StartOffset);
                     int rangeEnd = Math.Min(csEnd, vlEnd);
 
-                    double x1 = _services.MeasureRangeWidth(blockText, vl.StartOffset, rangeStart - vl.StartOffset,
+                    double x1 = _rendering.MeasureRangeWidth(blockText, vl.StartOffset, rangeStart - vl.StartOffset,
                         parsed.Runs, parsed.Kind, map);
-                    double x2 = _services.MeasureRangeWidth(blockText, vl.StartOffset, rangeEnd - vl.StartOffset,
+                    double x2 = _rendering.MeasureRangeWidth(blockText, vl.StartOffset, rangeEnd - vl.StartOffset,
                         parsed.Runs, parsed.Kind, map);
 
                     if (map?.ReplacementPrefix != null && vl.StartOffset == 0)
                     {
-                        double prefixW = ((DocsCanvas)_services)._measure.MeasureReplacementPrefix(map.ReplacementPrefix!, map.PrefixMeasureKind);
+                        double prefixW = _rendering.Measure.MeasureReplacementPrefix(map.ReplacementPrefix!, map.PrefixMeasureKind);
                         x1 += prefixW;
                         x2 += prefixW;
                     }
@@ -1008,7 +1046,7 @@ public partial class DocsCanvas
                     if (w <= 0) continue;
 
                     var bg = cs.Background.Value;
-                    dc.DrawRectangle(((DocsCanvas)_services).GetCachedBrush(40, bg.R, bg.G, bg.B), null,
+                    dc.DrawRectangle(_docsCanvas.GetCachedBrush(40, bg.R, bg.G, bg.B), null,
                         new Rect(DocsCanvas._padding + x1, lineY - effectiveScroll, w, lineH));
                 }
             }
@@ -1016,7 +1054,7 @@ public partial class DocsCanvas
 
         private void DrawSelection(DrawingContext dc, double effectiveScroll)
         {
-            var rectSel = ((DocsCanvas)_services).TryGetTableRectSelection();
+            var rectSel = _docsCanvas.TryGetTableRectSelection();
             if (rectSel != null)
             {
                 var r = rectSel.Value;
@@ -1024,15 +1062,15 @@ public partial class DocsCanvas
                 return;
             }
 
-            var (sb, so, eb, eo) = ((DocsCanvas)_services)._doc.GetOrderedSelection();
+            var (sb, so, eb, eo) = _doc.Document.GetOrderedSelection();
             double viewTop = effectiveScroll;
-            double viewBottom = effectiveScroll + _services.ActualHeight;
+            double viewBottom = effectiveScroll + _rendering.ActualHeight;
 
-            for (int i = 0; i < ((DocsCanvas)_services)._visualLines.Count; i++)
+            for (int i = 0; i < _layout.VisualLines.Count; i++)
             {
-                var vl = ((DocsCanvas)_services)._visualLines[i];
-                double lineH = ((DocsCanvas)_services).GetEffectiveLineHeight(vl);
-                double lineY = ((DocsCanvas)_services)._lineYPositions[i];
+                var vl = _layout.VisualLines[i];
+                double lineH = _layout.GetEffectiveLineHeight(vl);
+                double lineY = _layout.LineYPositions[i];
                 if (lineY + lineH < viewTop) continue;
                 if (lineY > viewBottom) break;
 
@@ -1053,17 +1091,17 @@ public partial class DocsCanvas
                 int hlEnd = Document.ComparePositions(vl.BlockIndex, vlEnd, eb, eo) <= 0
                     ? vlEnd : eo;
 
-                var parsed = ((DocsCanvas)_services)._parsedBlocks![vl.BlockIndex];
-                string blockText = ((DocsCanvas)_services)._doc.GetBlockText(vl.BlockIndex);
-                var map = _services.IsVisual ? ((DocsCanvas)_services)._visualMaps?[vl.BlockIndex] : null;
+                var parsed = _content.ParsedBlocks![vl.BlockIndex];
+                string blockText = _doc.Document.GetBlockText(vl.BlockIndex);
+                var map = _visual.IsVisual ? _content.VisualMaps?[vl.BlockIndex] : null;
 
                 double x1, x2;
-                if (_services.IsVisual && parsed.Table != null && parsed.TableRow != null)
+                if (_visual.IsVisual && parsed.Table != null && parsed.TableRow != null)
                 {
-                    if (((DocsCanvas)_services)._tableColumnWidths.TryGetValue(parsed.Table, out var colWidths))
+                    if (_table.TableColumnWidths.TryGetValue(parsed.Table, out var colWidths))
                     {
-                        x1 = ((DocsCanvas)_services)._tableRenderer.CursorXInTableRow(vl.BlockIndex, parsed, colWidths, hlStart);
-                        x2 = ((DocsCanvas)_services)._tableRenderer.CursorXInTableRow(vl.BlockIndex, parsed, colWidths, hlEnd);
+                        x1 = _table.TableRenderer.CursorXInTableRow(vl.BlockIndex, parsed, colWidths, hlStart);
+                        x2 = _table.TableRenderer.CursorXInTableRow(vl.BlockIndex, parsed, colWidths, hlEnd);
                     }
                     else
                     {
@@ -1072,14 +1110,14 @@ public partial class DocsCanvas
                 }
                 else
                 {
-                    x1 = _services.MeasureRangeWidth(blockText, vl.StartOffset, hlStart - vl.StartOffset,
+                    x1 = _rendering.MeasureRangeWidth(blockText, vl.StartOffset, hlStart - vl.StartOffset,
                         parsed.Runs, parsed.Kind, map);
-                    x2 = _services.MeasureRangeWidth(blockText, vl.StartOffset, hlEnd - vl.StartOffset,
+                    x2 = _rendering.MeasureRangeWidth(blockText, vl.StartOffset, hlEnd - vl.StartOffset,
                         parsed.Runs, parsed.Kind, map);
 
                     if (map != null && map.ReplacementPrefix != null && vl.StartOffset == 0)
                     {
-                        double prefixW = ((DocsCanvas)_services)._measure.MeasureReplacementPrefix(map.ReplacementPrefix!, map.PrefixMeasureKind);
+                        double prefixW = _rendering.Measure.MeasureReplacementPrefix(map.ReplacementPrefix!, map.PrefixMeasureKind);
                         x1 += prefixW;
                         x2 += prefixW;
                     }
@@ -1093,7 +1131,7 @@ public partial class DocsCanvas
 
                 double selW = Math.Max(0, x2 - x1);
                 if (selW > 0)
-                    dc.DrawRectangle(((DocsCanvas)_services)._palette.Selection, null,
+                    dc.DrawRectangle(_rendering.Palette.Selection, null,
                         new Rect(DocsCanvas._padding + x1, lineY - effectiveScroll, selW, lineH));
             }
         }
@@ -1101,7 +1139,7 @@ public partial class DocsCanvas
         private void DrawTableRectSelection(DrawingContext dc, double effectiveScroll,
             int startCol, int endCol, int startBlock, int endBlock, TableInfo table)
         {
-            if (!((DocsCanvas)_services)._tableColumnWidths.TryGetValue(table, out var colWidths)) return;
+            if (!_table.TableColumnWidths.TryGetValue(table, out var colWidths)) return;
 
             double xStart = 0;
             for (int c = 0; c < startCol && c < colWidths.Length; c++)
@@ -1111,21 +1149,21 @@ public partial class DocsCanvas
                 xEnd += colWidths[c];
 
             double viewTop = effectiveScroll;
-            double viewBottom = effectiveScroll + _services.ActualHeight;
+            double viewBottom = effectiveScroll + _rendering.ActualHeight;
 
-            for (int i = 0; i < ((DocsCanvas)_services)._visualLines.Count; i++)
+            for (int i = 0; i < _layout.VisualLines.Count; i++)
             {
-                var vl = ((DocsCanvas)_services)._visualLines[i];
+                var vl = _layout.VisualLines[i];
                 if (vl.BlockIndex < startBlock || vl.BlockIndex > endBlock) continue;
-                var parsed = ((DocsCanvas)_services)._parsedBlocks![vl.BlockIndex];
+                var parsed = _content.ParsedBlocks![vl.BlockIndex];
                 if (parsed.IsTableSeparator) continue;
 
-                double lineY = ((DocsCanvas)_services)._lineYPositions[i];
-                double lineH = ((DocsCanvas)_services).GetEffectiveLineHeight(vl);
+                double lineY = _layout.LineYPositions[i];
+                double lineH = _layout.GetEffectiveLineHeight(vl);
                 if (lineY + lineH < viewTop) continue;
                 if (lineY > viewBottom) break;
 
-                dc.DrawRectangle(((DocsCanvas)_services)._palette.Selection, null,
+                dc.DrawRectangle(_rendering.Palette.Selection, null,
                     new Rect(DocsCanvas._padding + xStart, lineY - effectiveScroll, xEnd - xStart, lineH));
             }
         }
@@ -1150,8 +1188,8 @@ public partial class DocsCanvas
             int hlStart = Math.Max(vlStart, selStartJoined);
             int hlEnd = Math.Min(vlEnd, selEndJoined);
 
-            double x1 = _services.MeasureJoinedRange(group, vlStart, hlStart - vlStart);
-            double x2 = _services.MeasureJoinedRange(group, vlStart, hlEnd - vlStart);
+            double x1 = _rendering.MeasureJoinedRange(group, vlStart, hlStart - vlStart);
+            double x2 = _rendering.MeasureJoinedRange(group, vlStart, hlEnd - vlStart);
 
             bool selectionContinues = vlEnd < selEndJoined;
             if (selectionContinues && x2 - x1 < 4)
@@ -1161,7 +1199,7 @@ public partial class DocsCanvas
 
             double selW = Math.Max(0, x2 - x1);
             if (selW > 0)
-                dc.DrawRectangle(((DocsCanvas)_services)._palette.Selection, null,
+                dc.DrawRectangle(_rendering.Palette.Selection, null,
                     new Rect(DocsCanvas._padding + x1, lineY - effectiveScroll, selW, lineH));
         }
 
@@ -1176,7 +1214,7 @@ public partial class DocsCanvas
             int trailCount = blockText.Length - trailStart;
             if (trailCount == 0) return;
 
-            var measureKind = !_services.IsVisual && parsed.Kind is BlockKind.TableHeaderRow or BlockKind.TableDataRow
+            var measureKind = !_visual.IsVisual && parsed.Kind is BlockKind.TableHeaderRow or BlockKind.TableDataRow
                 ? BlockKind.Paragraph : parsed.Kind;
 
             double x = textX;
@@ -1184,18 +1222,18 @@ public partial class DocsCanvas
             for (int i = vl.StartOffset; i < trailStart; i++)
             {
                 var style = TextMeasurer.GetStyleAtOffset(parsed.Runs, i, ref runIdx);
-                x += ((DocsCanvas)_services)._measure.MeasureCharWidth(blockText[i], measureKind, style);
+                x += _rendering.Measure.MeasureCharWidth(blockText[i], measureKind, style);
             }
 
-            double spaceW = ((DocsCanvas)_services)._measure.MeasureCharWidth(' ', measureKind, InlineStyle.Normal);
+            double spaceW = _rendering.Measure.MeasureCharWidth(' ', measureKind, InlineStyle.Normal);
             double dotSize = Math.Max(2, spaceW * 0.25);
-            double lineH = ((DocsCanvas)_services)._measure.GetLineHeight(parsed.Kind);
+            double lineH = _rendering.Measure.GetLineHeight(parsed.Kind);
             double cy = screenY + lineH / 2;
 
             for (int i = 0; i < trailCount; i++)
             {
                 double cx = x + spaceW * (i + 0.5);
-                dc.DrawEllipse(((DocsCanvas)_services)._palette.Syntax, null, new Point(cx, cy), dotSize / 2, dotSize / 2);
+                dc.DrawEllipse(_rendering.Palette.Syntax, null, new Point(cx, cy), dotSize / 2, dotSize / 2);
             }
         }
 
@@ -1205,7 +1243,7 @@ public partial class DocsCanvas
             int localStart = Math.Max(0, docStart - vl.StartOffset);
             int localEnd = Math.Min(vl.Length, docStart + length - vl.StartOffset);
             if (localEnd > localStart)
-                ft.SetForegroundBrush(((DocsCanvas)_services)._palette.Syntax, localStart, localEnd - localStart);
+                ft.SetForegroundBrush(_rendering.Palette.Syntax, localStart, localEnd - localStart);
         }
 
         private void DrawImagePlaceholder(DrawingContext dc, double x, double y, double w, double h, string? altText)
@@ -1215,7 +1253,7 @@ public partial class DocsCanvas
             {
                 var altFt = new FormattedText(altText,
                     CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
-                    TextMeasurer.NormalTypeface, Math.Round(11 * ((DocsCanvas)_services)._measure.ZoomFactor), ((DocsCanvas)_services)._palette.Syntax, ((DocsCanvas)_services)._measure.DpiScale);
+                    TextMeasurer.NormalTypeface, Math.Round(11 * _rendering.Measure.ZoomFactor), _rendering.Palette.Syntax, _rendering.Measure.DpiScale);
                 altFt.MaxTextWidth = Math.Max(1, w);
                 altFt.MaxTextHeight = Math.Max(1, h);
                 dc.DrawText(altFt, new Point(x + 2, y + 2));
@@ -1225,7 +1263,7 @@ public partial class DocsCanvas
         private void DrawSourceInlineImages(DrawingContext dc, VisualLine vl,
             IReadOnlyList<InlineImage> images, double lineY, double effectiveScroll)
         {
-            double textLineH = ((DocsCanvas)_services)._measure.GetLineHeight(vl.BlockKind);
+            double textLineH = _rendering.Measure.GetLineHeight(vl.BlockKind);
             double imgY = lineY - effectiveScroll + textLineH;
             int vlEnd = vl.StartOffset + vl.Length;
 
@@ -1233,8 +1271,8 @@ public partial class DocsCanvas
             {
                 if (img.Start < vl.StartOffset || img.Start >= vlEnd) continue;
 
-                var (imgW, imgH) = ((DocsCanvas)_services).GetImageSize(img, ((DocsCanvas)_services)._layoutMaxWidth);
-                var cached = ((DocsCanvas)_services)._imageCache.Get(img.Url, ((DocsCanvas)_services).DocumentBasePath, ((DocsCanvas)_services)._layoutMaxWidth);
+                var (imgW, imgH) = _images.GetImageSize(img, _layout.LayoutMaxWidth);
+                var cached = _images.ImageCache.Get(img.Url, _images.DocumentBasePath, _layout.LayoutMaxWidth);
                 if (cached != null)
                 {
                     dc.DrawImage(cached.Value.Image, new Rect(DocsCanvas._padding, imgY, imgW, imgH));
@@ -1249,19 +1287,19 @@ public partial class DocsCanvas
 
         private void DrawHoverImagePreview(DrawingContext dc)
         {
-            var img = ((DocsCanvas)_services)._hoveredImage!.Value;
-            double maxPreviewW = Math.Min(((DocsCanvas)_services)._layoutMaxWidth, 300);
-            var (imgW, imgH) = ((DocsCanvas)_services).GetImageSize(img, maxPreviewW);
-            var cached = ((DocsCanvas)_services)._imageCache.Get(img.Url, ((DocsCanvas)_services).DocumentBasePath, maxPreviewW);
+            var img = _docsCanvas._hoveredImage!.Value;
+            double maxPreviewW = Math.Min(_layout.LayoutMaxWidth, 300);
+            var (imgW, imgH) = _images.GetImageSize(img, maxPreviewW);
+            var cached = _images.ImageCache.Get(img.Url, _images.DocumentBasePath, maxPreviewW);
 
-            double popupX = Math.Min(((DocsCanvas)_services)._hoverPosition.X, Math.Max(0, _services.ActualWidth - imgW - 16));
-            double popupY = ((DocsCanvas)_services)._hoverPosition.Y + 20;
-            if (popupY + imgH + 8 > _services.ActualHeight)
-                popupY = Math.Max(0, ((DocsCanvas)_services)._hoverPosition.Y - imgH - 12);
+            double popupX = Math.Min(_docsCanvas._hoverPosition.X, Math.Max(0, _rendering.ActualWidth - imgW - 16));
+            double popupY = _docsCanvas._hoverPosition.Y + 20;
+            if (popupY + imgH + 8 > _rendering.ActualHeight)
+                popupY = Math.Max(0, _docsCanvas._hoverPosition.Y - imgH - 12);
 
-            var borderPen = new Pen(((DocsCanvas)_services)._palette.Syntax, 1);
+            var borderPen = new Pen(_rendering.Palette.Syntax, 1);
             borderPen.Freeze();
-            var bgBrush = ((DocsCanvas)_services)._palette.Background.Clone();
+            var bgBrush = _rendering.Palette.Background.Clone();
             bgBrush.Freeze();
 
             dc.DrawRectangle(bgBrush, borderPen,
@@ -1286,12 +1324,12 @@ public partial class DocsCanvas
 
         // Search-related rendering (delegated from parent)
         private void DrawSearchHighlights(DrawingContext dc, double effectiveScroll)
-            => ((DocsCanvas)_services).DrawSearchHighlights(dc, effectiveScroll);
+            => _docsCanvas.DrawSearchHighlights(dc, effectiveScroll);
 
         private void DrawSpellingErrors(DrawingContext dc, double effectiveScroll, double viewTop, double viewBottom)
-            => ((DocsCanvas)_services).DrawSpellingErrors(dc, effectiveScroll, viewTop, viewBottom);
+            => _docsCanvas.DrawSpellingErrors(dc, effectiveScroll, viewTop, viewBottom);
 
         private void DrawPageBreaks(DrawingContext dc, double effectiveScroll, double viewTop, double viewBottom)
-            => ((DocsCanvas)_services).DrawPageBreaks(dc, effectiveScroll, viewTop, viewBottom);
+            => _docsCanvas.DrawPageBreaks(dc, effectiveScroll, viewTop, viewBottom);
     }
 }
