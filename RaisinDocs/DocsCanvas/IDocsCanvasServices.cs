@@ -34,6 +34,7 @@ internal interface ILayoutDataServices
     double LayoutMaxWidth { get; }
     int LayoutVersion { get; }
     double GetEffectiveLineHeight(DocsCanvas.VisualLine vl);
+    double GetTextStartXForVisualLine(DocsCanvas.VisualLine vl);
     void InvalidateLayout();
     void ComputeLayout();
     BlockVisualSpacing? GetVisualLineSpacing(DocsCanvas.VisualLine vl);
@@ -171,6 +172,7 @@ internal interface ICanvasOperations
 {
     System.Windows.Threading.Dispatcher Dispatcher { get; }
     IMinimapDataProvider? Minimap { get; }
+    bool CursorAtLineEnd { get; set; }
     event System.Action? ScrollStateChanged;
     void SealAndStopTimer();
     void RaiseFormattingChanged();

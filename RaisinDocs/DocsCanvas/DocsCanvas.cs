@@ -188,6 +188,7 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider, IDocsC
 
     private bool _cursorVisible = true;
     private bool _cursorAtLineEnd;
+    bool ICanvasOperations.CursorAtLineEnd { get => _cursorAtLineEnd; set => _cursorAtLineEnd = value; }
     private (string Marker, InlineStyle Style)? _pendingStyleOff;
     private readonly DispatcherTimer _blinkTimer;
     private readonly Dictionary<Color, SolidColorBrush> _brushCache = new();
@@ -759,7 +760,19 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider, IDocsC
         _colorFormatter = new ColorFormattingManager((IDocumentServices)this, (IParsedContentServices)this, (ILayoutDataServices)this, (ICanvasOperations)this, (IScrollServices)this);
         _layoutEngine = new LayoutEngine((IDocsCanvasServices)this);
         _renderingContext = new RenderingContext((IDocsCanvasServices)this);
-        _navigationEngine = new CursorNavigationEngine((IDocsCanvasServices)this);
+        _navigationEngine = new CursorNavigationEngine(
+            (ILayoutDataServices)this,
+            (IDocumentServices)this,
+            (IVisualModeServices)this,
+            (ITableServices)this,
+            (IRenderingServices)this,
+            (IParsedContentServices)this,
+            (ILoggingServices)this,
+            (IImageServices)this,
+            (IScrollServices)this,
+            (ICanvasOperations)this,
+            (INavigationServices)this);
+        _navigationEngine.VisualModeManager = _visualModeManager;
         Focusable = true;
         FocusVisualStyle = null;
         SnapsToDevicePixels = true;
@@ -1023,6 +1036,8 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider, IDocsC
     internal int CursorToVisualLineIndex() => _navigationEngine.CursorToVisualLineIndex();
 
     private double GetTextStartXForVisualLine(VisualLine vl) => _layoutEngine.GetTextStartXForVisualLine(vl);
+
+    double ILayoutDataServices.GetTextStartXForVisualLine(VisualLine vl) => GetTextStartXForVisualLine(vl);
 
     internal BlockVisualSpacing? GetVisualLineSpacing(VisualLine vl) => _navigationEngine.GetVisualLineSpacing(vl);
 

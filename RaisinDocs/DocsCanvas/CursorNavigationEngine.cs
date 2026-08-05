@@ -12,35 +12,69 @@ public partial class DocsCanvas
     /// </summary>
     internal class CursorNavigationEngine
     {
-        private readonly IDocsCanvasServices _services;
+        private readonly ILayoutDataServices _layout;
+        private readonly IDocumentServices _doc;
+        private readonly IVisualModeServices _visual;
+        private readonly ITableServices _table;
+        private readonly IRenderingServices _rendering;
+        private readonly IParsedContentServices _content;
+        private readonly ILoggingServices _logging;
+        private readonly IImageServices _image;
+        private readonly IScrollServices _scroll;
+        private readonly ICanvasOperations _canvas;
+        private readonly INavigationServices _nav;
 
-        public CursorNavigationEngine(IDocsCanvasServices services)
+        // Set by DocsCanvas after construction
+        internal VisualModeManager? VisualModeManager { get; set; }
+
+        public CursorNavigationEngine(
+            ILayoutDataServices layout,
+            IDocumentServices doc,
+            IVisualModeServices visual,
+            ITableServices table,
+            IRenderingServices rendering,
+            IParsedContentServices content,
+            ILoggingServices logging,
+            IImageServices image,
+            IScrollServices scroll,
+            ICanvasOperations canvas,
+            INavigationServices nav)
         {
-            _services = services ?? throw new ArgumentNullException(nameof(services));
+            _layout = layout ?? throw new ArgumentNullException(nameof(layout));
+            _doc = doc ?? throw new ArgumentNullException(nameof(doc));
+            _visual = visual ?? throw new ArgumentNullException(nameof(visual));
+            _table = table ?? throw new ArgumentNullException(nameof(table));
+            _rendering = rendering ?? throw new ArgumentNullException(nameof(rendering));
+            _content = content ?? throw new ArgumentNullException(nameof(content));
+            _logging = logging ?? throw new ArgumentNullException(nameof(logging));
+            _image = image ?? throw new ArgumentNullException(nameof(image));
+            _scroll = scroll ?? throw new ArgumentNullException(nameof(scroll));
+            _canvas = canvas ?? throw new ArgumentNullException(nameof(canvas));
+            _nav = nav ?? throw new ArgumentNullException(nameof(nav));
         }
 
         // --- Cursor ↔ visual line mapping ---
 
         internal int CursorToVisualLineIndex()
         {
-            for (int i = ((DocsCanvas)_services)._visualLines.Count - 1; i >= 0; i--)
+            for (int i = _layout.VisualLines.Count - 1; i >= 0; i--)
             {
-                var vl = ((DocsCanvas)_services)._visualLines[i];
+                var vl = _layout.VisualLines[i];
                 if (vl.Group != null)
                 {
-                    int joined = vl.Group.SourceToJoined(((DocsCanvas)_services)._doc.CursorBlock, ((DocsCanvas)_services)._doc.CursorOffset);
+                    int joined = vl.Group.SourceToJoined(_doc.Document.CursorBlock, _doc.Document.CursorOffset);
                     if (joined >= 0 && joined >= vl.StartOffset && joined <= vl.StartOffset + vl.Length)
                     {
-                        if (((DocsCanvas)_services)._cursorAtLineEnd && joined == vl.StartOffset && i > 0
-                            && ((DocsCanvas)_services)._visualLines[i - 1].Group == vl.Group)
+                        if (_canvas.CursorAtLineEnd && joined == vl.StartOffset && i > 0
+                            && _layout.VisualLines[i - 1].Group == vl.Group)
                             continue;
                         return i;
                     }
                 }
-                else if (vl.BlockIndex == ((DocsCanvas)_services)._doc.CursorBlock && vl.StartOffset <= ((DocsCanvas)_services)._doc.CursorOffset)
+                else if (vl.BlockIndex == _doc.Document.CursorBlock && vl.StartOffset <= _doc.Document.CursorOffset)
                 {
-                    if (((DocsCanvas)_services)._cursorAtLineEnd && vl.StartOffset == ((DocsCanvas)_services)._doc.CursorOffset && i > 0
-                        && ((DocsCanvas)_services)._visualLines[i - 1].BlockIndex == vl.BlockIndex)
+                    if (_canvas.CursorAtLineEnd && vl.StartOffset == _doc.Document.CursorOffset && i > 0
+                        && _layout.VisualLines[i - 1].BlockIndex == vl.BlockIndex)
                         continue;
                     return i;
                 }
@@ -50,50 +84,50 @@ public partial class DocsCanvas
 
         internal BlockVisualSpacing? GetVisualLineSpacing(VisualLine vl)
         {
-            if (!_services.IsVisual || ((DocsCanvas)_services)._visualLineSpacings == null || vl.BlockIndex < 0)
+            if (!_visual.IsVisual || _layout.VisualLineSpacings == null || vl.BlockIndex < 0)
                 return null;
 
             // Find the index of this VisualLine
             int vlIndex = -1;
-            for (int i = 0; i < ((DocsCanvas)_services)._visualLines.Count; i++)
+            for (int i = 0; i < _layout.VisualLines.Count; i++)
             {
-                if (((DocsCanvas)_services)._visualLines[i] == vl)
+                if (_layout.VisualLines[i] == vl)
                 {
                     vlIndex = i;
                     break;
                 }
             }
 
-            if (vlIndex < 0 || vlIndex >= ((DocsCanvas)_services)._visualLineSpacings.Count)
+            if (vlIndex < 0 || vlIndex >= _layout.VisualLineSpacings.Count)
                 return null;
 
-            return ((DocsCanvas)_services)._visualLineSpacings[vlIndex];
+            return _layout.VisualLineSpacings[vlIndex];
         }
 
         internal double CursorXInVisualLine(int vlIndex)
         {
-            var vl = ((DocsCanvas)_services)._visualLines[vlIndex];
+            var vl = _layout.VisualLines[vlIndex];
 
             if (vl.Group != null)
             {
-                int joinedOffset = vl.Group.SourceToJoined(((DocsCanvas)_services)._doc.CursorBlock, ((DocsCanvas)_services)._doc.CursorOffset);
+                int joinedOffset = vl.Group.SourceToJoined(_doc.Document.CursorBlock, _doc.Document.CursorOffset);
                 int localOffset = Math.Clamp(joinedOffset - vl.StartOffset, 0, vl.Length);
                 if (localOffset == 0) return 0;
-                return MeasureJoinedRange(vl.Group, vl.StartOffset, localOffset);
+                return _rendering.MeasureJoinedRange(vl.Group, vl.StartOffset, localOffset);
             }
 
-            int localOff = Math.Clamp(((DocsCanvas)_services)._doc.CursorOffset - vl.StartOffset, 0, vl.Length);
-            var map = _services.IsVisual ? ((DocsCanvas)_services)._visualMaps?[vl.BlockIndex] : null;
+            int localOff = Math.Clamp(_doc.Document.CursorOffset - vl.StartOffset, 0, vl.Length);
+            var map = _visual.IsVisual ? _visual.VisualMaps?[vl.BlockIndex] : null;
 
-            var parsed = ((DocsCanvas)_services)._parsedBlocks![vl.BlockIndex];
-            if (_services.IsVisual && parsed.Table != null && parsed.TableRow != null
-                && ((DocsCanvas)_services)._tableColumnWidths.TryGetValue(parsed.Table, out var colWidths))
+            var parsed = _content.ParsedBlocks![vl.BlockIndex];
+            if (_visual.IsVisual && parsed.Table != null && parsed.TableRow != null
+                && _table.TableColumnWidths.TryGetValue(parsed.Table, out var colWidths))
             {
-                return _services.CursorXInTableRow(vl.BlockIndex, parsed, colWidths, localOff);
+                return _table.CursorXInTableRow(vl.BlockIndex, parsed, colWidths, localOff);
             }
 
-            string blockText = ((DocsCanvas)_services)._doc.GetBlockText(vl.BlockIndex);
-            double x = ((DocsCanvas)_services)._layoutEngine.GetTextStartXForVisualLine(vl);
+            string blockText = _doc.GetBlockText(vl.BlockIndex);
+            double x = _layout.GetTextStartXForVisualLine(vl);
 
             // Subtract padding since we're returning cursor x relative to control left edge
             // (ContentStartX from cache already accounts for ReplacementPrefix width)
@@ -106,8 +140,8 @@ public partial class DocsCanvas
                 string lineText = blockText.Substring(vl.StartOffset, vl.Length);
                 var ft = new System.Windows.Media.FormattedText(lineText, System.Globalization.CultureInfo.InvariantCulture,
                     System.Windows.FlowDirection.LeftToRight, TextMeasurer.GetBlockBaseTypeface(vl.BlockKind),
-                    ((DocsCanvas)_services)._measure.GetBlockFontSize(vl.BlockKind), ((DocsCanvas)_services)._palette.Foreground, ((DocsCanvas)_services)._measure.DpiScale);
-                _services.ApplyInlineStyles(ft, vl, parsed, blockText);
+                    _rendering.Measure.GetBlockFontSize(vl.BlockKind), _rendering.Palette.Foreground, _rendering.Measure.DpiScale);
+                _nav.ApplyInlineStyles(ft, vl, parsed, blockText);
                 var geom = ft.BuildHighlightGeometry(new Point(0, 0), 0, localOff);
                 return x + (geom != null ? geom.Bounds.Right : ft.WidthIncludingTrailingWhitespace);
             }
@@ -120,21 +154,21 @@ public partial class DocsCanvas
                     var img = FindImageAtRawOffset(map.Images, i);
                     if (img != null)
                     {
-                        var (imgW, _) = ((DocsCanvas)_services).GetImageSize(img.Value, ((DocsCanvas)_services)._layoutMaxWidth);
+                        var (imgW, _) = _image.GetImageSize(img.Value, _layout.LayoutMaxWidth);
                         x += imgW;
                         i += img.Value.Length - 1;
                     }
                     continue;
                 }
                 var style = TextMeasurer.GetStyleAtOffset(parsed.Runs, i, ref runIdx);
-                x += ((DocsCanvas)_services)._measure.MeasureCharWidth(blockText[i], parsed.Kind, style);
+                x += _rendering.Measure.MeasureCharWidth(blockText[i], parsed.Kind, style);
             }
             return x;
         }
 
         internal double MeasureJoinedRange(ParagraphGroup group, int start, int length)
         {
-            double width = _services.MeasureRangeWidth(group.JoinedText, start, length,
+            double width = _rendering.MeasureRangeWidth(group.JoinedText, start, length,
                 group.JoinedParsed.Runs, BlockKind.Paragraph, group.JoinedMap);
 
             // Add visual space width for soft breaks that fall within the range
@@ -146,7 +180,7 @@ public partial class DocsCanvas
                 {
                     // Add visual space width after each pilcrow
                     var style = TextMeasurer.GetStyleAtOffset(group.JoinedParsed.Runs, i, ref runIdx);
-                    double spaceW = ((DocsCanvas)_services)._measure.MeasureCharWidth(' ', BlockKind.Paragraph, style);
+                    double spaceW = _rendering.Measure.MeasureCharWidth(' ', BlockKind.Paragraph, style);
                     width += spaceW;
                 }
             }
@@ -156,15 +190,15 @@ public partial class DocsCanvas
 
         internal int HitTestInVisualLineProper(int vlIndex, double clickX)
         {
-            var vl = ((DocsCanvas)_services)._visualLines[vlIndex];
+            var vl = _layout.VisualLines[vlIndex];
             if (vl.Length == 0) return vl.StartOffset;
 
-            var parsed = ((DocsCanvas)_services)._parsedBlocks![vl.BlockIndex];
-            var map = _services.IsVisual ? ((DocsCanvas)_services)._visualMaps?[vl.BlockIndex] : null;
-            string blockText = ((DocsCanvas)_services)._doc.GetBlockText(vl.BlockIndex);
+            var parsed = _content.ParsedBlocks![vl.BlockIndex];
+            var map = _visual.IsVisual ? _visual.VisualMaps?[vl.BlockIndex] : null;
+            string blockText = _doc.GetBlockText(vl.BlockIndex);
 
             // Account for where text actually starts on screen
-            double textStartX = ((DocsCanvas)_services)._layoutEngine.GetTextStartXForVisualLine(vl);
+            double textStartX = _layout.GetTextStartXForVisualLine(vl);
 
             // clickX is already adjusted by _padding, so adjust textStartX to match
             // (textStartX is in screen coordinates, so we need to remove padding to match clickX)
@@ -187,14 +221,14 @@ public partial class DocsCanvas
                     var img = FindImageAtRawOffset(map.Images, i);
                     if (img != null)
                     {
-                        var (imgW, _) = ((DocsCanvas)_services).GetImageSize(img.Value, ((DocsCanvas)_services)._layoutMaxWidth);
+                        var (imgW, _) = _image.GetImageSize(img.Value, _layout.LayoutMaxWidth);
                         accum += imgW;
                     }
                     continue;
                 }
 
                 var style = TextMeasurer.GetStyleAtOffset(parsed.Runs, i, ref runIdx);
-                double charW = ((DocsCanvas)_services)._measure.MeasureCharWidth(blockText[i], parsed.Kind, style);
+                double charW = _rendering.Measure.MeasureCharWidth(blockText[i], parsed.Kind, style);
                 double charEnd = accum + charW;
 
                 // Check if click is closer to this char's start or end
@@ -216,31 +250,31 @@ public partial class DocsCanvas
 
         internal int HitTestInVisualLine(int vlIndex, double x)
         {
-            var vl = ((DocsCanvas)_services)._visualLines[vlIndex];
+            var vl = _layout.VisualLines[vlIndex];
             if (vl.Length == 0) return vl.StartOffset;
 
             if (vl.Group != null)
                 return HitTestInJoinedLine(vl, x);
 
-            var parsed = ((DocsCanvas)_services)._parsedBlocks![vl.BlockIndex];
-            if (_services.IsVisual && parsed.Table != null && parsed.TableRow != null
-                && ((DocsCanvas)_services)._tableColumnWidths.TryGetValue(parsed.Table, out var colWidths))
+            var parsed = _content.ParsedBlocks![vl.BlockIndex];
+            if (_visual.IsVisual && parsed.Table != null && parsed.TableRow != null
+                && _table.TableColumnWidths.TryGetValue(parsed.Table, out var colWidths))
             {
-                return _services.HitTestInTableRow(vl, parsed, colWidths, x);
+                return _table.HitTestInTableRow(vl, parsed, colWidths, x);
             }
 
-            var map = _services.IsVisual ? ((DocsCanvas)_services)._visualMaps?[vl.BlockIndex] : null;
-            string blockText = ((DocsCanvas)_services)._doc.GetBlockText(vl.BlockIndex);
+            var map = _visual.IsVisual ? _visual.VisualMaps?[vl.BlockIndex] : null;
+            string blockText = _doc.GetBlockText(vl.BlockIndex);
 
             double accum = 0;
 
             if (map != null && map.ReplacementPrefix != null && vl.StartOffset == 0)
             {
-                double prefixW = ((DocsCanvas)_services)._measure.MeasureReplacementPrefix(map.ReplacementPrefix!, map.PrefixMeasureKind);
-                _services.Logger?.Log(DocsLogLevel.Debug, $"HitTestInVisualLine: Block {vl.BlockIndex} has replacement prefix, prefixW={prefixW}, x={x}");
+                double prefixW = _rendering.Measure.MeasureReplacementPrefix(map.ReplacementPrefix!, map.PrefixMeasureKind);
+                _logging.Logger?.Log(DocsLogLevel.Debug, $"HitTestInVisualLine: Block {vl.BlockIndex} has replacement prefix, prefixW={prefixW}, x={x}");
                 if (x < prefixW)
                 {
-                    _services.Logger?.Log(DocsLogLevel.Debug, $"HitTestInVisualLine: Click in prefix area, returning StartOffset={vl.StartOffset}");
+                    _logging.Logger?.Log(DocsLogLevel.Debug, $"HitTestInVisualLine: Click in prefix area, returning StartOffset={vl.StartOffset}");
                     return vl.StartOffset;
                 }
                 accum = prefixW;
@@ -255,7 +289,7 @@ public partial class DocsCanvas
                     var img = FindImageAtRawOffset(map.Images, offset);
                     if (img != null)
                     {
-                        var (imgW, _) = ((DocsCanvas)_services).GetImageSize(img.Value, ((DocsCanvas)_services)._layoutMaxWidth);
+                        var (imgW, _) = _image.GetImageSize(img.Value, _layout.LayoutMaxWidth);
                         if (x < accum + imgW / 2)
                             return offset;
                         accum += imgW;
@@ -264,15 +298,15 @@ public partial class DocsCanvas
                     continue;
                 }
                 var style = TextMeasurer.GetStyleAtOffset(parsed.Runs, offset, ref runIdx);
-                double charW = ((DocsCanvas)_services)._measure.MeasureCharWidth(blockText[offset], parsed.Kind, style);
+                double charW = _rendering.Measure.MeasureCharWidth(blockText[offset], parsed.Kind, style);
                 if (x < accum + charW / 2)
                 {
-                    _services.Logger?.Log(DocsLogLevel.Debug, $"HitTestInVisualLine: Block {vl.BlockIndex} matched char at offset {offset} (accum={accum}, charW={charW})");
+                    _logging.Logger?.Log(DocsLogLevel.Debug, $"HitTestInVisualLine: Block {vl.BlockIndex} matched char at offset {offset} (accum={accum}, charW={charW})");
                     return offset;
                 }
                 accum += charW;
             }
-            _services.Logger?.Log(DocsLogLevel.Debug, $"HitTestInVisualLine: Block {vl.BlockIndex} past all chars, returning end offset {vl.StartOffset + vl.Length} (accum={accum}, x={x})");
+            _logging.Logger?.Log(DocsLogLevel.Debug, $"HitTestInVisualLine: Block {vl.BlockIndex} past all chars, returning end offset {vl.StartOffset + vl.Length} (accum={accum}, x={x})");
             return vl.StartOffset + vl.Length;
         }
 
@@ -291,7 +325,7 @@ public partial class DocsCanvas
                     var img = FindImageAtRawOffset(group.JoinedMap.Images, offset);
                     if (img != null)
                     {
-                        var (imgW, _) = ((DocsCanvas)_services).GetImageSize(img.Value, ((DocsCanvas)_services)._layoutMaxWidth);
+                        var (imgW, _) = _image.GetImageSize(img.Value, _layout.LayoutMaxWidth);
                         if (x < accum + imgW / 2)
                             return offset;
                         accum += imgW;
@@ -300,13 +334,13 @@ public partial class DocsCanvas
                     continue;
                 }
                 var style = TextMeasurer.GetStyleAtOffset(group.JoinedParsed.Runs, offset, ref runIdx);
-                double charW = ((DocsCanvas)_services)._measure.MeasureCharWidth(group.JoinedText[offset], BlockKind.Paragraph, style);
+                double charW = _rendering.Measure.MeasureCharWidth(group.JoinedText[offset], BlockKind.Paragraph, style);
 
                 // For soft breaks, account for visual space when hit-testing
                 double testWidth = charW;
                 if (softBreaks.Contains(offset) && group.JoinedText[offset] == '¶')
                 {
-                    double spaceW = ((DocsCanvas)_services)._measure.MeasureCharWidth(' ', BlockKind.Paragraph, style);
+                    double spaceW = _rendering.Measure.MeasureCharWidth(' ', BlockKind.Paragraph, style);
                     testWidth += spaceW;  // Use full visual width for hit-testing
                 }
 
@@ -322,25 +356,25 @@ public partial class DocsCanvas
 
         internal int HitTestVisualLine(double y)
         {
-            if (((DocsCanvas)_services)._visualLines.Count == 0) return 0;
-            for (int i = 0; i < ((DocsCanvas)_services)._visualLines.Count; i++)
+            if (_layout.VisualLines.Count == 0) return 0;
+            for (int i = 0; i < _layout.VisualLines.Count; i++)
             {
-                double lineH = _services.GetEffectiveLineHeight(((DocsCanvas)_services)._visualLines[i]);
-                if (y < ((DocsCanvas)_services)._lineYPositions[i] + lineH)
+                double lineH = _layout.GetEffectiveLineHeight(_layout.VisualLines[i]);
+                if (y < _layout.LineYPositions[i] + lineH)
                     return i;
             }
-            return ((DocsCanvas)_services)._visualLines.Count - 1;
+            return _layout.VisualLines.Count - 1;
         }
 
         internal void HitTestToPosition(Point pos, out int blockIndex, out int charOffset)
         {
-            if (((DocsCanvas)_services)._visualLines.Count == 0) { blockIndex = 0; charOffset = 0; return; }
-            double effectiveScroll = ((DocsCanvas)_services)._scroll.EffectiveOffset;
+            if (_layout.VisualLines.Count == 0) { blockIndex = 0; charOffset = 0; return; }
+            double effectiveScroll = _scroll.Scroll.EffectiveOffset;
             int vli = HitTestVisualLine(pos.Y + effectiveScroll);
-            var vl = ((DocsCanvas)_services)._visualLines[vli];
+            var vl = _layout.VisualLines[vli];
             double xForHitTest = pos.X - DocsCanvas._padding;
 
-            int rawOffset = _services.IsVisual ? HitTestInVisualLineProper(vli, xForHitTest) : HitTestInVisualLine(vli, xForHitTest);
+            int rawOffset = _visual.IsVisual ? HitTestInVisualLineProper(vli, xForHitTest) : HitTestInVisualLine(vli, xForHitTest);
 
             if (vl.Group != null)
             {
@@ -353,140 +387,140 @@ public partial class DocsCanvas
                 blockIndex = vl.BlockIndex;
                 charOffset = rawOffset;
             }
-            _services.Logger?.Log(DocsLogLevel.Debug, $"HitTestToPosition: Click at ({pos.X}, {pos.Y}) -> Block {blockIndex}, Offset {charOffset}");
+            _logging.Logger?.Log(DocsLogLevel.Debug, $"HitTestToPosition: Click at ({pos.X}, {pos.Y}) -> Block {blockIndex}, Offset {charOffset}");
         }
 
         // --- Key handlers (navigation) ---
 
         internal void HandleLeft(bool shift, bool ctrl = false)
         {
-            ((DocsCanvas)_services).SealAndStopTimer();
+            _canvas.SealAndStopTimer();
             if (ctrl)
             {
-                if (!shift && ((DocsCanvas)_services)._doc.HasSelection)
+                if (!shift && _doc.Document.HasSelection)
                 {
-                    var (sb, so, _, _) = ((DocsCanvas)_services)._doc.GetOrderedSelection();
-                    ((DocsCanvas)_services)._doc.CursorBlock = sb;
-                    ((DocsCanvas)_services)._doc.CursorOffset = so;
-                    ((DocsCanvas)_services)._doc.CollapseSelection();
+                    var (sb, so, _, _) = _doc.Document.GetOrderedSelection();
+                    _doc.Document.CursorBlock = sb;
+                    _doc.Document.CursorOffset = so;
+                    _doc.Document.CollapseSelection();
                 }
                 else
                 {
-                    ((DocsCanvas)_services)._doc.MoveWordLeft();
+                    _doc.Document.MoveWordLeft();
                 }
-                if (_services.IsVisual)
+                if (_visual.IsVisual)
                 {
-                    if (((DocsCanvas)_services)._parsedBlocks != null && DocsCanvas.IsTableRow(((DocsCanvas)_services)._parsedBlocks[((DocsCanvas)_services)._doc.CursorBlock]))
-                        ((DocsCanvas)_services).ClampCursorToTableCell();
+                    if (_content.ParsedBlocks != null && DocsCanvas.IsTableRow(_content.ParsedBlocks[_doc.Document.CursorBlock]))
+                        VisualModeManager?.ClampCursorToTableCell();
                     else
-                        _services.SkipCursorOverHiddenRanges(forward: false);
+                        _visual.SkipCursorOverHiddenRanges(forward: false);
                 }
-                if (!shift) ((DocsCanvas)_services)._doc.CollapseSelection();
+                if (!shift) _doc.Document.CollapseSelection();
             }
             else
             {
-                if (_services.IsVisual) ((DocsCanvas)_services)._visualModeManager.HandleLeftVisual(shift);
+                if (_visual.IsVisual) VisualModeManager?.HandleLeftVisual(shift);
                 else HandleLeftSource(shift);
-                if (!shift) ((DocsCanvas)_services)._doc.CollapseSelection();
+                if (!shift) _doc.Document.CollapseSelection();
             }
         }
 
         internal void HandleRight(bool shift, bool ctrl = false)
         {
-            ((DocsCanvas)_services).SealAndStopTimer();
+            _canvas.SealAndStopTimer();
             if (ctrl)
             {
-                if (!shift && ((DocsCanvas)_services)._doc.HasSelection)
+                if (!shift && _doc.Document.HasSelection)
                 {
-                    var (_, _, eb, eo) = ((DocsCanvas)_services)._doc.GetOrderedSelection();
-                    ((DocsCanvas)_services)._doc.CursorBlock = eb;
-                    ((DocsCanvas)_services)._doc.CursorOffset = eo;
-                    ((DocsCanvas)_services)._doc.CollapseSelection();
+                    var (_, _, eb, eo) = _doc.Document.GetOrderedSelection();
+                    _doc.Document.CursorBlock = eb;
+                    _doc.Document.CursorOffset = eo;
+                    _doc.Document.CollapseSelection();
                 }
                 else
                 {
-                    ((DocsCanvas)_services)._doc.MoveWordRight();
+                    _doc.Document.MoveWordRight();
                 }
-                if (_services.IsVisual)
+                if (_visual.IsVisual)
                 {
-                    if (((DocsCanvas)_services)._parsedBlocks != null && DocsCanvas.IsTableRow(((DocsCanvas)_services)._parsedBlocks[((DocsCanvas)_services)._doc.CursorBlock]))
-                        ((DocsCanvas)_services).ClampCursorToTableCell();
+                    if (_content.ParsedBlocks != null && DocsCanvas.IsTableRow(_content.ParsedBlocks[_doc.Document.CursorBlock]))
+                        VisualModeManager?.ClampCursorToTableCell();
                     else
-                        _services.SkipCursorOverHiddenRanges(forward: true);
+                        _visual.SkipCursorOverHiddenRanges(forward: true);
                 }
-                if (!shift) ((DocsCanvas)_services)._doc.CollapseSelection();
+                if (!shift) _doc.Document.CollapseSelection();
             }
             else
             {
-                if (_services.IsVisual) ((DocsCanvas)_services)._visualModeManager.HandleRightVisual(shift);
+                if (_visual.IsVisual) VisualModeManager?.HandleRightVisual(shift);
                 else HandleRightSource(shift);
-                if (!shift) ((DocsCanvas)_services)._doc.CollapseSelection();
+                if (!shift) _doc.Document.CollapseSelection();
             }
         }
 
         internal void HandleHome(bool shift, bool ctrl)
         {
-            ((DocsCanvas)_services).SealAndStopTimer();
+            _canvas.SealAndStopTimer();
             if (ctrl)
             {
-                ((DocsCanvas)_services)._doc.CursorBlock = 0;
-                ((DocsCanvas)_services)._doc.CursorOffset = 0;
+                _doc.Document.CursorBlock = 0;
+                _doc.Document.CursorOffset = 0;
             }
             else
             {
                 int vli = CursorToVisualLineIndex();
-                var vl = ((DocsCanvas)_services)._visualLines[vli];
+                var vl = _layout.VisualLines[vli];
                 if (vl.Group != null)
                 {
                     var (targetBi, targetBo) = vl.Group.JoinedToSource(vl.StartOffset);
-                    if (((DocsCanvas)_services)._doc.CursorBlock == targetBi && ((DocsCanvas)_services)._doc.CursorOffset == targetBo
-                        && vli > 0 && ((DocsCanvas)_services)._visualLines[vli - 1].Group == vl.Group)
+                    if (_doc.Document.CursorBlock == targetBi && _doc.Document.CursorOffset == targetBo
+                        && vli > 0 && _layout.VisualLines[vli - 1].Group == vl.Group)
                     {
                         var (firstBi, firstBo) = vl.Group.JoinedToSource(0);
-                        ((DocsCanvas)_services)._doc.CursorBlock = firstBi;
-                        ((DocsCanvas)_services)._doc.CursorOffset = firstBo;
+                        _doc.Document.CursorBlock = firstBi;
+                        _doc.Document.CursorOffset = firstBo;
                     }
                     else
                     {
-                        ((DocsCanvas)_services)._doc.CursorBlock = targetBi;
-                        ((DocsCanvas)_services)._doc.CursorOffset = targetBo;
+                        _doc.Document.CursorBlock = targetBi;
+                        _doc.Document.CursorOffset = targetBo;
                     }
                 }
                 else
                 {
-                    if (((DocsCanvas)_services)._doc.CursorOffset == vl.StartOffset
-                        && vli > 0 && ((DocsCanvas)_services)._visualLines[vli - 1].BlockIndex == vl.BlockIndex)
+                    if (_doc.Document.CursorOffset == vl.StartOffset
+                        && vli > 0 && _layout.VisualLines[vli - 1].BlockIndex == vl.BlockIndex)
                     {
-                        ((DocsCanvas)_services)._doc.CursorOffset = 0;
+                        _doc.Document.CursorOffset = 0;
                     }
                     else
                     {
-                        ((DocsCanvas)_services)._doc.CursorOffset = vl.StartOffset;
+                        _doc.Document.CursorOffset = vl.StartOffset;
                     }
                 }
             }
-            if (_services.IsVisual) ((DocsCanvas)_services)._visualModeManager.HandleHomeVisual();
-            if (!shift) ((DocsCanvas)_services)._doc.CollapseSelection();
+            if (_visual.IsVisual) VisualModeManager?.HandleHomeVisual();
+            if (!shift) _doc.Document.CollapseSelection();
         }
 
         internal void HandleEnd(bool shift, bool ctrl)
         {
-            ((DocsCanvas)_services).SealAndStopTimer();
-            ((DocsCanvas)_services)._cursorAtLineEnd = false;
+            _canvas.SealAndStopTimer();
+            _canvas.CursorAtLineEnd = false;
             if (ctrl)
             {
-                ((DocsCanvas)_services)._doc.CursorBlock = ((DocsCanvas)_services)._doc.BlockCount - 1;
-                ((DocsCanvas)_services)._doc.CursorOffset = ((DocsCanvas)_services)._doc.GetBlockLength(((DocsCanvas)_services)._doc.CursorBlock);
+                _doc.Document.CursorBlock = _doc.BlockCount - 1;
+                _doc.Document.CursorOffset = _doc.GetBlockLength(_doc.Document.CursorBlock);
             }
             else
             {
                 int vli = CursorToVisualLineIndex();
-                var vl = ((DocsCanvas)_services)._visualLines[vli];
+                var vl = _layout.VisualLines[vli];
                 int endOffset = vl.StartOffset + vl.Length;
                 if (vl.Group != null)
                 {
-                    bool isWrap = vli + 1 < ((DocsCanvas)_services)._visualLines.Count
-                        && ((DocsCanvas)_services)._visualLines[vli + 1].Group == vl.Group;
+                    bool isWrap = vli + 1 < _layout.VisualLines.Count
+                        && _layout.VisualLines[vli + 1].Group == vl.Group;
                     if (isWrap)
                     {
                         string text = vl.Group.JoinedText;
@@ -494,46 +528,46 @@ public partial class DocsCanvas
                             endOffset--;
                     }
                     var (targetBi, targetBo) = vl.Group.JoinedToSource(endOffset);
-                    if (((DocsCanvas)_services)._doc.CursorBlock == targetBi && ((DocsCanvas)_services)._doc.CursorOffset == targetBo && isWrap)
+                    if (_doc.Document.CursorBlock == targetBi && _doc.Document.CursorOffset == targetBo && isWrap)
                     {
                         var last = vl.Group.Segments[^1];
-                        ((DocsCanvas)_services)._doc.CursorBlock = last.BlockIndex;
-                        ((DocsCanvas)_services)._doc.CursorOffset = last.Length;
+                        _doc.Document.CursorBlock = last.BlockIndex;
+                        _doc.Document.CursorOffset = last.Length;
                     }
                     else
                     {
-                        ((DocsCanvas)_services)._doc.CursorBlock = targetBi;
-                        ((DocsCanvas)_services)._doc.CursorOffset = targetBo;
+                        _doc.Document.CursorBlock = targetBi;
+                        _doc.Document.CursorOffset = targetBo;
                     }
                 }
                 else
                 {
-                    bool isWrap = vli + 1 < ((DocsCanvas)_services)._visualLines.Count
-                        && ((DocsCanvas)_services)._visualLines[vli + 1].BlockIndex == vl.BlockIndex;
+                    bool isWrap = vli + 1 < _layout.VisualLines.Count
+                        && _layout.VisualLines[vli + 1].BlockIndex == vl.BlockIndex;
                     if (isWrap)
                     {
-                        string text = ((DocsCanvas)_services)._doc.GetBlockText(vl.BlockIndex);
+                        string text = _doc.GetBlockText(vl.BlockIndex);
                         while (endOffset > vl.StartOffset && text[endOffset - 1] == ' ')
                             endOffset--;
                     }
-                    if (((DocsCanvas)_services)._doc.CursorOffset == endOffset && isWrap)
+                    if (_doc.Document.CursorOffset == endOffset && isWrap)
                     {
-                        ((DocsCanvas)_services)._doc.CursorOffset = ((DocsCanvas)_services)._doc.GetBlockLength(vl.BlockIndex);
+                        _doc.Document.CursorOffset = _doc.GetBlockLength(vl.BlockIndex);
                     }
                     else
                     {
-                        ((DocsCanvas)_services)._doc.CursorOffset = endOffset;
+                        _doc.Document.CursorOffset = endOffset;
                     }
                 }
-                ((DocsCanvas)_services)._cursorAtLineEnd = true;
+                _canvas.CursorAtLineEnd = true;
             }
-            if (_services.IsVisual) ((DocsCanvas)_services)._visualModeManager.HandleEndVisual();
-            if (!shift) ((DocsCanvas)_services)._doc.CollapseSelection();
+            if (_visual.IsVisual) VisualModeManager?.HandleEndVisual();
+            if (!shift) _doc.Document.CollapseSelection();
         }
 
         internal void HandleUp(bool shift)
         {
-            ((DocsCanvas)_services).SealAndStopTimer();
+            _canvas.SealAndStopTimer();
             int vli = CursorToVisualLineIndex();
             if (vli > 0)
             {
@@ -541,76 +575,76 @@ public partial class DocsCanvas
                 vli--;
                 SetCursorFromVisualLine(vli, x);
             }
-            if (_services.IsVisual) ((DocsCanvas)_services)._visualModeManager.HandleUpVisual();
-            if (!shift) ((DocsCanvas)_services)._doc.CollapseSelection();
+            if (_visual.IsVisual) VisualModeManager?.HandleUpVisual();
+            if (!shift) _doc.Document.CollapseSelection();
         }
 
         internal void HandleDown(bool shift)
         {
-            ((DocsCanvas)_services).SealAndStopTimer();
+            _canvas.SealAndStopTimer();
             int vli = CursorToVisualLineIndex();
-            if (vli < ((DocsCanvas)_services)._visualLines.Count - 1)
+            if (vli < _layout.VisualLines.Count - 1)
             {
                 double x = CursorXInVisualLine(vli);
                 vli++;
                 SetCursorFromVisualLine(vli, x);
             }
-            if (_services.IsVisual) ((DocsCanvas)_services)._visualModeManager.HandleDownVisual();
-            if (!shift) ((DocsCanvas)_services)._doc.CollapseSelection();
+            if (_visual.IsVisual) VisualModeManager?.HandleDownVisual();
+            if (!shift) _doc.Document.CollapseSelection();
         }
 
         internal void HandlePageUp(bool shift)
         {
-            ((DocsCanvas)_services).SealAndStopTimer();
+            _canvas.SealAndStopTimer();
             int vli = CursorToVisualLineIndex();
             double x = CursorXInVisualLine(vli);
-            double cursorY = ((DocsCanvas)_services)._lineYPositions[vli];
-            double relativeY = cursorY - ((DocsCanvas)_services)._scroll.Offset;
-            double lineH = _services.GetEffectiveLineHeight(((DocsCanvas)_services)._visualLines[vli]);
-            double pageAmount = Math.Max(lineH, ((DocsCanvas)_services).ActualHeight - 3 * lineH);
+            double cursorY = _layout.LineYPositions[vli];
+            double relativeY = cursorY - _scroll.Scroll.Offset;
+            double lineH = _layout.GetEffectiveLineHeight(_layout.VisualLines[vli]);
+            double pageAmount = Math.Max(lineH, _rendering.ActualHeight - 3 * lineH);
 
-            ((DocsCanvas)_services)._scroll.Offset -= pageAmount;
-            ((DocsCanvas)_services)._scroll.Clamp();
+            _scroll.Scroll.Offset -= pageAmount;
+            _scroll.Scroll.Clamp();
 
-            int targetVli = HitTestVisualLine(((DocsCanvas)_services)._scroll.Offset + relativeY);
+            int targetVli = HitTestVisualLine(_scroll.Scroll.Offset + relativeY);
             SetCursorFromVisualLine(targetVli, x);
-            if (_services.IsVisual) ((DocsCanvas)_services)._visualModeManager.HandleUpVisual();
-            if (!shift) ((DocsCanvas)_services)._doc.CollapseSelection();
+            if (_visual.IsVisual) VisualModeManager?.HandleUpVisual();
+            if (!shift) _doc.Document.CollapseSelection();
         }
 
         internal void HandlePageDown(bool shift)
         {
-            ((DocsCanvas)_services).SealAndStopTimer();
+            _canvas.SealAndStopTimer();
             int vli = CursorToVisualLineIndex();
             double x = CursorXInVisualLine(vli);
-            double cursorY = ((DocsCanvas)_services)._lineYPositions[vli];
-            double relativeY = cursorY - ((DocsCanvas)_services)._scroll.Offset;
-            double lineH = _services.GetEffectiveLineHeight(((DocsCanvas)_services)._visualLines[vli]);
-            double pageAmount = Math.Max(lineH, ((DocsCanvas)_services).ActualHeight - 3 * lineH);
+            double cursorY = _layout.LineYPositions[vli];
+            double relativeY = cursorY - _scroll.Scroll.Offset;
+            double lineH = _layout.GetEffectiveLineHeight(_layout.VisualLines[vli]);
+            double pageAmount = Math.Max(lineH, _rendering.ActualHeight - 3 * lineH);
 
-            ((DocsCanvas)_services)._scroll.Offset += pageAmount;
-            ((DocsCanvas)_services)._scroll.Clamp();
+            _scroll.Scroll.Offset += pageAmount;
+            _scroll.Scroll.Clamp();
 
-            int targetVli = HitTestVisualLine(((DocsCanvas)_services)._scroll.Offset + relativeY);
+            int targetVli = HitTestVisualLine(_scroll.Scroll.Offset + relativeY);
             SetCursorFromVisualLine(targetVli, x);
-            if (_services.IsVisual) ((DocsCanvas)_services)._visualModeManager.HandleDownVisual();
-            if (!shift) ((DocsCanvas)_services)._doc.CollapseSelection();
+            if (_visual.IsVisual) VisualModeManager?.HandleDownVisual();
+            if (!shift) _doc.Document.CollapseSelection();
         }
 
         private void SetCursorFromVisualLine(int vli, double x)
         {
-            var vl = ((DocsCanvas)_services)._visualLines[vli];
+            var vl = _layout.VisualLines[vli];
             int rawOffset = HitTestInVisualLine(vli, x);
             if (vl.Group != null)
             {
                 var (bi, bo) = vl.Group.JoinedToSource(rawOffset);
-                ((DocsCanvas)_services)._doc.CursorBlock = bi;
-                ((DocsCanvas)_services)._doc.CursorOffset = bo;
+                _doc.Document.CursorBlock = bi;
+                _doc.Document.CursorOffset = bo;
             }
             else
             {
-                ((DocsCanvas)_services)._doc.CursorBlock = vl.BlockIndex;
-                ((DocsCanvas)_services)._doc.CursorOffset = rawOffset;
+                _doc.Document.CursorBlock = vl.BlockIndex;
+                _doc.Document.CursorOffset = rawOffset;
             }
         }
 
@@ -618,34 +652,34 @@ public partial class DocsCanvas
 
         private bool HandleLeftSource(bool shift)
         {
-            if (!shift && ((DocsCanvas)_services)._doc.HasSelection)
+            if (!shift && _doc.Document.HasSelection)
             {
-                var (sb, so, _, _) = ((DocsCanvas)_services)._doc.GetOrderedSelection();
-                ((DocsCanvas)_services)._doc.CursorBlock = sb;
-                ((DocsCanvas)_services)._doc.CursorOffset = so;
-                ((DocsCanvas)_services)._doc.CollapseSelection();
+                var (sb, so, _, _) = _doc.Document.GetOrderedSelection();
+                _doc.Document.CursorBlock = sb;
+                _doc.Document.CursorOffset = so;
+                _doc.Document.CollapseSelection();
             }
             else
             {
-                ((DocsCanvas)_services)._doc.MoveLeft();
-                if (!shift) ((DocsCanvas)_services)._doc.CollapseSelection();
+                _doc.Document.MoveLeft();
+                if (!shift) _doc.Document.CollapseSelection();
             }
             return true;
         }
 
         private bool HandleRightSource(bool shift)
         {
-            if (!shift && ((DocsCanvas)_services)._doc.HasSelection)
+            if (!shift && _doc.Document.HasSelection)
             {
-                var (_, _, eb, eo) = ((DocsCanvas)_services)._doc.GetOrderedSelection();
-                ((DocsCanvas)_services)._doc.CursorBlock = eb;
-                ((DocsCanvas)_services)._doc.CursorOffset = eo;
-                ((DocsCanvas)_services)._doc.CollapseSelection();
+                var (_, _, eb, eo) = _doc.Document.GetOrderedSelection();
+                _doc.Document.CursorBlock = eb;
+                _doc.Document.CursorOffset = eo;
+                _doc.Document.CollapseSelection();
             }
             else
             {
-                ((DocsCanvas)_services)._doc.MoveRight();
-                if (!shift) ((DocsCanvas)_services)._doc.CollapseSelection();
+                _doc.Document.MoveRight();
+                if (!shift) _doc.Document.CollapseSelection();
             }
             return true;
         }
