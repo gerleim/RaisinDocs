@@ -136,6 +136,38 @@ internal static class HtmlToMarkdownConverter
                 }
             }
 
+            // Handle unordered lists
+            if (IsListOpenTag(tag, out bool isOrderedList) && !isOrderedList)
+            {
+                int closeTagStart = FindMatchingListCloseTag(html, tagEnd + 1, "ul");
+                if (closeTagStart > 0)
+                {
+                    string listContent = html[(tagEnd + 1)..closeTagStart];
+                    string markdown = ListConverter.ConvertList(listContent, false, 0).Trim();
+                    result.Append("<!--@MARKDOWN_BLOCK-->");
+                    result.Append(markdown);
+                    result.Append("<!--/@MARKDOWN_BLOCK-->");
+                    pos = closeTagStart + "</ul>".Length;
+                    continue;
+                }
+            }
+
+            // Handle ordered lists
+            if (IsListOpenTag(tag, out isOrderedList) && isOrderedList)
+            {
+                int closeTagStart = FindMatchingListCloseTag(html, tagEnd + 1, "ol");
+                if (closeTagStart > 0)
+                {
+                    string listContent = html[(tagEnd + 1)..closeTagStart];
+                    string markdown = ListConverter.ConvertList(listContent, true, 0).Trim();
+                    result.Append("<!--@MARKDOWN_BLOCK-->");
+                    result.Append(markdown);
+                    result.Append("<!--/@MARKDOWN_BLOCK-->");
+                    pos = closeTagStart + "</ol>".Length;
+                    continue;
+                }
+            }
+
             result.Append(tag);
             pos = tagEnd + 1;
         }
@@ -175,6 +207,65 @@ internal static class HtmlToMarkdownConverter
     {
         return tag.Equals("<blockquote>", StringComparison.OrdinalIgnoreCase) ||
                (tag.StartsWith("<blockquote", StringComparison.OrdinalIgnoreCase) && tag.EndsWith(">"));
+    }
+
+    private static bool IsListOpenTag(string tag, out bool isOrdered)
+    {
+        isOrdered = false;
+
+        // Check for <ul>
+        if (tag.Equals("<ul>", StringComparison.OrdinalIgnoreCase) ||
+            (tag.StartsWith("<ul", StringComparison.OrdinalIgnoreCase) && tag.EndsWith(">")))
+        {
+            isOrdered = false;
+            return true;
+        }
+
+        // Check for <ol>
+        if (tag.Equals("<ol>", StringComparison.OrdinalIgnoreCase) ||
+            (tag.StartsWith("<ol", StringComparison.OrdinalIgnoreCase) && tag.EndsWith(">")))
+        {
+            isOrdered = true;
+            return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Finds the position of the matching closing tag for a list, accounting for nested lists.
+    /// </summary>
+    private static int FindMatchingListCloseTag(string html, int startPos, string tagName)
+    {
+        int depth = 1;
+        int pos = startPos;
+        string openTag = $"<{tagName}";
+        string closeTag = $"</{tagName}>";
+
+        while (pos < html.Length && depth > 0)
+        {
+            int nextOpen = html.IndexOf(openTag, pos, StringComparison.OrdinalIgnoreCase);
+            int nextClose = html.IndexOf(closeTag, pos, StringComparison.OrdinalIgnoreCase);
+
+            // If we can't find either tag, we're done (tag mismatch)
+            if (nextClose < 0) return -1;
+
+            // If we find an opening tag before the next closing tag, increment depth
+            if (nextOpen >= 0 && nextOpen < nextClose)
+            {
+                depth++;
+                pos = nextOpen + 1;
+            }
+            else
+            {
+                depth--;
+                if (depth == 0)
+                    return nextClose; // Found matching close tag
+                pos = nextClose + closeTag.Length;
+            }
+        }
+
+        return depth == 0 ? pos : -1;
     }
 
     private static string StripTags(string html)

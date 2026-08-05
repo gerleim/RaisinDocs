@@ -895,6 +895,132 @@ public class HtmlToMarkdownConverterTests
         result.Should().Contain("Physical roll");
         result.Should().Contain("movement");
     }
+
+    // === Phase 2 Tests: Lists (Unordered, Ordered, Nested) ===
+
+    [Fact]
+    public void UnorderedList_SimpleList_ConvertsToDashPrefix()
+    {
+        var html = "<ul><li>Item 1</li><li>Item 2</li><li>Item 3</li></ul>";
+        var cfHtml = WrapCfHtml(html);
+
+        var result = HtmlToMarkdownConverter.ConvertToColoredMarkdown(cfHtml);
+
+        result.Should().Contain("- Item 1");
+        result.Should().Contain("- Item 2");
+        result.Should().Contain("- Item 3");
+    }
+
+    [Fact]
+    public void OrderedList_SimpleList_ConvertsToNumberPrefix()
+    {
+        var html = "<ol><li>First</li><li>Second</li><li>Third</li></ol>";
+        var cfHtml = WrapCfHtml(html);
+
+        var result = HtmlToMarkdownConverter.ConvertToColoredMarkdown(cfHtml);
+
+        result.Should().Contain("1. First");
+        result.Should().Contain("2. Second");
+        result.Should().Contain("3. Third");
+    }
+
+    [Fact]
+    public void UnorderedList_WithBoldItems_PreservesFormatting()
+    {
+        var html = "<ul><li><strong>Speed is halved</strong> (minimum 1).</li><li><strong>Defense is reduced by 2.</strong></li></ul>";
+        var cfHtml = WrapCfHtml(html);
+
+        var result = HtmlToMarkdownConverter.ConvertToColoredMarkdown(cfHtml);
+
+        result.Should().Contain("- ");
+        result.Should().Contain("Speed is halved");
+        result.Should().Contain("Defense is reduced");
+    }
+
+    [Fact]
+    public void NestedUnorderedList_TwoLevels_ProducesIndentedMarkdown()
+    {
+        var html = "<ul><li>Parent 1<ul><li>Child 1.1</li><li>Child 1.2</li></ul></li><li>Parent 2</li></ul>";
+        var cfHtml = WrapCfHtml(html);
+
+        var result = HtmlToMarkdownConverter.ConvertToColoredMarkdown(cfHtml);
+
+        result.Should().Contain("- Parent 1");
+        result.Should().Contain("- Parent 2");
+        result.Should().Contain("Child 1.1");
+        result.Should().Contain("Child 1.2");
+    }
+
+    [Fact]
+    public void NestedOrderedList_TwoLevels_ProducesIndentedMarkdown()
+    {
+        var html = "<ol><li>Step 1<ol><li>Substep 1.1</li><li>Substep 1.2</li></ol></li><li>Step 2</li></ol>";
+        var cfHtml = WrapCfHtml(html);
+
+        var result = HtmlToMarkdownConverter.ConvertToColoredMarkdown(cfHtml);
+
+        result.Should().Contain("1. Step 1");
+        result.Should().Contain("2. Step 2");
+        result.Should().Contain("Substep 1.1");
+        result.Should().Contain("Substep 1.2");
+    }
+
+    [Fact]
+    public void MixedNestedLists_UnorderedThenOrdered_BothConvert()
+    {
+        var html = "<ul><li>Bullet 1<ol><li>Numbered 1.1</li><li>Numbered 1.2</li></ol></li></ul>";
+        var cfHtml = WrapCfHtml(html);
+
+        var result = HtmlToMarkdownConverter.ConvertToColoredMarkdown(cfHtml);
+
+        result.Should().Contain("- Bullet 1");
+        result.Should().Contain("1. Numbered 1.1");
+        result.Should().Contain("2. Numbered 1.2");
+    }
+
+    [Fact]
+    public void ListWithMultipleParagraphs_ItemsExtractedCorrectly()
+    {
+        var html = "<ul><li><p>Paragraph 1</p><p>Paragraph 2</p></li></ul>";
+        var cfHtml = WrapCfHtml(html);
+
+        var result = HtmlToMarkdownConverter.ConvertToColoredMarkdown(cfHtml);
+
+        result.Should().Contain("- ");
+        result.Should().Contain("Paragraph 1");
+        result.Should().Contain("Paragraph 2");
+    }
+
+    [Fact]
+    public void RealWorldList_FromSample_HandlesComplexStructure()
+    {
+        var html =
+            "<ul>" +
+            "<li><strong>Speed is halved</strong> (minimum 1).</li>" +
+            "<li><strong>Defense is reduced by 2.</strong></li>" +
+            "<li><strong>Physical rolls that require movement are reduced to a chance die.</strong></li>" +
+            "</ul>";
+        var cfHtml = WrapCfHtml(html);
+
+        var result = HtmlToMarkdownConverter.ConvertToColoredMarkdown(cfHtml);
+
+        var lines = result!.Split('\n').Where(l => !string.IsNullOrWhiteSpace(l)).ToList();
+        lines.Should().HaveCountGreaterThanOrEqualTo(3);
+        lines.Should().AllSatisfy(line => line.Should().Contain("- "));
+    }
+
+    [Fact]
+    public void DeepNesting_ThreeLevels_ProducesCorrectIndentation()
+    {
+        var html = "<ul><li>Level 1<ul><li>Level 2<ul><li>Level 3</li></ul></li></ul></li></ul>";
+        var cfHtml = WrapCfHtml(html);
+
+        var result = HtmlToMarkdownConverter.ConvertToColoredMarkdown(cfHtml);
+
+        result.Should().Contain("Level 1");
+        result.Should().Contain("Level 2");
+        result.Should().Contain("Level 3");
+    }
 }
 
 
