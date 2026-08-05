@@ -68,14 +68,14 @@ internal class ColorFormattingManager
     /// </summary>
     public void RemoveBackgroundAtCursor()
     {
-        ((DocsCanvas)_services).ComputeLayout();
-        ((DocsCanvas)_services).SealAndStopTimer();
-        ((DocsCanvas)_services)._doc.BeginUndoGroup();
-        BackgroundHelper.RemoveBackgroundAtCursor(((DocsCanvas)_services)._doc, ((DocsCanvas)_services)._parsedBlocks);
-        ((DocsCanvas)_services)._doc.SealUndoGroup();
-        ((DocsCanvas)_services).InvalidateLayout();
-        ((DocsCanvas)_services).EnsureCursorVisible();
-        ((DocsCanvas)_services).RaiseFormattingChanged();
+        _layout.ComputeLayout();
+        _canvas.SealAndStopTimer();
+        _doc.Document.BeginUndoGroup();
+        BackgroundHelper.RemoveBackgroundAtCursor(_doc.Document, _content.ParsedBlocks);
+        _doc.Document.SealUndoGroup();
+        _layout.InvalidateLayout();
+        _scroll.EnsureCursorVisible();
+        _canvas.RaiseFormattingChanged();
     }
 
     /// <summary>
@@ -83,15 +83,15 @@ internal class ColorFormattingManager
     /// </summary>
     public void RemoveBackgroundFromSelection()
     {
-        if (!((DocsCanvas)_services)._doc.HasSelection) return;
-        ((DocsCanvas)_services).ComputeLayout();
-        ((DocsCanvas)_services).SealAndStopTimer();
-        ((DocsCanvas)_services)._doc.BeginUndoGroup();
-        BackgroundHelper.RemoveBackgroundFromSelection(((DocsCanvas)_services)._doc, ((DocsCanvas)_services)._parsedBlocks);
-        ((DocsCanvas)_services)._doc.SealUndoGroup();
-        ((DocsCanvas)_services).InvalidateLayout();
-        ((DocsCanvas)_services).EnsureCursorVisible();
-        ((DocsCanvas)_services).RaiseFormattingChanged();
+        if (!_doc.Document.HasSelection) return;
+        _layout.ComputeLayout();
+        _canvas.SealAndStopTimer();
+        _doc.Document.BeginUndoGroup();
+        BackgroundHelper.RemoveBackgroundFromSelection(_doc.Document, _content.ParsedBlocks);
+        _doc.Document.SealUndoGroup();
+        _layout.InvalidateLayout();
+        _scroll.EnsureCursorVisible();
+        _canvas.RaiseFormattingChanged();
     }
 
     /// <summary>
@@ -100,45 +100,45 @@ internal class ColorFormattingManager
     /// </summary>
     private void InsertColorWrapper(string opener, string closer, string divProperty)
     {
-        ((DocsCanvas)_services).SealAndStopTimer();
-        ((DocsCanvas)_services)._doc.BeginUndoGroup();
+        _canvas.SealAndStopTimer();
+        _doc.Document.BeginUndoGroup();
 
-        if (((DocsCanvas)_services)._doc.HasSelection)
+        if (_doc.Document.HasSelection)
         {
-            var (sb, so, eb, eo) = ((DocsCanvas)_services)._doc.GetOrderedSelection();
+            var (sb, so, eb, eo) = _doc.Document.GetOrderedSelection();
             if (sb == eb)
             {
-                ((DocsCanvas)_services)._doc.InsertTextAt(sb, eo, closer);
-                ((DocsCanvas)_services)._doc.InsertTextAt(sb, so, opener);
-                ((DocsCanvas)_services)._doc.CursorBlock = sb;
-                ((DocsCanvas)_services)._doc.CursorOffset = eo + opener.Length;
-                ((DocsCanvas)_services)._doc.AnchorBlock = sb;
-                ((DocsCanvas)_services)._doc.AnchorOffset = ((DocsCanvas)_services)._doc.CursorOffset;
+                _doc.Document.InsertTextAt(sb, eo, closer);
+                _doc.Document.InsertTextAt(sb, so, opener);
+                _doc.Document.CursorBlock = sb;
+                _doc.Document.CursorOffset = eo + opener.Length;
+                _doc.Document.AnchorBlock = sb;
+                _doc.Document.AnchorOffset = _doc.Document.CursorOffset;
             }
             else
             {
                 string divOpen = $"<!--@div {divProperty}-->";
-                ((DocsCanvas)_services)._doc.InsertBlockAt(eb + 1, "<!--/@div-->");
-                ((DocsCanvas)_services)._doc.InsertBlockAt(sb, divOpen);
-                ((DocsCanvas)_services)._doc.CursorBlock = eb + 1;
-                ((DocsCanvas)_services)._doc.CursorOffset = eo;
-                ((DocsCanvas)_services)._doc.AnchorBlock = ((DocsCanvas)_services)._doc.CursorBlock;
-                ((DocsCanvas)_services)._doc.AnchorOffset = ((DocsCanvas)_services)._doc.CursorOffset;
+                _doc.Document.InsertBlockAt(eb + 1, "<!--/@div-->");
+                _doc.Document.InsertBlockAt(sb, divOpen);
+                _doc.Document.CursorBlock = eb + 1;
+                _doc.Document.CursorOffset = eo;
+                _doc.Document.AnchorBlock = _doc.Document.CursorBlock;
+                _doc.Document.AnchorOffset = _doc.Document.CursorOffset;
             }
         }
         else
         {
-            int block = ((DocsCanvas)_services)._doc.CursorBlock;
-            int offset = ((DocsCanvas)_services)._doc.CursorOffset;
-            ((DocsCanvas)_services)._doc.InsertTextAt(block, offset, opener + closer);
-            ((DocsCanvas)_services)._doc.CursorOffset = offset + opener.Length;
-            ((DocsCanvas)_services)._doc.AnchorBlock = block;
-            ((DocsCanvas)_services)._doc.AnchorOffset = ((DocsCanvas)_services)._doc.CursorOffset;
+            int block = _doc.Document.CursorBlock;
+            int offset = _doc.Document.CursorOffset;
+            _doc.Document.InsertTextAt(block, offset, opener + closer);
+            _doc.Document.CursorOffset = offset + opener.Length;
+            _doc.Document.AnchorBlock = block;
+            _doc.Document.AnchorOffset = _doc.Document.CursorOffset;
         }
 
-        ((DocsCanvas)_services)._doc.SealUndoGroup();
-        ((DocsCanvas)_services).InvalidateLayout();
-        ((DocsCanvas)_services).EnsureCursorVisible();
-        ((DocsCanvas)_services).RaiseFormattingChanged();
+        _doc.Document.SealUndoGroup();
+        _layout.InvalidateLayout();
+        _scroll.EnsureCursorVisible();
+        _canvas.RaiseFormattingChanged();
     }
 }
