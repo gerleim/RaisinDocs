@@ -86,6 +86,51 @@ dotnet build RaisinDocs.slnx -p:UseProjectReferences=false
 - **RetryHelper** — Generic retry utility (`internal`). Configurable retries, delay, and per-retry callback. Used by `ClipboardHelper` for transient OS failures.
 - **ClipboardHelper** — Wraps `Clipboard.SetText`/`GetText` with retry-on-`ExternalException` and `IDocsLogger` integration (`internal`).
 
+### Refactored Architecture (Phase 2 - 2026-08)
+
+After Phase 2 refactoring, DocsCanvas has been decomposed from a monolithic 8,721-line god class into a well-architected system:
+
+**11 Extracted Classes:**
+- **LayoutEngine** (911 lines) - Layout computation, word wrapping, visual line building
+- **RenderingContext** (1,297 lines) - All rendering operations, styling, visual elements
+- **CursorNavigationEngine** (700 lines) - Cursor positioning, hit-testing, navigation
+- **VisualModeManager** (580 lines) - Visual mode cursor navigation, hidden range handling
+- **TableRenderer** (500 lines) - Table rendering, column width computation
+- **FindAndReplaceController** (290 lines) - Search/replace functionality
+- **SpellCheckController** (432 lines) - Spell checking and error underlining
+- **LinkHandler** (169 lines) - Link detection and click handling
+- **TableInputHandler** (149 lines) - Table cell keyboard navigation
+- **PageBreakManager** (155 lines) - Page break visualization
+- **ColorFormattingManager** (130 lines) - Color tag insertion and removal
+
+**12 Service Interfaces:**
+Each extracted class depends on specific interfaces, not on DocsCanvas directly:
+- `IDocumentServices` - Document model access
+- `ILayoutDataServices` - Layout computation results
+- `IRenderingServices` - Text measurement and styling
+- `IParsedContentServices` - Markdown parsing results
+- `IVisualModeServices` - Visual mode features
+- `ITableServices` - Table rendering support
+- `INavigationServices` - Cursor positioning and hit-testing
+- `ICanvasOperations` - Canvas-level operations
+- `IScrollServices` - Scrolling and viewport management
+- `IImageServices` - Image handling
+- `ISearchServices` - Find/Replace feature
+- `ILoggingServices` - Diagnostic logging
+
+**Key Architecture Improvements:**
+- ✅ Eliminated 804 internal casts (`((DocsCanvas)_services)` patterns)
+- ✅ Clean separation of concerns (each class has single responsibility)
+- ✅ Loose coupling (depend on interfaces, not concrete implementations)
+- ✅ Enhanced testability (can mock specific interfaces)
+- ✅ Improved performance (no casting overhead in hot paths)
+
+**See Also:**
+- Full architecture documentation: `design/Architecture_Overview.md`
+- Refactoring plan: `design/ArchitectureReviews/DocsCanvas_Interface_Refactoring_Plan.md`
+- Completion summary: `design/ArchitectureReviews/Phase2_Refactoring_Summary.md`
+- Future opportunities: `design/ArchitectureReviews/Remaining_Architectural_Opportunities.md`
+
 ### Data flow and rendering pipeline
 
 The render pipeline is: **Document → MarkdownParser → BlockVisualMap → DocsCanvas.OnRender**.
