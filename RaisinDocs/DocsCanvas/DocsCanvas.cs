@@ -288,6 +288,7 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider, IDocsC
     private readonly TableRenderer _tableRenderer;
     private readonly VisualModeManager _visualModeManager;
     private readonly ColorFormattingManager _colorFormatter;
+    private readonly FormattingKeysHandler _formattingKeysHandler;
     private readonly LayoutEngine _layoutEngine;
     private readonly RenderingContext _renderingContext;
     private readonly CursorNavigationEngine _navigationEngine;
@@ -758,6 +759,7 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider, IDocsC
         _tableRenderer = new TableRenderer((ITableServices)this, (IRenderingServices)this, (IDocumentServices)this, (IParsedContentServices)this, (ILayoutDataServices)this);
         _visualModeManager = new VisualModeManager((IVisualModeServices)this, (IDocumentServices)this, (IParsedContentServices)this, (ILoggingServices)this);
         _colorFormatter = new ColorFormattingManager((IDocumentServices)this, (IParsedContentServices)this, (ILayoutDataServices)this, (ICanvasOperations)this, (IScrollServices)this);
+        _formattingKeysHandler = new FormattingKeysHandler(this, (ICanvasOperations)this, (IDocumentServices)this);
         _layoutEngine = new LayoutEngine(
             (ILayoutDataServices)this,
             (IDocumentServices)this,

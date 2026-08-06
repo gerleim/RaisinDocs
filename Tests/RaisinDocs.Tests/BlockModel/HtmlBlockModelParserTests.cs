@@ -654,4 +654,87 @@ public class HtmlBlockModelParserTests
             "../../../BlockModel/leg_wrack_output.md");
         File.WriteAllText(outFile, markdown);
     }
+
+    [Fact]
+    public void ConvertToMarkdown_ListThenHrThenHeading_NoEmptyLinesBetweenBlocks()
+    {
+        // This tests the specific case from leg-wrack-analysis where we have:
+        // <ul><li>...</li></ul>
+        // <hr>
+        // <h2>...</h2>
+        //
+        // The markdown should NOT have empty lines between these blocks
+        // because browsers don't display them anyway.
+
+        var html = @"
+<ul>
+<li><strong>Physical rolls that require movement are reduced to a chance die.</strong></li>
+</ul>
+<hr>
+<h2>Knocked Down Tilt</h2>";
+
+        var markdown = HtmlBlockModelParser.ConvertHtmlToMarkdown(html);
+
+        markdown.Should().NotBeNull("Should parse HTML to markdown");
+
+        // Split into lines
+        var lines = markdown!.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None);
+
+        // Find the list item line
+        var listItemLine = lines.FirstOrDefault(l => l.StartsWith("- "));
+        listItemLine.Should().NotBeNull("Should have list item");
+
+        // Find the HR line
+        var hrLine = lines.FirstOrDefault(l => l == "---");
+        hrLine.Should().NotBeNull("Should have horizontal rule");
+
+        // Find the heading line
+        var headingLine = lines.FirstOrDefault(l => l.StartsWith("## "));
+        headingLine.Should().NotBeNull("Should have heading");
+
+        // Get indices
+        int listIdx = Array.IndexOf(lines, listItemLine);
+        int hrIdx = Array.IndexOf(lines, hrLine);
+        int headingIdx = Array.IndexOf(lines, headingLine);
+
+        // Verify they're in order
+        listIdx.Should().BeLessThan(hrIdx, "List should come before HR");
+        hrIdx.Should().BeLessThan(headingIdx, "HR should come before heading");
+
+        // Verify no empty lines between them
+        // Between list and HR: should be adjacent (hrIdx == listIdx + 1)
+        (hrIdx - listIdx).Should().Be(1, "HR should immediately follow list (no empty lines)");
+
+        // Between HR and heading: should be adjacent (headingIdx == hrIdx + 1)
+        (headingIdx - hrIdx).Should().Be(1, "Heading should immediately follow HR (no empty lines)");
+    }
+
+    [Fact]
+    public void ConvertToMarkdown_TwoConsecutiveParagraphs_BlankLineBetween()
+    {
+        // Paragraphs SHOULD be separated by blank lines (CommonMark spec)
+        var blocks = new List<BlockElement>
+        {
+            new BlockElement
+            {
+                Kind = BlockKind.Paragraph,
+                Content = new() { new InlineContent { Text = "First paragraph" } }
+            },
+            new BlockElement
+            {
+                Kind = BlockKind.Paragraph,
+                Content = new() { new InlineContent { Text = "Second paragraph" } }
+            }
+        };
+
+        var markdown = HtmlBlockModelParser.ConvertToMarkdown(blocks);
+
+        var lines = markdown.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None);
+
+        // Should have: "First paragraph", "", "Second paragraph"
+        lines.Should().HaveCount(3, "Should have 3 lines: para1, blank, para2");
+        lines[0].Should().Be("First paragraph");
+        lines[1].Should().Be("", "Should have blank line between paragraphs");
+        lines[2].Should().Be("Second paragraph");
+    }
 }

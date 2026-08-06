@@ -834,21 +834,10 @@ public partial class DocsCanvas
                 break;
 
             case Key.B:
-                if (IsReadOnly) { handled = false; break; }
-                if (ctrl && !IsInFencedCode) ToggleBold();
-                else handled = false;
-                break;
-
             case Key.I:
-                if (IsReadOnly) { handled = false; break; }
-                if (ctrl && !IsInFencedCode) ToggleItalic();
-                else handled = false;
-                break;
-
             case Key.K:
-                if (IsReadOnly) { handled = false; break; }
-                if (ctrl && !IsInFencedCode) InsertLink();
-                else handled = false;
+                if (!_formattingKeysHandler.TryHandleFormattingKey(e.Key, ctrl, IsReadOnly))
+                    handled = false;
                 break;
 
             case Key.F:

@@ -463,7 +463,7 @@ public partial class DocsCanvas
         }
     }
 
-    private bool IsInFencedCode => CurrentBlockKind is BlockKind.FencedCodeLine or BlockKind.IndentedCodeLine;
+    internal bool IsInFencedCode => CurrentBlockKind is BlockKind.FencedCodeLine or BlockKind.IndentedCodeLine;
 
     public bool SelectionIsBold => SelectionHasStyle(InlineStyle.Bold);
     public bool SelectionIsItalic => SelectionHasStyle(InlineStyle.Italic);

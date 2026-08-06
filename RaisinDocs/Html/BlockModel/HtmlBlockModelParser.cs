@@ -114,6 +114,13 @@ internal static class HtmlBlockModelParser
                 continue;
             }
 
+            if (TryParseThematicBreak(html, pos, out var hrBlock, out newPos))
+            {
+                blocks.Add(hrBlock);
+                pos = newPos;
+                continue;
+            }
+
             // Skip unrecognized tags
             int closePos = html.IndexOf('>', pos);
             pos = closePos >= 0 ? closePos + 1 : pos + 1;
@@ -368,6 +375,34 @@ internal static class HtmlBlockModelParser
         };
 
         endPos = closeStart + 13; // "</blockquote>" is 13 characters
+        return true;
+    }
+
+    /// <summary>
+    /// Try to parse a thematic break (horizontal rule): &lt;hr&gt; or &lt;hr/&gt;
+    /// </summary>
+    private static bool TryParseThematicBreak(string html, int startPos, out BlockElement block, out int endPos)
+    {
+        block = null!;
+        endPos = startPos;
+
+        // Check for <hr tag
+        if (!html.AsSpan(startPos).StartsWith("<hr", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        // Find the closing > (self-closing or with />)
+        int closePos = html.IndexOf('>', startPos);
+        if (closePos < 0)
+            return false;
+
+        // Create thematic break block (no content)
+        block = new BlockElement
+        {
+            Kind = BlockKind.ThematicBreak,
+            Content = new(),
+        };
+
+        endPos = closePos + 1;
         return true;
     }
 
