@@ -582,12 +582,12 @@ internal static class HtmlBlockModelParser
                         output.Add(FormatInlineSegments(block.Content, settings));
                     break;
             }
-
-            // Separate blocks with blank line
-            output.Add("");
         }
 
-        return string.Join("\n", output).TrimEnd();
+        // Join blocks without extra blank lines (browsers don't display them anyway)
+        // CommonMark spec requires blank lines only between certain block types,
+        // and most adjacent blocks work fine without them.
+        return string.Join("\n", output);
     }
 
     /// <summary>
