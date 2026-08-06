@@ -289,6 +289,7 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider, IDocsC
     private readonly VisualModeManager _visualModeManager;
     private readonly ColorFormattingManager _colorFormatter;
     private readonly FormattingKeysHandler _formattingKeysHandler;
+    private readonly NavigationKeysHandler _navigationKeysHandler;
     private readonly LayoutEngine _layoutEngine;
     private readonly RenderingContext _renderingContext;
     private readonly CursorNavigationEngine _navigationEngine;
@@ -797,6 +798,7 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider, IDocsC
             (ICanvasOperations)this,
             (INavigationServices)this);
         _navigationEngine.VisualModeManager = _visualModeManager;
+        _navigationKeysHandler = new NavigationKeysHandler(_navigationEngine, (IDocumentServices)this);
         Focusable = true;
         FocusVisualStyle = null;
         SnapsToDevicePixels = true;

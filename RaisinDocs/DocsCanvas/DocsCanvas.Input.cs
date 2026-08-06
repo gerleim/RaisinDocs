@@ -695,11 +695,15 @@ public partial class DocsCanvas
                 break;
 
             case Key.Left:
-                HandleLeft(shift, ctrl);
+                if (_navigationKeysHandler.TryHandleNavigationKey(e.Key, shift, ctrl))
+                    break;
+                HandleLeft(shift, ctrl: false);
                 break;
 
             case Key.Right:
-                HandleRight(shift, ctrl);
+                if (_navigationKeysHandler.TryHandleNavigationKey(e.Key, shift, ctrl))
+                    break;
+                HandleRight(shift, ctrl: false);
                 break;
 
             case Key.Up:
@@ -719,11 +723,15 @@ public partial class DocsCanvas
                 break;
 
             case Key.Home:
-                HandleHome(shift, ctrl);
+                if (_navigationKeysHandler.TryHandleNavigationKey(e.Key, shift, ctrl))
+                    break;
+                HandleHome(shift, ctrl: false);
                 break;
 
             case Key.End:
-                HandleEnd(shift, ctrl);
+                if (_navigationKeysHandler.TryHandleNavigationKey(e.Key, shift, ctrl))
+                    break;
+                HandleEnd(shift, ctrl: false);
                 break;
 
             case Key.A:
