@@ -528,17 +528,6 @@ internal static class HtmlToMarkdownConverter
                         hasAnyFormatting = true;
                     }
                 }
-                else if (!preMode && !closing && tagName.Equals("p".AsSpan(), StringComparison.OrdinalIgnoreCase))
-                {
-                    // For <p> tags: create a new line if there's already content
-                    // (i.e., this is not the first block element)
-                    if (lines.Count > 0 || currentLine.Count > 0)
-                    {
-                        HtmlParsingContext.FlushText(textBuf, currentLine, curStyle.fg, curStyle.bg, curStyle.bold, curStyle.italic);
-                        currentLine = new List<ColoredSegment>();
-                        lines.Add(currentLine);
-                    }
-                }
                 else if (!closing && tagName.Equals("br".AsSpan(), StringComparison.OrdinalIgnoreCase))
                 {
                     HtmlParsingContext.FlushText(textBuf, currentLine, curStyle.fg, curStyle.bg, curStyle.bold, curStyle.italic);
