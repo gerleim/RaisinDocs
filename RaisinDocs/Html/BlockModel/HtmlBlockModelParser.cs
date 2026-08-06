@@ -34,7 +34,8 @@ internal static class HtmlBlockModelParser
             return null;
 
         // Parse and convert
-        var blocks = ParseBlockStructure(contentToConvert);
+        settings ??= new();
+        var blocks = ParseBlockStructure(contentToConvert, settings);
         if (blocks.Count == 0)
             return null;
 
@@ -62,8 +63,9 @@ internal static class HtmlBlockModelParser
     /// <summary>
     /// Stage 1: Extract block-level HTML elements and return structured blocks.
     /// </summary>
-    internal static List<BlockElement> ParseBlockStructure(string html)
+    internal static List<BlockElement> ParseBlockStructure(string html, MarkdownOutputSettings? settings = null)
     {
+        settings ??= new();
         var blocks = new List<BlockElement>();
         int pos = 0;
 
@@ -77,35 +79,35 @@ internal static class HtmlBlockModelParser
                 break;
 
             // Try to match block-level tags
-            if (TryParseHeader(html, pos, out var headerBlock, out var newPos))
+            if (TryParseHeader(html, pos, out var headerBlock, out var newPos, settings))
             {
                 blocks.Add(headerBlock);
                 pos = newPos;
                 continue;
             }
 
-            if (TryParseParagraph(html, pos, out var paraBlock, out newPos))
+            if (TryParseParagraph(html, pos, out var paraBlock, out newPos, settings))
             {
                 blocks.Add(paraBlock);
                 pos = newPos;
                 continue;
             }
 
-            if (TryParseUnorderedList(html, pos, out var ulBlock, out newPos))
+            if (TryParseUnorderedList(html, pos, out var ulBlock, out newPos, settings))
             {
                 blocks.Add(ulBlock);
                 pos = newPos;
                 continue;
             }
 
-            if (TryParseOrderedList(html, pos, out var olBlock, out newPos))
+            if (TryParseOrderedList(html, pos, out var olBlock, out newPos, settings))
             {
                 blocks.Add(olBlock);
                 pos = newPos;
                 continue;
             }
 
-            if (TryParseBlockquote(html, pos, out var bqBlock, out newPos))
+            if (TryParseBlockquote(html, pos, out var bqBlock, out newPos, settings))
             {
                 blocks.Add(bqBlock);
                 pos = newPos;
@@ -123,7 +125,7 @@ internal static class HtmlBlockModelParser
     /// <summary>
     /// Try to parse a header block: &lt;h1&gt;...&lt;/h1&gt;
     /// </summary>
-    private static bool TryParseHeader(string html, int startPos, out BlockElement block, out int endPos)
+    private static bool TryParseHeader(string html, int startPos, out BlockElement block, out int endPos, MarkdownOutputSettings? settings = null)
     {
         block = null!;
         endPos = startPos;
@@ -153,7 +155,8 @@ internal static class HtmlBlockModelParser
         string headerContent = html[(tagEnd + 1)..closeStart];
 
         // Parse inline content
-        var inline = ParseInlineContent(headerContent, BlockKind.Heading1);
+        settings ??= new();
+        var inline = ParseInlineContent(headerContent, BlockKind.Heading1, settings);
 
         // Create block element
         var headerKind = level switch
@@ -180,7 +183,7 @@ internal static class HtmlBlockModelParser
     /// <summary>
     /// Try to parse a paragraph block: &lt;p&gt;...&lt;/p&gt;
     /// </summary>
-    private static bool TryParseParagraph(string html, int startPos, out BlockElement block, out int endPos)
+    private static bool TryParseParagraph(string html, int startPos, out BlockElement block, out int endPos, MarkdownOutputSettings? settings = null)
     {
         block = null!;
         endPos = startPos;
@@ -201,7 +204,8 @@ internal static class HtmlBlockModelParser
         string paraContent = html[(tagEnd + 1)..closeStart];
 
         // Parse inline content (includes <br> handling)
-        var inline = ParseInlineContent(paraContent, BlockKind.Paragraph);
+        settings ??= new();
+        var inline = ParseInlineContent(paraContent, BlockKind.Paragraph, settings);
 
         block = new BlockElement
         {
@@ -216,7 +220,7 @@ internal static class HtmlBlockModelParser
     /// <summary>
     /// Try to parse an unordered list: &lt;ul&gt;...&lt;li&gt;...&lt;/li&gt;...&lt;/ul&gt;
     /// </summary>
-    private static bool TryParseUnorderedList(string html, int startPos, out BlockElement block, out int endPos)
+    private static bool TryParseUnorderedList(string html, int startPos, out BlockElement block, out int endPos, MarkdownOutputSettings? settings = null)
     {
         block = null!;
         endPos = startPos;
@@ -237,7 +241,8 @@ internal static class HtmlBlockModelParser
         string listContent = html[(tagEnd + 1)..closeStart];
 
         // Parse list items
-        var items = ParseListItems(listContent);
+        settings ??= new();
+        var items = ParseListItems(listContent, settings);
 
         block = new BlockElement
         {
@@ -252,7 +257,7 @@ internal static class HtmlBlockModelParser
     /// <summary>
     /// Try to parse an ordered list: &lt;ol&gt;...&lt;li&gt;...&lt;/li&gt;...&lt;/ol&gt;
     /// </summary>
-    private static bool TryParseOrderedList(string html, int startPos, out BlockElement block, out int endPos)
+    private static bool TryParseOrderedList(string html, int startPos, out BlockElement block, out int endPos, MarkdownOutputSettings? settings = null)
     {
         block = null!;
         endPos = startPos;
@@ -273,7 +278,8 @@ internal static class HtmlBlockModelParser
         string listContent = html[(tagEnd + 1)..closeStart];
 
         // Parse list items
-        var items = ParseListItems(listContent);
+        settings ??= new();
+        var items = ParseListItems(listContent, settings);
 
         block = new BlockElement
         {
@@ -288,8 +294,9 @@ internal static class HtmlBlockModelParser
     /// <summary>
     /// Parse individual list items from list content.
     /// </summary>
-    private static List<BlockElement> ParseListItems(string listContent)
+    private static List<BlockElement> ParseListItems(string listContent, MarkdownOutputSettings? settings = null)
     {
+        settings ??= new();
         var items = new List<BlockElement>();
         int pos = 0;
 
@@ -313,7 +320,7 @@ internal static class HtmlBlockModelParser
             string itemContent = listContent[(tagEnd + 1)..liCloseStart];
 
             // Parse inline content of list item
-            var inline = ParseInlineContent(itemContent, BlockKind.UnorderedListItem);
+            var inline = ParseInlineContent(itemContent, BlockKind.UnorderedListItem, settings);
 
             items.Add(new BlockElement
             {
@@ -330,7 +337,7 @@ internal static class HtmlBlockModelParser
     /// <summary>
     /// Try to parse a blockquote: &lt;blockquote&gt;...&lt;/blockquote&gt;
     /// </summary>
-    private static bool TryParseBlockquote(string html, int startPos, out BlockElement block, out int endPos)
+    private static bool TryParseBlockquote(string html, int startPos, out BlockElement block, out int endPos, MarkdownOutputSettings? settings = null)
     {
         block = null!;
         endPos = startPos;
@@ -351,7 +358,8 @@ internal static class HtmlBlockModelParser
         string quoteContent = html[(tagEnd + 1)..closeStart];
 
         // Parse blockquote as inline content
-        var inline = ParseInlineContent(quoteContent, BlockKind.Blockquote);
+        settings ??= new();
+        var inline = ParseInlineContent(quoteContent, BlockKind.Blockquote, settings);
 
         block = new BlockElement
         {
@@ -367,8 +375,12 @@ internal static class HtmlBlockModelParser
     /// Stage 2: Parse inline content within a block.
     /// Handles text, formatting tags (span, strong, em), and hard breaks (br).
     /// </summary>
-    internal static List<InlineContent> ParseInlineContent(string html, BlockKind context)
+    internal static List<InlineContent> ParseInlineContent(
+        string html,
+        BlockKind context,
+        MarkdownOutputSettings? settings = null)
     {
+        settings ??= new();
         var segments = new List<InlineContent>();
         var textBuf = new StringBuilder();
         var styleStack = new Stack<InlineFormat>();
@@ -383,7 +395,7 @@ internal static class HtmlBlockModelParser
                 // Flush accumulated text
                 if (textBuf.Length > 0)
                 {
-                    var text = NormalizeWhitespace(textBuf.ToString());
+                    var text = NormalizeWhitespace(textBuf.ToString(), settings.SoftBreak);
                     if (!string.IsNullOrEmpty(text))
                     {
                         segments.Add(new InlineContent
@@ -488,7 +500,7 @@ internal static class HtmlBlockModelParser
         // Flush remaining text
         if (textBuf.Length > 0)
         {
-            var text = NormalizeWhitespace(textBuf.ToString());
+            var text = NormalizeWhitespace(textBuf.ToString(), settings.SoftBreak);
             if (!string.IsNullOrEmpty(text))
             {
                 segments.Add(new InlineContent
@@ -510,9 +522,16 @@ internal static class HtmlBlockModelParser
     {
         settings ??= new();
         var output = new List<string>();
+        BlockKind? previousBlockKind = null;
 
         foreach (var block in blocks)
         {
+            // Add blank line between consecutive paragraphs for proper separation
+            if (previousBlockKind == BlockKind.Paragraph && block.Kind == BlockKind.Paragraph)
+            {
+                output.Add("");
+            }
+
             switch (block.Kind)
             {
                 case BlockKind.Heading1:
@@ -582,11 +601,14 @@ internal static class HtmlBlockModelParser
                         output.Add(FormatInlineSegments(block.Content, settings));
                     break;
             }
+
+            // Track block kind for next iteration (for paragraph separation)
+            previousBlockKind = block.Kind;
         }
 
         // Join blocks without extra blank lines (browsers don't display them anyway)
-        // CommonMark spec requires blank lines only between certain block types,
-        // and most adjacent blocks work fine without them.
+        // CommonMark spec requires blank lines only between certain block types
+        // (e.g., between consecutive paragraphs for proper paragraph separation).
         return string.Join("\n", output);
     }
 
@@ -665,10 +687,34 @@ internal static class HtmlBlockModelParser
         return text;
     }
 
-    /// <summary>Normalize whitespace: collapse multiple spaces/newlines to single space.</summary>
-    private static string NormalizeWhitespace(string text)
+    /// <summary>
+    /// Normalize whitespace according to soft break mode.
+    /// Relaxed: collapse all whitespace to single space (matches browser behavior)
+    /// Strict: preserve line structure
+    /// </summary>
+    private static string NormalizeWhitespace(string text, DocsCanvas.SoftBreakMode softBreakMode)
     {
-        return System.Text.RegularExpressions.Regex.Replace(text.Trim(), @"\s+", " ");
+        if (string.IsNullOrWhiteSpace(text))
+            return "";
+
+        if (softBreakMode == DocsCanvas.SoftBreakMode.Relaxed)
+        {
+            // Default: collapse all whitespace to single space (matches browser rendering)
+            return System.Text.RegularExpressions.Regex.Replace(text.Trim(), @"\s+", " ");
+        }
+        else // Strict mode
+        {
+            // Preserve line breaks but normalize internal spaces on each line
+            var lines = text.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+            if (lines.Length == 0)
+                return "";
+
+            var normalized = lines
+                .Select(line => System.Text.RegularExpressions.Regex.Replace(line.Trim(), @"\s+", " "))
+                .Where(line => !string.IsNullOrEmpty(line));
+
+            return string.Join("\n", normalized);
+        }
     }
 
     /// <summary>Extract foreground and background colors from a tag's style attribute.</summary>
