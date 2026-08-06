@@ -620,4 +620,38 @@ public class HtmlBlockModelParserTests
         markdown.Should().Contain("**bold**");
         markdown.Should().Contain("text");
     }
+
+    [Fact]
+    public void RealWorldContent_LegWrackAnalysis_ParsesCorrectly()
+    {
+        // This test uses real clipboard content from a web page (leg-wrack-analysis.html)
+        // to verify the parser handles real-world HTML structure
+        string htmlFragment = File.ReadAllText(
+            Path.Combine(Path.GetDirectoryName(typeof(HtmlBlockModelParserTests).Assembly.Location) ?? "",
+                "../../../BlockModel/leg_wrack_test.html"));
+
+        if (string.IsNullOrEmpty(htmlFragment))
+        {
+            // Skip test if file not found
+            return;
+        }
+
+        var blocks = HtmlBlockModelParser.ParseBlockStructure(htmlFragment);
+        var markdown = HtmlBlockModelParser.ConvertToMarkdown(blocks);
+
+        // Basic sanity checks
+        blocks.Should().NotBeEmpty("Should parse blocks from HTML");
+        markdown.Should().NotBeNullOrEmpty("Should generate markdown");
+        markdown.Length.Should().BeGreaterThan(100, "Should produce substantial output");
+
+        // Verify it contains expected elements
+        markdown.Should().ContainAny("# ", "## ", "### ", "- ", "1. ", "> ")
+            .And.Subject.Should().Contain("Effects");
+
+        // Save markdown output for inspection
+        string outFile = Path.Combine(
+            Path.GetDirectoryName(typeof(HtmlBlockModelParserTests).Assembly.Location) ?? "",
+            "../../../BlockModel/leg_wrack_output.md");
+        File.WriteAllText(outFile, markdown);
+    }
 }

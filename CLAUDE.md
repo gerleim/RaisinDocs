@@ -8,6 +8,23 @@ Do not append `Co-Authored-By` trailers to commit messages.
 
 ## Build Commands
 
+**IMPORTANT:** Use the safe build wrapper to avoid stray process accumulation:
+
+```bash
+# Safe build (recommended - cleans up orphaned processes)
+.\build-safe.ps1 -Command build
+
+# Safe test
+.\build-safe.ps1 -Command test
+
+# Safe clean
+.\build-safe.ps1 -Command clean
+```
+
+**Why the safe wrapper?** The .NET SDK spawns background compiler processes (VBCSCompiler) and worker processes that don't always exit cleanly. Over repeated builds, they accumulate and lock NuGet cache files, causing "Microsoft.WinFX.targets" copy errors. The wrapper detects and terminates orphaned processes after each build.
+
+Legacy commands (not recommended, may accumulate stray processes):
+
 ```bash
 # Build
 dotnet build RaisinDocs.slnx
