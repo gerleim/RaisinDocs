@@ -219,6 +219,117 @@ After completing Phase 2 (interface refactoring), the DocsCanvas architecture is
 
 ---
 
+## Identified Extraction Candidates
+
+Beyond the main improvement options, these specific classes/handlers are candidates for future extraction:
+
+### PrintService (from Print.cs - 512 lines)
+**Status:** Identified, deferred pending design work  
+**Current Location:** DocsCanvas.Print.cs  
+**Components to Extract:**
+- DocsPaginator inner class (~230 lines)
+- Print() method and printing logic
+- Print-specific styling and pagination
+
+**Rationale:**
+- Print rendering should work in tandem with screen rendering
+- Needs unified render/print pipeline design first
+- Risk: Medium (core printing functionality)
+
+**Design Work Needed:**
+- Create IRenderTarget abstraction (ScreenTarget vs PrintTarget)
+- Unify RenderingContext with print pipeline
+- Integrate DocsPaginator with layout engine
+
+**Timeline:** Phase 3 (after design work)
+
+---
+
+### FormattingKeysHandler (from Input.cs - ~150 lines)
+**Status:** Identified, not yet pursued  
+**Current Location:** DocsCanvas.Input.cs, OnKeyDown() method  
+**Responsibility:** Keyboard shortcuts for formatting
+
+**Methods to Extract:**
+- Ctrl+B (bold toggle)
+- Ctrl+I (italic toggle)
+- Ctrl+` (code toggle)
+- Ctrl+~ (strikethrough toggle)
+- Other formatting key combinations
+
+**Rationale:**
+- Formatting shortcuts are self-contained
+- Clear separation from navigation/editing
+- Would improve Input.cs readability
+
+**Risk:** Low (formatting is isolated, well-tested)  
+**Effort:** 1-2 hours  
+**Priority:** Low-Medium
+
+---
+
+### NavigationKeysHandler (from Input.cs - ~100 lines)
+**Status:** Identified, not yet pursued  
+**Current Location:** DocsCanvas.Input.cs, OnKeyDown() method  
+**Responsibility:** Advanced cursor navigation shortcuts
+
+**Methods to Extract:**
+- Ctrl+Home (document start)
+- Ctrl+End (document end)
+- Ctrl+Left/Right (word navigation)
+- Other navigation shortcuts
+
+**Rationale:**
+- Navigation shortcuts are well-defined
+- Already partially extracted to CursorNavigationEngine
+- Would consolidate related logic
+
+**Risk:** Low (navigation is well-tested)  
+**Effort:** 1-2 hours  
+**Priority:** Low
+
+---
+
+### EditingKeysHandler (from Input.cs - ~150 lines)
+**Status:** Identified, not yet pursued  
+**Current Location:** DocsCanvas.Input.cs, OnKeyDown() method  
+**Responsibility:** Core editing operations via keyboard
+
+**Methods to Extract:**
+- Backspace handling
+- Delete handling
+- Undo/Redo handling
+- Undo/Redo stack management
+
+**Rationale:**
+- Editing is core functionality that deserves isolation
+- Would improve separation between input dispatch and editing
+- Complex dependency chain with Document
+
+**Risk:** High (core editing path, must maintain perfect compatibility)  
+**Effort:** 2-3 hours  
+**Priority:** Low (only if Input.cs becomes problematic)
+
+**Note:** This would require extensive testing to ensure no regressions
+
+---
+
+## Extraction Candidate Summary
+
+| Candidate | Lines | Location | Risk | Effort | Priority | Status |
+|-----------|-------|----------|------|--------|----------|--------|
+| PrintService | 512 | Print.cs | Medium | 3-4 hrs | HIGH | Deferred (design needed) |
+| FormattingKeysHandler | 150 | Input.cs | Low | 1-2 hrs | MEDIUM | Not pursued |
+| NavigationKeysHandler | 100 | Input.cs | Low | 1-2 hrs | LOW | Not pursued |
+| EditingKeysHandler | 150 | Input.cs | High | 2-3 hrs | LOW | Not pursued |
+
+**Recommendation:** 
+- Pursue PrintService after design work completed (Phase 3)
+- Consider FormattingKeysHandler if Input.cs size becomes problematic
+- Defer NavigationKeysHandler and EditingKeysHandler (low ROI, higher risk)
+
+---
+
 ## Detailed Analysis: Remaining Partial Files
 
 ### Input.cs Deep Dive
