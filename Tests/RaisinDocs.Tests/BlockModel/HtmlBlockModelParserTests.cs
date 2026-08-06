@@ -431,4 +431,193 @@ public class HtmlBlockModelParserTests
         markdown.Should().Contain("-->Red<!--/@fg-->");
         markdown.Should().Contain("and normal");
     }
+
+    // --- Phase 2: Lists Tests ---
+
+    [Fact]
+    public void ParseBlockStructure_SimpleUnorderedList_CreatesListBlock()
+    {
+        var html = "<ul><li>Item 1</li><li>Item 2</li></ul>";
+        var blocks = HtmlBlockModelParser.ParseBlockStructure(html);
+
+        blocks.Should().HaveCount(1);
+        blocks[0].Kind.Should().Be(BlockKind.UnorderedListItem);
+        blocks[0].NestedBlocks.Should().HaveCount(2);
+        blocks[0].NestedBlocks![0].Content[0].Text.Should().Be("Item 1");
+        blocks[0].NestedBlocks[1].Content[0].Text.Should().Be("Item 2");
+    }
+
+    [Fact]
+    public void ParseBlockStructure_SimpleOrderedList_CreatesOrderedListBlock()
+    {
+        var html = "<ol><li>First</li><li>Second</li></ol>";
+        var blocks = HtmlBlockModelParser.ParseBlockStructure(html);
+
+        blocks.Should().HaveCount(1);
+        blocks[0].Kind.Should().Be(BlockKind.OrderedListItem);
+        blocks[0].NestedBlocks.Should().HaveCount(2);
+        blocks[0].NestedBlocks![0].Content[0].Text.Should().Be("First");
+        blocks[0].NestedBlocks[1].Content[0].Text.Should().Be("Second");
+    }
+
+    [Fact]
+    public void ParseBlockStructure_SimpleBlockquote_CreatesBlockquoteBlock()
+    {
+        var html = "<blockquote>A wise quote</blockquote>";
+        var blocks = HtmlBlockModelParser.ParseBlockStructure(html);
+
+        blocks.Should().HaveCount(1);
+        blocks[0].Kind.Should().Be(BlockKind.Blockquote);
+        blocks[0].Content.Should().HaveCount(1);
+        blocks[0].Content[0].Text.Should().Be("A wise quote");
+    }
+
+    [Fact]
+    public void ParseBlockStructure_ListWithFormattedItems_PreservesFormatting()
+    {
+        var html = "<ul><li>Item with <strong>bold</strong></li></ul>";
+        var blocks = HtmlBlockModelParser.ParseBlockStructure(html);
+
+        blocks.Should().HaveCount(1);
+        blocks[0].NestedBlocks.Should().HaveCount(1);
+        var item = blocks[0].NestedBlocks![0];
+
+        // Should have multiple segments: "Item with ", "bold"
+        item.Content.Should().HaveCountGreaterThanOrEqualTo(1);
+        var boldSegment = item.Content.FirstOrDefault(s => s.Format.Bold);
+        boldSegment.Should().NotBeNull();
+        boldSegment!.Text.Should().Be("bold");
+    }
+
+    [Fact]
+    public void ConvertToMarkdown_UnorderedList_FormatsWithDashes()
+    {
+        var blocks = new List<BlockElement>
+        {
+            new BlockElement
+            {
+                Kind = BlockKind.UnorderedListItem,
+                NestedBlocks = new List<BlockElement>
+                {
+                    new BlockElement
+                    {
+                        Kind = BlockKind.UnorderedListItem,
+                        Content = new List<InlineContent>
+                        {
+                            new InlineContent { Text = "Item 1" }
+                        }
+                    },
+                    new BlockElement
+                    {
+                        Kind = BlockKind.UnorderedListItem,
+                        Content = new List<InlineContent>
+                        {
+                            new InlineContent { Text = "Item 2" }
+                        }
+                    }
+                }
+            }
+        };
+
+        var markdown = HtmlBlockModelParser.ConvertToMarkdown(blocks);
+
+        markdown.Should().Contain("- Item 1");
+        markdown.Should().Contain("- Item 2");
+    }
+
+    [Fact]
+    public void ConvertToMarkdown_OrderedList_FormatsWithNumbers()
+    {
+        var blocks = new List<BlockElement>
+        {
+            new BlockElement
+            {
+                Kind = BlockKind.OrderedListItem,
+                NestedBlocks = new List<BlockElement>
+                {
+                    new BlockElement
+                    {
+                        Kind = BlockKind.OrderedListItem,
+                        Content = new List<InlineContent>
+                        {
+                            new InlineContent { Text = "First" }
+                        }
+                    },
+                    new BlockElement
+                    {
+                        Kind = BlockKind.OrderedListItem,
+                        Content = new List<InlineContent>
+                        {
+                            new InlineContent { Text = "Second" }
+                        }
+                    }
+                }
+            }
+        };
+
+        var markdown = HtmlBlockModelParser.ConvertToMarkdown(blocks);
+
+        markdown.Should().Contain("1. First");
+        markdown.Should().Contain("2. Second");
+    }
+
+    [Fact]
+    public void ConvertToMarkdown_Blockquote_FormatsWithGreaterThan()
+    {
+        var blocks = new List<BlockElement>
+        {
+            new BlockElement
+            {
+                Kind = BlockKind.Blockquote,
+                Content = new List<InlineContent>
+                {
+                    new InlineContent { Text = "A famous quote" }
+                }
+            }
+        };
+
+        var markdown = HtmlBlockModelParser.ConvertToMarkdown(blocks);
+
+        markdown.Should().Contain("> A famous quote");
+    }
+
+    [Fact]
+    public void FullPipeline_ListFollowedByParagraph_SeparatesBlocks()
+    {
+        var html = "<ul><li>Item</li></ul><p>After list</p>";
+        var blocks = HtmlBlockModelParser.ParseBlockStructure(html);
+        var markdown = HtmlBlockModelParser.ConvertToMarkdown(blocks);
+
+        var lines = markdown.Split('\n').Where(l => !string.IsNullOrWhiteSpace(l)).ToList();
+        lines.Should().HaveCountGreaterThanOrEqualTo(2);
+        lines[0].Should().Contain("- Item");
+        lines.Should().ContainSingle(l => l.Contains("After list"));
+    }
+
+    [Fact]
+    public void FullPipeline_HeaderBlockquoteParagraph_AllSeparated()
+    {
+        var html = "<h2>Title</h2><blockquote>Quote</blockquote><p>Text</p>";
+        var blocks = HtmlBlockModelParser.ParseBlockStructure(html);
+        var markdown = HtmlBlockModelParser.ConvertToMarkdown(blocks);
+
+        markdown.Should().Contain("## Title");
+        markdown.Should().Contain("> Quote");
+        markdown.Should().Contain("Text");
+
+        var lines = markdown.Split('\n').Where(l => !string.IsNullOrWhiteSpace(l)).ToList();
+        lines.Should().HaveCountGreaterThanOrEqualTo(3);
+    }
+
+    [Fact]
+    public void FullPipeline_ListWithFormattedItems_PreservesFormatting()
+    {
+        var html = "<ul><li>Item with <strong>bold</strong> text</li></ul>";
+        var blocks = HtmlBlockModelParser.ParseBlockStructure(html);
+        var markdown = HtmlBlockModelParser.ConvertToMarkdown(blocks);
+
+        markdown.Should().Contain("- Item with");
+        markdown.Should().Contain("**bold**");
+        markdown.Should().Contain("text");
+    }
 }

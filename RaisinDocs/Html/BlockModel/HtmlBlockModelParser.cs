@@ -47,6 +47,27 @@ internal static class HtmlBlockModelParser
                 continue;
             }
 
+            if (TryParseUnorderedList(html, pos, out var ulBlock, out newPos))
+            {
+                blocks.Add(ulBlock);
+                pos = newPos;
+                continue;
+            }
+
+            if (TryParseOrderedList(html, pos, out var olBlock, out newPos))
+            {
+                blocks.Add(olBlock);
+                pos = newPos;
+                continue;
+            }
+
+            if (TryParseBlockquote(html, pos, out var bqBlock, out newPos))
+            {
+                blocks.Add(bqBlock);
+                pos = newPos;
+                continue;
+            }
+
             // Skip unrecognized tags
             int closePos = html.IndexOf('>', pos);
             pos = closePos >= 0 ? closePos + 1 : pos + 1;
@@ -145,6 +166,156 @@ internal static class HtmlBlockModelParser
         };
 
         endPos = closeStart + 4; // "</p>" is 4 characters
+        return true;
+    }
+
+    /// <summary>
+    /// Try to parse an unordered list: &lt;ul&gt;...&lt;li&gt;...&lt;/li&gt;...&lt;/ul&gt;
+    /// </summary>
+    private static bool TryParseUnorderedList(string html, int startPos, out BlockElement block, out int endPos)
+    {
+        block = null!;
+        endPos = startPos;
+
+        if (!html.AsSpan(startPos).StartsWith("<ul", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        // Find closing tag
+        int closeStart = html.IndexOf("</ul>", startPos, StringComparison.OrdinalIgnoreCase);
+        if (closeStart < 0)
+            return false;
+
+        // Extract content between tags
+        int tagEnd = html.IndexOf('>', startPos);
+        if (tagEnd < 0)
+            return false;
+
+        string listContent = html[(tagEnd + 1)..closeStart];
+
+        // Parse list items
+        var items = ParseListItems(listContent);
+
+        block = new BlockElement
+        {
+            Kind = BlockKind.UnorderedListItem,
+            NestedBlocks = items,
+        };
+
+        endPos = closeStart + 5; // "</ul>" is 5 characters
+        return true;
+    }
+
+    /// <summary>
+    /// Try to parse an ordered list: &lt;ol&gt;...&lt;li&gt;...&lt;/li&gt;...&lt;/ol&gt;
+    /// </summary>
+    private static bool TryParseOrderedList(string html, int startPos, out BlockElement block, out int endPos)
+    {
+        block = null!;
+        endPos = startPos;
+
+        if (!html.AsSpan(startPos).StartsWith("<ol", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        // Find closing tag
+        int closeStart = html.IndexOf("</ol>", startPos, StringComparison.OrdinalIgnoreCase);
+        if (closeStart < 0)
+            return false;
+
+        // Extract content between tags
+        int tagEnd = html.IndexOf('>', startPos);
+        if (tagEnd < 0)
+            return false;
+
+        string listContent = html[(tagEnd + 1)..closeStart];
+
+        // Parse list items
+        var items = ParseListItems(listContent);
+
+        block = new BlockElement
+        {
+            Kind = BlockKind.OrderedListItem,
+            NestedBlocks = items,
+        };
+
+        endPos = closeStart + 5; // "</ol>" is 5 characters
+        return true;
+    }
+
+    /// <summary>
+    /// Parse individual list items from list content.
+    /// </summary>
+    private static List<BlockElement> ParseListItems(string listContent)
+    {
+        var items = new List<BlockElement>();
+        int pos = 0;
+
+        while (pos < listContent.Length)
+        {
+            // Find next <li> tag
+            int liStart = listContent.IndexOf("<li", pos, StringComparison.OrdinalIgnoreCase);
+            if (liStart < 0)
+                break;
+
+            // Find closing </li>
+            int liCloseStart = listContent.IndexOf("</li>", liStart, StringComparison.OrdinalIgnoreCase);
+            if (liCloseStart < 0)
+                break;
+
+            // Extract content between tags
+            int tagEnd = listContent.IndexOf('>', liStart);
+            if (tagEnd < 0)
+                break;
+
+            string itemContent = listContent[(tagEnd + 1)..liCloseStart];
+
+            // Parse inline content of list item
+            var inline = ParseInlineContent(itemContent, BlockKind.UnorderedListItem);
+
+            items.Add(new BlockElement
+            {
+                Kind = BlockKind.UnorderedListItem,
+                Content = inline,
+            });
+
+            pos = liCloseStart + 5; // "</li>" is 5 characters
+        }
+
+        return items;
+    }
+
+    /// <summary>
+    /// Try to parse a blockquote: &lt;blockquote&gt;...&lt;/blockquote&gt;
+    /// </summary>
+    private static bool TryParseBlockquote(string html, int startPos, out BlockElement block, out int endPos)
+    {
+        block = null!;
+        endPos = startPos;
+
+        if (!html.AsSpan(startPos).StartsWith("<blockquote", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        // Find closing tag
+        int closeStart = html.IndexOf("</blockquote>", startPos, StringComparison.OrdinalIgnoreCase);
+        if (closeStart < 0)
+            return false;
+
+        // Extract content between tags
+        int tagEnd = html.IndexOf('>', startPos);
+        if (tagEnd < 0)
+            return false;
+
+        string quoteContent = html[(tagEnd + 1)..closeStart];
+
+        // Parse blockquote as inline content
+        var inline = ParseInlineContent(quoteContent, BlockKind.Blockquote);
+
+        block = new BlockElement
+        {
+            Kind = BlockKind.Blockquote,
+            Content = inline,
+        };
+
+        endPos = closeStart + 13; // "</blockquote>" is 13 characters
         return true;
     }
 
@@ -318,6 +489,42 @@ internal static class HtmlBlockModelParser
                     {
                         var paraLines = FormatParagraph(block.Content, settings);
                         output.AddRange(paraLines);
+                        break;
+                    }
+
+                case BlockKind.UnorderedListItem:
+                    {
+                        if (block.NestedBlocks != null)
+                        {
+                            foreach (var item in block.NestedBlocks)
+                            {
+                                string itemText = FormatInlineSegments(item.Content, settings);
+                                output.Add($"- {itemText}");
+                            }
+                        }
+                        break;
+                    }
+
+                case BlockKind.OrderedListItem:
+                    {
+                        if (block.NestedBlocks != null)
+                        {
+                            int itemNum = 1;
+                            foreach (var item in block.NestedBlocks)
+                            {
+                                string itemText = FormatInlineSegments(item.Content, settings);
+                                output.Add($"{itemNum}. {itemText}");
+                                itemNum++;
+                            }
+                        }
+                        break;
+                    }
+
+                case BlockKind.Blockquote:
+                    {
+                        var quoteLines = FormatParagraph(block.Content, settings);
+                        foreach (var line in quoteLines)
+                            output.Add($"> {line}");
                         break;
                     }
 
