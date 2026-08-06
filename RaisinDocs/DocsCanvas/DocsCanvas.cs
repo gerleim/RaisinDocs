@@ -917,7 +917,11 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider, IDocsC
         {
             string? html = ClipboardHelper.GetHtml(Logger);
             if (html != null)
-                pasteText = HtmlToMarkdownConverter.ConvertToColoredMarkdown(html);
+            {
+                // Use new semantic block model parser with color preservation
+                var settings = new MarkdownOutputSettings { PreserveColors = true };
+                pasteText = HtmlBlockModelParser.ConvertHtmlToMarkdown(html, settings);
+            }
         }
         pasteText ??= ClipboardHelper.GetText(Logger);
         if (!string.IsNullOrEmpty(pasteText))

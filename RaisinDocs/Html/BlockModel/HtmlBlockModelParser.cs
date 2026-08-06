@@ -12,9 +12,53 @@ namespace RaisinDocs;
 /// 1. ParseBlockStructure(): Extract block boundaries (h1-6, p, ul, ol, etc.)
 /// 2. ParseInlineContent(): Character parsing within each block's content
 /// 3. ConvertToMarkdown(): Apply settings and format to final markdown
+///
+/// Public entry point: ConvertHtmlToMarkdown() handles both CF_HTML and raw HTML.
 /// </summary>
 internal static class HtmlBlockModelParser
 {
+    /// <summary>
+    /// Converts HTML from clipboard format (CF_HTML) or raw HTML to markdown.
+    /// Returns null if no content is found or parsing fails.
+    /// </summary>
+    internal static string? ConvertHtmlToMarkdown(string html, MarkdownOutputSettings? settings = null)
+    {
+        if (string.IsNullOrWhiteSpace(html))
+            return null;
+
+        // Extract fragment from CF_HTML format if present
+        string? fragment = ExtractCfHtmlFragment(html);
+        string contentToConvert = fragment ?? html;
+
+        if (string.IsNullOrWhiteSpace(contentToConvert))
+            return null;
+
+        // Parse and convert
+        var blocks = ParseBlockStructure(contentToConvert);
+        if (blocks.Count == 0)
+            return null;
+
+        return ConvertToMarkdown(blocks, settings);
+    }
+
+    /// <summary>
+    /// Extracts the HTML fragment from CF_HTML clipboard format.
+    /// Returns null if markers are not found.
+    /// </summary>
+    private static string? ExtractCfHtmlFragment(string cfHtml)
+    {
+        const string startMarker = "<!--StartFragment-->";
+        const string endMarker = "<!--EndFragment-->";
+
+        int start = cfHtml.IndexOf(startMarker, StringComparison.Ordinal);
+        if (start < 0) return null;
+        start += startMarker.Length;
+
+        int end = cfHtml.IndexOf(endMarker, start, StringComparison.Ordinal);
+        if (end < 0) return null;
+
+        return cfHtml[start..end];
+    }
     /// <summary>
     /// Stage 1: Extract block-level HTML elements and return structured blocks.
     /// </summary>

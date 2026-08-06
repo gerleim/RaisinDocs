@@ -3,8 +3,14 @@ using System.Text;
 namespace RaisinDocs;
 
 /// <summary>
-/// Converts HTML content (typically from clipboard) to RaisinDocs markdown.
+/// DEPRECATED: Use HtmlBlockModelParser.ConvertHtmlToMarkdown() instead.
+///
+/// Legacy converter for HTML content (typically from clipboard) to RaisinDocs markdown.
 /// Handles structural elements (headers, blockquotes, rules) and inline formatting (bold, italic, colors).
+///
+/// This class is kept for backward compatibility with existing tests and use cases.
+/// The clipboard paste flow (DocsCanvas.PerformPaste) now uses HtmlBlockModelParser,
+/// which provides a cleaner, more maintainable architecture.
 ///
 /// Conversion pipeline:
 /// 1. Extract HTML fragment from CF_HTML clipboard format
@@ -13,6 +19,7 @@ namespace RaisinDocs;
 /// 4. Convert segments to markdown with appropriate syntax
 /// 5. Merge adjacent segments and apply div color wrapping
 /// </summary>
+[System.Obsolete("Use HtmlBlockModelParser.ConvertHtmlToMarkdown() instead", false)]
 internal static class HtmlToMarkdownConverter
 {
     /// <summary>

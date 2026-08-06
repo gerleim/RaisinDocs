@@ -126,10 +126,10 @@ Each extracted class depends on specific interfaces, not on DocsCanvas directly:
 - ✅ Improved performance (no casting overhead in hot paths)
 
 **See Also:**
-- Full architecture documentation: `design/Architecture_Overview.md`
-- Refactoring plan: `design/ArchitectureReviews/DocsCanvas_Interface_Refactoring_Plan.md`
-- Completion summary: `design/ArchitectureReviews/Phase2_Refactoring_Summary.md`
-- Future opportunities: `design/ArchitectureReviews/Remaining_Architectural_Opportunities.md`
+- Full architecture documentation: `design/DocsCanvas_Refactoring/Architecture_Overview.md`
+- Refactoring plan: `design/DocsCanvas_Refactoring/DocsCanvas_Interface_Refactoring_Plan.md`
+- Completion summary: `design/DocsCanvas_Refactoring/Phase2_Refactoring_Summary.md`
+- Future opportunities: `design/DocsCanvas_Refactoring/Remaining_Architectural_Opportunities.md`
 
 ### Data flow and rendering pipeline
 
