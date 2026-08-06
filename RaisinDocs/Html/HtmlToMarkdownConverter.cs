@@ -407,7 +407,6 @@ internal static class HtmlToMarkdownConverter
         int pos = contentStart;
         var textBuf = new StringBuilder();
         var styleStack = new List<(RgbColor? fg, RgbColor? bg, bool bold, bool italic)>();
-        bool hadParagraph = false;
 
         while (pos < contentEnd)
         {
@@ -446,6 +445,17 @@ internal static class HtmlToMarkdownConverter
                         }
 
                         pos = blockEnd + markdownBlockEnd.Length;
+
+                        // Skip newline after MARKDOWN_BLOCK and create a fresh currentLine
+                        // to separate from next block element (e.g., paragraph)
+                        if (pos < contentEnd && html[pos] == '\n')
+                        {
+                            pos++;
+                            // Create a fresh line for the next element
+                            currentLine = new List<ColoredSegment>();
+                            lines.Add(currentLine);
+                        }
+
                         continue;
                     }
                 }
@@ -520,13 +530,14 @@ internal static class HtmlToMarkdownConverter
                 }
                 else if (!preMode && !closing && tagName.Equals("p".AsSpan(), StringComparison.OrdinalIgnoreCase))
                 {
-                    if (hadParagraph)
+                    // For <p> tags: create a new line if there's already content
+                    // (i.e., this is not the first block element)
+                    if (lines.Count > 0 || currentLine.Count > 0)
                     {
                         HtmlParsingContext.FlushText(textBuf, currentLine, curStyle.fg, curStyle.bg, curStyle.bold, curStyle.italic);
                         currentLine = new List<ColoredSegment>();
                         lines.Add(currentLine);
                     }
-                    hadParagraph = true;
                 }
                 else if (!closing && tagName.Equals("br".AsSpan(), StringComparison.OrdinalIgnoreCase))
                 {
@@ -571,6 +582,12 @@ internal static class HtmlToMarkdownConverter
         HtmlParsingContext.FlushText(textBuf, currentLine, finalStyle.fg, finalStyle.bg, finalStyle.bold, finalStyle.italic);
 
         if (!hasAnyFormatting) return null;
+
+        // Ensure currentLine is added to lines if it's not already there
+        if (currentLine.Count > 0 && (lines.Count == 0 || lines[^1] != currentLine))
+        {
+            lines.Add(currentLine);
+        }
 
         HtmlParsingContext.MergeAdjacentSegments(lines);
 
