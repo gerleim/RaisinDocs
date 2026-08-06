@@ -373,18 +373,22 @@ public class BlockVisualMap
             }
         }
 
-        var colorTagRanges = MarkdownParser.FindInlineColorTagRanges(blockText);
-        if (colorTagRanges != null)
+        // Only hide color tag syntax in non-code blocks (code blocks preserve literal content)
+        if (parsed.Kind is not BlockKind.FencedCodeLine and not BlockKind.IndentedCodeLine)
         {
-            foreach (var tag in colorTagRanges)
-                ranges.Add(tag);
-        }
+            var colorTagRanges = MarkdownParser.FindInlineColorTagRanges(blockText);
+            if (colorTagRanges != null)
+            {
+                foreach (var tag in colorTagRanges)
+                    ranges.Add(tag);
+            }
 
-        var htmlCommentRanges = MarkdownParser.FindHtmlCommentRanges(blockText);
-        if (htmlCommentRanges != null)
-        {
-            foreach (var comment in htmlCommentRanges)
-                ranges.Add(comment);
+            var htmlCommentRanges = MarkdownParser.FindHtmlCommentRanges(blockText);
+            if (htmlCommentRanges != null)
+            {
+                foreach (var comment in htmlCommentRanges)
+                    ranges.Add(comment);
+            }
         }
 
         ranges.Sort((a, b) => a.Start.CompareTo(b.Start));

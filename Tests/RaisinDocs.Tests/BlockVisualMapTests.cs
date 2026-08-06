@@ -1327,4 +1327,44 @@ public class BlockVisualMapTests
         map.ReplacementPrefix.Should().StartWith("    ");
         map.ReplacementPrefix.Should().Contain("☐");
     }
+
+    // --- HTML Color Tags in Code Blocks ---
+
+    [Fact]
+    public void HtmlColorTag_InFencedCode_NotHidden()
+    {
+        // HTML color comments inside code blocks should remain visible in visual mode
+        // because they are literal content being displayed as code
+        var htmlComment = "<!--@fg:red-->text<!--/@fg-->";
+        var map = ComputeMap(htmlComment, BlockKind.FencedCodeLine);
+
+        // Verify that all characters are visible (nothing hidden)
+        for (int i = 0; i < htmlComment.Length; i++)
+            map.IsHidden(i).Should().BeFalse(
+                because: $"HTML comment character at position {i} in code block should be visible");
+    }
+
+    [Fact]
+    public void HtmlColorTag_InParagraph_OpeningTagHidden()
+    {
+        // HTML color comments in regular paragraphs should be hidden
+        // The opening tag <!--@fg:red--> and closing tag <!--/@fg--> should be hidden
+        var text = "<!--@fg:red-->error<!--/@fg-->";
+        var map = ComputeMap(text, BlockKind.Paragraph);
+
+        // Opening tag should be hidden: positions 0-13 (<!--@fg:red-->)
+        for (int i = 0; i < 14; i++)
+            map.IsHidden(i).Should().BeTrue(
+                because: $"Opening HTML color tag character at position {i} should be hidden");
+
+        // Content "error" should be visible: positions 14-18
+        for (int i = 14; i < 19; i++)
+            map.IsHidden(i).Should().BeFalse(
+                because: $"Color tag content character at position {i} should be visible");
+
+        // Closing tag should be hidden: positions 19-29 (<!--/@fg-->)
+        for (int i = 19; i < 30; i++)
+            map.IsHidden(i).Should().BeTrue(
+                because: $"Closing HTML color tag character at position {i} should be hidden");
+    }
 }
