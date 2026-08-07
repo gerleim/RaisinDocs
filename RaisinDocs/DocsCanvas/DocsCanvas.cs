@@ -748,7 +748,6 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider, IDocsC
     }
 
     private readonly DispatcherTimer _undoSealTimer;
-    private enum LastActionKind { None, Typing, Deleting }
     private LastActionKind _lastAction;
 
     public DocsCanvas()

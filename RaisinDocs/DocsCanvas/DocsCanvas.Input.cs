@@ -792,7 +792,10 @@ public partial class DocsCanvas
                     {
                         string? html = ClipboardHelper.GetHtml(Logger);
                         if (html != null)
-                            pasteText = HtmlToMarkdownConverter.ConvertToColoredMarkdown(html);
+                        {
+                            var settings = new MarkdownOutputSettings { PreserveColors = true };
+                            pasteText = HtmlBlockModelParser.ConvertHtmlToMarkdown(html, settings);
+                        }
                     }
                     pasteText ??= ClipboardHelper.GetText(Logger);
                     if (!string.IsNullOrEmpty(pasteText))

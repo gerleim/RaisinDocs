@@ -1,5 +1,6 @@
 using FluentAssertions;
 using Xunit;
+using System.Text;
 
 namespace RaisinDocs.Tests.BlockModel;
 
@@ -736,5 +737,74 @@ public class HtmlBlockModelParserTests
         lines[0].Should().Be("First paragraph");
         lines[1].Should().Be("", "Should have blank line between paragraphs");
         lines[2].Should().Be("Second paragraph");
+    }
+
+    [Fact]
+    public void Integration_Document_Paste_ActualClipboardContent_NoEmptyLines()
+    {
+        // This test uses the ACTUAL clipboard content from Chrome (CF_HTML format)
+        var cfHtml = @"Version:0.9
+StartHTML:0000000185
+EndHTML:0000001903
+StartFragment:0000000221
+EndFragment:0000001867
+SourceURL:file:///D:/Sources/Raisin/RaisinDocs/design/leg-wrack-analysis2.html
+<html>
+<body>
+<!--StartFragment--><ul style=""color: rgb(0, 0, 0); font-family: &quot;Times New Roman&quot;;""><li data-section-id=""1ylqh14"" data-start=""509"" data-end=""580""><strong data-start=""511"" data-end=""580"">Physical rolls that require movement are reduced to a chance die.</strong></li></ul><hr data-start=""582"" data-end=""585"" style=""font-family: &quot;Times New Roman&quot;;""><h2 data-section-id=""dlj78x"" data-start=""587"" data-end=""607"" style=""color: rgb(0, 0, 0);"">Knocked Down Tilt</h2><!--EndFragment-->
+</body>
+</html>";
+
+        // Convert HTML to markdown using the new parser
+        var settings = new MarkdownOutputSettings { PreserveColors = true };
+        var markdown = HtmlBlockModelParser.ConvertHtmlToMarkdown(cfHtml, settings);
+
+        // Verify the conversion is correct
+        markdown.Should().NotBeNullOrEmpty();
+
+        // Parse into document and verify structure
+        var doc = new Document();
+        doc.Paste(markdown!);
+
+        // Verify we have exactly 3 blocks (no empty lines added)
+        doc.BlockCount.Should().Be(3);
+
+        // Verify each block is what we expect
+        doc.GetBlockText(0).Should().Be("- Physical rolls that require movement are reduced to a chance die.");
+        doc.GetBlockText(1).Should().Be("---");
+        doc.GetBlockText(2).Should().Be("## Knocked Down Tilt");
+    }
+
+    [Fact]
+    public void Integration_Document_Paste_ListThenHrThenHeading_NoEmptyLines()
+    {
+        // Integration test: HTML → ConvertHtmlToMarkdown → Document.Paste() → check document contents
+        var html = @"<ul><li><strong>Physical rolls that require movement are reduced to a chance die.</strong></li></ul><hr><h2>Knocked Down Tilt</h2>";
+
+        // Step 1: Convert HTML to markdown
+        var markdown = HtmlBlockModelParser.ConvertHtmlToMarkdown(html);
+        markdown.Should().NotBeNull("Should convert HTML to markdown");
+
+        // Verify parser output has no empty lines (sanity check)
+        var parserLines = markdown!.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None);
+        var nonEmptyParserLines = parserLines.Where(l => !string.IsNullOrEmpty(l)).ToList();
+        nonEmptyParserLines.Should().HaveCount(3, "Parser should produce 3 non-empty lines");
+
+        // Step 2: Paste into document
+        var doc = new Document();
+        doc.Paste(markdown);
+
+        // Step 3: Get all lines from document
+        var docLines = new List<string>();
+        for (int i = 0; i < doc.BlockCount; i++)
+        {
+            docLines.Add(doc.GetBlockText(i));
+        }
+
+        // Step 4: Check if Document.Paste added empty lines
+        var nonEmptyDocLines = docLines.Where(l => !string.IsNullOrEmpty(l.Trim())).ToList();
+
+        // If Document.Paste is adding empty lines, we'll see more lines here than in parser output
+        nonEmptyDocLines.Should().HaveCount(3, $"Document should have 3 non-empty lines after paste, but has: {string.Join(", ", nonEmptyDocLines.Select((l, i) => $"[{i}]='{l}'"))}");
     }
 }
