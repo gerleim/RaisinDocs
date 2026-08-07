@@ -11,8 +11,8 @@ namespace RaisinDocs;
 /// </summary>
 
 /// <summary>
-/// Access to the Document model: text storage, cursor, selection, and mutations.
-/// Used by: LayoutEngine, CursorNavigationEngine, FindAndReplaceController, SpellCheckController
+/// Access to the Document model: text storage, cursor, selection, mutations, and undo/redo.
+/// Used by: LayoutEngine, CursorNavigationEngine, FindAndReplaceController, SpellCheckController, EditingKeysHandler
 /// </summary>
 internal interface IDocumentServices
 {
@@ -20,6 +20,12 @@ internal interface IDocumentServices
     int BlockCount { get; }
     string GetBlockText(int blockIndex);
     int GetBlockLength(int blockIndex);
+
+    // Undo/Redo support
+    void Undo();
+    void Redo();
+    void BeginUndoGroup();
+    void SealUndoGroup();
 }
 
 /// <summary>
@@ -168,7 +174,45 @@ internal interface ILoggingServices
     IDocsLogger? Logger { get; }
 }
 
-/// <summary>1
+/// <summary>
+/// Editing operations: backspace, delete, undo, redo, and undo grouping management.
+/// Provides access to editing-specific functionality and state management.
+/// Used by: EditingKeysHandler
+/// </summary>
+internal interface IEditingServices
+{
+    /// <summary>Gets whether the current edit mode is visual (vs source).</summary>
+    bool IsVisual { get; }
+
+    /// <summary>Gets the last action kind for undo grouping purposes.</summary>
+    LastActionKind LastAction { get; set; }
+
+    /// <summary>Tries to get a rectangular table selection (if in a table with Shift+Arrow drag).</summary>
+    (int StartCol, int EndCol, int StartBlock, int EndBlock, TableInfo Table)? TryGetTableRectSelection();
+
+    /// <summary>Clears (deletes content of) table cells in a rectangular range.</summary>
+    void ClearTableRectCells((int StartCol, int EndCol, int StartBlock, int EndBlock, TableInfo Table) rect);
+
+    /// <summary>Handles backspace in visual mode. Returns true if text was changed.</summary>
+    bool HandleBackVisual();
+
+    /// <summary>Handles backspace in source mode. Returns true if text was changed.</summary>
+    bool HandleBackSource();
+
+    /// <summary>Handles delete in visual mode. Returns true if text was changed.</summary>
+    bool HandleDeleteVisual();
+
+    /// <summary>Handles delete in source mode. Returns true if text was changed.</summary>
+    bool HandleDeleteSource();
+
+    /// <summary>Resets the undo seal timer to allow grouping of consecutive editing actions.</summary>
+    void ResetUndoSealTimer();
+
+    /// <summary>Stops the undo seal timer to finalize the current undo group.</summary>
+    void StopUndoSealTimer();
+}
+
+/// <summary>
 /// Core canvas operations: state management, rendering control, UI components.
 /// Used by: RenderingContext, FindAndReplaceController, and extracted classes for operations
 /// </summary>
@@ -201,6 +245,7 @@ internal interface IDocsCanvasServices :
     IImageServices,
     ISearchServices,
     ILoggingServices,
+    IEditingServices,
     ICanvasOperations
 {
     // Composite interface - combines all specialized service interfaces

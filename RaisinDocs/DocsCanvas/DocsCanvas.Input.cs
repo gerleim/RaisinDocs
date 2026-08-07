@@ -685,13 +685,15 @@ public partial class DocsCanvas
                 break;
 
             case Key.Back:
-                if (IsReadOnly) { handled = false; break; }
-                HandleBack(shift, out textChanged);
+                if (_editingKeysHandler.TryHandleEditingKey(e.Key, ctrl, shift, IsReadOnly, out textChanged))
+                    break;
+                handled = false;
                 break;
 
             case Key.Delete:
-                if (IsReadOnly) { handled = false; break; }
-                HandleDelete(shift, out textChanged);
+                if (_editingKeysHandler.TryHandleEditingKey(e.Key, ctrl, shift, IsReadOnly, out textChanged))
+                    break;
+                handled = false;
                 break;
 
             case Key.Left:
@@ -821,27 +823,15 @@ public partial class DocsCanvas
                 break;
 
             case Key.Z:
-                if (IsReadOnly) { handled = false; break; }
-                if (ctrl)
-                {
-                    _undoSealTimer.Stop();
-                    _doc.Undo();
-                    _lastAction = LastActionKind.None;
-                    textChanged = true;
-                }
-                else handled = false;
+                if (ctrl && _editingKeysHandler.TryHandleEditingKey(e.Key, ctrl, shift, IsReadOnly, out textChanged))
+                    break;
+                handled = false;
                 break;
 
             case Key.Y:
-                if (IsReadOnly) { handled = false; break; }
-                if (ctrl)
-                {
-                    _undoSealTimer.Stop();
-                    _doc.Redo();
-                    _lastAction = LastActionKind.None;
-                    textChanged = true;
-                }
-                else handled = false;
+                if (ctrl && _editingKeysHandler.TryHandleEditingKey(e.Key, ctrl, shift, IsReadOnly, out textChanged))
+                    break;
+                handled = false;
                 break;
 
             case Key.B:

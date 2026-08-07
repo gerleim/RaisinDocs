@@ -15,6 +15,10 @@ public partial class DocsCanvas
     int IDocumentServices.BlockCount => BlockCount;
     string IDocumentServices.GetBlockText(int blockIndex) => _doc.GetBlockText(blockIndex);
     int IDocumentServices.GetBlockLength(int blockIndex) => _doc.GetBlockLength(blockIndex);
+    void IDocumentServices.Undo() => _doc.Undo();
+    void IDocumentServices.Redo() => _doc.Redo();
+    void IDocumentServices.BeginUndoGroup() => _doc.BeginUndoGroup();
+    void IDocumentServices.SealUndoGroup() => _doc.SealUndoGroup();
 
     // ====== ILayoutDataServices ======
     List<VisualLine> ILayoutDataServices.VisualLines => _visualLines;
@@ -135,6 +139,22 @@ public partial class DocsCanvas
 
     // ====== ILoggingServices ======
     IDocsLogger? ILoggingServices.Logger => Logger;
+
+    // ====== IEditingServices ======
+    bool IEditingServices.IsVisual => IsVisual;
+    LastActionKind IEditingServices.LastAction
+    {
+        get => _lastAction;
+        set => _lastAction = value;
+    }
+    (int StartCol, int EndCol, int StartBlock, int EndBlock, TableInfo Table)? IEditingServices.TryGetTableRectSelection() => TryGetTableRectSelection();
+    void IEditingServices.ClearTableRectCells((int StartCol, int EndCol, int StartBlock, int EndBlock, TableInfo Table) rect) => ClearTableRectCells(rect);
+    bool IEditingServices.HandleBackVisual() => HandleBackVisual();
+    bool IEditingServices.HandleBackSource() => HandleBackSource();
+    bool IEditingServices.HandleDeleteVisual() => HandleDeleteVisual();
+    bool IEditingServices.HandleDeleteSource() => HandleDeleteSource();
+    void IEditingServices.ResetUndoSealTimer() => ResetUndoSealTimer();
+    void IEditingServices.StopUndoSealTimer() => _undoSealTimer.Stop();
 
     // ====== ICanvasOperations ======
     Dispatcher ICanvasOperations.Dispatcher => Dispatcher;
