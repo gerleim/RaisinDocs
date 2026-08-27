@@ -155,12 +155,12 @@ public class BlockVisualMapTests
     public void RawToVisual_ListWithReplacementPrefix()
     {
         var map = ComputeMap("- Item");
-        map.ReplacementPrefix.Should().Be("  ● ");
-        map.RawToVisual(0).Should().Be(4);
-        map.RawToVisual(1).Should().Be(4);
-        map.RawToVisual(2).Should().Be(4);
-        map.RawToVisual(3).Should().Be(5);
-        map.RawToVisual(5).Should().Be(7);
+        map.ReplacementPrefix.Should().Be("  ●  ");
+        map.RawToVisual(0).Should().Be(5);
+        map.RawToVisual(1).Should().Be(5);
+        map.RawToVisual(2).Should().Be(5);
+        map.RawToVisual(3).Should().Be(6);
+        map.RawToVisual(5).Should().Be(8);
     }
 
     // --- VisualToRaw ---
@@ -198,9 +198,9 @@ public class BlockVisualMapTests
     public void VisualToRaw_ListWithReplacementPrefix()
     {
         var map = ComputeMap("- Item");
-        map.VisualToRaw(4).Should().Be(2);
-        map.VisualToRaw(5).Should().Be(3);
-        map.VisualToRaw(7).Should().Be(5);
+        map.VisualToRaw(5).Should().Be(2);
+        map.VisualToRaw(6).Should().Be(3);
+        map.VisualToRaw(8).Should().Be(5);
     }
 
     // --- RoundTrip ---
@@ -415,14 +415,14 @@ public class BlockVisualMapTests
     public void OrderedList_ReplacementPrefix()
     {
         var map = ComputeMap("1. Item");
-        map.ReplacementPrefix.Should().Be("  1. ");
+        map.ReplacementPrefix.Should().Be("  1.  ");
     }
 
     [Fact]
     public void OrderedList_MultiDigit_ReplacementPrefix()
     {
         var map = ComputeMap("42) Item");
-        map.ReplacementPrefix.Should().Be("  42) ");
+        map.ReplacementPrefix.Should().Be("  42)  ");
     }
 
     [Fact]
@@ -866,7 +866,7 @@ public class BlockVisualMapTests
     public void LazyContinuation_OrderedList_UsesOwnerPrefix()
     {
         var map = ComputeMapMultiBlock(["1. item", "continuation"], 1);
-        map.ReplacementPrefix.Should().Be("  1. ");
+        map.ReplacementPrefix.Should().Be("  1.  ");
         map.IsContinuationIndent.Should().BeTrue();
     }
 
@@ -874,7 +874,7 @@ public class BlockVisualMapTests
     public void LazyContinuation_MultiDigitOrderedList_UsesOwnerPrefix()
     {
         var map = ComputeMapMultiBlock(["10. item", "continuation"], 1);
-        map.ReplacementPrefix.Should().Be("  10. ");
+        map.ReplacementPrefix.Should().Be(" 10.  ");
     }
 
     [Fact]
@@ -906,7 +906,7 @@ public class BlockVisualMapTests
     public void IndentedContinuation_UsesOwnerPrefix()
     {
         var map = ComputeMapMultiBlock(["- item", "", "  continuation"], 2);
-        map.ReplacementPrefix.Should().Be("  ● ");
+        map.ReplacementPrefix.Should().Be("  ●  ");
         map.IsContinuationIndent.Should().BeTrue();
     }
 
@@ -955,7 +955,7 @@ public class BlockVisualMapTests
     public void PrefixTolerance_UnorderedList_HidesLeadingSpaces()
     {
         var map = ComputeMap("  - item");
-        map.ReplacementPrefix.Should().Be("  ● ");
+        map.ReplacementPrefix.Should().Be("  ●  ");
         map.IsHidden(0).Should().BeTrue();
         map.IsHidden(1).Should().BeTrue();
         map.IsHidden(2).Should().BeTrue();
@@ -967,7 +967,7 @@ public class BlockVisualMapTests
     public void PrefixTolerance_OrderedList_HidesLeadingSpaces()
     {
         var map = ComputeMap("  1. item");
-        map.ReplacementPrefix.Should().Be("  1. ");
+        map.ReplacementPrefix.Should().Be("  1.  ");
         map.IsHidden(0).Should().BeTrue();
         map.IsHidden(1).Should().BeTrue();
         map.IsHidden(2).Should().BeTrue();
@@ -1303,21 +1303,21 @@ public class BlockVisualMapTests
     public void ListNesting_Level0_StandardPrefix()
     {
         var map = ComputeMapMultiBlock(["- foo"], 0);
-        map.ReplacementPrefix.Should().Be("  ● ");
+        map.ReplacementPrefix.Should().Be("  ●  ");
     }
 
     [Fact]
     public void ListNesting_Level1_IndentedPrefix()
     {
         var map = ComputeMapMultiBlock(["- foo", "  - bar"], 1);
-        map.ReplacementPrefix.Should().Be("      ○ ");
+        map.ReplacementPrefix.Should().Be("      ○  ");
     }
 
     [Fact]
     public void ListNesting_Level2_DoubleIndentedPrefix()
     {
         var map = ComputeMapMultiBlock(["- foo", "  - bar", "    - baz"], 2);
-        map.ReplacementPrefix.Should().Be("          ■ ");
+        map.ReplacementPrefix.Should().Be("          ■  ");
     }
 
     [Fact]
