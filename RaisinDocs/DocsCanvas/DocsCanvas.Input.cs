@@ -748,15 +748,7 @@ public partial class DocsCanvas
             case Key.C:
                 if (ctrl && _doc.HasSelection)
                 {
-                    var rectC = TryGetTableRectSelection();
-                    string copyText = rectC != null
-                        ? GetTableRectSelectedText(rectC.Value)
-                        : _doc.GetSelectedText();
-                    var cfHtml = HtmlToMarkdownConverter.ConvertToHtmlClipboard(copyText);
-                    if (cfHtml != null)
-                        ClipboardHelper.SetTextAndHtml(copyText, cfHtml, Logger);
-                    else
-                        ClipboardHelper.SetText(copyText, Logger);
+                    PerformCopy();
                 }
                 else handled = false;
                 break;
@@ -767,10 +759,7 @@ public partial class DocsCanvas
                 {
                     SealAndStopTimer();
                     var rectX = TryGetTableRectSelection();
-                    string cutText = rectX != null
-                        ? GetTableRectSelectedText(rectX.Value)
-                        : _doc.GetSelectedText();
-                    ClipboardHelper.SetText(cutText, Logger);
+                    SetClipboardFromSelection();
                     _doc.BeginUndoGroup();
                     if (rectX != null)
                         ClearTableRectCells(rectX.Value);

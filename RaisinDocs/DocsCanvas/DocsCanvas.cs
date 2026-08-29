@@ -725,6 +725,11 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider, IDocsC
         if (r == null) return null;
         return GetTableRectSelectedText(r.Value);
     }
+    internal (string Text, string? Html) TestBuildClipboardPayload()
+    {
+        ComputeLayout();
+        return BuildClipboardPayload();
+    }
     internal bool TestClearTableRectCells()
     {
         ComputeLayout();
@@ -882,16 +887,51 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider, IDocsC
         InvalidateLayout();
     }
 
+    /// <summary>
+    /// Builds the clipboard payload for the current selection: the markdown text, plus a CF_HTML
+    /// fragment when the content warrants one. Table selections produce a real &lt;table&gt; so
+    /// Excel and Word paste them into separate cells.
+    /// </summary>
+    internal (string Text, string? Html) BuildClipboardPayload()
+    {
+        var rect = TryGetTableRectSelection();
+        string text = rect != null ? GetTableRectSelectedText(rect.Value) : _doc.GetSelectedText();
+        string? html = BuildTableClipboardHtml(rect)
+                       ?? HtmlToMarkdownConverter.ConvertToHtmlClipboard(text);
+        return (text, html);
+    }
+
+    private string? BuildTableClipboardHtml(
+        (int StartCol, int EndCol, int StartBlock, int EndBlock, TableInfo Table)? rect)
+    {
+        if (_parsedBlocks == null) return null;
+
+        if (rect != null)
+            return TableClipboardHtml.TryBuild(_parsedBlocks, _doc.GetBlockText,
+                rect.Value.StartBlock, rect.Value.EndBlock, rect.Value.StartCol, rect.Value.EndCol);
+
+        var (startBlock, _, endBlock, endOffset) = _doc.GetOrderedSelection();
+        // A drag that ends at the start of the following line shouldn't pull that line in.
+        if (endOffset == 0 && endBlock > startBlock) endBlock--;
+        // Single-row selections are ordinary text copies, not grid copies.
+        if (endBlock <= startBlock) return null;
+
+        return TableClipboardHtml.TryBuild(_parsedBlocks, _doc.GetBlockText, startBlock, endBlock);
+    }
+
+    private void SetClipboardFromSelection()
+    {
+        var (text, html) = BuildClipboardPayload();
+        if (html != null)
+            ClipboardHelper.SetTextAndHtml(text, html, Logger);
+        else
+            ClipboardHelper.SetText(text, Logger);
+    }
+
     public void PerformCopy()
     {
         if (!_doc.HasSelection) return;
-        var rect = TryGetTableRectSelection();
-        string text = rect != null ? GetTableRectSelectedText(rect.Value) : _doc.GetSelectedText();
-        var cfHtml = HtmlToMarkdownConverter.ConvertToHtmlClipboard(text);
-        if (cfHtml != null)
-            ClipboardHelper.SetTextAndHtml(text, cfHtml, Logger);
-        else
-            ClipboardHelper.SetText(text, Logger);
+        SetClipboardFromSelection();
     }
 
     public void PerformCut()
@@ -900,8 +940,7 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider, IDocsC
         if (!_doc.HasSelection) return;
         SealAndStopTimer();
         var rect = TryGetTableRectSelection();
-        string text = rect != null ? GetTableRectSelectedText(rect.Value) : _doc.GetSelectedText();
-        ClipboardHelper.SetText(text, Logger);
+        SetClipboardFromSelection();
         _doc.BeginUndoGroup();
         if (rect != null)
             ClearTableRectCells(rect.Value);
