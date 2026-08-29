@@ -730,6 +730,15 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider, IDocsC
         ComputeLayout();
         return BuildClipboardPayload();
     }
+    internal bool TestTryPasteIntoTableCells(string pasteText)
+    {
+        ComputeLayout();
+        _doc.BeginUndoGroup();
+        bool handled = TryPasteIntoTableCells(pasteText);
+        _doc.SealUndoGroup();
+        InvalidateLayout();
+        return handled;
+    }
     internal bool TestClearTableRectCells()
     {
         ComputeLayout();

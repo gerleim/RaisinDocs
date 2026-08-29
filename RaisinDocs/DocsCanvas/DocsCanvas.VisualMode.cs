@@ -204,6 +204,11 @@ public partial class DocsCanvas
                 return false;
         }
 
+        // A pasted markdown table (e.g. converted from an Excel copy) carries an alignment
+        // separator that is syntax, not data — it must not land in a destination cell.
+        pasteLines = [.. pasteLines.Where(l => !MarkdownParser.IsSeparatorRow(l.Trim(), out _))];
+        if (pasteLines.Length == 0) return false;
+
         int startCol = FindCellIndexAtOffset(cursorParsed.TableRow.Cells, _doc.CursorOffset);
         int destBlock = _doc.CursorBlock;
         int lastBlock = destBlock;

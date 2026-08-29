@@ -33,9 +33,11 @@ internal static class HtmlBlockModelParser
         if (string.IsNullOrWhiteSpace(contentToConvert))
             return null;
 
-        // Parse and convert
+        // Parse and convert. The stylesheet is read from the whole payload, not the fragment:
+        // Excel declares cell formatting as class rules in the document head, which sits
+        // outside the fragment markers.
         settings ??= new();
-        var blocks = ParseBlockStructure(contentToConvert, settings);
+        var blocks = ParseBlockStructure(contentToConvert, settings, HtmlStyleSheet.Parse(html));
         if (blocks.Count == 0)
             return null;
 
@@ -63,9 +65,11 @@ internal static class HtmlBlockModelParser
     /// <summary>
     /// Stage 1: Extract block-level HTML elements and return structured blocks.
     /// </summary>
-    internal static List<BlockElement> ParseBlockStructure(string html, MarkdownOutputSettings? settings = null)
+    internal static List<BlockElement> ParseBlockStructure(
+        string html, MarkdownOutputSettings? settings = null, HtmlStyleSheet? styles = null)
     {
         settings ??= new();
+        styles ??= HtmlStyleSheet.Parse(html);
         var blocks = new List<BlockElement>();
         int pos = 0;
 
@@ -77,6 +81,22 @@ internal static class HtmlBlockModelParser
 
             if (pos >= html.Length)
                 break;
+
+            if (HtmlTableParser.TryParseTable(html, pos, styles, settings, out var tableBlock, out var afterTable))
+            {
+                blocks.Add(tableBlock);
+                pos = afterTable;
+                continue;
+            }
+
+            // Excel's CF_HTML fragment starts inside the <table>, so the rows arrive
+            // without their enclosing element.
+            if (HtmlTableParser.TryParseOrphanRows(html, pos, styles, settings, out var rowsBlock, out var afterRows))
+            {
+                blocks.Add(rowsBlock);
+                pos = afterRows;
+                continue;
+            }
 
             // Try to match block-level tags
             if (TryParseHeader(html, pos, out var headerBlock, out var newPos, settings))
@@ -489,13 +509,18 @@ internal static class HtmlBlockModelParser
                 }
                 else if (tag.StartsWith("<span", StringComparison.OrdinalIgnoreCase))
                 {
-                    // Extract color from style attribute
-                    var (fg, bg) = ExtractColorsFromTag(tag);
+                    // Resolve the span's own style attribute. Word and Excel express emphasis
+                    // as font-weight/font-style here rather than with <b>/<i> tags.
+                    var spanFormat = HtmlStyleSheet.Empty.ResolveFormat(tag);
                     var fmt = styleStack.Count > 0 ? CloneFormat(styleStack.Peek()) : new();
-                    if (fg != null)
-                        fmt.ForegroundColor = fg;
-                    if (bg != null)
-                        fmt.BackgroundColor = bg;
+                    if (spanFormat.ForegroundColor != null)
+                        fmt.ForegroundColor = spanFormat.ForegroundColor;
+                    if (spanFormat.BackgroundColor != null)
+                        fmt.BackgroundColor = spanFormat.BackgroundColor;
+                    // Only ever add emphasis: a span that states a normal weight is not
+                    // an instruction to un-bold its surroundings.
+                    fmt.Bold |= spanFormat.Bold;
+                    fmt.Italic |= spanFormat.Italic;
                     styleStack.Push(fmt);
                 }
                 else if (tag.Equals("</span>", StringComparison.OrdinalIgnoreCase))
@@ -630,6 +655,11 @@ internal static class HtmlBlockModelParser
                     output.Add("---");
                     break;
 
+                case BlockKind.TableHeaderRow:
+                    if (block.TableData != null)
+                        output.AddRange(FormatTable(block.TableData, settings));
+                    break;
+
                 default:
                     // Placeholder for other block types
                     if (block.Content.Count > 0)
@@ -648,6 +678,94 @@ internal static class HtmlBlockModelParser
     }
 
     /// <summary>
+    /// Renders a parsed table as GitHub-flavored markdown: header row, alignment separator,
+    /// then the data rows.
+    /// </summary>
+    private static List<string> FormatTable(TableBlockData table, MarkdownOutputSettings settings)
+    {
+        var lines = new List<string>();
+        int width = table.ColumnCount;
+        if (width == 0 || table.Rows.Count == 0) return lines;
+
+        // Markdown allows exactly one header row; extra <th> rows become ordinary rows.
+        int headerIndex = table.Rows.FindIndex(r => r.IsHeader);
+        if (headerIndex < 0) headerIndex = 0;
+
+        lines.Add(FormatTableRow(table.Rows[headerIndex], width, settings));
+        lines.Add(FormatSeparatorRow(table.Alignments, width));
+
+        for (int i = 0; i < table.Rows.Count; i++)
+        {
+            if (i == headerIndex) continue;
+            lines.Add(FormatTableRow(table.Rows[i], width, settings));
+        }
+
+        return lines;
+    }
+
+    private static string FormatTableRow(TableRowContent row, int width, MarkdownOutputSettings settings)
+    {
+        var sb = new StringBuilder("|");
+        for (int col = 0; col < width; col++)
+        {
+            string cell = col < row.Cells.Count
+                ? EscapeTableCell(FormatCellSegments(row.Cells[col].Content, settings))
+                : "";
+            sb.Append(' ').Append(cell).Append(" |");
+        }
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// Formats one cell's segments. Unlike a paragraph, a cell cannot break across lines,
+    /// so a hard break inside it becomes a space.
+    /// </summary>
+    private static string FormatCellSegments(List<InlineContent> content, MarkdownOutputSettings settings)
+    {
+        var sb = new StringBuilder();
+        foreach (var segment in content)
+        {
+            sb.Append(FormatSegment(segment, settings));
+            if (segment.FollowedByHardBreak) sb.Append(' ');
+        }
+        return sb.ToString();
+    }
+
+    private static string FormatSeparatorRow(List<ColumnAlignment> alignments, int width)
+    {
+        var sb = new StringBuilder("|");
+        for (int col = 0; col < width; col++)
+        {
+            var align = col < alignments.Count ? alignments[col] : ColumnAlignment.Left;
+            sb.Append(align switch
+            {
+                ColumnAlignment.Center => " :---: |",
+                ColumnAlignment.Right => " ---: |",
+                _ => " --- |",
+            });
+        }
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// Makes cell text safe for a markdown table row: pipes would end the cell, and a table
+    /// row cannot span lines.
+    /// </summary>
+    private static string EscapeTableCell(string text)
+    {
+        var sb = new StringBuilder(text.Length);
+        foreach (char c in text)
+        {
+            if (c == '|') sb.Append("\\|");
+            else if (c == '\n' || c == '\r') sb.Append(' ');
+            else sb.Append(c);
+        }
+
+        // Collapse the runs that flattened breaks can leave behind.
+        return string.Join(' ', sb.ToString().Split(' ', StringSplitOptions.RemoveEmptyEntries));
+    }
+
+    /// <summary>
     /// Format inline segments for a paragraph, respecting hard breaks.
     /// Returns list of lines (each line is a string).
     /// </summary>
@@ -663,20 +781,25 @@ internal static class HtmlBlockModelParser
 
             if (segment.FollowedByHardBreak)
             {
+                // Trim before the marker: segments carry edge whitespace so inter-element
+                // gaps survive, but a trailing space here would corrupt the break syntax.
+                string line = currentLine.ToString().Trim();
+
                 // Hard break: apply HardBreak setting
                 if (settings.HardBreak == DocsCanvas.HardBreakStyle.Backslash)
-                    currentLine.Append("\\");
+                    line += "\\";
                 else if (settings.HardBreak == DocsCanvas.HardBreakStyle.TrailingSpaces)
-                    currentLine.Append("  ");
+                    line += "  ";
 
-                lines.Add(currentLine.ToString());
+                lines.Add(line);
                 currentLine.Clear();
             }
         }
 
-        // Add final line if any content
+        // Add final line if any content. Lines ended by a hard break were already trimmed
+        // above, before their break marker was appended.
         if (currentLine.Length > 0)
-            lines.Add(currentLine.ToString());
+            lines.Add(currentLine.ToString().Trim());
 
         return lines;
     }
@@ -692,7 +815,7 @@ internal static class HtmlBlockModelParser
         {
             result.Append(FormatSegment(segment, settings));
         }
-        return result.ToString();
+        return result.ToString().Trim();
     }
 
     /// <summary>
@@ -734,8 +857,12 @@ internal static class HtmlBlockModelParser
 
         if (softBreakMode == DocsCanvas.SoftBreakMode.Relaxed)
         {
-            // Default: collapse all whitespace to single space (matches browser rendering)
-            return System.Text.RegularExpressions.Regex.Replace(text.Trim(), @"\s+", " ");
+            // Default: collapse all whitespace to single space (matches browser rendering).
+            // Edge whitespace is kept as a single space so that inter-element gaps
+            // ("Some <b>bold</b>") are not lost; blocks trim their own assembled line.
+            string lead = char.IsWhiteSpace(text[0]) ? " " : "";
+            string trail = char.IsWhiteSpace(text[^1]) ? " " : "";
+            return lead + System.Text.RegularExpressions.Regex.Replace(text.Trim(), @"\s+", " ") + trail;
         }
         else // Strict mode
         {
@@ -750,53 +877,6 @@ internal static class HtmlBlockModelParser
 
             return string.Join("\n", normalized);
         }
-    }
-
-    /// <summary>Extract foreground and background colors from a tag's style attribute.</summary>
-    private static (RgbColor? fg, RgbColor? bg) ExtractColorsFromTag(string tag)
-    {
-        int styleIdx = tag.IndexOf("style=", StringComparison.OrdinalIgnoreCase);
-        if (styleIdx < 0)
-            return (null, null);
-
-        int quotePos = styleIdx + 6;
-        if (quotePos >= tag.Length)
-            return (null, null);
-
-        char quote = tag[quotePos];
-        if (quote != '"' && quote != '\'')
-            return (null, null);
-
-        int styleStart = quotePos + 1;
-        int styleEnd = tag.IndexOf(quote, styleStart);
-        if (styleEnd < 0)
-            return (null, null);
-
-        string style = tag[styleStart..styleEnd];
-
-        // Look for color: value
-        int colorIdx = style.IndexOf("color:", StringComparison.OrdinalIgnoreCase);
-        RgbColor? fg = null;
-        if (colorIdx >= 0)
-        {
-            // Check it's not background-color
-            bool isBg = colorIdx > 0 && style[colorIdx - 1] == '-';
-            if (!isBg)
-            {
-                int valueStart = colorIdx + 6;
-                int valueEnd = style.IndexOfAny(new[] { ';', '}' }, valueStart);
-                if (valueEnd < 0)
-                    valueEnd = style.Length;
-
-                string colorValue = style[valueStart..valueEnd].Trim();
-                fg = HtmlParsingContext.ParseCssColor(colorValue.AsSpan());
-            }
-        }
-
-        // For now, we don't extract background colors in Phase 1
-        RgbColor? bg = null;
-
-        return (fg, bg);
     }
 
     /// <summary>Format an RgbColor as a color name or hex code.</summary>

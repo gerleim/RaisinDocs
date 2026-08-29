@@ -18,6 +18,9 @@ internal class BlockElement
     /// <summary>Nested blocks (for lists, blockquotes, etc.)</summary>
     public List<BlockElement>? NestedBlocks { get; set; }
 
+    /// <summary>Table rows and columns, when this block is a table.</summary>
+    public TableBlockData? TableData { get; set; }
+
     /// <summary>
     /// Helper to extract heading level from BlockKind.
     /// Returns 1-6 for Heading1-Heading6, null for non-headings.
