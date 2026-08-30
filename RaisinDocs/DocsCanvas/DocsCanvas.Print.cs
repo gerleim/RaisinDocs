@@ -35,11 +35,7 @@ partial class DocsCanvas
     /// </summary>
     internal double TestRenderedJoinedLineWidth(int vi)
         => _renderingContext.BuildJoinedLineText(_visualLines[vi])?.Width ?? 0;
-    internal double TestTotalContentHeight => _totalContentHeight;
     internal List<VisualLine> TestVisualLines => _visualLines;
-    internal List<double> TestLineYPositions => _lineYPositions;
-    internal List<ParsedBlock>? TestParsedBlocks => _parsedBlocks;
-    internal int TestLayoutVersion => _layoutVersion;
     internal TextMeasurer TestMeasure => _measure;
 
     internal void TestComputeLayoutAtWidth(double width)
@@ -47,11 +43,6 @@ partial class DocsCanvas
         _parsedBlocks ??= MarkdownParser.Parse(i => _doc.GetBlockText(i), _doc.BlockCount, _syntaxHighlighter);
         ComputeLayoutCore(width);
         _layoutDirty = true;
-    }
-
-    internal double GetEffectiveLineHeightPublic(VisualLine visualLine)
-    {
-        return GetEffectiveLineHeight(visualLine);
     }
 
     private void DrawPageBreaks(DrawingContext dc, double effectiveScroll,
