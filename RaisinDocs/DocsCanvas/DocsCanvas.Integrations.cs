@@ -35,6 +35,8 @@ public partial class DocsCanvas
 
     internal void OpenFind(bool showReplace)
     {
+        FindAndReplace.ResetSearchOrigin();
+
         string? initialText = null;
         if (_doc.HasSelection)
         {

@@ -226,6 +226,93 @@ public class FindReplaceTests
         canvas.TestSearchMatchCount.Should().Be(0);
     }
 
+    // --- Incremental typing in the find box ---
+    //
+    // Every keystroke re-runs the whole search. Picking the current match relative to the
+    // caret made the hit jump forward on almost every letter, because making a match current
+    // leaves the caret at its *end*: with "alpha nothing beta nothing", "n" lands on offset 6
+    // and puts the caret at 7, so "no" then looks from 7 and skips straight to offset 19 - even
+    // though offset 6 is still a perfectly good "no". The search resumes from the current
+    // match's start instead, so a hit is only given up when it genuinely stops matching.
+
+    [StaFact]
+    public void IncrementalTyping_KeepsTheCurrentMatchWhileItStillMatches()
+    {
+        var canvas = CreateCanvas("alpha nothing beta nothing");
+        canvas.TestSetCursor(0, 0);
+
+        canvas.TestExecuteSearch("n", caseSensitive: false);
+        canvas.TestAnchorOffset.Should().Be(6);
+
+        canvas.TestExecuteSearch("no", caseSensitive: false);
+
+        canvas.TestSearchMatchCount.Should().Be(2);
+        canvas.TestCurrentMatchIndex.Should().Be(0, "offset 6 still matches, so it stays current");
+        canvas.TestAnchorOffset.Should().Be(6);
+    }
+
+    [StaFact]
+    public void IncrementalTyping_AdvancesWhenTheCurrentMatchStopsMatching()
+    {
+        var canvas = CreateCanvas("nap and nothing");
+        canvas.TestSetCursor(0, 0);
+
+        canvas.TestExecuteSearch("n", caseSensitive: false);
+        canvas.TestAnchorOffset.Should().Be(0);
+
+        canvas.TestExecuteSearch("no", caseSensitive: false);
+
+        canvas.TestSearchMatchCount.Should().Be(1);
+        canvas.TestAnchorOffset.Should().Be(8, "the hit at 0 is no longer a hit, so the search moves on");
+    }
+
+    [StaFact]
+    public void IncrementalTyping_AfterNavigating_ResumesFromTheMatchTheUserIsOn()
+    {
+        var canvas = CreateCanvas("alpha nothing beta nothing gamma");
+        canvas.TestSetCursor(0, 0);
+
+        canvas.TestExecuteSearch("nothing", caseSensitive: false);
+        canvas.NavigateMatch(1);
+        canvas.TestAnchorOffset.Should().Be(19);
+
+        canvas.TestExecuteSearch("nothing ", caseSensitive: false);
+
+        canvas.TestCurrentMatchIndex.Should().Be(1, "typing continues from the match the user navigated to");
+        canvas.TestAnchorOffset.Should().Be(19);
+    }
+
+    [StaFact]
+    public void IncrementalTyping_Backspace_KeepsTheCurrentMatch()
+    {
+        var canvas = CreateCanvas("alpha nothing beta nothing gamma");
+        canvas.TestSetCursor(0, 0);
+
+        canvas.TestExecuteSearch("nothing", caseSensitive: false);
+        canvas.NavigateMatch(1);
+        canvas.TestAnchorOffset.Should().Be(19);
+
+        canvas.TestExecuteSearch("nothin", caseSensitive: false);
+
+        canvas.TestAnchorOffset.Should().Be(19, "deleting a letter must not throw the hit back to the top");
+    }
+
+    [StaFact]
+    public void OpenFind_RestartsTheSearchFromTheCaret()
+    {
+        var canvas = CreateCanvas("foo bar foo baz foo");
+        canvas.TestSetCursor(0, 0);
+        canvas.TestExecuteSearch("foo", caseSensitive: false);
+        canvas.TestCurrentMatchIndex.Should().Be(0);
+
+        // The user clicked further down the document and hit Ctrl+F again.
+        canvas.TestSetCursor(0, 10);
+        canvas.OpenFind(showReplace: false);
+        canvas.TestExecuteSearch("foo", caseSensitive: false);
+
+        canvas.TestCurrentMatchIndex.Should().Be(2);
+    }
+
     // --- ISearchServices contract ---
     //
     // RenderingContext gates the highlight pass on ISearchServices, not on the internal

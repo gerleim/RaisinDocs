@@ -21,6 +21,15 @@ internal class FindAndReplaceController
     private bool _lastSearchCaseSensitive;
     private bool _searchDirty;
 
+    // Where a search starts looking. Not the caret: making a match current also selects it,
+    // which leaves the caret at the match *end*, so a caret-relative search skips the very
+    // match the user is looking at as soon as they type another letter - "n" lands on a hit,
+    // then "no" jumps past it even when that hit still starts with "no". Anchoring to the
+    // current match's start keeps it selected for as long as it keeps matching.
+    // -1 means "not captured yet"; the next search takes it from the caret/selection.
+    private int _searchOriginBlock = -1;
+    private int _searchOriginOffset;
+
     internal record struct SearchMatch(int Block, int Offset, int Length);
 
     public FindAndReplaceController(
@@ -61,11 +70,14 @@ internal class FindAndReplaceController
             return;
         }
 
+        if (_searchOriginBlock < 0)
+            CaptureSearchOrigin();
+
         _currentMatchIndex = -1;
         for (int i = 0; i < _searchMatches.Count; i++)
         {
             var m = _searchMatches[i];
-            if (Document.ComparePositions(m.Block, m.Offset, _doc.Document.CursorBlock, _doc.Document.CursorOffset) >= 0)
+            if (Document.ComparePositions(m.Block, m.Offset, _searchOriginBlock, _searchOriginOffset) >= 0)
             {
                 _currentMatchIndex = i;
                 break;
@@ -194,11 +206,18 @@ internal class FindAndReplaceController
         ExecuteSearch(_lastSearchQuery, _lastSearchCaseSensitive);
     }
 
+    /// <summary>
+    /// Drops the search origin so the next search starts from wherever the caret is now.
+    /// Called when Find opens: the user may have clicked elsewhere since the last search.
+    /// </summary>
+    public void ResetSearchOrigin() => _searchOriginBlock = -1;
+
     public void ClearMatches()
     {
         _searchMatches.Clear();
         _currentMatchIndex = -1;
         _lastSearchQuery = "";
+        _searchOriginBlock = -1;
         // Closing Find must not leave a pending refresh that would re-open the render gate.
         _searchDirty = false;
         _rendering.InvalidateVisual();
@@ -248,10 +267,35 @@ internal class FindAndReplaceController
 
     // --- Private helpers ---
 
+    /// <summary>
+    /// Takes the origin from the caret, or from the start of the selection when there is one -
+    /// Find seeds its box with the selected text, and the occurrence the user selected has to
+    /// be the one that comes up as the current match.
+    /// </summary>
+    private void CaptureSearchOrigin()
+    {
+        var doc = _doc.Document;
+        if (doc.HasSelection)
+        {
+            var (startBlock, startOffset, _, _) = doc.GetOrderedSelection();
+            _searchOriginBlock = startBlock;
+            _searchOriginOffset = startOffset;
+        }
+        else
+        {
+            _searchOriginBlock = doc.CursorBlock;
+            _searchOriginOffset = doc.CursorOffset;
+        }
+    }
+
     private void ScrollToMatch(int matchIndex)
     {
         if (matchIndex < 0 || matchIndex >= _searchMatches.Count) return;
         var match = _searchMatches[matchIndex];
+
+        // The match the user is on is where the next search resumes from.
+        _searchOriginBlock = match.Block;
+        _searchOriginOffset = match.Offset;
 
         _doc.Document.AnchorBlock = match.Block;
         _doc.Document.AnchorOffset = match.Offset;
