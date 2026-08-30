@@ -39,6 +39,7 @@ public class FileChangeWatcher : IDisposable
         _watcher.Changed += OnFileSystemChanged;
         _watcher.Created += OnFileSystemChanged;
         _watcher.Renamed += OnFileRenamed;
+        _watcher.Error += OnWatcherError;
     }
 
     public void WatchFile(string filePath)
@@ -91,20 +92,49 @@ public class FileChangeWatcher : IDisposable
 
     private void OnFileSystemChanged(object sender, FileSystemEventArgs e)
     {
-        if (File.Exists(e.FullPath))
+        // Runs on the watcher's thread: an escaping exception would tear down the host app.
+        try
         {
-            ScheduleCallback(new FileChangeEvent
+            if (File.Exists(e.FullPath))
             {
-                FilePath = e.FullPath,
-                ChangeType = FileChangeType.Modified,
-            });
+                ScheduleCallback(new FileChangeEvent
+                {
+                    FilePath = e.FullPath,
+                    ChangeType = FileChangeType.Modified,
+                });
+            }
+        }
+        catch
+        {
         }
     }
 
     private void OnFileRenamed(object sender, RenamedEventArgs e)
     {
-        if (File.Exists(e.FullPath))
+        try
         {
+            if (!File.Exists(e.FullPath)) return;
+
+            // A rename whose *target* is the watched file is not a rename at all from the
+            // host's point of view — it is an atomic save (write a temp file, delete or
+            // replace the original, rename the temp onto its name). The path is unchanged
+            // and the content is new, so this has to be reported as a modification.
+            // Reporting it as a rename is how an external edit went unnoticed: hosts only
+            // retitle on a rename, and the debounce below still advances the polling
+            // baseline, so the fallback stayed silent too.
+            if (SamePath(e.FullPath, CurrentFilePath))
+            {
+                ScheduleCallback(new FileChangeEvent
+                {
+                    FilePath = e.FullPath,
+                    ChangeType = FileChangeType.Modified,
+                });
+                return;
+            }
+
+            // The watched file itself was renamed away: follow it. Its content is unchanged.
+            if (!SamePath(e.OldFullPath, CurrentFilePath)) return;
+
             lock (_lock)
             {
                 CurrentFilePath = e.FullPath;
@@ -119,20 +149,49 @@ public class FileChangeWatcher : IDisposable
                 OldPath = e.OldFullPath,
             });
         }
+        catch
+        {
+        }
+    }
+
+    private void OnWatcherError(object sender, ErrorEventArgs e)
+    {
+        // The OS dropped the subscription (buffer overflow, directory went away).
+        // Re-arm it so change detection does not silently degrade to polling only.
+        try
+        {
+            var path = CurrentFilePath;
+            if (_disposed || _watcher == null || path == null || !File.Exists(path)) return;
+
+            _watcher.EnableRaisingEvents = false;
+            _watcher.Path = Path.GetDirectoryName(path)!;
+            _watcher.Filter = Path.GetFileName(path);
+            _watcher.EnableRaisingEvents = true;
+        }
+        catch
+        {
+        }
+    }
+
+    private static bool SamePath(string? a, string? b)
+    {
+        if (a == null || b == null) return false;
+        return string.Equals(Path.GetFullPath(a), Path.GetFullPath(b), StringComparison.OrdinalIgnoreCase);
     }
 
     private void OnPollTimerElapsed(object? sender, ElapsedEventArgs e)
     {
-        lock (_lock)
-        {
-            if (_disposed || _suppressed) return;
-        }
-
-        var path = CurrentFilePath;
-        if (path == null || !File.Exists(path)) return;
-
+        // Runs on a timer thread: in .NET an exception escaping here kills the process.
         try
         {
+            lock (_lock)
+            {
+                if (_disposed || _suppressed) return;
+            }
+
+            var path = CurrentFilePath;
+            if (path == null || !File.Exists(path)) return;
+
             var writeTime = File.GetLastWriteTimeUtc(path);
             if (writeTime != _lastKnownWriteTime)
             {
@@ -173,18 +232,31 @@ public class FileChangeWatcher : IDisposable
     private void OnDebounceTimerElapsed(object? sender, ElapsedEventArgs e)
     {
         FileChangeEvent? pending;
+        DateTime previousWriteTime;
         lock (_lock)
         {
             if (_disposed || _suppressed) return;
             pending = _pendingEvent;
             _pendingEvent = null;
+            previousWriteTime = _lastKnownWriteTime;
 
             if (pending != null && CurrentFilePath != null && File.Exists(CurrentFilePath))
                 _lastKnownWriteTime = File.GetLastWriteTimeUtc(CurrentFilePath);
         }
 
-        if (pending != null)
+        if (pending == null) return;
+
+        // Runs on a timer thread: in .NET an exception escaping here kills the process.
+        // A callback that failed also means the host never saw this change, so put the
+        // baseline back and let the poll timer offer it again.
+        try
+        {
             _onFileChanged(pending);
+        }
+        catch
+        {
+            lock (_lock) _lastKnownWriteTime = previousWriteTime;
+        }
     }
 
     public void Dispose()
@@ -200,6 +272,7 @@ public class FileChangeWatcher : IDisposable
             _watcher.Changed -= OnFileSystemChanged;
             _watcher.Created -= OnFileSystemChanged;
             _watcher.Renamed -= OnFileRenamed;
+            _watcher.Error -= OnWatcherError;
             _watcher.Dispose();
         }
 

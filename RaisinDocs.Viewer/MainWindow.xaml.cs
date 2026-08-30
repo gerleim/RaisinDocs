@@ -187,7 +187,11 @@ public partial class MainWindow : Window
                 }
                 catch (Exception ex)
                 {
+                    // Let it reach the watcher: a reload that failed (the writer still had
+                    // the file open, say) means we are showing stale content, and the
+                    // watcher retries rather than dropping the change.
                     Viewer.Canvas.Logger?.Log(DocsLogLevel.Error, $"Could not reload file: {ex.Message}");
+                    throw;
                 }
                 finally
                 {
