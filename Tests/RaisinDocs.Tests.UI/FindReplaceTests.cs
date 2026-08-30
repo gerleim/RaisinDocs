@@ -1,4 +1,6 @@
 using System.Windows;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using FluentAssertions;
 using Xunit;
 
@@ -14,6 +16,14 @@ public class FindReplaceTests
         canvas.Arrange(new Rect(0, 0, 800, 600));
         canvas.TestComputeLayout();
         return canvas;
+    }
+
+    /// <summary>Drives a real OnRender pass, which is where a dirty search is re-run.</summary>
+    private static void Render(DocsCanvas canvas)
+    {
+        canvas.Measure(new Size(800, 600));
+        canvas.Arrange(new Rect(0, 0, 800, 600));
+        new RenderTargetBitmap(800, 600, 96, 96, PixelFormats.Pbgra32).Render(canvas);
     }
 
     [StaFact]
@@ -279,5 +289,47 @@ public class FindReplaceTests
         canvas.CloseFind();
 
         services.HasSearchHighlights.Should().BeFalse();
+    }
+
+    // --- Re-search after an edit ---
+    //
+    // The render pass owns re-running a search the document invalidated. Two things have to
+    // hold: a search that currently has no matches must still be re-run (or typing the first
+    // match never lights up), and the re-run must not navigate - ExecuteSearch ends in
+    // ScrollToMatch, which would drag the caret to the next match on every keystroke.
+
+    [StaFact]
+    public void EditCreatingFirstMatch_LightsUpOnNextRender()
+    {
+        var canvas = CreateCanvas("hello world");
+        canvas.TestExecuteSearch("foo", caseSensitive: false);
+        canvas.TestSearchMatchCount.Should().Be(0);
+
+        canvas.TestSetCursor(0, 0);
+        canvas.TestInsert("foo ");
+        Render(canvas);
+
+        canvas.TestSearchMatchCount.Should().Be(1,
+            "a search with no matches must still be re-run, or the first match never appears");
+    }
+
+    [StaFact]
+    public void EditWithActiveSearch_DoesNotMoveCursorOnRender()
+    {
+        var canvas = CreateCanvas("foo bar foo");
+        canvas.TestSetCursor(0, 4);
+        canvas.TestExecuteSearch("foo", caseSensitive: false);
+
+        // Put the caret where a user would be typing, not where the search left it.
+        canvas.TestSetCursor(0, 4);
+        canvas.TestInsert("X");
+        int block = canvas.TestCursorBlock, offset = canvas.TestCursorOffset;
+
+        Render(canvas);
+
+        canvas.TestCursorBlock.Should().Be(block);
+        canvas.TestCursorOffset.Should().Be(offset, "rendering must not navigate the caret");
+        canvas.TestAnchorOffset.Should().Be(offset, "rendering must not create a selection");
+        canvas.TestSearchMatchCount.Should().Be(2, "matches are still refreshed");
     }
 }

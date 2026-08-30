@@ -49,10 +49,9 @@ internal class FindAndReplaceController
 
     public void ExecuteSearch(string query, bool caseSensitive)
     {
-        _searchMatches.Clear();
         _lastSearchQuery = query;
         _lastSearchCaseSensitive = caseSensitive;
-        _searchDirty = false;
+        RecomputeMatches();
 
         if (string.IsNullOrEmpty(query))
         {
@@ -60,23 +59,6 @@ internal class FindAndReplaceController
             _search.FindBar?.UpdateMatchInfo(-1, 0);
             _rendering.InvalidateVisual();
             return;
-        }
-
-        var comparison = caseSensitive
-            ? StringComparison.Ordinal
-            : StringComparison.OrdinalIgnoreCase;
-
-        for (int b = 0; b < _doc.BlockCount; b++)
-        {
-            string blockText = _doc.GetBlockText(b);
-            int pos = 0;
-            while (pos <= blockText.Length - query.Length)
-            {
-                int found = blockText.IndexOf(query, pos, comparison);
-                if (found < 0) break;
-                _searchMatches.Add(new SearchMatch(b, found, query.Length));
-                pos = found + query.Length;
-            }
         }
 
         _currentMatchIndex = -1;
@@ -98,6 +80,57 @@ internal class FindAndReplaceController
             ScrollToMatch(_currentMatchIndex);
         else
             _rendering.InvalidateVisual();
+    }
+
+    /// <summary>
+    /// Rebuilds <see cref="_searchMatches"/> from the last query. Pure: touches no cursor,
+    /// selection, layout or scroll state, so it is safe to call from the render pass.
+    /// </summary>
+    private void RecomputeMatches()
+    {
+        _searchMatches.Clear();
+        _searchDirty = false;
+
+        if (string.IsNullOrEmpty(_lastSearchQuery)) return;
+
+        var comparison = _lastSearchCaseSensitive
+            ? StringComparison.Ordinal
+            : StringComparison.OrdinalIgnoreCase;
+
+        for (int b = 0; b < _doc.BlockCount; b++)
+        {
+            string blockText = _doc.GetBlockText(b);
+            int pos = 0;
+            while (pos <= blockText.Length - _lastSearchQuery.Length)
+            {
+                int found = blockText.IndexOf(_lastSearchQuery, pos, comparison);
+                if (found < 0) break;
+                _searchMatches.Add(new SearchMatch(b, found, _lastSearchQuery.Length));
+                pos = found + _lastSearchQuery.Length;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Re-runs the search after the document changed, without navigating. ExecuteSearch ends
+    /// in ScrollToMatch, which moves the cursor and selects the match - fine when the user
+    /// asked to search, but it would drag the caret to the next match on every keystroke if
+    /// used here. The find bar is updated off the dispatcher so no UI is touched mid-render.
+    /// </summary>
+    private void RefreshMatchesAfterEdit()
+    {
+        int previousIndex = _currentMatchIndex;
+        RecomputeMatches();
+
+        _currentMatchIndex = _searchMatches.Count == 0
+            ? -1
+            : Math.Clamp(previousIndex < 0 ? 0 : previousIndex, 0, _searchMatches.Count - 1);
+
+        if (_search.FindBar is { } bar)
+        {
+            int index = _currentMatchIndex, count = _searchMatches.Count;
+            _canvas.Dispatcher.BeginInvoke(() => bar.UpdateMatchInfo(index, count));
+        }
     }
 
     public void NavigateMatch(int direction)
@@ -128,6 +161,9 @@ internal class FindAndReplaceController
         _doc.Document.SealUndoGroup();
 
         int savedIndex = _currentMatchIndex;
+        // Invalidate before searching, not after: InvalidateLayout marks the search dirty,
+        // and the search that follows is authoritative - it must not be left pending.
+        _layout.InvalidateLayout();
         ExecuteSearch(_lastSearchQuery, _lastSearchCaseSensitive);
         if (_searchMatches.Count > 0)
         {
@@ -135,8 +171,6 @@ internal class FindAndReplaceController
             ScrollToMatch(_currentMatchIndex);
             _search.FindBar?.UpdateMatchInfo(_currentMatchIndex, _searchMatches.Count);
         }
-
-        _layout.InvalidateLayout();
     }
 
     public void ReplaceAll(string replacement)
@@ -155,8 +189,9 @@ internal class FindAndReplaceController
 
         _doc.Document.SealUndoGroup();
 
-        ExecuteSearch(_lastSearchQuery, _lastSearchCaseSensitive);
+        // Invalidate first - see ReplaceCurrent.
         _layout.InvalidateLayout();
+        ExecuteSearch(_lastSearchQuery, _lastSearchCaseSensitive);
     }
 
     public void ClearMatches()
@@ -164,27 +199,32 @@ internal class FindAndReplaceController
         _searchMatches.Clear();
         _currentMatchIndex = -1;
         _lastSearchQuery = "";
+        // Closing Find must not leave a pending refresh that would re-open the render gate.
+        _searchDirty = false;
         _rendering.InvalidateVisual();
     }
 
     // --- Internal API ---
 
-    /// <summary>True when there is at least one match to paint. Gates the render pass.</summary>
-    internal bool HasHighlights => _searchMatches.Count > 0;
+    /// <summary>
+    /// True when there is something to paint, or a pending refresh that may produce some.
+    /// Gates the render pass. The dirty case matters: an edit can create the first match of
+    /// a search that previously found nothing, and only the render pass re-runs the search.
+    /// </summary>
+    internal bool HasHighlights => _searchMatches.Count > 0 || _searchDirty;
 
     internal void InvalidateSearchOnContentChange()
     {
-        if (_searchMatches.Count > 0 && !string.IsNullOrEmpty(_lastSearchQuery))
+        // Not conditional on having matches already: typing can create the first match of a
+        // search that found nothing, and that has to light up too.
+        if (!string.IsNullOrEmpty(_lastSearchQuery))
             _searchDirty = true;
     }
 
     internal void DrawSearchHighlights(DrawingContext dc, double effectiveScroll)
     {
         if (_searchDirty)
-        {
-            _searchDirty = false;
-            ExecuteSearch(_lastSearchQuery, _lastSearchCaseSensitive);
-        }
+            RefreshMatchesAfterEdit();
 
         if (_searchMatches.Count == 0) return;
 
