@@ -1879,6 +1879,31 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider, IDocsC
     protected override void OnRenderSizeChanged(SizeChangedInfo sizeInfo)
     {
         base.OnRenderSizeChanged(sizeInfo);
+
+        // A height-only change does not reflow anything, so the offset still points at the
+        // same content and only needs a fresh layout.
+        if (sizeInfo.WidthChanged)
+            ReflowPreservingViewport();
+        else
+            InvalidateLayout();
+    }
+
+    /// <summary>
+    /// Recomputes layout for a new width while keeping the viewport on the content the reader
+    /// is looking at. A width change rewraps every line, so total content height changes and a
+    /// fixed pixel scroll offset would slide the document under the reader. Anchors the same
+    /// way <see cref="SetEditMode"/> and <see cref="SetZoom"/> do.
+    /// </summary>
+    internal void ReflowPreservingViewport()
+    {
+        bool canAnchor = _visualLines.Count > 0 && _lineYPositions.Count > 0;
+        var anchor = canAnchor ? ComputeScrollAnchor() : default;
+
         InvalidateLayout();
+
+        if (!canAnchor) return;
+
+        ComputeLayout();
+        ApplyScrollAnchor(anchor);
     }
 }
