@@ -654,10 +654,12 @@ public partial class DocsCanvas
                 return;
             }
 
+            var softBreaks = new HashSet<int>(group.SoftBreakOffsets);
             int pos = 0;
             while (pos < text.Length)
             {
-                int lineLen = FitLine(text, pos, maxWidth, group.JoinedParsed, group.JoinedMap);
+                int lineLen = FitLine(text, pos, maxWidth, group.JoinedParsed, group.JoinedMap,
+                    softBreaks: softBreaks);
                 var (bi, _) = group.JoinedToSource(pos);
                 var vl = new DocsCanvas.VisualLine(bi, pos, lineLen, BlockKind.Paragraph) { Group = group };
                 if (group.JoinedMap.Images != null)
@@ -671,7 +673,7 @@ public partial class DocsCanvas
         }
 
         private int FitLine(string text, int start, double maxWidth, ParsedBlock parsed,
-            BlockVisualMap? map = null, int blockOffset = 0)
+            BlockVisualMap? map = null, int blockOffset = 0, HashSet<int>? softBreaks = null)
         {
             int lastSpace = -1;
             double width = 0;
@@ -698,9 +700,27 @@ public partial class DocsCanvas
                     }
                     continue;
                 }
-                if (text[i] is ' ' or '¶') lastSpace = i;
                 var style = TextMeasurer.GetStyleAtOffset(parsed.Runs, rawOffset, ref runIdx);
-                width += _rendering.Measure.MeasureCharWidth(text[i], parsed.Kind, style);
+                double charW = _rendering.Measure.MeasureCharWidth(text[i], parsed.Kind, style);
+
+                // A soft-break pilcrow is rendered followed by a visual space (see
+                // RenderingContext.DrawJoinedLine). The pilcrow itself is visible ink and
+                // must fit, so check it before it can become this line's break point.
+                bool isSoftBreak = text[i] == '¶' && softBreaks != null && softBreaks.Contains(rawOffset);
+                if (isSoftBreak && width + charW > maxWidth && anyVisible && i > start)
+                {
+                    if (lastSpace >= start)
+                        return lastSpace - start + 1;
+                    return i - start;
+                }
+
+                if (text[i] is ' ' or '¶') lastSpace = i;
+                width += charW;
+                // The visual space after the pilcrow must be measured too, or the rendered
+                // line ends up wider than maxWidth and its tail gets clipped. Like any
+                // trailing space it is allowed to hang past the edge when it ends the line.
+                if (isSoftBreak)
+                    width += _rendering.Measure.MeasureCharWidth(' ', parsed.Kind, style);
                 anyVisible = true;
                 if (width > maxWidth && anyVisible && i > start)
                 {

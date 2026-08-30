@@ -193,6 +193,11 @@ public partial class DocsCanvas
         var vl = _layout.VisualLines[vlIndex];
         if (vl.Length == 0) return vl.StartOffset;
 
+        // Joined paragraph groups have their own text/parse/map and their offsets are
+        // relative to the joined text, not to the source block.
+        if (vl.Group != null)
+            return HitTestInJoinedLine(vl, clickX);
+
         var parsed = _content.ParsedBlocks![vl.BlockIndex];
         var map = _visual.IsVisual ? _visual.VisualMaps?[vl.BlockIndex] : null;
         string blockText = _doc.GetBlockText(vl.BlockIndex);
@@ -336,20 +341,18 @@ public partial class DocsCanvas
             var style = TextMeasurer.GetStyleAtOffset(group.JoinedParsed.Runs, offset, ref runIdx);
             double charW = _rendering.Measure.MeasureCharWidth(group.JoinedText[offset], BlockKind.Paragraph, style);
 
-            // For soft breaks, account for visual space when hit-testing
+            // A soft break renders as pilcrow + visual space, so it occupies both widths
             double testWidth = charW;
             if (softBreaks.Contains(offset) && group.JoinedText[offset] == '¶')
-            {
-                double spaceW = _rendering.Measure.MeasureCharWidth(' ', BlockKind.Paragraph, style);
-                testWidth += spaceW;  // Use full visual width for hit-testing
-            }
+                testWidth += _rendering.Measure.MeasureCharWidth(' ', BlockKind.Paragraph, style);
 
             // Check if click is in this character's area
             if (x < accum + testWidth / 2)
                 return offset;
 
-            // Advance by character width only (not visual space - that's rendering-only)
-            accum += charW;
+            // Advance by the full rendered width, otherwise every soft break on the line
+            // shifts all following hit-test results to the right.
+            accum += testWidth;
         }
         return vl.StartOffset + vl.Length;
     }

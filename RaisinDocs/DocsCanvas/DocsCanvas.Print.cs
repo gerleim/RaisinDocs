@@ -25,6 +25,14 @@ partial class DocsCanvas
     }
 
     internal int TestVisualLineCount => _visualLines.Count;
+
+    /// <summary>
+    /// Width of the visible ink a joined visual line actually renders, measured from the very
+    /// <see cref="System.Windows.Media.FormattedText"/> OnRender draws (trailing whitespace
+    /// excluded, since it draws nothing). Must fit the layout width or the tail is clipped.
+    /// </summary>
+    internal double TestRenderedJoinedLineWidth(int vi)
+        => _renderingContext.BuildJoinedLineText(_visualLines[vi])?.Width ?? 0;
     internal double TestTotalContentHeight => _totalContentHeight;
     internal List<VisualLine> TestVisualLines => _visualLines;
     internal List<double> TestLineYPositions => _lineYPositions;

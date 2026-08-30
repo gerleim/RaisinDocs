@@ -255,6 +255,21 @@ public partial class DocsCanvas
                 return;
             }
 
+            var ft = BuildJoinedLineText(vl);
+            if (ft == null) return;
+
+            dc.DrawText(ft, new Point(DocsCanvas._padding, lineY - effectiveScroll));
+        }
+
+        /// <summary>
+        /// Builds the exact <see cref="FormattedText"/> that <see cref="DrawJoinedLine"/> draws,
+        /// or null when the line renders nothing. Shared with the test hook that measures how
+        /// wide a joined line really renders, so layout can be checked against reality.
+        /// </summary>
+        internal FormattedText? BuildJoinedLineText(VisualLine vl)
+        {
+            var group = vl.Group!;
+
             // Build base display string (with "¶" only, no spaces yet)
             var baseDisplay = group.JoinedMap.BuildDisplayString(group.JoinedText, vl.StartOffset, vl.Length);
 
@@ -278,7 +293,7 @@ public partial class DocsCanvas
             }
 
             string displayText = sb.ToString();
-            if (displayText.Length == 0) return;
+            if (displayText.Length == 0) return null;
 
             double fontSize = _rendering.Measure.GetBlockFontSize(BlockKind.Paragraph);
             var baseTypeface = TextMeasurer.GetBlockBaseTypeface(BlockKind.Paragraph);
@@ -286,7 +301,7 @@ public partial class DocsCanvas
             var ft = new FormattedText(displayText, CultureInfo.InvariantCulture,
                 FlowDirection.LeftToRight, baseTypeface, fontSize,
                 _rendering.Palette.Foreground, _rendering.Measure.DpiScale);
-            ApplyInlineStylesVisual(ft, vl, group.JoinedParsed, group.JoinedMap);
+            ApplyInlineStylesVisual(ft, vl, group.JoinedParsed, group.JoinedMap, group.SoftBreakOffsets);
 
             // Color soft breaks (pilcrow + visual space)
             visPos = 0;
@@ -303,7 +318,7 @@ public partial class DocsCanvas
                 visPos++;
             }
 
-            dc.DrawText(ft, new Point(DocsCanvas._padding, lineY - effectiveScroll));
+            return ft;
         }
 
         private void ApplyInlineStyles(FormattedText ft, VisualLine vl, ParsedBlock parsed, string blockText)
@@ -585,8 +600,28 @@ public partial class DocsCanvas
             }
         }
 
+        /// <summary>
+        /// Number of extra display characters inserted before <paramref name="rawOffset"/> by
+        /// soft breaks: a joined line renders each pilcrow followed by a visual space, which
+        /// <see cref="BlockVisualMap.RawToVisual"/> knows nothing about. Without this shift,
+        /// every style range after a pilcrow is applied one position too early per soft break
+        /// — the wrong characters get bold/monospace, and the line renders at a different
+        /// width than layout measured, so its tail is clipped.
+        /// </summary>
+        private static int SoftBreakShift(int[]? softBreaks, int rawOffset)
+        {
+            if (softBreaks == null) return 0;
+            int shift = 0;
+            foreach (int p in softBreaks)
+            {
+                if (p >= rawOffset) break;
+                shift++;
+            }
+            return shift;
+        }
+
         private void ApplyInlineStylesVisual(FormattedText ft, VisualLine vl,
-            ParsedBlock parsed, BlockVisualMap map)
+            ParsedBlock parsed, BlockVisualMap map, int[]? softBreaks = null)
         {
             if (parsed.SyntaxTokens != null)
             {
@@ -595,6 +630,7 @@ public partial class DocsCanvas
             }
 
             int vlEnd = vl.StartOffset + vl.Length;
+            int vlVisBase = map.RawToVisual(vl.StartOffset) + SoftBreakShift(softBreaks, vl.StartOffset);
             foreach (var run in parsed.Runs)
             {
                 if (run.Style == InlineStyle.Normal || run.Style == InlineStyle.Image) continue;
@@ -604,8 +640,8 @@ public partial class DocsCanvas
 
                 int rawStart = Math.Max(run.Start, vl.StartOffset);
                 int rawEnd = Math.Min(runEnd, vlEnd);
-                int visStart = map.RawToVisual(rawStart) - map.RawToVisual(vl.StartOffset);
-                int visEnd = map.RawToVisual(rawEnd) - map.RawToVisual(vl.StartOffset);
+                int visStart = map.RawToVisual(rawStart) + SoftBreakShift(softBreaks, rawStart) - vlVisBase;
+                int visEnd = map.RawToVisual(rawEnd) + SoftBreakShift(softBreaks, rawEnd) - vlVisBase;
                 int count = visEnd - visStart;
                 if (count <= 0) continue;
 
@@ -634,11 +670,11 @@ public partial class DocsCanvas
                 }
             }
 
-            ApplyColorSpansVisual(ft, vl, parsed, map);
+            ApplyColorSpansVisual(ft, vl, parsed, map, softBreaks);
         }
 
         private void ApplyColorSpansVisual(FormattedText ft, VisualLine vl,
-            ParsedBlock parsed, BlockVisualMap map)
+            ParsedBlock parsed, BlockVisualMap map, int[]? softBreaks = null)
         {
             if (parsed.Kind is BlockKind.FencedCodeLine or BlockKind.IndentedCodeLine) return;
             int ftLen = ft.Text.Length;
@@ -654,7 +690,7 @@ public partial class DocsCanvas
             if (colorSpans == null) return;
 
             int vlEnd = vl.StartOffset + vl.Length;
-            int vlVisBase = map.RawToVisual(vl.StartOffset);
+            int vlVisBase = map.RawToVisual(vl.StartOffset) + SoftBreakShift(softBreaks, vl.StartOffset);
 
             foreach (var cs in colorSpans)
             {
@@ -663,8 +699,8 @@ public partial class DocsCanvas
 
                 int rawStart = Math.Max(cs.Start, vl.StartOffset);
                 int rawEnd = Math.Min(csEnd, vlEnd);
-                int visStart = map.RawToVisual(rawStart) - vlVisBase;
-                int visEnd = map.RawToVisual(rawEnd) - vlVisBase;
+                int visStart = map.RawToVisual(rawStart) + SoftBreakShift(softBreaks, rawStart) - vlVisBase;
+                int visEnd = map.RawToVisual(rawEnd) + SoftBreakShift(softBreaks, rawEnd) - vlVisBase;
                 visEnd = Math.Min(visEnd, ftLen);
                 int count = visEnd - visStart;
                 if (count <= 0 || visStart < 0 || visStart >= ftLen) continue;
