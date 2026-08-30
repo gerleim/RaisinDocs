@@ -8,6 +8,7 @@ internal class PageBreakManager
 {
     private readonly ILayoutDataServices _layout;
     private readonly IRenderingServices _rendering;
+    private readonly IParsedContentServices _content;
     private bool _showPageBreaks;
     private readonly List<double> _pageBreakYs = [];
     private int _pageBreakLayoutVersion = -1;
@@ -18,10 +19,12 @@ internal class PageBreakManager
     private static readonly Pen _pageBreakPen = BuildPageBreakPen();
     private static readonly Brush _pageBreakLabelBrush = BuildPageBreakLabelBrush();
 
-    public PageBreakManager(ILayoutDataServices layout, IRenderingServices rendering)
+    public PageBreakManager(ILayoutDataServices layout, IRenderingServices rendering,
+        IParsedContentServices content)
     {
         _layout = layout ?? throw new ArgumentNullException(nameof(layout));
         _rendering = rendering ?? throw new ArgumentNullException(nameof(rendering));
+        _content = content ?? throw new ArgumentNullException(nameof(content));
     }
 
     public bool ShowPageBreaks => _showPageBreaks;
@@ -43,27 +46,30 @@ internal class PageBreakManager
 
     public void ComputePageBreakPositions()
     {
-        if (_pageBreakLayoutVersion == _layout.TestLayoutVersion) return;
-        _pageBreakLayoutVersion = _layout.TestLayoutVersion;
+        if (_pageBreakLayoutVersion == _layout.LayoutVersion) return;
+        _pageBreakLayoutVersion = _layout.LayoutVersion;
         _pageBreakYs.Clear();
 
-        if (_layout.TestVisualLineCount == 0) return;
+        var lines = _layout.VisualLines;
+        var lineYs = _layout.LineYPositions;
+        if (lines.Count == 0) return;
 
+        var parsedBlocks = _content.ParsedBlocks;
         double pageContentH = DefaultPageHeight - PageBreakMarginY * 2;
-        double pageTopY = _layout.TestLineYPositions[0];
+        double pageTopY = lineYs[0];
         int pageStartLine = 0;
-        int prevBlockIndex = _layout.TestVisualLines[0].BlockIndex;
+        int prevBlockIndex = lines[0].BlockIndex;
 
-        for (int i = 1; i < _layout.TestVisualLineCount; i++)
+        for (int i = 1; i < lines.Count; i++)
         {
-            int bi = _layout.TestVisualLines[i].BlockIndex;
+            int bi = lines[i].BlockIndex;
 
-            if (_layout.TestParsedBlocks != null && bi > prevBlockIndex)
+            if (parsedBlocks != null && bi > prevBlockIndex)
             {
                 bool hasExplicitBreak = false;
                 for (int b = prevBlockIndex; b < bi; b++)
                 {
-                    if (_layout.TestParsedBlocks[b].Kind == BlockKind.PageBreak)
+                    if (parsedBlocks[b].Kind == BlockKind.PageBreak)
                     {
                         hasExplicitBreak = true;
                         break;
@@ -71,20 +77,20 @@ internal class PageBreakManager
                 }
                 if (hasExplicitBreak)
                 {
-                    _pageBreakYs.Add(_layout.TestLineYPositions[i]);
-                    pageTopY = _layout.TestLineYPositions[i];
+                    _pageBreakYs.Add(lineYs[i]);
+                    pageTopY = lineYs[i];
                     pageStartLine = i;
                     prevBlockIndex = bi;
                     continue;
                 }
             }
 
-            double lineBottom = _layout.TestLineYPositions[i] + _layout.GetEffectiveLineHeightPublic(_layout.TestVisualLines[i]) - pageTopY;
+            double lineBottom = lineYs[i] + _layout.GetEffectiveLineHeight(lines[i]) - pageTopY;
             if (lineBottom > pageContentH && i > pageStartLine)
             {
-                int breakAt = AvoidOrphanedHeading(i, pageStartLine, _layout.TestVisualLines);
-                _pageBreakYs.Add(_layout.TestLineYPositions[breakAt]);
-                pageTopY = _layout.TestLineYPositions[breakAt];
+                int breakAt = AvoidOrphanedHeading(i, pageStartLine, lines);
+                _pageBreakYs.Add(lineYs[breakAt]);
+                pageTopY = lineYs[breakAt];
                 pageStartLine = breakAt;
             }
 
@@ -129,7 +135,7 @@ internal class PageBreakManager
             string label = $"Page {i + 2}";
             var ft = new FormattedText(label, CultureInfo.InvariantCulture,
                 FlowDirection.LeftToRight, TextMeasurer.NormalTypeface, 10,
-                _pageBreakLabelBrush, _layout.TestMeasure.DpiScale);
+                _pageBreakLabelBrush, _rendering.Measure.DpiScale);
             dc.DrawText(ft, new Point(width - ft.Width - 6, screenY + 2));
         }
     }

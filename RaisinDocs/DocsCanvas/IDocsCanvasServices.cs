@@ -47,15 +47,6 @@ internal interface ILayoutDataServices
     void InvalidateLayout();
     void ComputeLayout();
     BlockVisualSpacing? GetVisualLineSpacing(DocsCanvas.VisualLine vl);
-
-    // Test-only properties for testing and internal use by PageBreakManager
-    int TestLayoutVersion { get; }
-    int TestVisualLineCount { get; }
-    List<double> TestLineYPositions { get; }
-    List<DocsCanvas.VisualLine> TestVisualLines { get; }
-    List<ParsedBlock>? TestParsedBlocks { get; }
-    TextMeasurer TestMeasure { get; }
-    double GetEffectiveLineHeightPublic(DocsCanvas.VisualLine vl);
 }
 
 /// <summary>
