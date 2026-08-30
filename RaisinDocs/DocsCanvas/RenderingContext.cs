@@ -80,11 +80,14 @@ public partial class DocsCanvas
             if (_visual.IsVisual)
                 _table.TableRenderer.DrawTableBackgrounds(dc, effectiveScroll, viewTop, viewBottom);
 
-            if (_search.HasSearchHighlights)
-                DrawSearchHighlights(dc, effectiveScroll);
-
+            // Selection first: navigating to a match also selects it, so the two overlap.
+            // Painted the other way round the selection covers the current-match colour,
+            // and the current match becomes indistinguishable from the rest.
             if (_doc.Document.HasSelection)
                 DrawSelection(dc, effectiveScroll);
+
+            if (_search.HasSearchHighlights)
+                DrawSearchHighlights(dc, effectiveScroll);
 
             for (int i = 0; i < _layout.VisualLines.Count; i++)
             {
