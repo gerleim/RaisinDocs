@@ -169,6 +169,9 @@ internal class FindAndReplaceController
 
     // --- Internal API ---
 
+    /// <summary>True when there is at least one match to paint. Gates the render pass.</summary>
+    internal bool HasHighlights => _searchMatches.Count > 0;
+
     internal void InvalidateSearchOnContentChange()
     {
         if (_searchMatches.Count > 0 && !string.IsNullOrEmpty(_lastSearchQuery))

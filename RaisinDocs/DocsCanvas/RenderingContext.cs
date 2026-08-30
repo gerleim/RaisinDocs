@@ -80,7 +80,7 @@ public partial class DocsCanvas
             if (_visual.IsVisual)
                 _table.TableRenderer.DrawTableBackgrounds(dc, effectiveScroll, viewTop, viewBottom);
 
-            if (_search.TestSearchMatchCount > 0)
+            if (_search.HasSearchHighlights)
                 DrawSearchHighlights(dc, effectiveScroll);
 
             if (_doc.Document.HasSelection)

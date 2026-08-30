@@ -135,7 +135,9 @@ public partial class DocsCanvas
 
     // ====== ISearchServices ======
     FindBarController? ISearchServices.FindBar => FindBar;
-    int ISearchServices.TestSearchMatchCount => 0;  // TODO: implement based on FindBar if needed
+    // Reads the controller only if it already exists - never force the lazy FindAndReplace
+    // property, which would allocate on the first render of every canvas.
+    bool ISearchServices.HasSearchHighlights => _findAndReplaceController?.HasHighlights ?? false;
 
     // ====== ILoggingServices ======
     IDocsLogger? ILoggingServices.Logger => Logger;

@@ -215,4 +215,69 @@ public class FindReplaceTests
         canvas.ReplaceCurrent("bar");
         canvas.TestSearchMatchCount.Should().Be(0);
     }
+
+    // --- ISearchServices contract ---
+    //
+    // RenderingContext gates the highlight pass on ISearchServices, not on the internal
+    // DocsCanvas members the tests above use. Between 9ce9893 and this test, the explicit
+    // implementation was a stub returning 0 while those internal members returned the real
+    // count, so search highlights silently never painted and every test above still passed.
+    // These assert through the interface so that shadowing cannot regress unnoticed.
+
+    [StaFact]
+    public void HasSearchHighlights_MatchesConcreteMatchCount()
+    {
+        var canvas = CreateCanvas("aababab");
+        var services = (ISearchServices)canvas;
+
+        services.HasSearchHighlights.Should().BeFalse("no search has run yet");
+
+        canvas.TestExecuteSearch("ab", caseSensitive: false);
+
+        canvas.TestSearchMatchCount.Should().Be(3);
+        services.HasSearchHighlights.Should().BeTrue(
+            "the render pass reads the interface, which must agree with the concrete match count");
+    }
+
+    [StaFact]
+    public void HasSearchHighlights_FalseWhenSearchFindsNothing()
+    {
+        var canvas = CreateCanvas("hello world");
+        var services = (ISearchServices)canvas;
+
+        canvas.TestExecuteSearch("xyz", caseSensitive: false);
+
+        canvas.TestSearchMatchCount.Should().Be(0);
+        services.HasSearchHighlights.Should().BeFalse();
+    }
+
+    [StaFact]
+    public void HasSearchHighlights_FalseAfterMatchesReplacedAway()
+    {
+        var canvas = CreateCanvas("foo foo");
+        var services = (ISearchServices)canvas;
+
+        canvas.TestSetCursor(0, 0);
+        canvas.TestExecuteSearch("foo", caseSensitive: false);
+        services.HasSearchHighlights.Should().BeTrue();
+
+        canvas.ReplaceAll("bar");
+
+        canvas.TestSearchMatchCount.Should().Be(0);
+        services.HasSearchHighlights.Should().BeFalse();
+    }
+
+    [StaFact]
+    public void HasSearchHighlights_FalseAfterFindClosed()
+    {
+        var canvas = CreateCanvas("foo foo");
+        var services = (ISearchServices)canvas;
+
+        canvas.TestExecuteSearch("foo", caseSensitive: false);
+        services.HasSearchHighlights.Should().BeTrue();
+
+        canvas.CloseFind();
+
+        services.HasSearchHighlights.Should().BeFalse();
+    }
 }

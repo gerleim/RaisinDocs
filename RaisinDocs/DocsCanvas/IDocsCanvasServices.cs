@@ -162,7 +162,12 @@ internal interface IImageServices
 internal interface ISearchServices
 {
     FindBarController? FindBar { get; }
-    int TestSearchMatchCount { get; }
+
+    /// <summary>
+    /// True when a search is active with at least one match, so the highlight pass is worth running.
+    /// Must not force construction of the find/replace controller.
+    /// </summary>
+    bool HasSearchHighlights { get; }
 }
 
 /// <summary>
