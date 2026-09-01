@@ -43,6 +43,42 @@ either of those.
 **The constraint, stated plainly:** we cannot move live-rasterised text vertically by a
 fractional amount. We can only move *already-rasterised pixels* by a fractional amount.
 
+## Measured: caching objects reaches a ceiling, and tables are past it
+
+Before proposing to cache pixels it is worth recording what caching *objects* achieved, since
+it bounds what is left to win.
+
+Two documents, measured with the same instrumentation, are completely different workloads:
+
+| per render pass | trading report | rdmd design doc |
+|---|---|---|
+| lines drawn | 46 | 48 |
+| table rows | **33.5** | 0 |
+| blank lines | 3.5 | 18.2 |
+| joined lines | 0 | 0 |
+| line-cache hits | 1 | 31 |
+| cost per line | **64.8 µs** | 30.5 µs |
+
+On prose the per-line `FormattedText` cache works: 66 → 30.5 µs a line, and what still looks
+like "bypassing the cache" is almost entirely **blank lines**, which cost nothing — they are
+counted as drawn but the whole branch is guarded by `vl.Length > 0`.
+
+On the table document three separate attempts moved nothing:
+
+| attempt | cost per line |
+|---|---|
+| baseline | 64.8 µs |
+| cache the per-cell `FormattedText` | 72.2 µs |
+| plus clip only on overflow, plus precomputed colour backgrounds | 76.9 µs |
+
+All within noise of each other. **A table row issues one `DrawText` per cell** — about ten a
+row, ~270 a frame — where a plain line issues one. Caching what *feeds* `DrawText` cannot help
+when `DrawText` is the cost, and the ~120 lines of cache lifecycle it took were reverted.
+
+That is the argument for this design, now measured rather than predicted: a pre-rendered row
+is **one blit instead of ten `DrawText` calls**, which is the only structure that reaches this
+cost. Coalescing on that document still runs at 35%, so it is also the case that most needs it.
+
 ## The approach
 
 Rasterise the glyphs once, then translate the resulting surface. The glyphs are rendered at
@@ -129,6 +165,10 @@ highlights → cached content → caret and squiggles.
   irregular `CompositionTarget.Rendering` tick (p10 1.66 ms, median 2.93, p90 7.11, max 25.1).
 - **Memory.** One bitmap per cached line at DPI × zoom. Needs the same windowing the
   `FormattedText` cache already uses.
+- **Table rows are the case that matters, not prose.** They are where the cost is (33.5 of 46
+  drawn lines on the report, 64.8 µs a line) and the one place object caching demonstrably
+  cannot help. A design that handles prose beautifully and leaves tables re-rendering per
+  frame would miss the point entirely.
 - **Coverage has to be total before the offset goes fractional.** Any line type left out is
   re-rasterised at a new sub-pixel phase every frame, which is precisely the wobble this
   design exists to avoid — so an uncached table row would visibly breathe against its cached

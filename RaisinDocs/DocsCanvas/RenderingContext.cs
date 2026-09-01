@@ -122,6 +122,9 @@ public partial class DocsCanvas
             long _t0 = System.Diagnostics.Stopwatch.GetTimestamp();
             long _tBg = 0, _tText = 0, _tSpell = 0;
             int _drawn = 0, _firstVisible = -1, _hits = 0, _misses = 0;
+            // TEMP: what kind of line each drawn line was, so "bypassing the cache" can be
+            // attributed instead of guessed at.
+            int _nEmpty = 0, _nJoined = 0, _nJoinedImg = 0, _nTable = 0, _nImg = 0, _nRule = 0, _nPlain = 0;
             static long _us(long a, long b) =>
                 (b - a) * 1_000_000 / System.Diagnostics.Stopwatch.Frequency;
 
@@ -170,11 +173,13 @@ public partial class DocsCanvas
                 _drawn++;                                 // TEMP
                 _lastVisible = i;
 
+                if (vl.Length == 0) _nEmpty++; // TEMP
                 if (vl.Length > 0)
                 {
                     if (vl.Group != null)
                     {
-                        DrawJoinedLine(dc, vl, lineY, effectiveScroll);
+                        if (HasImagesOnLine(vl, vl.Group.JoinedMap)) _nJoinedImg++; else _nJoined++; // TEMP
+                        DrawJoinedLine(dc, vl, lineY, effectiveScroll, i, ref _hits, ref _misses);
                     }
                     else
                     {
@@ -196,18 +201,21 @@ public partial class DocsCanvas
 
                         if (_visual.IsVisual && parsed.Kind == BlockKind.ThematicBreak)
                         {
+                            _nRule++; // TEMP
                             double ruleY = lineY - effectiveScroll + 10;
                             double ruleRight = _rendering.ActualWidth - DocsCanvas._padding;
                             dc.DrawLine(_rendering.Palette.TableBorderPen, new Point(DocsCanvas._padding, ruleY), new Point(ruleRight, ruleY));
                         }
                         else if (_visual.IsVisual && parsed.Table != null && parsed.TableRow != null)
                         {
+                            _nTable++; // TEMP
                             _table.TableRenderer.DrawTableRow(dc, vl, blockText(), parsed, lineY, effectiveScroll, fontSize, baseTypeface);
                         }
                         else if (map != null)
                         {
                             if (HasImagesOnLine(vl, map))
                             {
+                                _nImg++; // TEMP
                                 DrawVisualLineWithImages(dc, vl, blockText(), parsed, map,
                                     lineY, effectiveScroll, fontSize, baseTypeface);
                             }
@@ -333,7 +341,8 @@ public partial class DocsCanvas
             // TEMP instrumentation
             WheelDiag.Render(_us(_t0, System.Diagnostics.Stopwatch.GetTimestamp()),
                 _tBg, _tText, _tSpell, _drawn, _firstVisible, _layout.VisualLines.Count,
-                _hits, _misses);
+                _hits, _misses,
+                $"e{_nEmpty} j{_nJoined} ji{_nJoinedImg} t{_nTable} im{_nImg} r{_nRule}");
 
             _canvas.Dispatcher.BeginInvoke(() =>
             {
@@ -344,20 +353,30 @@ public partial class DocsCanvas
         }
 
         private void DrawJoinedLine(DrawingContext dc, VisualLine vl,
-            double lineY, double effectiveScroll)
+            double lineY, double effectiveScroll, int index, ref int hits, ref int misses)
         {
             var group = vl.Group!;
 
             if (HasImagesOnLine(vl, group.JoinedMap))
             {
+                // Not cached: this path draws images as well as text, so it does not reduce to
+                // a single FormattedText the way the others do.
                 DrawVisualLineWithImages(dc, vl, group.JoinedText, group.JoinedParsed,
                     group.JoinedMap, lineY, effectiveScroll,
                     _rendering.Measure.GetBlockFontSize(BlockKind.Paragraph), TextMeasurer.GetBlockBaseTypeface(BlockKind.Paragraph));
                 return;
             }
 
-            var ft = BuildJoinedLineText(vl);
-            if (ft == null) return;
+            var ft = _lineFt![index];
+            if (ft != null) hits++;
+            else
+            {
+                misses++;
+                ft = BuildJoinedLineText(vl);
+                if (ft == null) return;
+                _lineFt[index] = ft;
+                NoteCached(index);
+            }
 
             dc.DrawText(ft, new Point(DocsCanvas._padding, lineY - effectiveScroll));
         }

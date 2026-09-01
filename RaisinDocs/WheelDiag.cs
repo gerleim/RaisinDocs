@@ -9,8 +9,9 @@ namespace RaisinDocs;
 ///
 /// Writes two interleaved records to <see cref="LogPath"/>, tab separated:
 ///   S  ourMs  mvid  dllWriteTime  dllPath    which assembly wrote this session
+///   D  ourMs  label                       which document is being scrolled
 ///   M  ourMs  us                          one minimap OnRender pass
-///   R  ourMs  totalUs bgUs textUs spellUs drawn firstVisible totalLines hits misses
+///   R  ourMs  totalUs bgUs textUs spellUs drawn firstVisible totalLines hits misses kinds
 ///                                             one OnRender pass, split by phase
 ///   C  ourMs  intervalMs  targetFps           a coast starting, with the repaint target
 ///                                             resolved for the display the window is on
@@ -69,7 +70,7 @@ internal static class WheelDiag
     /// actually drawn and how many had to be skipped to reach the first visible one.
     /// </summary>
     internal static void Render(long totalUs, long bgUs, long textUs, long spellUs,
-        int linesDrawn, int firstVisible, int totalLines, int hits, int misses)
+        int linesDrawn, int firstVisible, int totalLines, int hits, int misses, string kinds)
     {
         Buffer.Append("R\t").Append(Clock.Elapsed.TotalMilliseconds.ToString("F1"))
               .Append('\t').Append(totalUs)
@@ -81,6 +82,25 @@ internal static class WheelDiag
               .Append('\t').Append(totalLines)
               .Append('\t').Append(hits)
               .Append('\t').Append(misses)
+              .Append('\t').Append(kinds)
+              .AppendLine();
+        if (++_lines >= MaxBufferedLines) Flush();
+    }
+
+    private static string _lastDoc = "";
+
+    /// <summary>
+    /// Records which document is being scrolled, written only when it changes. Sessions span
+    /// tab switches and several files, and line-kind counts mean nothing without knowing
+    /// which document produced them - a table-heavy file and a prose file look like a
+    /// regression against each other otherwise.
+    /// </summary>
+    internal static void NoteDocument(string label)
+    {
+        if (label == _lastDoc) return;
+        _lastDoc = label;
+        Buffer.Append("D" + TAB).Append(Clock.Elapsed.TotalMilliseconds.ToString("F1"))
+              .Append(TAB).Append(label)
               .AppendLine();
         if (++_lines >= MaxBufferedLines) Flush();
     }
