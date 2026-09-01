@@ -216,6 +216,35 @@ hand-transcribed version failed with 0x88980090.
 This is worth nothing while the offset is integral, which is why it was discarded rather
 than kept.
 
+## Afterwards, possibly: motion blur
+
+Once the content is a surface rather than live text, smearing it along the scroll direction is
+cheap and would make a low frame rate read as continuous — the reason film at 24fps does not
+look like a slideshow.
+
+Where it helps and where it does not is worth being precise about, because it is easy to
+reach for against the wrong artifact:
+
+- **It cannot help the slow decaying tail.** Blur length is proportional to velocity, so at
+  20–60 px/s there is nothing to smear, and that is exactly where the 1px stepping shows. The
+  artifact that most wants fixing is the one blur structurally cannot touch.
+- **It does help heavy content at speed**, where the repaint cap has lowered the frame rate and
+  consecutive frames are far apart. That is the case the adaptive cap currently mitigates by
+  trading frame rate for evenness; blur would make the remaining rate look better rather than
+  merely even.
+
+Two ways to draw it, once there is a cached surface:
+
+- **Composite the surface two or three times** at intermediate offsets with reduced opacity.
+  With a cached bitmap this is extra composites of a texture already on the GPU, needs no
+  shader, and is trivially tunable. Crude, but likely enough.
+- **A directional blur `ShaderEffect`** (HLSL ps_3_0). Correct, but WPF's built-in `BlurEffect`
+  is isotropic and would blur horizontally too, which is wrong for vertical scrolling, so this
+  means writing and shipping a shader.
+
+Whichever, the blur must fall to zero as velocity does, or text at rest would be soft — and
+that is also what stops it from being tried as a fix for the slow tail.
+
 ## Alternatives rejected
 
 - **Retained `DrawingGroup` plus translate.** Does not avoid re-rasterisation; WPF re-renders
