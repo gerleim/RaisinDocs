@@ -48,6 +48,95 @@ public partial class DocsCanvas
         /// Entries outside a window around the viewport are dropped so a long document does
         /// not accumulate them.
         /// </remarks>
+        /// <summary>
+        /// One cached visual per visual line, rendered at its own origin and positioned by a
+        /// transform. Dropped and rebuilt on the same signal as the text cache.
+        /// </summary>
+        /// <remarks>
+        /// The text cache took prose from 66us a line to 30.5, but stopped there: a table row
+        /// issues one DrawText per cell, about ten a row, and caching what feeds DrawText
+        /// cannot help when DrawText is the cost. Caching the rasterised line instead makes a
+        /// row a composite regardless of how many cells it holds.
+        /// </remarks>
+        private int _visualsBuilt; // TEMP
+        private DrawingVisual?[]? _lineVisuals;
+        private int _lineVisualsVersion = -1;
+        private int _visualsLo, _visualsHi = -1;
+
+        private void EnsureLineVisualCache(int count, int version)
+        {
+            if (_lineVisualsVersion == version && _lineVisuals != null && _lineVisuals.Length >= count)
+                return;
+
+            _docsCanvas.ContentLayer.Children.Clear();
+            _lineVisuals = new DrawingVisual?[count];
+            _lineVisualsVersion = version;
+            _visualsLo = 0;
+            _visualsHi = -1;
+        }
+
+        /// <summary>
+        /// Renders the lines in view that have no visual yet, and drops those that have
+        /// scrolled well outside it.
+        /// </summary>
+        private void SyncLineVisuals(int firstVisible, int lastVisible)
+        {
+            if (_lineVisuals == null || firstVisible < 0) return;
+
+            for (int i = firstVisible; i <= lastVisible && i < _lineVisuals.Length; i++)
+            {
+                if (_lineVisuals[i] != null) continue;
+
+                var vl = _layout.VisualLines[i];
+                var dv = new DrawingVisual
+                {
+                    // Rasterised once and composited thereafter. RenderAtScale has to follow
+                    // DPI and zoom, or the bitmap is resampled and the text is soft.
+                    CacheMode = new BitmapCache
+                    {
+                        RenderAtScale = _rendering.Measure.DpiScale,
+                        SnapsToDevicePixels = false,
+                    },
+                    Transform = new TranslateTransform(0, _layout.LineYPositions[i]),
+                };
+                using (var dc = dv.RenderOpen())
+                {
+                    // lineY == scrollY draws the line at the origin of its own visual.
+                    double y = _layout.LineYPositions[i];
+                    DrawLineContent(dc, i, vl, y, y);
+                }
+
+                _visualsBuilt++; // TEMP
+                _lineVisuals[i] = dv;
+                _docsCanvas.ContentLayer.Children.Add(dv);
+                if (_visualsHi < _visualsLo) { _visualsLo = _visualsHi = i; }
+                else { if (i < _visualsLo) _visualsLo = i; if (i > _visualsHi) _visualsHi = i; }
+            }
+
+            TrimLineVisuals(firstVisible, lastVisible);
+        }
+
+        private void TrimLineVisuals(int firstVisible, int lastVisible)
+        {
+            if (_lineVisuals == null || _visualsHi < _visualsLo) return;
+
+            int lo = Math.Max(0, firstVisible - LineFtWindow);
+            int hi = Math.Min(_lineVisuals.Length - 1, lastVisible + LineFtWindow);
+
+            for (int i = _visualsLo; i < lo && i <= _visualsHi; i++) Drop(i);
+            for (int i = _visualsHi; i > hi && i >= _visualsLo; i--) Drop(i);
+
+            _visualsLo = Math.Max(_visualsLo, lo);
+            _visualsHi = Math.Min(_visualsHi, hi);
+
+            void Drop(int i)
+            {
+                if (_lineVisuals![i] is not { } dv) return;
+                _docsCanvas.ContentLayer.Children.Remove(dv);
+                _lineVisuals[i] = null;
+            }
+        }
+
         private FormattedText?[]? _lineFt;
         private int _lineFtVersion = -1;
         private int _lineFtLo, _lineFtHi = -1;
@@ -121,6 +210,7 @@ public partial class DocsCanvas
             // Timed so the scroll controller can pace repaints against what a frame costs.
             long _t0 = System.Diagnostics.Stopwatch.GetTimestamp();
             int _firstVisible = -1;
+            _visualsBuilt = 0; // TEMP
 
             _rendering.Measure.EnsureMeasured(_docsCanvas);
             dc.DrawRectangle(_rendering.Palette.Background, null,
@@ -161,35 +251,60 @@ public partial class DocsCanvas
 
                 if (_firstVisible < 0) _firstVisible = i;
                 _lastVisible = i;
+            }
 
-                DrawLineContent(dc, i, vl, lineY, effectiveScroll);
+            if (_docsCanvas.CachedLineVisuals)
+            {
+                // Each line is rendered once into its own cached visual and the whole layer is
+                // moved by one transform, so a frame costs a composite rather than a redraw of
+                // everything on screen.
+                EnsureLineVisualCache(_layout.VisualLines.Count, _docsCanvas.RenderVersion);
+                SyncLineVisuals(_firstVisible, _lastVisible);
+                _docsCanvas.ContentScroll.Y = -effectiveScroll;
+            }
+            else
+            {
+                // TEMP comparison path: draw every visible line here, as before phase 2.
+                if (_docsCanvas.ContentLayer.Children.Count > 0)
+                    _docsCanvas.ContentLayer.Children.Clear();
+
+                for (int i = Math.Max(0, _firstVisible); i <= _lastVisible; i++)
+                    DrawLineContent(dc, i, _layout.VisualLines[i], _layout.LineYPositions[i], effectiveScroll);
             }
 
             if (_firstVisible >= 0) TrimLineFtCache(_firstVisible, _lastVisible);
 
-            if (_docsCanvas.SpellCheckEnabled)
-                DrawSpellingErrors(dc, effectiveScroll, viewTop, viewBottom);
-
-            if (_docsCanvas.ShowPageBreaks)
-                DrawPageBreaks(dc, effectiveScroll, viewTop, viewBottom);
-
-            if (_docsCanvas._cursorVisible && _docsCanvas.IsFocused && _layout.VisualLines.Count > 0)
+            // Above the text, so it goes in the overlay child rather than here: a child visual
+            // draws after the element's own content, and these would otherwise be underneath.
+            using (var odc = _docsCanvas.OverlayLayer.RenderOpen())
             {
-                int vli = _docsCanvas.CursorToVisualLineIndex();
-                double cx = DocsCanvas._padding + _docsCanvas.CursorXInVisualLine(vli);
-                double cy = _layout.LineYPositions[vli] - effectiveScroll;
-                double lineH = _layout.GetEffectiveLineHeight(_layout.VisualLines[vli]);
-                dc.DrawLine(_rendering.Palette.CursorPen, new Point(cx, cy), new Point(cx, cy + lineH));
-            }
+                if (_docsCanvas.SpellCheckEnabled)
+                    DrawSpellingErrors(odc, effectiveScroll, viewTop, viewBottom);
 
-            if (!_visual.IsVisual && _images.ImagePreview == DocsCanvas.ImagePreviewMode.OnHover && _docsCanvas._hoveredImage != null)
-                DrawHoverImagePreview(dc);
+                if (_docsCanvas.ShowPageBreaks)
+                    DrawPageBreaks(odc, effectiveScroll, viewTop, viewBottom);
+
+                if (_docsCanvas._cursorVisible && _docsCanvas.IsFocused && _layout.VisualLines.Count > 0)
+                {
+                    int vli = _docsCanvas.CursorToVisualLineIndex();
+                    double cx = DocsCanvas._padding + _docsCanvas.CursorXInVisualLine(vli);
+                    double cy = _layout.LineYPositions[vli] - effectiveScroll;
+                    double lineH = _layout.GetEffectiveLineHeight(_layout.VisualLines[vli]);
+                    odc.DrawLine(_rendering.Palette.CursorPen, new Point(cx, cy), new Point(cx, cy + lineH));
+                }
+
+                if (!_visual.IsVisual && _images.ImagePreview == DocsCanvas.ImagePreviewMode.OnHover && _docsCanvas._hoveredImage != null)
+                    DrawHoverImagePreview(odc);
+
+                DrawModeBadge(odc); // TEMP
+            }
 
             // Feeds the adaptive repaint cap: the scroll controller stretches its interval
             // when a frame is too dear to draw at the display's rate.
-            _scroll.Scroll.NoteRenderCost(
-                (System.Diagnostics.Stopwatch.GetTimestamp() - _t0)
-                / (double)System.Diagnostics.Stopwatch.Frequency);
+            long _elapsed = System.Diagnostics.Stopwatch.GetTimestamp() - _t0;
+            Phase2Diag.Frame(_elapsed * 1_000_000 / System.Diagnostics.Stopwatch.Frequency,
+                _lastVisible - _firstVisible + 1, _visualsBuilt, _docsCanvas.RenderVersion,
+                _scroll.Scroll.RepaintIntervalMs, _scroll.Scroll.DisplayIntervalMs); // TEMP
 
             _canvas.Dispatcher.BeginInvoke(() =>
             {
@@ -197,6 +312,18 @@ public partial class DocsCanvas
                     fe.InvalidateVisual();
                 _docsCanvas.ScrollStateChanged?.Invoke();
             });
+        }
+
+        /// <summary>TEMP: says which of the two paths is drawing, for the F9 comparison.</summary>
+        private void DrawModeBadge(DrawingContext dc)
+        {
+            string text = _docsCanvas.CachedLineVisuals ? "F9: cached visuals" : "F9: direct draw";
+            var ft = new FormattedText(text, CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
+                TextMeasurer.NormalTypeface, 11, _rendering.Palette.Syntax, _rendering.Measure.DpiScale);
+            double x = _rendering.ActualWidth - ft.Width - 12;
+            dc.DrawRectangle(_rendering.Palette.CodeBackground, null,
+                new Rect(x - 6, 4, ft.Width + 12, ft.Height + 4));
+            dc.DrawText(ft, new Point(x, 6));
         }
 
         /// <summary>
