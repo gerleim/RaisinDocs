@@ -88,6 +88,7 @@ public partial class DocsCanvas
         get => _visualBlockStructure;
         set => _visualBlockStructure = value;
     }
+    bool IParsedContentServices.IsVisual => IsVisual;
 
     // ====== IVisualModeServices ======
     List<BlockVisualMap>? IVisualModeServices.VisualMaps => _visualMaps;

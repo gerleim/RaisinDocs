@@ -82,6 +82,7 @@ internal interface IParsedContentServices
     List<ParsedBlock>? ParsedBlocks { get; set; }
     List<BlockVisualMap>? VisualMaps { get; set; }
     VisualBlockStructure? VisualBlockStructure { get; set; }
+    bool IsVisual { get; }
 }
 
 /// <summary>

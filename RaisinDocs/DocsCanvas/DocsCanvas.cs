@@ -291,6 +291,7 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider, IDocsC
     private readonly FormattingKeysHandler _formattingKeysHandler;
     private readonly NavigationKeysHandler _navigationKeysHandler;
     private readonly EditingKeysHandler _editingKeysHandler;
+    private readonly ListFormattingHandler _listFormattingHandler;
     private readonly LayoutEngine _layoutEngine;
     private readonly RenderingContext _renderingContext;
     private readonly CursorNavigationEngine _navigationEngine;
@@ -759,7 +760,7 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider, IDocsC
         _parsedBlocks = null;
         InvalidateLayout();
         ComputeLayout();
-        HandleEnter(shift, ctrl);
+        _listFormattingHandler.HandleEnter(shift, ctrl);
     }
 
     private readonly DispatcherTimer _undoSealTimer;
@@ -814,6 +815,7 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider, IDocsC
         _navigationEngine.VisualModeManager = _visualModeManager;
         _navigationKeysHandler = new NavigationKeysHandler(_navigationEngine, (IDocumentServices)this);
         _editingKeysHandler = new EditingKeysHandler((IDocumentServices)this, (IEditingServices)this);
+        _listFormattingHandler = new ListFormattingHandler((IDocumentServices)this, (IParsedContentServices)this, new HardBreakStyleProvider(this));
         Focusable = true;
         FocusVisualStyle = null;
         SnapsToDevicePixels = true;
