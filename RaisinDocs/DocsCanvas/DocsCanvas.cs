@@ -531,6 +531,7 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider, IDocsC
 
     public void SetShowWhitespace(bool show)
     {
+        InvalidateRenderCache();
         if (_showWhitespace == show) return;
         _showWhitespace = show;
         InvalidateVisual();
@@ -1030,8 +1031,24 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider, IDocsC
         _blinkTimer.Start();
     }
 
+    /// <summary>
+    /// Bumped whenever anything that could change how a line is drawn changes. The per-line
+    /// FormattedText cache in RenderingContext keys off this.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately over-eager. Dropping the cache costs one frame's rebuild on an action a
+    /// reader takes occasionally - a theme switch, a zoom, toggling whitespace - whereas
+    /// missing an invalidation leaves stale text on screen. Anything new that alters the
+    /// text, its styling, its fonts or the palette should call
+    /// <see cref="InvalidateRenderCache"/>, whether or not it also invalidates layout.
+    /// </remarks>
+    internal int RenderVersion { get; private set; }
+
+    internal void InvalidateRenderCache() => RenderVersion++;
+
     internal void InvalidateLayout()
     {
+        InvalidateRenderCache();
         _layoutDirty = true;
         _parsedBlocks = null;
         _visualBlockStructure = null;

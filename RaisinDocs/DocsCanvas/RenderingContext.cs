@@ -38,10 +38,12 @@ public partial class DocsCanvas
         /// 43% of wall-clock time while coasting, which starved the message pump enough for
         /// Windows to start merging wheel notches.
         ///
-        /// LayoutVersion covers every input: it is bumped by ComputeLayoutCore, which runs
-        /// for content edits, zoom, width and edit mode, and a theme change routes through
-        /// InvalidateLayout too. Selection, search highlights, the cursor and spelling
-        /// squiggles are all drawn outside the FormattedText, so they need no invalidation.
+        /// Keyed on DocsCanvas.RenderVersion, which InvalidateLayout bumps - covering content
+        /// edits, zoom, width, edit mode and theme - and which anything else that changes how
+        /// a line is drawn is expected to bump too. It is deliberately over-eager: a rebuild
+        /// costs one frame on an occasional action, a missed invalidation leaves stale text on
+        /// screen. Selection, search highlights, the cursor and spelling squiggles are drawn
+        /// outside the FormattedText and so need no invalidation of their own.
         ///
         /// Entries outside a window around the viewport are dropped so a long document does
         /// not accumulate them.
@@ -153,7 +155,7 @@ public partial class DocsCanvas
             _tBg = _us(_bg0, System.Diagnostics.Stopwatch.GetTimestamp()); // TEMP
             long _tx0 = System.Diagnostics.Stopwatch.GetTimestamp();        // TEMP
 
-            EnsureLineFtCache(_layout.VisualLines.Count, _layout.LayoutVersion);
+            EnsureLineFtCache(_layout.VisualLines.Count, _docsCanvas.RenderVersion);
             int _lastVisible = -1;
 
             for (int i = 0; i < _layout.VisualLines.Count; i++)
