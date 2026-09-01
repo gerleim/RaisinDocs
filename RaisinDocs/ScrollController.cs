@@ -23,6 +23,22 @@ internal class ScrollController
     // dropped, so slow frames cost precision, never a visible stop.
     private const double MaxFrameDelta = 0.05;
 
+    // Repainting from inside the Rendering handler makes WPF schedule another render pass,
+    // which raises Rendering again straight away: the loop free-runs as fast as the UI
+    // thread can go rather than at the display rate. Measured at ~295 repaints/sec with
+    // bursts to 3000Hz, each one an OnRender costing time proportional to the number of
+    // visible lines. That saturates the thread, so WM_MOUSEWHEEL messages queue up and
+    // Windows sums their deltas - 276 notches arrived as 83 messages, half of them carrying
+    // 2 to 12 notches, each becoming one oversized velocity impulse.
+    //
+    // The physics still integrates on every tick and stays dt-correct; only the repaint is
+    // capped, which is all the display can show anyway. The spare time lets the message
+    // pump keep up so notches arrive one at a time.
+    private const double MinRepaintInterval = 1.0 / 60;
+
+    private double _sinceRepaint;
+    private double _paintedPixel;
+
     internal double Offset
     {
         get => _offset;
@@ -51,6 +67,7 @@ internal class ScrollController
         _wheelCoasting = false;
         _wheelClock.Reset();
         CompositionTarget.Rendering -= OnWheelFrame;
+        WheelDiag.Flush(); // TEMP instrumentation
     }
 
     internal void CancelSmooth() => _smoother.Cancel();
@@ -70,6 +87,8 @@ internal class ScrollController
         {
             _wheelCoasting = true;
             _wheelClock.Restart();
+            _paintedPixel = Math.Round(_offset);
+            _sinceRepaint = MinRepaintInterval; // let the first frame paint immediately
             CompositionTarget.Rendering += OnWheelFrame;
             _invalidateVisual();
         }
@@ -110,6 +129,7 @@ internal class ScrollController
             _wheelVelocity = 0;
 
         _wheelVelocity *= Math.Exp(-dt * WheelDamping);
+        WheelDiag.Frame(dt, _wheelVelocity, _offset); // TEMP instrumentation
 
         bool stop = Math.Abs(_wheelVelocity) < 0.5;
         if (!stop && Math.Round(_offset) != prevPixel
@@ -125,13 +145,19 @@ internal class ScrollController
             _wheelCoasting = false;
             _wheelClock.Reset();
             CompositionTarget.Rendering -= OnWheelFrame;
+            WheelDiag.Flush(); // TEMP instrumentation
         }
 
-        // The renderer rounds the offset to whole pixels, so a frame that did not cross a
-        // pixel boundary would repaint an identical image. Skipping it keeps the per-frame
-        // cost (which scales with the number of visible lines) off the dispatcher, where it
-        // would otherwise starve wheel input at the lower Input priority.
-        if (Math.Round(_offset) != prevPixel)
+        // Repaint only when the image would actually differ - the renderer rounds the offset
+        // to whole pixels - and at most once per display frame. The last coast frame always
+        // paints, so the final resting position is never left unpainted.
+        _sinceRepaint += dt;
+        double pixel = Math.Round(_offset);
+        if (pixel != _paintedPixel && (stop || _sinceRepaint >= MinRepaintInterval))
+        {
+            _paintedPixel = pixel;
+            _sinceRepaint = 0;
             _invalidateVisual();
+        }
     }
 }
