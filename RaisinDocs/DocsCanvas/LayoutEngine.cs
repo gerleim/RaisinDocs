@@ -876,10 +876,13 @@ public partial class DocsCanvas
 
         internal double GetTextStartXForVisualLine(DocsCanvas.VisualLine vl)
         {
+            // Recovers the index by scanning. VisualLine is a record struct with eight
+            // members, so every comparison is a full value equality - fine for the cursor
+            // paths that call this a handful of times, but never call it from OnRender: use
+            // the overload below, which takes the index the render loop already has.
             if (!_visual.IsVisual || _layout.VisualLineSpacings == null || vl.BlockIndex < 0)
                 return DocsCanvas._padding;
 
-            // Find the index of this VisualLine
             int vlIndex = -1;
             for (int i = 0; i < _layout.VisualLines.Count; i++)
             {
@@ -889,6 +892,17 @@ public partial class DocsCanvas
                     break;
                 }
             }
+
+            return GetTextStartXForVisualLine(vl, vlIndex);
+        }
+
+        /// <summary>
+        /// The X the line's text starts at, for a line whose index is already known.
+        /// </summary>
+        internal double GetTextStartXForVisualLine(DocsCanvas.VisualLine vl, int vlIndex)
+        {
+            if (!_visual.IsVisual || _layout.VisualLineSpacings == null || vl.BlockIndex < 0)
+                return DocsCanvas._padding;
 
             if (vlIndex < 0 || vlIndex >= _layout.VisualLineSpacings.Count)
                 return DocsCanvas._padding;

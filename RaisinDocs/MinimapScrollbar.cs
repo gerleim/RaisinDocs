@@ -125,6 +125,9 @@ public class MinimapScrollbar : FrameworkElement, IMinimapDataProvider
 
     protected override void OnRender(DrawingContext dc)
     {
+        long _m0 = System.Diagnostics.Stopwatch.GetTimestamp(); // TEMP
+        try {
+
         double w = ActualWidth, h = ActualHeight;
         if (w < 1 || h < 1 || Canvas == null) return;
 
@@ -243,6 +246,12 @@ public class MinimapScrollbar : FrameworkElement, IMinimapDataProvider
         }
 
         dc.DrawRectangle(s_viewportFill, s_viewportPen, new Rect(0, _vpTop, w, _vpHeight));
+        }
+        finally
+        {
+            WheelDiag.Minimap((System.Diagnostics.Stopwatch.GetTimestamp() - _m0)
+                * 1_000_000 / System.Diagnostics.Stopwatch.Frequency); // TEMP
+        }
     }
 
     private void RebuildBitmap(int w, int h, int firstLine, int lineCount,

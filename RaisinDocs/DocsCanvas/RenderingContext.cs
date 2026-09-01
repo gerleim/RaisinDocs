@@ -28,6 +28,59 @@ public partial class DocsCanvas
         private readonly INavigationServices _navigation;
         private readonly DocsCanvas _docsCanvas;
 
+        /// <summary>
+        /// Built FormattedText per visual line, reused across frames.
+        /// </summary>
+        /// <remarks>
+        /// A FormattedText depends on the line's text, styles, fonts and palette, never on
+        /// the scroll offset - only the point it is drawn at moves. Rebuilding one per
+        /// visible line per frame measured at ~66us a line, 3.4ms of a 3.5ms OnRender, and
+        /// 43% of wall-clock time while coasting, which starved the message pump enough for
+        /// Windows to start merging wheel notches.
+        ///
+        /// LayoutVersion covers every input: it is bumped by ComputeLayoutCore, which runs
+        /// for content edits, zoom, width and edit mode, and a theme change routes through
+        /// InvalidateLayout too. Selection, search highlights, the cursor and spelling
+        /// squiggles are all drawn outside the FormattedText, so they need no invalidation.
+        ///
+        /// Entries outside a window around the viewport are dropped so a long document does
+        /// not accumulate them.
+        /// </remarks>
+        private FormattedText?[]? _lineFt;
+        private int _lineFtVersion = -1;
+        private int _lineFtLo, _lineFtHi = -1;
+        private const int LineFtWindow = 400;
+
+        private void EnsureLineFtCache(int count, int version)
+        {
+            if (_lineFtVersion != version || _lineFt == null || _lineFt.Length < count)
+            {
+                _lineFt = new FormattedText?[count];
+                _lineFtVersion = version;
+                _lineFtLo = 0;
+                _lineFtHi = -1;
+            }
+        }
+
+        /// <summary>Drops cached lines that have scrolled well outside the viewport.</summary>
+        private void TrimLineFtCache(int firstVisible, int lastVisible)
+        {
+            if (_lineFt == null || _lineFtHi < _lineFtLo) return;
+            int lo = Math.Max(0, firstVisible - LineFtWindow);
+            int hi = Math.Min(_lineFt.Length - 1, lastVisible + LineFtWindow);
+            for (int i = _lineFtLo; i < lo && i <= _lineFtHi; i++) _lineFt[i] = null;
+            for (int i = _lineFtHi; i > hi && i >= _lineFtLo; i--) _lineFt[i] = null;
+            _lineFtLo = Math.Max(_lineFtLo, lo);
+            _lineFtHi = Math.Min(_lineFtHi, hi);
+        }
+
+        private void NoteCached(int i)
+        {
+            if (_lineFtHi < _lineFtLo) { _lineFtLo = _lineFtHi = i; return; }
+            if (i < _lineFtLo) _lineFtLo = i;
+            if (i > _lineFtHi) _lineFtHi = i;
+        }
+
         public RenderingContext(
             IRenderingServices rendering,
             ILayoutDataServices layout,
@@ -63,6 +116,13 @@ public partial class DocsCanvas
         /// </summary>
         public void OnRender(DrawingContext dc)
         {
+            // TEMP instrumentation
+            long _t0 = System.Diagnostics.Stopwatch.GetTimestamp();
+            long _tBg = 0, _tText = 0, _tSpell = 0;
+            int _drawn = 0, _firstVisible = -1, _hits = 0, _misses = 0;
+            static long _us(long a, long b) =>
+                (b - a) * 1_000_000 / System.Diagnostics.Stopwatch.Frequency;
+
             _rendering.Measure.EnsureMeasured(_docsCanvas);
             dc.DrawRectangle(_rendering.Palette.Background, null,
                 new Rect(0, 0, _rendering.ActualWidth, _rendering.ActualHeight));
@@ -74,6 +134,7 @@ public partial class DocsCanvas
             double viewTop = effectiveScroll;
             double viewBottom = effectiveScroll + _rendering.ActualHeight;
 
+            long _bg0 = System.Diagnostics.Stopwatch.GetTimestamp(); // TEMP
             DrawCodeBlockBackgrounds(dc, effectiveScroll, viewTop, viewBottom);
             DrawColorBlockBackgrounds(dc, effectiveScroll, viewTop, viewBottom);
             DrawInlineColorBackgrounds(dc, effectiveScroll, viewTop, viewBottom);
@@ -89,6 +150,12 @@ public partial class DocsCanvas
             if (_search.HasSearchHighlights)
                 DrawSearchHighlights(dc, effectiveScroll);
 
+            _tBg = _us(_bg0, System.Diagnostics.Stopwatch.GetTimestamp()); // TEMP
+            long _tx0 = System.Diagnostics.Stopwatch.GetTimestamp();        // TEMP
+
+            EnsureLineFtCache(_layout.VisualLines.Count, _layout.LayoutVersion);
+            int _lastVisible = -1;
+
             for (int i = 0; i < _layout.VisualLines.Count; i++)
             {
                 var vl = _layout.VisualLines[i];
@@ -96,6 +163,10 @@ public partial class DocsCanvas
                 double lineY = _layout.LineYPositions[i];
                 if (lineY + lineH < viewTop) continue;
                 if (lineY > viewBottom) break;
+
+                if (_firstVisible < 0) _firstVisible = i; // TEMP
+                _drawn++;                                 // TEMP
+                _lastVisible = i;
 
                 if (vl.Length > 0)
                 {
@@ -106,12 +177,15 @@ public partial class DocsCanvas
                     else
                     {
                         var parsed = _content.ParsedBlocks[vl.BlockIndex];
-                        string blockText = _doc.Document.GetBlockText(vl.BlockIndex);
+                        // Materialised lazily: GetBlockText is a StringBuilder.ToString(), and on
+                        // a cache hit the line's text is never needed at all.
+                        string? _blockTextLazy = null;
+                        string blockText() => _blockTextLazy ??= _doc.Document.GetBlockText(vl.BlockIndex);
                         double fontSize = _rendering.Measure.GetBlockFontSize(parsed.Kind);
                         var baseTypeface = TextMeasurer.GetBlockBaseTypeface(parsed.Kind);
                         var map = _visual.IsVisual ? _content.VisualMaps?[vl.BlockIndex] : null;
 
-                        double textX = _docsCanvas._layoutEngine.GetTextStartXForVisualLine(vl);
+                        double textX = _docsCanvas._layoutEngine.GetTextStartXForVisualLine(vl, i);
 
                         if (_visual.IsVisual && parsed.Kind == BlockKind.Blockquote && vl.StartOffset == 0)
                         {
@@ -126,13 +200,13 @@ public partial class DocsCanvas
                         }
                         else if (_visual.IsVisual && parsed.Table != null && parsed.TableRow != null)
                         {
-                            _table.TableRenderer.DrawTableRow(dc, vl, blockText, parsed, lineY, effectiveScroll, fontSize, baseTypeface);
+                            _table.TableRenderer.DrawTableRow(dc, vl, blockText(), parsed, lineY, effectiveScroll, fontSize, baseTypeface);
                         }
                         else if (map != null)
                         {
                             if (HasImagesOnLine(vl, map))
                             {
-                                DrawVisualLineWithImages(dc, vl, blockText, parsed, map,
+                                DrawVisualLineWithImages(dc, vl, blockText(), parsed, map,
                                     lineY, effectiveScroll, fontSize, baseTypeface);
                             }
                             else
@@ -180,12 +254,14 @@ public partial class DocsCanvas
                                     }
                                 }
 
-                                string displayText = map.BuildDisplayString(blockText, vl.StartOffset, vl.Length);
-                                if (displayText.Length > 0 || (parsed.Kind == BlockKind.HtmlBlock && parsed.CreateVisualSeparation))
+                                var ft = _lineFt![i];
+                                if (ft != null) _hits++; else _misses++; // TEMP
+                                if (ft == null)
                                 {
+                                    string displayText = map.BuildDisplayString(blockText(), vl.StartOffset, vl.Length);
                                     if (displayText.Length > 0)
                                     {
-                                        var ft = new FormattedText(displayText, CultureInfo.InvariantCulture,
+                                        ft = new FormattedText(displayText, CultureInfo.InvariantCulture,
                                             FlowDirection.LeftToRight, baseTypeface, fontSize,
                                             _rendering.Palette.Foreground, _rendering.Measure.DpiScale);
                                         ApplyInlineStylesVisual(ft, vl, parsed, map);
@@ -194,22 +270,32 @@ public partial class DocsCanvas
                                             ft.SetForegroundBrush(_rendering.Palette.Syntax, 0, displayText.Length);
                                             ft.SetTextDecorations(TextDecorations.Strikethrough, 0, displayText.Length);
                                         }
-                                        dc.DrawText(ft, new Point(textX, lineY - effectiveScroll));
+                                        _lineFt[i] = ft;
+                                        NoteCached(i);
                                     }
                                 }
+                                if (ft != null)
+                                    dc.DrawText(ft, new Point(textX, lineY - effectiveScroll));
                             }
                         }
                         else
                         {
-                            string text = blockText.Substring(vl.StartOffset, vl.Length);
-                            var ft = new FormattedText(text, CultureInfo.InvariantCulture,
-                                FlowDirection.LeftToRight, baseTypeface, fontSize,
-                                _rendering.Palette.Foreground, _rendering.Measure.DpiScale);
-                            ApplyInlineStyles(ft, vl, parsed, blockText);
+                            var ft = _lineFt![i];
+                            if (ft != null) _hits++; else _misses++; // TEMP
+                            if (ft == null)
+                            {
+                                string text = blockText().Substring(vl.StartOffset, vl.Length);
+                                ft = new FormattedText(text, CultureInfo.InvariantCulture,
+                                    FlowDirection.LeftToRight, baseTypeface, fontSize,
+                                    _rendering.Palette.Foreground, _rendering.Measure.DpiScale);
+                                ApplyInlineStyles(ft, vl, parsed, blockText());
+                                _lineFt[i] = ft;
+                                NoteCached(i);
+                            }
                             dc.DrawText(ft, new Point(textX, lineY - effectiveScroll));
 
                             if (_docsCanvas._showWhitespace)
-                                DrawTrailingSpaceDots(dc, vl, blockText, parsed, textX, lineY - effectiveScroll);
+                                DrawTrailingSpaceDots(dc, vl, blockText(), parsed, textX, lineY - effectiveScroll);
 
                             if (_images.ImagePreview == DocsCanvas.ImagePreviewMode.Inline && parsed.Images != null)
                                 DrawSourceInlineImages(dc, vl, parsed.Images, lineY, effectiveScroll);
@@ -218,8 +304,14 @@ public partial class DocsCanvas
                 }
             }
 
+            if (_firstVisible >= 0) TrimLineFtCache(_firstVisible, _lastVisible);
+
+            _tText = _us(_tx0, System.Diagnostics.Stopwatch.GetTimestamp()); // TEMP
+            long _sp0 = System.Diagnostics.Stopwatch.GetTimestamp();          // TEMP
+
             if (_docsCanvas.SpellCheckEnabled)
                 DrawSpellingErrors(dc, effectiveScroll, viewTop, viewBottom);
+            _tSpell = _us(_sp0, System.Diagnostics.Stopwatch.GetTimestamp()); // TEMP
 
             if (_docsCanvas.ShowPageBreaks)
                 DrawPageBreaks(dc, effectiveScroll, viewTop, viewBottom);
@@ -235,6 +327,11 @@ public partial class DocsCanvas
 
             if (!_visual.IsVisual && _images.ImagePreview == DocsCanvas.ImagePreviewMode.OnHover && _docsCanvas._hoveredImage != null)
                 DrawHoverImagePreview(dc);
+
+            // TEMP instrumentation
+            WheelDiag.Render(_us(_t0, System.Diagnostics.Stopwatch.GetTimestamp()),
+                _tBg, _tText, _tSpell, _drawn, _firstVisible, _layout.VisualLines.Count,
+                _hits, _misses);
 
             _canvas.Dispatcher.BeginInvoke(() =>
             {

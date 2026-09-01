@@ -8,6 +8,10 @@ namespace RaisinDocs;
 /// TEMPORARY instrumentation for the mouse-wheel scrolling investigation. Delete when done.
 ///
 /// Writes two interleaved records to <see cref="LogPath"/>, tab separated:
+///   S  ourMs  mvid  dllWriteTime  dllPath    which assembly wrote this session
+///   M  ourMs  us                          one minimap OnRender pass
+///   R  ourMs  totalUs bgUs textUs spellUs drawn firstVisible totalLines hits misses
+///                                             one OnRender pass, split by phase
 ///   C  ourMs  intervalMs  targetFps           a coast starting, with the repaint target
 ///                                             resolved for the display the window is on
 ///   W  ourMs  osMs  delta  canvasHeight       a wheel notch arriving at OnMouseWheel
@@ -26,6 +30,8 @@ namespace RaisinDocs;
 /// </summary>
 internal static class WheelDiag
 {
+    private const char TAB = '\t';
+
     private const int MaxBufferedLines = 2000;
 
     private static readonly Stopwatch Clock = Stopwatch.StartNew();
@@ -36,6 +42,57 @@ internal static class WheelDiag
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
         "RaisinDocs",
         $"wheel-{DateTime.Now:yyyy-MM-dd}.log");
+
+    /// <summary>
+    /// Records which assembly wrote this session. Sessions append to one file across runs,
+    /// and a process launched before a rebuild keeps the assembly it started with, so
+    /// without this a stale run is indistinguishable from a fresh one in the data. The MVID
+    /// changes on every compile.
+    /// </summary>
+    static WheelDiag()
+    {
+        try
+        {
+            var asm = typeof(WheelDiag).Assembly;
+            Buffer.Append("S" + TAB).Append(Clock.Elapsed.TotalMilliseconds.ToString("F1"))
+                  .Append(TAB).Append(asm.ManifestModule.ModuleVersionId.ToString("N"))
+                  .Append(TAB).Append(File.GetLastWriteTime(asm.Location).ToString("HH:mm:ss"))
+                  .Append(TAB).Append(asm.Location)
+                  .AppendLine();
+            Flush();
+        }
+        catch { /* diagnostics must never break scrolling */ }
+    }
+
+    /// <summary>
+    /// One OnRender pass, in microseconds, split by phase, plus how many visual lines were
+    /// actually drawn and how many had to be skipped to reach the first visible one.
+    /// </summary>
+    internal static void Render(long totalUs, long bgUs, long textUs, long spellUs,
+        int linesDrawn, int firstVisible, int totalLines, int hits, int misses)
+    {
+        Buffer.Append("R\t").Append(Clock.Elapsed.TotalMilliseconds.ToString("F1"))
+              .Append('\t').Append(totalUs)
+              .Append('\t').Append(bgUs)
+              .Append('\t').Append(textUs)
+              .Append('\t').Append(spellUs)
+              .Append('\t').Append(linesDrawn)
+              .Append('\t').Append(firstVisible)
+              .Append('\t').Append(totalLines)
+              .Append('\t').Append(hits)
+              .Append('\t').Append(misses)
+              .AppendLine();
+        if (++_lines >= MaxBufferedLines) Flush();
+    }
+
+    /// <summary>One minimap OnRender pass, in microseconds.</summary>
+    internal static void Minimap(long us)
+    {
+        Buffer.Append("M\t").Append(Clock.Elapsed.TotalMilliseconds.ToString("F1"))
+              .Append('\t').Append(us)
+              .AppendLine();
+        if (++_lines >= MaxBufferedLines) Flush();
+    }
 
     /// <summary>Start of a coast, recording the repaint target resolved for this gesture.</summary>
     internal static void Coast(double repaintInterval)
