@@ -59,6 +59,10 @@ public partial class DocsCanvas
         /// row a composite regardless of how many cells it holds.
         /// </remarks>
         private int _visualsBuilt; // TEMP
+        /// <summary>How often the minimap thumbnail is refreshed while scrolling.</summary>
+        private const int MinimapHz = 30;
+        private long _lastMinimapTick;
+
         private DrawingVisual?[]? _lineVisuals;
         private int _lineVisualsVersion = -1;
         private int _visualsLo, _visualsHi = -1;
@@ -97,7 +101,13 @@ public partial class DocsCanvas
                         RenderAtScale = _rendering.Measure.DpiScale,
                         SnapsToDevicePixels = false,
                     },
-                    Transform = new TranslateTransform(0, _layout.LineYPositions[i]),
+                    // Whole pixels here, deliberately. The fractional part of the scroll
+                    // belongs to the one shared transform below, so every line carries the
+                    // same sub-pixel phase: if the compositor snaps a cached bitmap's
+                    // placement, it snaps all of them the same way and the spacing between
+                    // lines cannot breathe - which is what killed the earlier attempt at
+                    // sub-pixel scrolling over live-rasterised text.
+                    Transform = new TranslateTransform(0, Math.Round(_layout.LineYPositions[i])),
                 };
                 using (var dc = dv.RenderOpen())
                 {
@@ -219,6 +229,11 @@ public partial class DocsCanvas
             if (_content.ParsedBlocks == null)
                 return;
 
+            // Whole pixels. Sub-pixel scrolling was tried over cached lines (phase 3) and
+            // backed out: translating a bitmap by a fraction resamples it, which softens the
+            // text and, as a coast decays and the fraction drifts slowly, beats into a visible
+            // interference pattern. Over live-rasterised text it is worse still - each line
+            // grid-fits on its own and the spacing between them wriggles.
             double effectiveScroll = Math.Round(_scroll.Scroll.EffectiveOffset);
             double viewTop = effectiveScroll;
             double viewBottom = effectiveScroll + _rendering.ActualHeight;
@@ -306,12 +321,29 @@ public partial class DocsCanvas
                 _lastVisible - _firstVisible + 1, _visualsBuilt, _docsCanvas.RenderVersion,
                 _scroll.Scroll.RepaintIntervalMs, _scroll.Scroll.DisplayIntervalMs); // TEMP
 
-            _canvas.Dispatcher.BeginInvoke(() =>
-            {
-                if (_canvas.Minimap is FrameworkElement fe)
-                    fe.InvalidateVisual();
-                _docsCanvas.ScrollStateChanged?.Invoke();
-            });
+            // Both at Background priority, below Input and Render. Queued at the default
+            // Normal these outrank the very things they interrupt: the caller is a render, so
+            // every frame was scheduling work that preempted the next one.
+            //
+            // The minimap is throttled as well. It rebuilds its bitmap whenever the viewport
+            // scrolls past the line range it cached, which while scrolling happens every few
+            // frames, and that rebuild is far dearer than a canvas frame. Invalidating it once
+            // per canvas frame therefore injected a periodic stall - measured as late frames
+            // arriving every third frame, 19ms against a 7.4ms median, with the canvas's own
+            // OnRender perfectly normal on those frames. A viewport thumbnail does not need
+            // 135 updates a second.
+            long now = System.Diagnostics.Stopwatch.GetTimestamp();
+            bool minimapDue =
+                (now - _lastMinimapTick) > System.Diagnostics.Stopwatch.Frequency / MinimapHz;
+            if (minimapDue) _lastMinimapTick = now;
+
+            _canvas.Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Background,
+                () =>
+                {
+                    if (minimapDue && _canvas.Minimap is FrameworkElement fe)
+                        fe.InvalidateVisual();
+                    _docsCanvas.ScrollStateChanged?.Invoke();
+                });
         }
 
         /// <summary>TEMP: says which of the two paths is drawing, for the F9 comparison.</summary>

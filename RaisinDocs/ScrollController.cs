@@ -231,7 +231,10 @@ internal class ScrollController
         if (!stop && Math.Round(_offset) != prevPixel
                   && Math.Abs(_wheelVelocity) < WheelDamping)
         {
-            _offset = prevPixel;
+            // Come to rest on a whole pixel so the frame that lingers is not resampled.
+            // Nearest, not the pixel this frame began on: the view moves sub-pixel now, so
+            // snapping backwards would be a visible step.
+            _offset = Math.Round(_offset);
             stop = true;
         }
 
@@ -250,6 +253,9 @@ internal class ScrollController
         // view makes them cheap again.
         _repaintInterval = EffectiveInterval();
 
+        // Only when the drawn image would differ, since the renderer rounds to whole pixels.
+        // This does limit the decaying tail to one paint per pixel - about 38 a second at
+        // 40px/s - which is the 1px stepping that sub-pixel scrolling was meant to cure.
         _sinceRepaint += dt;
         double pixel = Math.Round(_offset);
         bool painted = pixel != _paintedPixel && (stop || _sinceRepaint >= _repaintInterval);

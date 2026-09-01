@@ -27,6 +27,9 @@ internal static class Phase2Diag
     internal static void Frame(long onRenderUs, int linesDrawn, int visualsBuilt, int renderVersion,
         double repaintMs, double displayMs)
     {
+        // Gen0/1/2 collection counts, so a late frame can be checked against a collection
+        // rather than guessed at. Reading them is a few field loads.
+        int g0 = GC.CollectionCount(0), g1 = GC.CollectionCount(1), g2 = GC.CollectionCount(2);
         Buffer.Append(Clock.Elapsed.TotalMilliseconds.ToString("F1"))
               .Append('\t').Append(onRenderUs)
               .Append('\t').Append(linesDrawn)
@@ -34,6 +37,9 @@ internal static class Phase2Diag
               .Append('\t').Append(renderVersion)
               .Append('\t').Append(repaintMs.ToString("F2"))
               .Append('\t').Append(displayMs.ToString("F2"))
+              .Append('\t').Append(g0)
+              .Append('\t').Append(g1)
+              .Append('\t').Append(g2)
               .AppendLine();
         if (++_lines >= 400) Flush();
     }
