@@ -168,7 +168,7 @@ public partial class DocsCanvas
         RaiseFormattingChanged();
     }
 
-    private bool CanReformatAll
+    internal bool CanReformatAll
     {
         get
         {

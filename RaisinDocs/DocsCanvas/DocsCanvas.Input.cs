@@ -760,13 +760,6 @@ public partial class DocsCanvas
 
     // --- Right-click context menu ---
 
-    protected override void OnMouseRightButtonUp(MouseButtonEventArgs e)
-    {
-        base.OnMouseRightButtonUp(e);
-        ShowContextMenu(e.GetPosition(this));
-        e.Handled = true;
-    }
-
     private bool IsWithinSelection(int block, int offset)
     {
         if (!_doc.HasSelection) return false;
@@ -777,138 +770,16 @@ public partial class DocsCanvas
         return true;
     }
 
-    private void ShowContextMenu(Point position)
+    protected override void OnMouseRightButtonUp(MouseButtonEventArgs e)
     {
-        var menu = new ContextMenu();
-        ApplyContextMenuStyle(menu);
-
-        bool selectionIsMultiWord = _doc.HasSelection
-            && _doc.GetSelectedText().AsSpan().IndexOfAny(' ', '\t') >= 0;
-
-        if (SpellCheckEnabled && !selectionIsMultiWord)
-            AddSpellCheckMenuItems(menu, position);
-
-        bool hasSelection = _doc.HasSelection;
-        bool inCode = IsInFencedCode;
-
-        // Clipboard operations
-        if (menu.Items.Count > 0)
-            menu.Items.Add(new Separator());
-
-        if (!IsReadOnly)
-        {
-            var cut = new MenuItem { Header = "Cut", InputGestureText = "Ctrl+X", IsEnabled = hasSelection };
-            ApplyMenuItemStyle(cut);
-            cut.Click += (_, _) => { PerformCut(); Focus(); };
-            menu.Items.Add(cut);
-        }
-
-        var copy = new MenuItem { Header = "Copy", InputGestureText = "Ctrl+C", IsEnabled = hasSelection };
-        ApplyMenuItemStyle(copy);
-        copy.Click += (_, _) => { PerformCopy(); Focus(); };
-        menu.Items.Add(copy);
-
-        if (!IsReadOnly)
-        {
-            var paste = new MenuItem { Header = "Paste", InputGestureText = "Ctrl+V", IsEnabled = Clipboard.ContainsText() };
-            ApplyMenuItemStyle(paste);
-            paste.Click += (_, _) => { PerformPaste(); Focus(); };
-            menu.Items.Add(paste);
-        }
-
-        var selectAll = new MenuItem { Header = "Select all", InputGestureText = "Ctrl+A" };
-        ApplyMenuItemStyle(selectAll);
-        selectAll.Click += (_, _) => { PerformSelectAll(); Focus(); };
-        menu.Items.Add(selectAll);
-
-        // Inline formatting (only when selection exists and not in code block)
-        if (hasSelection && !IsReadOnly && !inCode)
-        {
-            menu.Items.Add(new Separator());
-
-            var bold = new MenuItem { Header = "Bold", InputGestureText = "Ctrl+B", IsChecked = SelectionIsBold };
-            ApplyMenuItemStyle(bold);
-            bold.Click += (_, _) => { ToggleBold(); Focus(); };
-            menu.Items.Add(bold);
-
-            var italic = new MenuItem { Header = "Italic", InputGestureText = "Ctrl+I", IsChecked = SelectionIsItalic };
-            ApplyMenuItemStyle(italic);
-            italic.Click += (_, _) => { ToggleItalic(); Focus(); };
-            menu.Items.Add(italic);
-
-            var strikethrough = new MenuItem { Header = "Strikethrough", IsChecked = SelectionIsStrikethrough };
-            ApplyMenuItemStyle(strikethrough);
-            strikethrough.Click += (_, _) => { ToggleStrikethrough(); Focus(); };
-            menu.Items.Add(strikethrough);
-
-            var code = new MenuItem { Header = "Code", IsChecked = SelectionIsCode };
-            ApplyMenuItemStyle(code);
-            code.Click += (_, _) => { ToggleCodeSpan(); Focus(); };
-            menu.Items.Add(code);
-        }
-
-        // Reformat
-        if (!IsReadOnly)
-        {
-            bool canReformat = hasSelection ? CanReformat : CanReformatAll;
-            menu.Items.Add(new Separator());
-            var reformat = new MenuItem
-            {
-                Header = hasSelection ? "Reformat" : "Reformat all",
-                IsEnabled = canReformat
-            };
-            ApplyMenuItemStyle(reformat);
-            reformat.Click += (_, _) =>
-            {
-                if (_doc.HasSelection)
-                    Reflow();
-                else
-                    ReflowAll();
-                Focus();
-            };
-            menu.Items.Add(reformat);
-        }
-
-        // Clear background
-        bool hasBg = hasSelection ? SelectionHasBackground() : CursorHasBackground();
-        if (hasBg)
-        {
-            menu.Items.Add(new Separator());
-            var clearBackground = new MenuItem { Header = "Clear background" };
-            ApplyMenuItemStyle(clearBackground);
-            clearBackground.Click += (_, _) =>
-            {
-                if (_doc.HasSelection)
-                    RemoveBackgroundFromSelection();
-                else
-                    RemoveBackgroundAtCursor();
-                Focus();
-            };
-            menu.Items.Add(clearBackground);
-        }
-
-        menu.Placement = System.Windows.Controls.Primitives.PlacementMode.RelativePoint;
-        menu.PlacementTarget = this;
-        menu.HorizontalOffset = position.X;
-        menu.VerticalOffset = position.Y;
-        menu.IsOpen = true;
-    }
-
-    private Style? _contextMenuStyle;
-    private Style? _menuItemStyle;
-
-    private void ApplyContextMenuStyle(ContextMenu menu)
-    {
-        _contextMenuStyle ??= TryFindResource("DarkContextMenu") as Style;
-        if (_contextMenuStyle != null)
-            menu.Style = _contextMenuStyle;
+        base.OnMouseRightButtonUp(e);
+        _contextMenuHandler.ShowContextMenu(e.GetPosition(this));
+        e.Handled = true;
     }
 
     internal void ApplyMenuItemStyle(MenuItem item)
     {
-        _menuItemStyle ??= TryFindResource("DarkContextMenuItem") as Style;
-        if (_menuItemStyle != null)
-            item.Style = _menuItemStyle;
+        _contextMenuHandler.ApplyMenuItemStyle(item);
     }
 
     void ICanvasOperations.StyleMenuItem(MenuItem item) => ApplyMenuItemStyle(item);

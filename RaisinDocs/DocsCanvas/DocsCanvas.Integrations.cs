@@ -213,7 +213,7 @@ public partial class DocsCanvas
         _spellCheckController?.DrawSpellingErrors(dc, effectiveScroll, viewTop, viewBottom);
     }
 
-    private bool AddSpellCheckMenuItems(ContextMenu menu, Point position)
+    public bool AddSpellCheckMenuItems(ContextMenu menu, Point position)
     {
         return _spellCheckController?.AddSpellCheckMenuItems(menu, position) ?? false;
     }
