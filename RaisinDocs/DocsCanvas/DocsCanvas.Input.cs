@@ -129,7 +129,7 @@ public partial class DocsCanvas
             Cursor = hoverLink != null && Keyboard.Modifiers.HasFlag(ModifierKeys.Control)
                 ? Cursors.Hand
                 : Cursors.IBeam;
-            UpdateHoverImage(pos);
+            _hoverImageHandler.UpdateHoverImage(pos);
             return;
         }
 
@@ -186,57 +186,12 @@ public partial class DocsCanvas
     protected override void OnMouseLeave(MouseEventArgs e)
     {
         base.OnMouseLeave(e);
+        _hoverImageHandler.Clear();
         if (_hoveredImage != null)
         {
-            _hoveredImage = null;
             InvalidateVisual();
         }
         _linkHandler.HideLinkTooltip();
-    }
-
-    private void UpdateHoverImage(Point pos)
-    {
-        if (IsVisual || _imagePreview != ImagePreviewMode.OnHover || _parsedBlocks == null)
-        {
-            if (_hoveredImage != null) { _hoveredImage = null; InvalidateVisual(); }
-            return;
-        }
-
-        ComputeLayout();
-        double effectiveScroll = _scroll.EffectiveOffset;
-        double hitY = pos.Y + effectiveScroll;
-        int vli = HitTestVisualLine(hitY);
-        if (vli < 0 || vli >= _visualLines.Count)
-        {
-            if (_hoveredImage != null) { _hoveredImage = null; InvalidateVisual(); }
-            return;
-        }
-
-        var vl = _visualLines[vli];
-        var parsed = _parsedBlocks[vl.BlockIndex];
-        if (parsed.Images == null)
-        {
-            if (_hoveredImage != null) { _hoveredImage = null; InvalidateVisual(); }
-            return;
-        }
-
-        int offset = HitTestInVisualLine(vli, pos.X - _padding);
-        InlineImage? found = null;
-        foreach (var img in parsed.Images)
-        {
-            if (offset >= img.Start && offset < img.Start + img.Length)
-            {
-                found = img;
-                break;
-            }
-        }
-
-        if (found != _hoveredImage)
-        {
-            _hoveredImage = found;
-            _hoverPosition = pos;
-            InvalidateVisual();
-        }
     }
 
     // --- Text input ---

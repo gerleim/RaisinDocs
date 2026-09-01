@@ -279,8 +279,8 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider, IDocsC
     public enum ImagePreviewMode { Off, Inline, OnHover }
     private ImagePreviewMode _imagePreview = ImagePreviewMode.Off;
     public ImagePreviewMode CurrentImagePreview => _imagePreview;
-    private InlineImage? _hoveredImage;
-    private Point _hoverPosition;
+    internal InlineImage? _hoveredImage;
+    internal Point _hoverPosition;
 
     private readonly LinkHandler _linkHandler;
     private readonly LinkPopupController _linkPopup;
@@ -294,6 +294,7 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider, IDocsC
     private readonly ListFormattingHandler _listFormattingHandler;
     private readonly ContextMenuHandler _contextMenuHandler;
     private readonly IndentationHandler _indentationHandler;
+    private readonly HoverImageHandler _hoverImageHandler;
     private readonly LayoutEngine _layoutEngine;
     private readonly RenderingContext _renderingContext;
     private readonly CursorNavigationEngine _navigationEngine;
@@ -820,6 +821,7 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider, IDocsC
         _listFormattingHandler = new ListFormattingHandler((IDocumentServices)this, (IParsedContentServices)this, new HardBreakStyleProvider(this));
         _contextMenuHandler = new ContextMenuHandler(this, (IDocumentServices)this, (ISpellCheckAccess)this);
         _indentationHandler = new IndentationHandler((IDocumentServices)this, (IParsedContentServices)this);
+        _hoverImageHandler = new HoverImageHandler((IParsedContentServices)this, (IImageServices)this, (INavigationServices)this, (ILayoutDataServices)this, (IScrollServices)this, (IRenderingServices)this, (IDocumentServices)this, this);
         Focusable = true;
         FocusVisualStyle = null;
         SnapsToDevicePixels = true;
@@ -1136,6 +1138,9 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider, IDocsC
         => _navigationEngine.HitTestInVisualLineProper(vlIndex, clickX);
 
     private int HitTestInVisualLine(int vlIndex, double x)
+        => _navigationEngine.HitTestInVisualLine(vlIndex, x);
+
+    internal int HitTestInVisualLineInternal(int vlIndex, double x)
         => _navigationEngine.HitTestInVisualLine(vlIndex, x);
 
     private int HitTestInJoinedLine(VisualLine vl, double x)
