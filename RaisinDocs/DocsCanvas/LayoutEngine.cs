@@ -915,8 +915,13 @@ public partial class DocsCanvas
             var cached = _image.ImageCache.Get(img.Url, _image.DocumentBasePath, maxWidth);
             if (cached != null)
                 return (cached.Value.Width, cached.Value.Height);
-            _image.ImageCache.RequestLoad(img.Url, _image.DocumentBasePath, () => _layout.InvalidateLayout());
-            return (20, 20);
+
+            // See DocsCanvas.GetImageSize: a size read from the header means the decode only
+            // has to repaint, rather than invalidate layout from under a running scroll.
+            var known = _image.ImageCache.GetPixelSize(img.Url, _image.DocumentBasePath, maxWidth);
+            _image.ImageCache.RequestLoad(img.Url, _image.DocumentBasePath,
+                known != null ? _rendering.InvalidateVisual : _layout.InvalidateLayout);
+            return known ?? (20, 20);
         }
 
         private static InlineImage? FindImageAtRawOffset(IReadOnlyList<InlineImage>? images, int rawOffset)

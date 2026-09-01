@@ -1102,8 +1102,14 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider, IDocsC
         var cached = _imageCache.Get(img.Url, DocumentBasePath, maxWidth);
         if (cached != null)
             return (cached.Value.Width, cached.Value.Height);
-        _imageCache.RequestLoad(img.Url, DocumentBasePath, () => InvalidateLayout());
-        return (20, 20);
+
+        // Reserve the real size straight away where the header can tell us. Then the decode
+        // that follows changes pixels but not layout, so it only needs a repaint - no reparse,
+        // no dropped render cache, and nothing below the image moves when it appears.
+        var known = _imageCache.GetPixelSize(img.Url, DocumentBasePath, maxWidth);
+        _imageCache.RequestLoad(img.Url, DocumentBasePath,
+            known != null ? InvalidateVisual : InvalidateLayout);
+        return known ?? (20, 20);
     }
 
     private static InlineImage? FindImageAtRawOffset(IReadOnlyList<InlineImage>? images, int rawOffset)

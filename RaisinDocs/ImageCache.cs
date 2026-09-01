@@ -11,6 +11,7 @@ public class ImageCache
 
     private readonly ConcurrentDictionary<string, CacheEntry> _cache = new();
     private readonly ConcurrentDictionary<string, Task<CacheEntry?>> _pending = new();
+    private readonly ConcurrentDictionary<string, (double W, double H)> _sizes = new();
     private static readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(15) };
 
     public (BitmapImage Image, double Width, double Height)? Get(string url, string? basePath, double maxWidth)
@@ -40,6 +41,69 @@ public class ImageCache
         bmp.EndInit();
         bmp.Freeze();
         _cache[key] = new CacheEntry(bmp, pixelWidth, pixelHeight);
+    }
+
+    /// <summary>
+    /// The scaled size an image will occupy, read from the file header without decoding it.
+    /// Null when that cannot be known without fetching - an http url, or a missing file.
+    /// </summary>
+    /// <remarks>
+    /// Layout needs a size the moment an image comes into view, and it used to reserve 20x20
+    /// until the decode finished. That was wrong twice over: everything below the image jumped
+    /// when the real size arrived, and the only way to correct it was InvalidateLayout, which
+    /// reparses the whole document and drops the render caches - measured at up to 41ms on a
+    /// long document, mid-scroll, which is felt as the scroll pausing near images.
+    ///
+    /// Reading the header costs a file open and a few hundred bytes, so the size is right from
+    /// the first frame, nothing moves when the pixels arrive, and the decode that follows only
+    /// needs a repaint.
+    /// </remarks>
+    public (double Width, double Height)? GetPixelSize(string url, string? basePath, double maxWidth)
+    {
+        string key = ResolveKey(url, basePath);
+
+        if (_cache.TryGetValue(key, out var entry))
+        {
+            var scaled = Scale(entry, maxWidth);
+            return (scaled.Width, scaled.Height);
+        }
+
+        if (_sizes.TryGetValue(key, out var known))
+            return ScaleSize(known.W, known.H, maxWidth);
+
+        // An http image cannot be measured without fetching it, so its size stays unknown and
+        // the caller keeps the old placeholder-then-relayout behaviour.
+        if (IsHttpUrl(url)) return null;
+
+        try
+        {
+            string path = Path.IsPathRooted(url) ? url : Path.Combine(basePath ?? ".", url);
+            path = Path.GetFullPath(path);
+            if (!File.Exists(path)) return null;
+
+            using var fs = File.OpenRead(path);
+            var frame = BitmapFrame.Create(fs, BitmapCreateOptions.DelayCreation, BitmapCacheOption.None);
+            double w = frame.PixelWidth, h = frame.PixelHeight;
+            if (w <= 0 || h <= 0) return null;
+
+            _sizes[key] = (w, h);
+            return ScaleSize(w, h, maxWidth);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static (double Width, double Height) ScaleSize(double w, double h, double maxWidth)
+    {
+        if (w > maxWidth && maxWidth > 0)
+        {
+            double ratio = maxWidth / w;
+            w = maxWidth;
+            h *= ratio;
+        }
+        return (w, h);
     }
 
     public void RequestLoad(string url, string? basePath, Action onLoaded)
