@@ -316,30 +316,6 @@ public partial class DocsCanvas
         ResetUndoSealTimer();
     }
 
-    private void HandleLeft(bool shift, bool ctrl = false)
-        => _navigationEngine.HandleLeft(shift, ctrl);
-
-    private void HandleRight(bool shift, bool ctrl = false)
-        => _navigationEngine.HandleRight(shift, ctrl);
-
-    private void HandleHome(bool shift, bool ctrl)
-        => _navigationEngine.HandleHome(shift, ctrl);
-
-    private void HandleEnd(bool shift, bool ctrl)
-        => _navigationEngine.HandleEnd(shift, ctrl);
-
-    private void HandleUp(bool shift)
-        => _navigationEngine.HandleUp(shift);
-
-    private void HandleDown(bool shift)
-        => _navigationEngine.HandleDown(shift);
-
-    private void HandlePageUp(bool shift)
-        => _navigationEngine.HandlePageUp(shift);
-
-    private void HandlePageDown(bool shift)
-        => _navigationEngine.HandlePageDown(shift);
-
     // --- Keyboard ---
 
     private bool _altKeyAlone;
@@ -409,41 +385,41 @@ public partial class DocsCanvas
             case Key.Left:
                 if (_navigationKeysHandler.TryHandleNavigationKey(e.Key, shift, ctrl))
                     break;
-                HandleLeft(shift, ctrl: false);
+                _navigationEngine.HandleLeft(shift, ctrl: false);
                 break;
 
             case Key.Right:
                 if (_navigationKeysHandler.TryHandleNavigationKey(e.Key, shift, ctrl))
                     break;
-                HandleRight(shift, ctrl: false);
+                _navigationEngine.HandleRight(shift, ctrl: false);
                 break;
 
             case Key.Up:
-                HandleUp(shift);
+                _navigationEngine.HandleUp(shift);
                 break;
 
             case Key.Down:
-                HandleDown(shift);
+                _navigationEngine.HandleDown(shift);
                 break;
 
             case Key.PageUp:
-                HandlePageUp(shift);
+                _navigationEngine.HandlePageUp(shift);
                 break;
 
             case Key.PageDown:
-                HandlePageDown(shift);
+                _navigationEngine.HandlePageDown(shift);
                 break;
 
             case Key.Home:
                 if (_navigationKeysHandler.TryHandleNavigationKey(e.Key, shift, ctrl))
                     break;
-                HandleHome(shift, ctrl: false);
+                _navigationEngine.HandleHome(shift, ctrl: false);
                 break;
 
             case Key.End:
                 if (_navigationKeysHandler.TryHandleNavigationKey(e.Key, shift, ctrl))
                     break;
-                HandleEnd(shift, ctrl: false);
+                _navigationEngine.HandleEnd(shift, ctrl: false);
                 break;
 
             case Key.A:

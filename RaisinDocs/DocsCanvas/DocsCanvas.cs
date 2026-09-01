@@ -519,9 +519,9 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider, IDocsC
     }
 
     /// <summary>Page up with cursor repositioning (used when canvas has focus)</summary>
-    public void PageUp() => HandlePageUp(shift: false);
+    public void PageUp() => _navigationEngine.HandlePageUp(shift: false);
     /// <summary>Page down with cursor repositioning (used when canvas has focus)</summary>
-    public void PageDown() => HandlePageDown(shift: false);
+    public void PageDown() => _navigationEngine.HandlePageDown(shift: false);
 
     public void ToggleShowWhitespace()
     {
@@ -581,14 +581,14 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider, IDocsC
         bool textChanged = false;
         switch (key)
         {
-            case Key.Left: HandleLeft(shift, ctrl); break;
-            case Key.Right: HandleRight(shift, ctrl); break;
-            case Key.Up: HandleUp(shift); break;
-            case Key.Down: HandleDown(shift); break;
-            case Key.PageUp: HandlePageUp(shift); break;
-            case Key.PageDown: HandlePageDown(shift); break;
-            case Key.Home: HandleHome(shift, ctrl); break;
-            case Key.End: HandleEnd(shift, ctrl); break;
+            case Key.Left: _navigationEngine.HandleLeft(shift, ctrl); break;
+            case Key.Right: _navigationEngine.HandleRight(shift, ctrl); break;
+            case Key.Up: _navigationEngine.HandleUp(shift); break;
+            case Key.Down: _navigationEngine.HandleDown(shift); break;
+            case Key.PageUp: _navigationEngine.HandlePageUp(shift); break;
+            case Key.PageDown: _navigationEngine.HandlePageDown(shift); break;
+            case Key.Home: _navigationEngine.HandleHome(shift, ctrl); break;
+            case Key.End: _navigationEngine.HandleEnd(shift, ctrl); break;
             case Key.Back: HandleBack(shift, out textChanged); break;
             case Key.Delete: HandleDelete(shift, out textChanged); break;
         }
