@@ -166,12 +166,10 @@ public partial class DocsCanvas
                     // Only process actual text continuations like "sad\ns"
                     if (blockText.Length > 0 && blockText.Contains('\n') && !blockText.Contains("\n\n"))
                     {
-                        _logging.Logger?.Log(DocsLogLevel.Debug, $"Continuation: Block {bi} has internal newline");
                         // This block has internal newlines - it's a merged continuation
                         // Create a group for it
                         var singleBlockGroup = new List<int> { bi };
                         EmitParagraphGroup(singleBlockGroup);
-                        _logging.Logger?.Log(DocsLogLevel.Debug, $"Continuation: Created ParagraphGroup for block {bi}");
                     }
                 }
             }
@@ -507,16 +505,12 @@ public partial class DocsCanvas
         {
             if (_visual.IsVisual && _layout.BlockToGroup != null && _layout.BlockToGroup.TryGetValue(blockIndex, out var group))
             {
-                _logging.Logger?.Log(DocsLogLevel.Debug, $"ProcessBlockAndChildren: Block {blockIndex} is in a ParagraphGroup");
                 if (blockIndex == group.FirstBlock)
                 {
-                    _logging.Logger?.Log(DocsLogLevel.Debug, $"ProcessBlockAndChildren: Block {blockIndex} is FirstBlock, wrapping as joined");
                     WrapSegmentJoined(group, maxWidth);
                 }
                 return;
             }
-
-            _logging.Logger?.Log(DocsLogLevel.Debug, $"ProcessBlockAndChildren: Block {blockIndex} is NOT in a ParagraphGroup");
 
             string text = _doc.GetBlockText(blockIndex);
 

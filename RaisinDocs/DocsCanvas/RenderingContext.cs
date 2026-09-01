@@ -248,7 +248,6 @@ public partial class DocsCanvas
             double lineY, double effectiveScroll)
         {
             var group = vl.Group!;
-            _logging.Logger?.Log(DocsLogLevel.Debug, $"DrawJoinedLine: Rendering joined line with text '{group.JoinedText}'");
 
             if (HasImagesOnLine(vl, group.JoinedMap))
             {

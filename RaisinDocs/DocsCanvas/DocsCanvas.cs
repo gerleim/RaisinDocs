@@ -1190,7 +1190,6 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider, IDocsC
         double lineY, double effectiveScroll)
     {
         var group = vl.Group!;
-        Logger?.Log(DocsLogLevel.Debug, $"DrawJoinedLine: Rendering joined line with text '{group.JoinedText}'");
 
         if (HasImagesOnLine(vl, group.JoinedMap))
         {

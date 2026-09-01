@@ -285,10 +285,8 @@ public partial class DocsCanvas
         if (map != null && map.ReplacementPrefix != null && vl.StartOffset == 0)
         {
             double prefixW = _rendering.Measure.MeasureReplacementPrefix(map.ReplacementPrefix!, map.PrefixMeasureKind);
-            _logging.Logger?.Log(DocsLogLevel.Debug, $"HitTestInVisualLine: Block {vl.BlockIndex} has replacement prefix, prefixW={prefixW}, x={x}");
             if (x < prefixW)
             {
-                _logging.Logger?.Log(DocsLogLevel.Debug, $"HitTestInVisualLine: Click in prefix area, returning StartOffset={vl.StartOffset}");
                 return vl.StartOffset;
             }
             accum = prefixW;
@@ -315,12 +313,10 @@ public partial class DocsCanvas
             double charW = _rendering.Measure.MeasureCharWidth(blockText[offset], parsed.Kind, style);
             if (x < accum + charW / 2)
             {
-                _logging.Logger?.Log(DocsLogLevel.Debug, $"HitTestInVisualLine: Block {vl.BlockIndex} matched char at offset {offset} (accum={accum}, charW={charW})");
                 return offset;
             }
             accum += charW;
         }
-        _logging.Logger?.Log(DocsLogLevel.Debug, $"HitTestInVisualLine: Block {vl.BlockIndex} past all chars, returning end offset {vl.StartOffset + vl.Length} (accum={accum}, x={x})");
         return vl.StartOffset + vl.Length;
     }
 
@@ -399,7 +395,6 @@ public partial class DocsCanvas
             blockIndex = vl.BlockIndex;
             charOffset = rawOffset;
         }
-        _logging.Logger?.Log(DocsLogLevel.Debug, $"HitTestToPosition: Click at ({pos.X}, {pos.Y}) -> Block {blockIndex}, Offset {charOffset}");
     }
 
     // --- Key handlers (navigation) ---
