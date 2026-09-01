@@ -8,8 +8,13 @@ namespace RaisinDocs;
 /// TEMPORARY instrumentation for the mouse-wheel scrolling investigation. Delete when done.
 ///
 /// Writes two interleaved records to <see cref="LogPath"/>, tab separated:
-///   W  ourMs  osMs  delta  canvasHeight   a wheel notch arriving at OnMouseWheel
-///   F  ourMs  dtMs  velocity  offset      one coast frame
+///   C  ourMs  intervalMs  targetFps           a coast starting, with the repaint target
+///                                             resolved for the display the window is on
+///   W  ourMs  osMs  delta  canvasHeight       a wheel notch arriving at OnMouseWheel
+///   F  ourMs  dtMs  velocity  offset  painted one coast frame; painted is 1 when this
+///                                             frame actually repainted, so the achieved
+///                                             repaint rate can be read off directly rather
+///                                             than inferred from the tick rate
 ///
 /// The decisive comparison is <c>osMs</c> (the Windows message time, i.e. when the notch
 /// physically happened) against <c>ourMs</c> (when the UI thread got round to handling it).
@@ -32,6 +37,16 @@ internal static class WheelDiag
         "RaisinDocs",
         $"wheel-{DateTime.Now:yyyy-MM-dd}.log");
 
+    /// <summary>Start of a coast, recording the repaint target resolved for this gesture.</summary>
+    internal static void Coast(double repaintInterval)
+    {
+        Buffer.Append("C\t").Append(Clock.Elapsed.TotalMilliseconds.ToString("F1"))
+              .Append('\t').Append((repaintInterval * 1000).ToString("F2"))
+              .Append('\t').Append((1.0 / repaintInterval).ToString("F0"))
+              .AppendLine();
+        if (++_lines >= MaxBufferedLines) Flush();
+    }
+
     internal static void Wheel(int delta, int osMs, double canvasHeight)
     {
         Buffer.Append("W\t").Append(Clock.Elapsed.TotalMilliseconds.ToString("F1"))
@@ -42,12 +57,13 @@ internal static class WheelDiag
         if (++_lines >= MaxBufferedLines) Flush();
     }
 
-    internal static void Frame(double dtSeconds, double velocity, double offset)
+    internal static void Frame(double dtSeconds, double velocity, double offset, bool painted)
     {
         Buffer.Append("F\t").Append(Clock.Elapsed.TotalMilliseconds.ToString("F1"))
               .Append('\t').Append((dtSeconds * 1000).ToString("F2"))
               .Append('\t').Append(velocity.ToString("F1"))
               .Append('\t').Append(offset.ToString("F2"))
+              .Append('\t').Append(painted ? '1' : '0')
               .AppendLine();
         if (++_lines >= MaxBufferedLines) Flush();
     }

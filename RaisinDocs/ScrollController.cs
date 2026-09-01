@@ -8,6 +8,7 @@ internal class ScrollController
 {
     private readonly Action _invalidateVisual;
     private readonly Func<double> _getMaxScroll;
+    private readonly Func<double> _getRepaintInterval;
     private readonly SmoothScroller _smoother;
 
     private double _offset;
@@ -34,7 +35,11 @@ internal class ScrollController
     // The physics still integrates on every tick and stays dt-correct; only the repaint is
     // capped, which is all the display can show anyway. The spare time lets the message
     // pump keep up so notches arrive one at a time.
-    private const double MinRepaintInterval = 1.0 / 60;
+    //
+    // The cap is the display's own rate (see DisplayRefresh), not a fixed 60: scrolling is
+    // continuous motion, so every frame the panel can show is a frame worth drawing. Read
+    // once per gesture, which is cheap and picks up a monitor or mode change.
+    private double _repaintInterval = 1.0 / 60;
 
     private double _sinceRepaint;
     private double _paintedPixel;
@@ -47,10 +52,12 @@ internal class ScrollController
 
     internal double EffectiveOffset => _offset + _smoother.Offset;
 
-    internal ScrollController(Action invalidateVisual, Func<double> getMaxScroll)
+    internal ScrollController(Action invalidateVisual, Func<double> getMaxScroll,
+        Func<double>? getRepaintInterval = null)
     {
         _invalidateVisual = invalidateVisual;
         _getMaxScroll = getMaxScroll;
+        _getRepaintInterval = getRepaintInterval ?? (() => 1.0 / 60);
         _smoother = new SmoothScroller(invalidateVisual);
     }
 
@@ -87,8 +94,10 @@ internal class ScrollController
         {
             _wheelCoasting = true;
             _wheelClock.Restart();
+            _repaintInterval = _getRepaintInterval();
             _paintedPixel = Math.Round(_offset);
-            _sinceRepaint = MinRepaintInterval; // let the first frame paint immediately
+            _sinceRepaint = _repaintInterval; // let the first frame paint immediately
+            WheelDiag.Coast(_repaintInterval); // TEMP instrumentation
             CompositionTarget.Rendering += OnWheelFrame;
             _invalidateVisual();
         }
@@ -129,7 +138,6 @@ internal class ScrollController
             _wheelVelocity = 0;
 
         _wheelVelocity *= Math.Exp(-dt * WheelDamping);
-        WheelDiag.Frame(dt, _wheelVelocity, _offset); // TEMP instrumentation
 
         bool stop = Math.Abs(_wheelVelocity) < 0.5;
         if (!stop && Math.Round(_offset) != prevPixel
@@ -145,7 +153,6 @@ internal class ScrollController
             _wheelCoasting = false;
             _wheelClock.Reset();
             CompositionTarget.Rendering -= OnWheelFrame;
-            WheelDiag.Flush(); // TEMP instrumentation
         }
 
         // Repaint only when the image would actually differ - the renderer rounds the offset
@@ -153,11 +160,19 @@ internal class ScrollController
         // paints, so the final resting position is never left unpainted.
         _sinceRepaint += dt;
         double pixel = Math.Round(_offset);
-        if (pixel != _paintedPixel && (stop || _sinceRepaint >= MinRepaintInterval))
+        bool painted = pixel != _paintedPixel && (stop || _sinceRepaint >= _repaintInterval);
+        if (painted)
         {
             _paintedPixel = pixel;
-            _sinceRepaint = 0;
+            // Carry the remainder rather than zeroing. Ticks do not divide evenly into the
+            // repaint interval, so zeroing rounds every repaint up to the next whole tick:
+            // a 120Hz target served by ~137Hz ticks would beat down to about 68Hz. Clamped
+            // to one interval so a long stall cannot bank credit for a burst of catch-up.
+            _sinceRepaint = Math.Min(_sinceRepaint - _repaintInterval, _repaintInterval);
             _invalidateVisual();
         }
+
+        WheelDiag.Frame(dt, _wheelVelocity, _offset, painted); // TEMP instrumentation
+        if (stop) WheelDiag.Flush();                           // TEMP instrumentation
     }
 }

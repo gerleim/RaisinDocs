@@ -771,7 +771,8 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider, IDocsC
 
     public DocsCanvas()
     {
-        _scroll = new ScrollController(InvalidateVisual, () => Math.Max(0, _totalContentHeight - ActualHeight));
+        _scroll = new ScrollController(InvalidateVisual, () => Math.Max(0, _totalContentHeight - ActualHeight),
+            () => DisplayRefresh.GetRepaintInterval(this));
         _linkHandler = new LinkHandler((INavigationServices)this, (IDocumentServices)this, (IParsedContentServices)this, (ILayoutDataServices)this, (IVisualModeServices)this, (IScrollServices)this);
         _linkPopup = new LinkPopupController(_doc, this);
         _tableInputHandler = new TableInputHandler((IDocumentServices)this, (IParsedContentServices)this, (ICanvasOperations)this);
