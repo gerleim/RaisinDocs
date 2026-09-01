@@ -131,13 +131,21 @@ internal class ScrollController
 
         double prevPixel = Math.Round(_offset);
         double before = _offset;
-        double deltaPx = _wheelVelocity * dt;
+
+        // Closed-form integral of v0*exp(-D*t) over the frame, rather than v0*dt. Moving at
+        // the start-of-frame velocity for the whole interval overshoots, because the real
+        // velocity decays throughout it, by D*dt/(1-exp(-D*dt)): 2% at a 5ms frame but 27%
+        // at the MaxFrameDelta clamp. That made how far a notch scrolled depend on how fast
+        // the machine was drawing. This form is exact at any dt, so a notch always travels
+        // the same distance. The exp is the one the decay below needs anyway.
+        double decay = Math.Exp(-dt * WheelDamping);
+        double deltaPx = _wheelVelocity * (1 - decay) / WheelDamping;
         _offset += deltaPx;
         Clamp();
         if (_offset != before + deltaPx)
             _wheelVelocity = 0;
 
-        _wheelVelocity *= Math.Exp(-dt * WheelDamping);
+        _wheelVelocity *= decay;
 
         bool stop = Math.Abs(_wheelVelocity) < 0.5;
         if (!stop && Math.Round(_offset) != prevPixel
