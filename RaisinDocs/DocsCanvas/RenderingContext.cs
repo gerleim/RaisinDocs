@@ -161,138 +161,8 @@ public partial class DocsCanvas
 
                 if (_firstVisible < 0) _firstVisible = i;
                 _lastVisible = i;
-                if (vl.Length > 0)
-                {
-                    if (vl.Group != null)
-                    {
-                        DrawJoinedLine(dc, vl, lineY, effectiveScroll, i);
-                    }
-                    else
-                    {
-                        var parsed = _content.ParsedBlocks[vl.BlockIndex];
-                        // Materialised lazily: GetBlockText is a StringBuilder.ToString(), and on
-                        // a cache hit the line's text is never needed at all.
-                        string? _blockTextLazy = null;
-                        string blockText() => _blockTextLazy ??= _doc.Document.GetBlockText(vl.BlockIndex);
-                        double fontSize = _rendering.Measure.GetBlockFontSize(parsed.Kind);
-                        var baseTypeface = TextMeasurer.GetBlockBaseTypeface(parsed.Kind);
-                        var map = _visual.IsVisual ? _content.VisualMaps?[vl.BlockIndex] : null;
 
-                        double textX = _docsCanvas._layoutEngine.GetTextStartXForVisualLine(vl, i);
-
-                        if (_visual.IsVisual && parsed.Kind == BlockKind.Blockquote && vl.StartOffset == 0)
-                        {
-                            DrawBlockquoteBar(dc, lineY, effectiveScroll);
-                        }
-
-                        if (_visual.IsVisual && parsed.Kind == BlockKind.ThematicBreak)
-                        {
-                            double ruleY = lineY - effectiveScroll + 10;
-                            double ruleRight = _rendering.ActualWidth - DocsCanvas._padding;
-                            dc.DrawLine(_rendering.Palette.TableBorderPen, new Point(DocsCanvas._padding, ruleY), new Point(ruleRight, ruleY));
-                        }
-                        else if (_visual.IsVisual && parsed.Table != null && parsed.TableRow != null)
-                        {
-                            _table.TableRenderer.DrawTableRow(dc, vl, blockText(), parsed, lineY, effectiveScroll, fontSize, baseTypeface);
-                        }
-                        else if (map != null)
-                        {
-                            if (HasImagesOnLine(vl, map))
-                            {
-                                DrawVisualLineWithImages(dc, vl, blockText(), parsed, map,
-                                    lineY, effectiveScroll, fontSize, baseTypeface);
-                            }
-                            else
-                            {
-                                // In source mode, only draw actual markdown syntax (bullets, numbers, etc)
-                                // but NOT continuation indentation - show raw text at column 0
-                                if (map.ReplacementPrefix != null && vl.StartOffset == 0 && !map.IsContinuationIndent)
-                                {
-                                    if (parsed.Kind is BlockKind.TaskListItemUnchecked or BlockKind.TaskListItemChecked)
-                                    {
-                                        var spacing = _layout.GetVisualLineSpacing(vl);
-                                        if (spacing != null)
-                                        {
-                                            DrawTaskListCheckbox(dc, parsed.Kind == BlockKind.TaskListItemChecked,
-                                                new AbsoluteX(spacing.MarkerStartX), new AbsoluteY(lineY - effectiveScroll),
-                                                parsed.Kind);
-                                        }
-                                    }
-                                    else if (parsed.Kind == BlockKind.UnorderedListItem)
-                                    {
-                                        var spacing = _layout.GetVisualLineSpacing(vl);
-                                        if (spacing != null)
-                                        {
-                                            DrawListBullet(dc, new AbsoluteX(spacing.MarkerStartX),
-                                                new AbsoluteY(lineY - effectiveScroll),
-                                                parsed.Kind, parsed.ListNestingLevel);
-                                        }
-                                    }
-                                    else if (parsed.Kind == BlockKind.OrderedListItem)
-                                    {
-                                        var spacing = _layout.GetVisualLineSpacing(vl);
-                                        if (spacing != null)
-                                        {
-                                            DrawOrderedListNumber(dc, new AbsoluteX(spacing.MarkerStartX),
-                                                new AbsoluteY(lineY - effectiveScroll),
-                                                map.ReplacementPrefix!, fontSize, parsed.ListNestingLevel);
-                                        }
-                                    }
-                                    else
-                                    {
-                                        var prefixFt = new FormattedText(map.ReplacementPrefix!,
-                                            CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
-                                            TextMeasurer.NormalTypeface, fontSize, _rendering.Palette.Syntax, _rendering.Measure.DpiScale);
-                                        dc.DrawText(prefixFt, new Point(DocsCanvas._padding, lineY - effectiveScroll));
-                                    }
-                                }
-
-                                var ft = _lineFt![i];
-                                if (ft == null)
-                                {
-                                    string displayText = map.BuildDisplayString(blockText(), vl.StartOffset, vl.Length);
-                                    if (displayText.Length > 0)
-                                    {
-                                        ft = new FormattedText(displayText, CultureInfo.InvariantCulture,
-                                            FlowDirection.LeftToRight, baseTypeface, fontSize,
-                                            _rendering.Palette.Foreground, _rendering.Measure.DpiScale);
-                                        ApplyInlineStylesVisual(ft, vl, parsed, map);
-                                        if (parsed.Kind == BlockKind.TaskListItemChecked)
-                                        {
-                                            ft.SetForegroundBrush(_rendering.Palette.Syntax, 0, displayText.Length);
-                                            ft.SetTextDecorations(TextDecorations.Strikethrough, 0, displayText.Length);
-                                        }
-                                        _lineFt[i] = ft;
-                                        NoteCached(i);
-                                    }
-                                }
-                                if (ft != null)
-                                    dc.DrawText(ft, new Point(textX, lineY - effectiveScroll));
-                            }
-                        }
-                        else
-                        {
-                            var ft = _lineFt![i];
-                            if (ft == null)
-                            {
-                                string text = blockText().Substring(vl.StartOffset, vl.Length);
-                                ft = new FormattedText(text, CultureInfo.InvariantCulture,
-                                    FlowDirection.LeftToRight, baseTypeface, fontSize,
-                                    _rendering.Palette.Foreground, _rendering.Measure.DpiScale);
-                                ApplyInlineStyles(ft, vl, parsed, blockText());
-                                _lineFt[i] = ft;
-                                NoteCached(i);
-                            }
-                            dc.DrawText(ft, new Point(textX, lineY - effectiveScroll));
-
-                            if (_docsCanvas._showWhitespace)
-                                DrawTrailingSpaceDots(dc, vl, blockText(), parsed, textX, lineY - effectiveScroll);
-
-                            if (_images.ImagePreview == DocsCanvas.ImagePreviewMode.Inline && parsed.Images != null)
-                                DrawSourceInlineImages(dc, vl, parsed.Images, lineY, effectiveScroll);
-                        }
-                    }
-                }
+                DrawLineContent(dc, i, vl, lineY, effectiveScroll);
             }
 
             if (_firstVisible >= 0) TrimLineFtCache(_firstVisible, _lastVisible);
@@ -328,6 +198,149 @@ public partial class DocsCanvas
                 _docsCanvas.ScrollStateChanged?.Invoke();
             });
         }
+
+        /// <summary>
+        /// Draws one visual line's own content. Everything here positions itself as
+        /// <c>lineY - scrollY</c>, so passing the two equal draws the line at the origin -
+        /// which is how a line is rendered into its own cached visual.
+        /// </summary>
+        private void DrawLineContent(DrawingContext dc, int i, VisualLine vl,
+            double lineY, double scrollY)
+        {
+            if (vl.Length > 0)
+            {
+                if (vl.Group != null)
+                {
+                    DrawJoinedLine(dc, vl, lineY, scrollY, i);
+                }
+                else
+                {
+                    var parsed = _content.ParsedBlocks[vl.BlockIndex];
+                    // Materialised lazily: GetBlockText is a StringBuilder.ToString(), and on
+                    // a cache hit the line's text is never needed at all.
+                    string? _blockTextLazy = null;
+                    string blockText() => _blockTextLazy ??= _doc.Document.GetBlockText(vl.BlockIndex);
+                    double fontSize = _rendering.Measure.GetBlockFontSize(parsed.Kind);
+                    var baseTypeface = TextMeasurer.GetBlockBaseTypeface(parsed.Kind);
+                    var map = _visual.IsVisual ? _content.VisualMaps?[vl.BlockIndex] : null;
+
+                    double textX = _docsCanvas._layoutEngine.GetTextStartXForVisualLine(vl, i);
+
+                    if (_visual.IsVisual && parsed.Kind == BlockKind.Blockquote && vl.StartOffset == 0)
+                    {
+                        DrawBlockquoteBar(dc, lineY, scrollY);
+                    }
+
+                    if (_visual.IsVisual && parsed.Kind == BlockKind.ThematicBreak)
+                    {
+                        double ruleY = lineY - scrollY + 10;
+                        double ruleRight = _rendering.ActualWidth - DocsCanvas._padding;
+                        dc.DrawLine(_rendering.Palette.TableBorderPen, new Point(DocsCanvas._padding, ruleY), new Point(ruleRight, ruleY));
+                    }
+                    else if (_visual.IsVisual && parsed.Table != null && parsed.TableRow != null)
+                    {
+                        _table.TableRenderer.DrawTableRow(dc, vl, blockText(), parsed, lineY, scrollY, fontSize, baseTypeface);
+                    }
+                    else if (map != null)
+                    {
+                        if (HasImagesOnLine(vl, map))
+                        {
+                            DrawVisualLineWithImages(dc, vl, blockText(), parsed, map,
+                                lineY, scrollY, fontSize, baseTypeface);
+                        }
+                        else
+                        {
+                            // In source mode, only draw actual markdown syntax (bullets, numbers, etc)
+                            // but NOT continuation indentation - show raw text at column 0
+                            if (map.ReplacementPrefix != null && vl.StartOffset == 0 && !map.IsContinuationIndent)
+                            {
+                                if (parsed.Kind is BlockKind.TaskListItemUnchecked or BlockKind.TaskListItemChecked)
+                                {
+                                    var spacing = _layout.GetVisualLineSpacing(vl);
+                                    if (spacing != null)
+                                    {
+                                        DrawTaskListCheckbox(dc, parsed.Kind == BlockKind.TaskListItemChecked,
+                                            new AbsoluteX(spacing.MarkerStartX), new AbsoluteY(lineY - scrollY),
+                                            parsed.Kind);
+                                    }
+                                }
+                                else if (parsed.Kind == BlockKind.UnorderedListItem)
+                                {
+                                    var spacing = _layout.GetVisualLineSpacing(vl);
+                                    if (spacing != null)
+                                    {
+                                        DrawListBullet(dc, new AbsoluteX(spacing.MarkerStartX),
+                                            new AbsoluteY(lineY - scrollY),
+                                            parsed.Kind, parsed.ListNestingLevel);
+                                    }
+                                }
+                                else if (parsed.Kind == BlockKind.OrderedListItem)
+                                {
+                                    var spacing = _layout.GetVisualLineSpacing(vl);
+                                    if (spacing != null)
+                                    {
+                                        DrawOrderedListNumber(dc, new AbsoluteX(spacing.MarkerStartX),
+                                            new AbsoluteY(lineY - scrollY),
+                                            map.ReplacementPrefix!, fontSize, parsed.ListNestingLevel);
+                                    }
+                                }
+                                else
+                                {
+                                    var prefixFt = new FormattedText(map.ReplacementPrefix!,
+                                        CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
+                                        TextMeasurer.NormalTypeface, fontSize, _rendering.Palette.Syntax, _rendering.Measure.DpiScale);
+                                    dc.DrawText(prefixFt, new Point(DocsCanvas._padding, lineY - scrollY));
+                                }
+                            }
+
+                            var ft = _lineFt![i];
+                            if (ft == null)
+                            {
+                                string displayText = map.BuildDisplayString(blockText(), vl.StartOffset, vl.Length);
+                                if (displayText.Length > 0)
+                                {
+                                    ft = new FormattedText(displayText, CultureInfo.InvariantCulture,
+                                        FlowDirection.LeftToRight, baseTypeface, fontSize,
+                                        _rendering.Palette.Foreground, _rendering.Measure.DpiScale);
+                                    ApplyInlineStylesVisual(ft, vl, parsed, map);
+                                    if (parsed.Kind == BlockKind.TaskListItemChecked)
+                                    {
+                                        ft.SetForegroundBrush(_rendering.Palette.Syntax, 0, displayText.Length);
+                                        ft.SetTextDecorations(TextDecorations.Strikethrough, 0, displayText.Length);
+                                    }
+                                    _lineFt[i] = ft;
+                                    NoteCached(i);
+                                }
+                            }
+                            if (ft != null)
+                                dc.DrawText(ft, new Point(textX, lineY - scrollY));
+                        }
+                    }
+                    else
+                    {
+                        var ft = _lineFt![i];
+                        if (ft == null)
+                        {
+                            string text = blockText().Substring(vl.StartOffset, vl.Length);
+                            ft = new FormattedText(text, CultureInfo.InvariantCulture,
+                                FlowDirection.LeftToRight, baseTypeface, fontSize,
+                                _rendering.Palette.Foreground, _rendering.Measure.DpiScale);
+                            ApplyInlineStyles(ft, vl, parsed, blockText());
+                            _lineFt[i] = ft;
+                            NoteCached(i);
+                        }
+                        dc.DrawText(ft, new Point(textX, lineY - scrollY));
+
+                        if (_docsCanvas._showWhitespace)
+                            DrawTrailingSpaceDots(dc, vl, blockText(), parsed, textX, lineY - scrollY);
+
+                        if (_images.ImagePreview == DocsCanvas.ImagePreviewMode.Inline && parsed.Images != null)
+                            DrawSourceInlineImages(dc, vl, parsed.Images, lineY, scrollY);
+                    }
+                }
+            }
+        }
+
 
         private void DrawJoinedLine(DrawingContext dc, VisualLine vl,
             double lineY, double effectiveScroll, int index)
