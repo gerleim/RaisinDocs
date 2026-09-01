@@ -293,6 +293,7 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider, IDocsC
     private readonly EditingKeysHandler _editingKeysHandler;
     private readonly ListFormattingHandler _listFormattingHandler;
     private readonly ContextMenuHandler _contextMenuHandler;
+    private readonly IndentationHandler _indentationHandler;
     private readonly LayoutEngine _layoutEngine;
     private readonly RenderingContext _renderingContext;
     private readonly CursorNavigationEngine _navigationEngine;
@@ -818,6 +819,7 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider, IDocsC
         _editingKeysHandler = new EditingKeysHandler((IDocumentServices)this, (IEditingServices)this);
         _listFormattingHandler = new ListFormattingHandler((IDocumentServices)this, (IParsedContentServices)this, new HardBreakStyleProvider(this));
         _contextMenuHandler = new ContextMenuHandler(this, (IDocumentServices)this, (ISpellCheckAccess)this);
+        _indentationHandler = new IndentationHandler((IDocumentServices)this, (IParsedContentServices)this);
         Focusable = true;
         FocusVisualStyle = null;
         SnapsToDevicePixels = true;

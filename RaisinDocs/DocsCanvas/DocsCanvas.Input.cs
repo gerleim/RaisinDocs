@@ -385,73 +385,6 @@ public partial class DocsCanvas
     private void HandlePageDown(bool shift)
         => _navigationEngine.HandlePageDown(shift);
 
-
-
-
-    private void HandleTabIndent(bool shift)
-    {
-        SealAndStopTimer();
-        _doc.BeginUndoGroup();
-
-        if (_doc.HasSelection)
-        {
-            var (sb, _, eb, _) = _doc.GetOrderedSelection();
-            if (shift)
-                _doc.OutdentLines(sb, eb, 4);
-            else
-                _doc.IndentLines(sb, eb, 4);
-            _doc.AnchorBlock = sb;
-            _doc.AnchorOffset = 0;
-            _doc.CursorBlock = eb;
-            _doc.CursorOffset = _doc.GetBlockLength(eb);
-        }
-        else
-        {
-            int indentStep = GetIndentStep(_doc.CursorBlock);
-            if (indentStep != 4)
-            {
-                if (shift)
-                    _doc.OutdentLines(_doc.CursorBlock, _doc.CursorBlock, indentStep);
-                else
-                    _doc.IndentLines(_doc.CursorBlock, _doc.CursorBlock, indentStep);
-            }
-            else
-            {
-                if (shift)
-                {
-                    _doc.OutdentLines(_doc.CursorBlock, _doc.CursorBlock, 4);
-                }
-                else
-                {
-                    _doc.InsertTextAt(_doc.CursorBlock, _doc.CursorOffset, "    ");
-                    _doc.CursorOffset += 4;
-                }
-            }
-            _doc.CollapseSelection();
-        }
-
-        _doc.SealUndoGroup();
-        InvalidateLayout();
-        EnsureCursorVisible();
-    }
-
-    private int GetIndentStep(int blockIndex)
-    {
-        if (_parsedBlocks == null) return 4;
-        var kind = _parsedBlocks[blockIndex].Kind;
-        var text = _doc.GetBlockText(blockIndex);
-        if (kind == BlockKind.IndentedCodeLine)
-            kind = MarkdownParser.ClassifyBlock(text.TrimStart());
-        return kind switch
-        {
-            BlockKind.UnorderedListItem => 2,
-            BlockKind.TaskListItemUnchecked or BlockKind.TaskListItemChecked => 2,
-            BlockKind.OrderedListItem => MarkdownParser.GetOrderedListPrefixLength(text.TrimStart()),
-            BlockKind.Blockquote => 2,
-            _ => 4,
-        };
-    }
-
     // --- Keyboard ---
 
     private bool _altKeyAlone;
@@ -490,7 +423,10 @@ public partial class DocsCanvas
                 if (IsReadOnly) { handled = false; break; }
                 if (_tableInputHandler.HandleTableTab(shift, out textChanged))
                     break;
-                HandleTabIndent(shift);
+                SealAndStopTimer();
+                _doc.BeginUndoGroup();
+                _indentationHandler.HandleTabIndent(shift);
+                _doc.SealUndoGroup();
                 textChanged = true;
                 break;
 

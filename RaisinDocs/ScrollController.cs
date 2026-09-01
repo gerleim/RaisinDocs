@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Windows.Media;
 using Raisin.WPF.Base;
 
@@ -12,8 +13,15 @@ internal class ScrollController
     private double _offset;
     private double _wheelVelocity;
     private bool _wheelCoasting;
-    private TimeSpan _lastWheelFrameTime;
+    private readonly Stopwatch _wheelClock = new();
     private const double WheelDamping = 10.0;
+
+    // RenderingEventArgs.RenderingTime is the composition engine's frame stamp, not a wall
+    // clock: it repeats or regresses when the UI thread and the render thread desync, which
+    // gets likely once OnRender approaches the frame budget (tall window = many visible
+    // lines). A Stopwatch cannot do that. A frame that overran is clamped rather than
+    // dropped, so slow frames cost precision, never a visible stop.
+    private const double MaxFrameDelta = 0.05;
 
     internal double Offset
     {
@@ -41,6 +49,7 @@ internal class ScrollController
         if (!_wheelCoasting) return;
         _wheelVelocity = 0;
         _wheelCoasting = false;
+        _wheelClock.Reset();
         CompositionTarget.Rendering -= OnWheelFrame;
     }
 
@@ -55,13 +64,12 @@ internal class ScrollController
             Clamp();
         }
 
-        double velBefore = _wheelVelocity;
         _wheelVelocity -= delta * WheelDamping;
 
         if (!_wheelCoasting)
         {
             _wheelCoasting = true;
-            _lastWheelFrameTime = TimeSpan.Zero;
+            _wheelClock.Restart();
             CompositionTarget.Rendering += OnWheelFrame;
             _invalidateVisual();
         }
@@ -88,20 +96,10 @@ internal class ScrollController
 
     private void OnWheelFrame(object? sender, EventArgs e)
     {
-        if (e is not RenderingEventArgs args) return;
-
-        double dt;
-        if (_lastWheelFrameTime == TimeSpan.Zero)
-        {
-            _lastWheelFrameTime = args.RenderingTime;
-            dt = 1.0 / 60;
-        }
-        else
-        {
-            dt = (args.RenderingTime - _lastWheelFrameTime).TotalSeconds;
-            _lastWheelFrameTime = args.RenderingTime;
-            if (dt <= 0 || dt >= 0.5) return;
-        }
+        double dt = _wheelClock.Elapsed.TotalSeconds;
+        _wheelClock.Restart();
+        if (dt <= 0) dt = 1.0 / 60;
+        else if (dt > MaxFrameDelta) dt = MaxFrameDelta;
 
         double prevPixel = Math.Round(_offset);
         double before = _offset;
@@ -111,7 +109,6 @@ internal class ScrollController
         if (_offset != before + deltaPx)
             _wheelVelocity = 0;
 
-        double velBefore = _wheelVelocity;
         _wheelVelocity *= Math.Exp(-dt * WheelDamping);
 
         bool stop = Math.Abs(_wheelVelocity) < 0.5;
@@ -126,9 +123,15 @@ internal class ScrollController
         {
             _wheelVelocity = 0;
             _wheelCoasting = false;
+            _wheelClock.Reset();
             CompositionTarget.Rendering -= OnWheelFrame;
         }
 
-        _invalidateVisual();
+        // The renderer rounds the offset to whole pixels, so a frame that did not cross a
+        // pixel boundary would repaint an identical image. Skipping it keeps the per-frame
+        // cost (which scales with the number of visible lines) off the dispatcher, where it
+        // would otherwise starve wheel input at the lower Input priority.
+        if (Math.Round(_offset) != prevPixel)
+            _invalidateVisual();
     }
 }
