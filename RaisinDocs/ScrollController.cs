@@ -42,7 +42,7 @@ internal class ScrollController
     private double _repaintInterval = 1.0 / 60;
 
     private double _sinceRepaint;
-    private double _paintedPixel;
+    private double _paintedOffset;
 
     internal double Offset
     {
@@ -95,7 +95,7 @@ internal class ScrollController
             _wheelCoasting = true;
             _wheelClock.Restart();
             _repaintInterval = _getRepaintInterval();
-            _paintedPixel = Math.Round(_offset);
+            _paintedOffset = _offset;
             _sinceRepaint = _repaintInterval; // let the first frame paint immediately
             WheelDiag.Coast(_repaintInterval); // TEMP instrumentation
             CompositionTarget.Rendering += OnWheelFrame;
@@ -151,7 +151,11 @@ internal class ScrollController
         if (!stop && Math.Round(_offset) != prevPixel
                   && Math.Abs(_wheelVelocity) < WheelDamping)
         {
-            _offset = prevPixel;
+            // Come to rest on a whole pixel so the final, lingering frame is crisp. Nearest
+            // rather than the frame's starting pixel: the view now moves sub-pixel, so
+            // snapping back to where this frame began would be a visible backward step,
+            // where nearest moves at most half a pixel.
+            _offset = Math.Round(_offset);
             stop = true;
         }
 
@@ -163,15 +167,17 @@ internal class ScrollController
             CompositionTarget.Rendering -= OnWheelFrame;
         }
 
-        // Repaint only when the image would actually differ - the renderer rounds the offset
-        // to whole pixels - and at most once per display frame. The last coast frame always
-        // paints, so the final resting position is never left unpainted.
+        // Repaint whenever the view has moved at all, at most once per display frame. The
+        // test used to be "crossed a whole pixel", which at low speed let through only one
+        // paint per pixel - about 38/sec once a coast decayed to 40px/s, and irregularly
+        // spaced. Now that drawing is sub-pixel every frame differs, so the only gate that
+        // matters is the display's own rate. The last coast frame always paints, so the
+        // final resting position is never left unpainted.
         _sinceRepaint += dt;
-        double pixel = Math.Round(_offset);
-        bool painted = pixel != _paintedPixel && (stop || _sinceRepaint >= _repaintInterval);
+        bool painted = _offset != _paintedOffset && (stop || _sinceRepaint >= _repaintInterval);
         if (painted)
         {
-            _paintedPixel = pixel;
+            _paintedOffset = _offset;
             // Carry the remainder rather than zeroing. Ticks do not divide evenly into the
             // repaint interval, so zeroing rounds every repaint up to the next whole tick:
             // a 120Hz target served by ~137Hz ticks would beat down to about 68Hz. Clamped

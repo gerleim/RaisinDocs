@@ -132,7 +132,17 @@ public partial class DocsCanvas
             if (_content.ParsedBlocks == null)
                 return;
 
-            double effectiveScroll = Math.Round(_scroll.Scroll.EffectiveOffset);
+            // Sub-pixel, deliberately. Rounding to whole pixels kept each line's glyph phase
+            // identical from frame to frame, but it also quantised the motion: as a coast
+            // decays the view can only move in 1px hops, so at 40px/s the screen updated once
+            // every 25ms instead of every frame, and the hop landed on whichever render tick
+            // came next, jittering by +-12ms. That reads as low frame rate and judder however
+            // fast we repaint. WPF positions glyphs at fractional coordinates anyway - line Y
+            // positions are fractional already, since they accumulate FormattedText.Height -
+            // and the per-line cache holds the FormattedText, not the point it is drawn at, so
+            // moving sub-pixel costs nothing. The coast snaps to a whole pixel when it stops,
+            // so the resting frame is still crisp.
+            double effectiveScroll = _scroll.Scroll.EffectiveOffset;
             double viewTop = effectiveScroll;
             double viewBottom = effectiveScroll + _rendering.ActualHeight;
 
