@@ -338,6 +338,12 @@ public partial class DocsCanvas
             if (!_visual.IsVisual && _images.ImagePreview == DocsCanvas.ImagePreviewMode.OnHover && _docsCanvas._hoveredImage != null)
                 DrawHoverImagePreview(dc);
 
+            // Feeds the adaptive repaint cap: the scroll controller stretches its interval
+            // when a frame is too dear to draw at the display's rate.
+            _scroll.Scroll.NoteRenderCost(
+                (System.Diagnostics.Stopwatch.GetTimestamp() - _t0)
+                / (double)System.Diagnostics.Stopwatch.Frequency);
+
             // TEMP instrumentation
             WheelDiag.Render(_us(_t0, System.Diagnostics.Stopwatch.GetTimestamp()),
                 _tBg, _tText, _tSpell, _drawn, _firstVisible, _layout.VisualLines.Count,

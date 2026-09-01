@@ -41,6 +41,38 @@ internal class ScrollController
     // once per gesture, which is cheap and picks up a monitor or mode change.
     private double _repaintInterval = 1.0 / 60;
 
+    /// <summary>The display's own interval, before any allowance for how heavy the content is.</summary>
+    private double _displayInterval = 1.0 / 60;
+
+    /// <summary>Rolling estimate of what one OnRender costs, in seconds.</summary>
+    private double _renderCost;
+
+    /// <summary>
+    /// The share of the repaint interval OnRender is allowed to occupy.
+    /// </summary>
+    /// <remarks>
+    /// Repainting at the display's rate assumes a frame is cheap enough to draw in the time
+    /// available. On heavy content it is not: a document whose lines are mostly table rows
+    /// measured 3.7ms an OnRender against a 6.94ms interval, so drawing took about half of
+    /// wall-clock time and the message pump fell behind. Windows then merged queued wheel
+    /// notches and the impulses arrived in clumps rather than evenly, which is felt as the
+    /// coast building unevenly.
+    ///
+    /// Measured across documents, merging stays at zero while drawing takes under about a
+    /// quarter of the time, appears around a third, and is severe at a half:
+    ///
+    ///   load    12%  19%  22%  25%  25%  34%  49%
+    ///   merged   0%   0%   0%   1%   4%   9%  27%
+    ///
+    /// So the interval is stretched, when needed, until drawing fits inside this share of it.
+    /// Heavy content then scrolls at a lower frame rate but an even one, which is the better
+    /// trade: an uneven coast is far more noticeable than a slower one.
+    /// </remarks>
+    private const double MaxRenderLoad = 0.30;
+
+    /// <summary>Never stretch further than this, however heavy a frame is.</summary>
+    private const double MaxIntervalStretch = 4.0;
+
     private double _sinceRepaint;
     private double _paintedPixel;
 
@@ -94,7 +126,8 @@ internal class ScrollController
         {
             _wheelCoasting = true;
             _wheelClock.Restart();
-            _repaintInterval = _getRepaintInterval();
+            _displayInterval = _getRepaintInterval();
+            _repaintInterval = EffectiveInterval();
             _paintedPixel = Math.Round(_offset);
             _sinceRepaint = _repaintInterval; // let the first frame paint immediately
             WheelDiag.Coast(_repaintInterval); // TEMP instrumentation
@@ -120,6 +153,23 @@ internal class ScrollController
         _smoother.Offset -= jump;
         _smoother.Start();
         _invalidateVisual();
+    }
+
+    /// <summary>
+    /// How long an OnRender took. Fed back so the repaint rate can allow for heavy content.
+    /// </summary>
+    internal void NoteRenderCost(double seconds)
+    {
+        // Weighted towards recent frames without chasing a single slow one: content varies as
+        // tables and images scroll in and out of view.
+        _renderCost = _renderCost <= 0 ? seconds : _renderCost * 0.9 + seconds * 0.1;
+    }
+
+    private double EffectiveInterval()
+    {
+        if (_renderCost <= 0) return _displayInterval;
+        return Math.Clamp(_renderCost / MaxRenderLoad,
+            _displayInterval, _displayInterval * MaxIntervalStretch);
     }
 
     private void OnWheelFrame(object? sender, EventArgs e)
@@ -166,6 +216,10 @@ internal class ScrollController
         // Repaint only when the image would actually differ - the renderer rounds the offset
         // to whole pixels - and at most once per display frame. The last coast frame always
         // paints, so the final resting position is never left unpainted.
+        // Re-evaluated per frame: a table scrolling into view makes frames dearer, and out of
+        // view makes them cheap again.
+        _repaintInterval = EffectiveInterval();
+
         _sinceRepaint += dt;
         double pixel = Math.Round(_offset);
         bool painted = pixel != _paintedPixel && (stop || _sinceRepaint >= _repaintInterval);
