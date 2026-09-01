@@ -21,8 +21,6 @@ public partial class DocsCanvas
         }
         ComputeLayout();
         double scaledDelta = e.Delta * _measure.ZoomFactor;
-        WheelDiag.NoteDocument(DescribeDocument()); // TEMP instrumentation
-        WheelDiag.Wheel(e.Delta, e.Timestamp, ActualHeight); // TEMP instrumentation
         _scroll.HandleWheel(scaledDelta);
         e.Handled = true;
     }

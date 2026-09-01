@@ -1046,26 +1046,6 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider, IDocsC
 
     internal void InvalidateRenderCache() => RenderVersion++;
 
-    /// <summary>
-    /// TEMP instrumentation: a label identifying the open document in the scroll log.
-    /// </summary>
-    /// <remarks>
-    /// The canvas only knows DocumentBasePath, the folder, because the host owns the file
-    /// path - so rather than widen the library's API for a diagnostic, this identifies the
-    /// document by what the canvas already has: the folder, how many blocks it holds, and its
-    /// first non-empty line. Enough to tell a table-heavy file from a prose one when reading
-    /// the log back.
-    /// </remarks>
-    private string DescribeDocument()
-    {
-        string first = "";
-        for (int i = 0; i < _doc.BlockCount && i < 50; i++)
-        {
-            string t = _doc.GetBlockText(i).Trim();
-            if (t.Length > 0) { first = t.Length > 48 ? t[..48] : t; break; }
-        }
-        return $"{DocumentBasePath ?? "(no path)"} | blocks={_doc.BlockCount} | {first}";
-    }
 
     internal void InvalidateLayout()
     {

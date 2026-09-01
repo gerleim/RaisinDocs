@@ -106,7 +106,6 @@ internal class ScrollController
         _wheelCoasting = false;
         _wheelClock.Reset();
         CompositionTarget.Rendering -= OnWheelFrame;
-        WheelDiag.Flush(); // TEMP instrumentation
     }
 
     internal void CancelSmooth() => _smoother.Cancel();
@@ -130,7 +129,6 @@ internal class ScrollController
             _repaintInterval = EffectiveInterval();
             _paintedPixel = Math.Round(_offset);
             _sinceRepaint = _repaintInterval; // let the first frame paint immediately
-            WheelDiag.Coast(_repaintInterval); // TEMP instrumentation
             CompositionTarget.Rendering += OnWheelFrame;
             _invalidateVisual();
         }
@@ -233,8 +231,5 @@ internal class ScrollController
             _sinceRepaint = Math.Min(_sinceRepaint - _repaintInterval, _repaintInterval);
             _invalidateVisual();
         }
-
-        WheelDiag.Frame(dt, _wheelVelocity, _offset, painted); // TEMP instrumentation
-        if (stop) WheelDiag.Flush();                           // TEMP instrumentation
     }
 }

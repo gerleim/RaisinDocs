@@ -118,15 +118,9 @@ public partial class DocsCanvas
         /// </summary>
         public void OnRender(DrawingContext dc)
         {
-            // TEMP instrumentation
+            // Timed so the scroll controller can pace repaints against what a frame costs.
             long _t0 = System.Diagnostics.Stopwatch.GetTimestamp();
-            long _tBg = 0, _tText = 0, _tSpell = 0;
-            int _drawn = 0, _firstVisible = -1, _hits = 0, _misses = 0;
-            // TEMP: what kind of line each drawn line was, so "bypassing the cache" can be
-            // attributed instead of guessed at.
-            int _nEmpty = 0, _nJoined = 0, _nJoinedImg = 0, _nTable = 0, _nImg = 0, _nRule = 0, _nPlain = 0;
-            static long _us(long a, long b) =>
-                (b - a) * 1_000_000 / System.Diagnostics.Stopwatch.Frequency;
+            int _firstVisible = -1;
 
             _rendering.Measure.EnsureMeasured(_docsCanvas);
             dc.DrawRectangle(_rendering.Palette.Background, null,
@@ -139,7 +133,6 @@ public partial class DocsCanvas
             double viewTop = effectiveScroll;
             double viewBottom = effectiveScroll + _rendering.ActualHeight;
 
-            long _bg0 = System.Diagnostics.Stopwatch.GetTimestamp(); // TEMP
             DrawCodeBlockBackgrounds(dc, effectiveScroll, viewTop, viewBottom);
             DrawColorBlockBackgrounds(dc, effectiveScroll, viewTop, viewBottom);
             DrawInlineColorBackgrounds(dc, effectiveScroll, viewTop, viewBottom);
@@ -155,9 +148,6 @@ public partial class DocsCanvas
             if (_search.HasSearchHighlights)
                 DrawSearchHighlights(dc, effectiveScroll);
 
-            _tBg = _us(_bg0, System.Diagnostics.Stopwatch.GetTimestamp()); // TEMP
-            long _tx0 = System.Diagnostics.Stopwatch.GetTimestamp();        // TEMP
-
             EnsureLineFtCache(_layout.VisualLines.Count, _docsCanvas.RenderVersion);
             int _lastVisible = -1;
 
@@ -169,17 +159,13 @@ public partial class DocsCanvas
                 if (lineY + lineH < viewTop) continue;
                 if (lineY > viewBottom) break;
 
-                if (_firstVisible < 0) _firstVisible = i; // TEMP
-                _drawn++;                                 // TEMP
+                if (_firstVisible < 0) _firstVisible = i;
                 _lastVisible = i;
-
-                if (vl.Length == 0) _nEmpty++; // TEMP
                 if (vl.Length > 0)
                 {
                     if (vl.Group != null)
                     {
-                        if (HasImagesOnLine(vl, vl.Group.JoinedMap)) _nJoinedImg++; else _nJoined++; // TEMP
-                        DrawJoinedLine(dc, vl, lineY, effectiveScroll, i, ref _hits, ref _misses);
+                        DrawJoinedLine(dc, vl, lineY, effectiveScroll, i);
                     }
                     else
                     {
@@ -201,21 +187,18 @@ public partial class DocsCanvas
 
                         if (_visual.IsVisual && parsed.Kind == BlockKind.ThematicBreak)
                         {
-                            _nRule++; // TEMP
                             double ruleY = lineY - effectiveScroll + 10;
                             double ruleRight = _rendering.ActualWidth - DocsCanvas._padding;
                             dc.DrawLine(_rendering.Palette.TableBorderPen, new Point(DocsCanvas._padding, ruleY), new Point(ruleRight, ruleY));
                         }
                         else if (_visual.IsVisual && parsed.Table != null && parsed.TableRow != null)
                         {
-                            _nTable++; // TEMP
                             _table.TableRenderer.DrawTableRow(dc, vl, blockText(), parsed, lineY, effectiveScroll, fontSize, baseTypeface);
                         }
                         else if (map != null)
                         {
                             if (HasImagesOnLine(vl, map))
                             {
-                                _nImg++; // TEMP
                                 DrawVisualLineWithImages(dc, vl, blockText(), parsed, map,
                                     lineY, effectiveScroll, fontSize, baseTypeface);
                             }
@@ -265,7 +248,6 @@ public partial class DocsCanvas
                                 }
 
                                 var ft = _lineFt![i];
-                                if (ft != null) _hits++; else _misses++; // TEMP
                                 if (ft == null)
                                 {
                                     string displayText = map.BuildDisplayString(blockText(), vl.StartOffset, vl.Length);
@@ -291,7 +273,6 @@ public partial class DocsCanvas
                         else
                         {
                             var ft = _lineFt![i];
-                            if (ft != null) _hits++; else _misses++; // TEMP
                             if (ft == null)
                             {
                                 string text = blockText().Substring(vl.StartOffset, vl.Length);
@@ -316,12 +297,8 @@ public partial class DocsCanvas
 
             if (_firstVisible >= 0) TrimLineFtCache(_firstVisible, _lastVisible);
 
-            _tText = _us(_tx0, System.Diagnostics.Stopwatch.GetTimestamp()); // TEMP
-            long _sp0 = System.Diagnostics.Stopwatch.GetTimestamp();          // TEMP
-
             if (_docsCanvas.SpellCheckEnabled)
                 DrawSpellingErrors(dc, effectiveScroll, viewTop, viewBottom);
-            _tSpell = _us(_sp0, System.Diagnostics.Stopwatch.GetTimestamp()); // TEMP
 
             if (_docsCanvas.ShowPageBreaks)
                 DrawPageBreaks(dc, effectiveScroll, viewTop, viewBottom);
@@ -344,12 +321,6 @@ public partial class DocsCanvas
                 (System.Diagnostics.Stopwatch.GetTimestamp() - _t0)
                 / (double)System.Diagnostics.Stopwatch.Frequency);
 
-            // TEMP instrumentation
-            WheelDiag.Render(_us(_t0, System.Diagnostics.Stopwatch.GetTimestamp()),
-                _tBg, _tText, _tSpell, _drawn, _firstVisible, _layout.VisualLines.Count,
-                _hits, _misses,
-                $"e{_nEmpty} j{_nJoined} ji{_nJoinedImg} t{_nTable} im{_nImg} r{_nRule}");
-
             _canvas.Dispatcher.BeginInvoke(() =>
             {
                 if (_canvas.Minimap is FrameworkElement fe)
@@ -359,7 +330,7 @@ public partial class DocsCanvas
         }
 
         private void DrawJoinedLine(DrawingContext dc, VisualLine vl,
-            double lineY, double effectiveScroll, int index, ref int hits, ref int misses)
+            double lineY, double effectiveScroll, int index)
         {
             var group = vl.Group!;
 
@@ -374,10 +345,8 @@ public partial class DocsCanvas
             }
 
             var ft = _lineFt![index];
-            if (ft != null) hits++;
-            else
+            if (ft == null)
             {
-                misses++;
                 ft = BuildJoinedLineText(vl);
                 if (ft == null) return;
                 _lineFt[index] = ft;
