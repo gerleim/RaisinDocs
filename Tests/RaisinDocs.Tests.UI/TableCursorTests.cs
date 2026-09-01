@@ -7,6 +7,8 @@ namespace RaisinDocs.Tests.UI;
 
 public class TableCursorTests
 {
+    private const string N = "\n";
+
     private static DocsCanvas CreateCanvas(string text, DocsCanvas.EditMode mode = DocsCanvas.EditMode.Visual)
     {
         var canvas = new DocsCanvas();
@@ -318,5 +320,66 @@ public class TableCursorTests
         var offset = canvas.TestCursorOffset;
         ((offset >= 2 && offset <= 4) || (offset >= 7 && offset <= 9)).Should().BeTrue(
             $"cursor at offset {offset} should be within a cell's content range");
+    }
+
+    private static int FindVisualLineForBlock(DocsCanvas canvas, int blockIndex)
+    {
+        for (int vi = 0; vi < canvas.TestVisualLineCount; vi++)
+            if (canvas.TestGetVisualLineBlockIndex(vi) == blockIndex)
+                return vi;
+        throw new InvalidOperationException($"No visual line for block {blockIndex}");
+    }
+
+    [StaFact]
+    public void Click_InTableDataRow_RoundTripsToTheClickedOffset()
+    {
+        // Columns are far wider than the data row's content, so a hit test that walks the
+        // raw text instead of the table layout drifts several columns to the right.
+        // | AEHL | +$213.77 | 1h 2m |
+        //  0123456789...
+        var canvas = CreateCanvas(
+            "| Symbol | Max Gain/Loss | Avg Hold |" + N +
+            "|---|---|---|" + N +
+            "| AEHL | +$213.77 | 1h 2m |");
+
+        int vi = FindVisualLineForBlock(canvas, 2);
+        double y = canvas.TestGetLineYPosition(vi) + 2;
+
+        // Interior offsets of each cell's trimmed content (cell edges are ambiguous).
+        foreach (int offset in new[] { 2, 3, 4, 5, 9, 11, 13, 16, 20, 21, 24 })
+        {
+            canvas.TestSetCursor(2, offset);
+            double x = canvas.TestCursorX;
+
+            canvas.HitTestToPosition(new Point(x, y), out int hitBlock, out int hitOffset);
+
+            hitBlock.Should().Be(2);
+            hitOffset.Should().Be(offset,
+                $"a click at the caret position of offset {offset} must land back on it");
+        }
+    }
+
+    [StaFact]
+    public void Click_PastTheEndOfACell_StaysInThatCell()
+    {
+        // Clicking in the empty space to the right of a cell's text must keep the caret
+        // in that cell, not fall through to the last column.
+        var canvas = CreateCanvas(
+            "| Symbol | Max Gain/Loss | Avg Hold |" + N +
+            "|---|---|---|" + N +
+            "| AEHL | +$213.77 | 1h 2m |");
+
+        int vi = FindVisualLineForBlock(canvas, 2);
+        double y = canvas.TestGetLineYPosition(vi) + 2;
+
+        // Caret at the end of "+$213.77" (offset 17), then click a little further right —
+        // still inside the "Max Gain/Loss" column, which is padded out by the header.
+        canvas.TestSetCursor(2, 17);
+        double endOfCellX = canvas.TestCursorX;
+
+        canvas.HitTestToPosition(new Point(endOfCellX + 12, y), out int hitBlock, out int hitOffset);
+
+        hitBlock.Should().Be(2);
+        hitOffset.Should().Be(17, "a click in the cell's trailing space belongs to that cell");
     }
 }

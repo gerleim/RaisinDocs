@@ -199,6 +199,15 @@ public partial class DocsCanvas
             return HitTestInJoinedLine(vl, clickX);
 
         var parsed = _content.ParsedBlocks![vl.BlockIndex];
+
+        // Table rows are laid out in padded columns, not as a run of raw text, so they need
+        // the table-aware hit test (mirrors CursorXInVisualLine).
+        if (_visual.IsVisual && parsed.Table != null && parsed.TableRow != null
+            && _table.TableColumnWidths.TryGetValue(parsed.Table, out var colWidths))
+        {
+            return _table.HitTestInTableRow(vl, parsed, colWidths, clickX);
+        }
+
         var map = _visual.IsVisual ? _visual.VisualMaps?[vl.BlockIndex] : null;
         string blockText = _doc.GetBlockText(vl.BlockIndex);
 
