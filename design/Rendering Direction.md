@@ -88,6 +88,77 @@ It is not completely without pacing primitives, in fairness: D3D9Ex gained
 `WaitForVBlank`. Whether milcore uses any of them is the next thing to read in the source, and it
 decides whether A is a contained patch or a backend rewrite.
 
+## Reading the present path
+
+Done, and it changes the answer. The short version: WPF does try to sync to vblank, the code
+that decides *when* is managed rather than native, and it was written for 60Hz.
+
+**The swapchain is blt-model.** `d3ddevicemanager.cpp` sets `D3DSWAPEFFECT_DISCARD` (or `_COPY`
+when contents must be retained), `BackBufferCount = 1`, and
+`PresentationInterval = D3DPRESENT_INTERVAL_ONE`. There is no `D3DSWAPEFFECT_FLIPEX` anywhere in
+the repository, and `SetMaximumFrameLatency` appears only in a COM wrapper declaration and a
+fake device stub for shader generation - it is never called with a value.
+
+**But vsync locking exists.** `CRenderTargetManager::WaitToPresent` opens with:
+
+```cpp
+// By default We don't support waiting for VSync.
+*pePresentationResults = MilPresentationResults::VSyncUnsupported;
+*puiRefreshRate = 60;
+
+if (m_rgpVBlankSyncChannels.GetCount() > 0)
+    IFC(WaitForDwm(...));
+```
+
+`EnableVBlankSync` - "Enables locking present calls to the vertical blank" - fills that list, via
+the `MILCMD_PARTITION_SETVBLANKSYNCMODE` channel command.
+
+**And it is on by default.** `MediaContext.EnterInterlockedPresentation` sends that command when
+`MediaSystem.AnimationSmoothing && Channel.MarshalType == ChannelMarshalTypeCrossThread &&
+IsClockSupported`. `s_animationSmoothing` defaults to `true`, and the registry override that could
+disable it (`HKLM\Software\Microsoft\Avalon.Graphics\AnimationSmoothing`) is inside
+`#if PRERELEASE`, so it is absent from shipping builds. `IsClockSupported` is only a QPC check.
+
+### Where it actually goes wrong
+
+The waiting is not done by blocking on a vblank signal. It is done in managed code, by estimating
+when the next vblank will be and setting a `DispatcherTimer`:
+
+```csharp
+// we add 1ms to the estimated time because are estimated time make not be perfectly accurate
+// and its more important that wake up after the vblank than right on it.
+long earliestWakeupTicks = currentTicks + TicksUntilNextVsync(currentTicks)
+                         + TimeSpan.TicksPerMillisecond;
+```
+
+...with a fallback of `TimeSpan.FromMilliseconds(17)` when the refresh rate is unknown, and a
+render rate chosen as:
+
+```csharp
+_adjustedRefreshRate = FindNextPrime(displayRefreshRate + 5);
+```
+
+Three assumptions, all reasonable in 2006 and all wrong at 280Hz:
+
+- **The +1 ms fudge.** At 60Hz a refresh period is 16.7 ms and 1 ms is a 6% safety margin. At
+  280Hz the period is 3.571 ms and the same constant is **28% of it**.
+- **A `DispatcherTimer` at `Render` priority** as the wake-up mechanism. Its resolution and queue
+  latency are around a millisecond at best - again, noise at 16.7 ms, and a large fraction of a
+  period at 3.571 ms. Any overshoot lands in the *next* period, which is exactly the
+  refresh-multiple gaps we measured.
+- **Deliberately off-cadence.** `FindNextPrime(refresh + 5)` targets 293 for a 280Hz display, on
+  purpose, to avoid beating against the panel when tearing is possible. It is the opposite of
+  pacing.
+
+So the earlier framing - "WPF cannot pace because D3D9Ex has no waitable object" - is not the
+whole story and is not the actionable part. WPF paces; it paces with a timer and a constant that
+were sized for a 60Hz world.
+
+**And that code is managed.** `MediaContext.cs` and `MediaSystem.cs` are C# in `PresentationCore`,
+not native milcore. No `bilinearspan.lib`, no pinned MSVC, no LTCG. That makes A very much cheaper
+than the earlier estimate - but it is still a forked runtime assembly, and the roadmap gives no
+sign of an upstream fix to converge with.
+
 ## A. Patch WPF
 
 Feasible, with real caveats.
@@ -158,12 +229,19 @@ So the honest reading is not that a paced DirectWrite presenter is unworkable. I
    was already on and never applied; HAGS remains untested but addresses the wrong mechanism.
    The module list answered the question they were meant to answer.
 2. ~~Confirm the layer~~ — **done**. It is milcore, and it is on Direct3D 9Ex.
-3. **Read milcore's present path.** `src/Microsoft.DotNet.Wpf/src/WpfGfx` - does it use
-   `D3DSWAPEFFECT_FLIPEX` and `SetMaximumFrameLatency`, or the older copy path? This is the one
-   question left that separates a contained patch from a backend rewrite, and it costs an hour of
-   reading.
-4. **Then choose.** A contained patch means a forked runtime DLL, a pinned toolchain and a
-   re-fork on every servicing update - for a stack that will still be on a 2006 graphics API
-   afterwards. That last point is the argument for B, and specifically for owning the canvas
-   ourselves: the presenter already held 280 frames a second with matching text, and everything
-   that went wrong came from sharing a surface rather than from the presenter.
+3. ~~Read milcore's present path~~ — **done**. It is blt-model D3D9Ex with no FlipEx, but the
+   pacing decision is not there. It is in managed `PresentationCore`, in a `DispatcherTimer`
+   estimate with a hardcoded 1 ms margin and a deliberately off-cadence prime render rate.
+4. **Decide.** A is now much cheaper than it looked - a managed assembly, not a native one - and
+   the change is small and legible: the wake-up margin, the timer, and the prime-rate choice. It
+   is still a forked runtime assembly with no upstream convergence, and it leaves the editor on a
+   blt-model D3D9Ex path afterwards.
+
+   B remains what it was: the presenter already held 280 frames a second on the real document with
+   text matching WPF exactly, and everything that went wrong came from sharing a surface rather
+   than from the presenter.
+
+   Worth testing before either: **does the fault scale with refresh rate?** Every constant above is
+   sized for 16.7 ms. Running the editor on the 100Hz or 144Hz panel and re-measuring costs
+   minutes, and if the pacing is clean there, that confirms the diagnosis exactly and tells us
+   what a patch would have to fix.
