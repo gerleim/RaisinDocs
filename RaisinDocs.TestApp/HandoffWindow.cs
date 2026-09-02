@@ -146,6 +146,12 @@ public sealed class HandoffWindow : Window
         // left a see-through hole when it was hidden.
         SourceInitialized += (_, _) =>
         {
+            if (MonitorIndex >= 0)
+            {
+                PlaceOnMonitor(MonitorIndex);
+                UpdateLayout();
+            }
+
             var b = PanelBounds();
             _d2d.Create(new WindowInteropHelper(this).Handle, b.x, b.y, b.w, b.h);
         };
@@ -627,6 +633,48 @@ public sealed class HandoffWindow : Window
     private static extern IntPtr WindowFromPoint(POINT point);
 
     [DllImport("user32.dll")]
+    private static extern bool EnumDisplayMonitors(IntPtr dc, IntPtr clip, MonitorEnumProc proc, IntPtr data);
+
+    [DllImport("user32.dll")]
+    private static extern bool SetWindowPos(IntPtr hwnd, IntPtr after, int x, int y, int w, int h, uint flags);
+
+    private delegate bool MonitorEnumProc(IntPtr monitor, IntPtr dc, ref RECT rect, IntPtr data);
+
+    /// <summary>Which monitor to sit on. Only one display here is HDR, so this isolates it.</summary>
+    internal static int MonitorIndex = -1;
+
+    private static List<RECT> Monitors()
+    {
+        var found = new List<RECT>();
+        EnumDisplayMonitors(IntPtr.Zero, IntPtr.Zero,
+            (IntPtr m, IntPtr dc, ref RECT r, IntPtr d) => { found.Add(r); return true; },
+            IntPtr.Zero);
+        return found;
+    }
+
+    /// <summary>
+    /// Places the window on a chosen monitor, in physical pixels. SetWindowPos rather than
+    /// Left/Top, so no device-independent conversion is involved and per-monitor DPI cannot
+    /// land the window somewhere other than asked for.
+    /// </summary>
+    private void PlaceOnMonitor(int index)
+    {
+        var all = Monitors();
+        Log($"monitors: {all.Count}");
+        for (int i = 0; i < all.Count; i++)
+            Log($"  [{i}] {all[i].Left},{all[i].Top} .. {all[i].Right},{all[i].Bottom}");
+
+        if (index < 0 || index >= all.Count) return;
+
+        var r = all[index];
+        int w = Math.Min(1000, r.Right - r.Left - 80);
+        int h = Math.Min(700, r.Bottom - r.Top - 80);
+        SetWindowPos(new WindowInteropHelper(this).Handle, IntPtr.Zero,
+            r.Left + 40, r.Top + 40, w, h, 0x0004 /* SWP_NOZORDER */);
+        Log($"placed on monitor {index} at {r.Left + 40},{r.Top + 40} size {w}x{h}");
+    }
+
+    [DllImport("user32.dll")]
     private static extern IntPtr GetAncestor(IntPtr hwnd, uint flags);
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
@@ -1010,9 +1058,7 @@ public sealed class HandoffWindow : Window
             // the renderer.
             try
             {
-                using var adapter1 = adapter.QueryInterface<IDXGIAdapter1>();
-                adapter1.EnumOutputs(0, out IDXGIOutput output).CheckError();
-                using var _ = output;
+                using var output = _swapChain.GetContainingOutput();
                 using var output6 = output.QueryInterface<IDXGIOutput6>();
                 var d = output6.Description1;
                 HandoffWindow.Log($"  [d2d] display colour space {d.ColorSpace}, " +

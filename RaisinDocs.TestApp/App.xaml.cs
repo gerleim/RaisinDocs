@@ -29,6 +29,10 @@ public partial class App : Application
         if (e.Args.Contains("--magenta")) HandoffWindow.SetDebugMagenta();
         if (e.Args.Contains("--nogesture")) HandoffWindow.NoGesture = true;
 
+        string? monitor = e.Args.FirstOrDefault(a => a.StartsWith("--monitor="));
+        if (monitor != null && int.TryParse(monitor.AsSpan("--monitor=".Length), out int m))
+            HandoffWindow.MonitorIndex = m;
+
         MainWindow = window;
         window.Show();
     }
