@@ -155,7 +155,34 @@ both variants of it unusable.
 - `D3DImage` does not help: the surface goes back to WPF's compositor, so presentation is at
   its mercy again.
 
-### Prove it first
+### The prototype answered yes
+
+Built and measured (`RaisinDocs.TestApp --presenter`). A child HWND, a flip-model swapchain,
+`FRAME_LATENCY_WAITABLE_OBJECT`, `MaximumFrameLatency = 1`, presenting nothing but a colour
+sweep so that only the timing is under test:
+
+```
+present gap   median 3.57ms (280/s)   p99 3.72ms   max 3.78ms   over 1.5x median 0.0%
+```
+
+Exactly one refresh of the 280Hz panel, a 4% spread, and **not one jump to a multiple**.
+Against the editor on the same machine, same panel, same compositor: 7.00ms median, with 19%
+of frames at 17.8ms - two refreshes and five.
+
+**So the ceiling is liftable.** The quantisation is not the hardware, not DWM's inherent
+behaviour, and not the GPU. It is WPF presenting when it chooses rather than to a deadline, and
+a paced swapchain does not have that problem.
+
+What that buys, if built: an even 280 in place of 140 with a fifth of frames late. It also very
+likely removes the argument for sub-pixel scrolling, since at 280 steps a second whole-pixel
+motion is smooth down to 280 px/s - and with it the resampling blur and the wriggling spacing
+that made both attempts at sub-pixel unusable.
+
+What it still costs is unchanged and unmeasured: the seam at both ends of a gesture, the ring
+buffer for running off the texture, airspace while the surface is up, and the interop itself.
+Those are the things to weigh now that the payoff is known rather than guessed.
+
+### How it was proved
 
 Phase 1 of the pre-buffering work paid for itself by answering one question cheaply before
 anything was built on it. Do the same here.

@@ -22,5 +22,8 @@
     <PackageReference Include="Raisin.AvalonDock.Themes.VS2013" Version="4.72.6" />
     <PackageReference Include="Raisin.WPF.Base" Version="2.0.0" />
   </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Vortice.Direct3D11" Version="3.8.3" />
+  </ItemGroup>
 
 </Project>
