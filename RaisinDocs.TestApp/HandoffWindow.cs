@@ -155,6 +155,7 @@ public sealed class HandoffWindow : Window
                 UpdateLayout();
             }
 
+            LogRefreshRate();
             var b = PanelBounds();
             _d2d.Create(new WindowInteropHelper(this).Handle, b.x, b.y, b.w, b.h);
         };
@@ -715,6 +716,59 @@ public sealed class HandoffWindow : Window
 
     [DllImport("user32.dll")]
     private static extern IntPtr WindowFromPoint(POINT point);
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]
+    private struct DEVMODE
+    {
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)] public string dmDeviceName;
+        public short dmSpecVersion, dmDriverVersion, dmSize, dmDriverExtra;
+        public int dmFields, dmPositionX, dmPositionY, dmDisplayOrientation, dmDisplayFixedOutput;
+        public short dmColor, dmDuplex, dmYResolution, dmTTOption, dmCollate;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)] public string dmFormName;
+        public short dmLogPixels;
+        public int dmBitsPerPel, dmPelsWidth, dmPelsHeight, dmDisplayFlags, dmDisplayFrequency;
+        public int dmICMMethod, dmICMIntent, dmMediaType, dmDitherType;
+        public int dmReserved1, dmReserved2, dmPanningWidth, dmPanningHeight;
+    }
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]
+    private struct MONITORINFOEX
+    {
+        public int cbSize;
+        public int mL, mT, mR, mB, wL, wT, wR, wB, dwFlags;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)] public string szDevice;
+    }
+
+    [DllImport("user32.dll", CharSet = CharSet.Auto)]
+    private static extern bool EnumDisplaySettings(string? device, int mode, ref DEVMODE dm);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr MonitorFromWindow(IntPtr hwnd, uint flags);
+
+    [DllImport("user32.dll", CharSet = CharSet.Auto)]
+    private static extern bool GetMonitorInfo(IntPtr monitor, ref MONITORINFOEX info);
+
+    /// <summary>
+    /// The refresh rate of the display this window is on. Decisive for reading the A/B: the
+    /// presenter's advantage is an even cadence at the panel's rate, so comparing the two modes
+    /// on a slower panel than the one the stutter was found on measures the wrong thing.
+    /// </summary>
+    private void LogRefreshRate()
+    {
+        string? device = null;
+        IntPtr monitor = MonitorFromWindow(new WindowInteropHelper(this).Handle, 2);
+        if (monitor != IntPtr.Zero)
+        {
+            var info = new MONITORINFOEX { cbSize = Marshal.SizeOf<MONITORINFOEX>() };
+            if (GetMonitorInfo(monitor, ref info)) device = info.szDevice;
+        }
+
+        var dm = new DEVMODE { dmSize = (short)Marshal.SizeOf<DEVMODE>() };
+        if (EnumDisplaySettings(device, -1, ref dm))
+            Log($"display {device}: {dm.dmPelsWidth}x{dm.dmPelsHeight} @ {dm.dmDisplayFrequency}Hz");
+        else
+            Log("display refresh rate unavailable");
+    }
 
     [DllImport("user32.dll")]
     private static extern bool EnumDisplayMonitors(IntPtr dc, IntPtr clip, MonitorEnumProc proc, IntPtr data);
