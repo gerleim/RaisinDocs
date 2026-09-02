@@ -190,6 +190,35 @@ public partial class DocsCanvas
         }
 
         /// <summary>
+        /// The backgrounds that sit behind text and do not change unless the content does.
+        /// </summary>
+        /// <remarks>
+        /// Drawn under the whole content layer when lines are transparent, and into each line
+        /// when they are opaque - an opaque line covers anything painted beneath it, which is
+        /// what made table row separators disappear.
+        ///
+        /// Calling this per line is cheap: each painter binary-searches to the first line in
+        /// range and stops at the last, so a one-line range costs a lookup rather than a scan.
+        ///
+        /// Selection and search highlights are deliberately not here. They change without the
+        /// content changing, so baking them into a cached line means rebuilding that line
+        /// whenever they move, which needs per-line invalidation this does not yet have.
+        ///
+        /// This is the whole-block form, for drawing under the content layer. A line visual
+        /// draws the same things a row at a time - see the opaque branch of BuildLineVisual -
+        /// because a table drawn whole is one rectangle thousands of pixels tall and a
+        /// separator for every row, which no per-line cache can hold.
+        /// </remarks>
+        private void DrawStaticBackgrounds(DrawingContext dc, double effectiveScroll,
+            double viewTop, double viewBottom)
+        {
+            // Opaque lines paint these themselves, and would cover them anyway.
+            bool backgroundsInLines = DocsCanvas.OpaqueLineVisuals && _docsCanvas.CachedLineVisuals;
+            if (!backgroundsInLines)
+                DrawStaticBackgrounds(dc, effectiveScroll, viewTop, viewBottom);
+        }
+
+        /// <summary>
         /// The display list of every line visual currently built, frozen so another thread can
         /// read it.
         /// </summary>
@@ -361,8 +390,30 @@ public partial class DocsCanvas
                     // the top of a document and puts the background thousands of pixels away
                     // further down.
                     double h = _layout.GetEffectiveLineHeight(vl);
-                    dc.DrawRectangle(_rendering.Palette.Background, null,
-                        new Rect(0, 0, Math.Max(1, _rendering.ActualWidth), h));
+                    double w = Math.Max(1, _rendering.ActualWidth);
+                    dc.DrawRectangle(_rendering.Palette.Background, null, new Rect(0, 0, w, h));
+
+                    // Clipped to this line. These painters work in whole blocks rather than
+                    // rows - a table background is one rectangle spanning every row, a colour
+                    // block one spanning every line it covers - so without a clip each line
+                    // would try to cache a bitmap the height of the whole table, and a long
+                    // table simply exceeds what a BitmapCache will hold, leaving nothing drawn.
+                    // Clipped, because the code and colour block painters work in whole blocks
+                    // and a block can span many lines.
+                    dc.PushClip(new RectangleGeometry(new Rect(0, 0, w, h)));
+                    DrawCodeBlockBackgrounds(dc, y, y, y + h);
+                    DrawColorBlockBackgrounds(dc, y, y, y + h);
+                    DrawInlineColorBackgrounds(dc, y, y, y + h);
+                    dc.Pop();
+
+                    // Tables get the per-row painter rather than the whole-table one, which
+                    // would put the entire table's geometry into every row's cache.
+                    if (_visual.IsVisual && _content.ParsedBlocks != null
+                        && vl.BlockIndex < _content.ParsedBlocks.Count)
+                    {
+                        _table.TableRenderer.DrawTableRowBackground(
+                            dc, i, _content.ParsedBlocks[vl.BlockIndex], y, y);
+                    }
                 }
 
                 DrawLineContent(dc, i, vl, y, y);

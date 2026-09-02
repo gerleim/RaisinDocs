@@ -153,6 +153,75 @@ public partial class DocsCanvas
         }
 
         /// <summary>
+        /// Draws one table row's background and the borders that belong to it.
+        /// </summary>
+        /// <remarks>
+        /// The same result as <see cref="DrawTableBackgrounds"/>, expressed a row at a time so
+        /// it can be drawn into the row's own cached visual.
+        ///
+        /// Drawing the whole table for each row is not an option: on the trading report that is
+        /// one rectangle 7,873 pixels tall plus a separator for every one of some 370 rows, per
+        /// line, and a per-line bitmap cache cannot hold it.
+        ///
+        /// Each row therefore owns its fill, its column separators, the table's left and right
+        /// edges for its own height, the separator above it (except the first row, which draws
+        /// the table's top edge instead) and, if it is the last row, the bottom edge.
+        /// </remarks>
+        public void DrawTableRowBackground(DrawingContext dc, int lineIndex,
+            ParsedBlock parsed, double lineY, double effectiveScroll)
+        {
+            if (parsed.Table == null) return;
+            if (parsed.Kind is not (BlockKind.TableHeaderRow or BlockKind.TableDataRow)) return;
+            if (!_table.TableColumnWidths.TryGetValue(parsed.Table, out var colWidths)) return;
+
+            double tableWidth = 0;
+            foreach (var w in colWidths) tableWidth += w;
+
+            double x = DocsCanvas._padding;
+            double y = lineY - effectiveScroll;
+            double h = _layout.GetEffectiveLineHeight(_layout.VisualLines[lineIndex]);
+            var pen = _rendering.Palette.TableBorderPen;
+
+            bool isFirst = !IsSameTable(lineIndex - 1, parsed.Table);
+            bool isLast = !IsSameTable(lineIndex + 1, parsed.Table);
+
+            dc.DrawRectangle(_rendering.Palette.TableBackground, null,
+                new Rect(x, y, tableWidth, h));
+
+            if (parsed.Kind == BlockKind.TableHeaderRow)
+                dc.DrawRectangle(_rendering.Palette.TableHeaderBackground, null,
+                    new Rect(x, y, tableWidth, h));
+
+            // Horizontal: the row's own top edge, and the table's bottom edge on the last row.
+            dc.DrawLine(pen, new Point(x, y), new Point(x + tableWidth, y));
+            if (isLast)
+                dc.DrawLine(pen, new Point(x, y + h), new Point(x + tableWidth, y + h));
+
+            // Vertical: the table's sides and the column separators, for this row's height.
+            dc.DrawLine(pen, new Point(x, y), new Point(x, y + h));
+            dc.DrawLine(pen, new Point(x + tableWidth, y), new Point(x + tableWidth, y + h));
+
+            double cx = x;
+            for (int c = 0; c < colWidths.Length - 1; c++)
+            {
+                cx += colWidths[c];
+                dc.DrawLine(pen, new Point(cx, y), new Point(cx, y + h));
+            }
+
+            _ = isFirst;
+        }
+
+        /// <summary>Whether the visual line at <paramref name="index"/> belongs to the same table.</summary>
+        private bool IsSameTable(int index, TableInfo table)
+        {
+            if (index < 0 || index >= _layout.VisualLines.Count) return false;
+            if (_content.ParsedBlocks == null) return false;
+            int block = _layout.VisualLines[index].BlockIndex;
+            if (block < 0 || block >= _content.ParsedBlocks.Count) return false;
+            return ReferenceEquals(_content.ParsedBlocks[block].Table, table);
+        }
+
+        /// <summary>
         /// Draws the content of a table row, including cell text with proper alignment and styling.
         /// </summary>
         public void DrawTableRow(DrawingContext dc, VisualLine vl, string blockText,

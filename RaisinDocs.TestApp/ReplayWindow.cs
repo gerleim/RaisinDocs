@@ -59,6 +59,9 @@ public sealed class ReplayWindow : Window
 
     internal static int MonitorIndex = -1;
 
+    /// <summary>Dump the display list at a few offsets and exit. See DumpAsync.</summary>
+    internal static bool Dump;
+
     private readonly DocsEditor _editor;
     private readonly TextBlock _readout;
     private readonly ReplaySurface _surface;
@@ -180,15 +183,106 @@ public sealed class ReplayWindow : Window
             e.Handled = true;
         };
 
-        ContentRendered += (_, _) =>
+        ContentRendered += async (_, _) =>
         {
             Log($"content height {Canvas.ContentHeight:F0}px");
             CompositionTarget.Rendering += OnFrame;
+            if (Dump)
+            {
+                try { await DumpAsync(); }
+                catch (Exception ex) { Log($"DUMP FAILED: {ex.GetType().Name}: {ex.Message}"); Close(); }
+            }
         };
         Closed += (_, _) => _surface.Destroy();
     }
 
     private DocsCanvas Canvas => _editor.Canvas;
+
+    /// <summary>
+    /// Writes the display list of a few lines, opaque and transparent, at offsets deep enough
+    /// to be inside the report's tables.
+    /// </summary>
+    /// <remarks>
+    /// Running in the real app rather than a test canvas, because a test canvas laid the same
+    /// document out at about forty pixels wide - every table row wrapped to a single character
+    /// and the table column widths came out empty, which looks exactly like the bug being
+    /// chased and is not it.
+    /// </remarks>
+    private async Task DumpAsync()
+    {
+        foreach (bool opaque in new[] { false, true })
+        {
+            DocsCanvas.OpaqueLineVisuals = opaque;
+            Canvas.RebuildLineVisuals();
+
+            foreach (double offset in new[] { 6000.0, 12000.0 })
+            {
+                Canvas.ViewOffset = offset;
+                Canvas.InvalidateVisual();
+                Canvas.UpdateLayout();
+                await Task.Delay(150);
+                Canvas.PrepareLineVisualsAt(offset);
+
+                var list = new List<DocsCanvas.LineDrawing>();
+                Canvas.SnapshotLineDrawings(list);
+
+                Log($"===== opaque={opaque} offset={offset:F0} lines={list.Count} =====");
+
+                // The same painters, one line wide and then a whole viewport, so it is clear
+                // whether the range is the problem or the call context is.
+                foreach (var line in list.Where(l => l.Y >= offset && l.Y < offset + 120).Take(5))
+                {
+                    var sb = new System.Text.StringBuilder();
+                    Describe(line.Drawing, sb, 0);
+                    Log($"--- line {line.Index} y={line.Y:F0} ---{Environment.NewLine}{sb.ToString().TrimEnd()}");
+                }
+            }
+        }
+
+        DocsCanvas.OpaqueLineVisuals = false;
+        Canvas.RebuildLineVisuals();
+        Log("===== dump complete =====");
+        Close();
+    }
+
+    private static void Describe(Drawing? d, System.Text.StringBuilder sb, int depth)
+    {
+        if (d == null) return;
+        string pad = new(' ', depth * 2 + 2);
+
+        switch (d)
+        {
+            case DrawingGroup g:
+                sb.AppendLine($"{pad}group({g.Children.Count})" +
+                              $" clip={(g.ClipGeometry as RectangleGeometry)?.Rect.ToString() ?? "none"}");
+                foreach (var c in g.Children) Describe(c, sb, depth + 1);
+                break;
+
+            case GeometryDrawing geo:
+                string what = geo.Geometry switch
+                {
+                    RectangleGeometry r => $"rect {r.Rect}",
+                    LineGeometry l => $"line {l.StartPoint}->{l.EndPoint}",
+                    _ => geo.Geometry?.GetType().Name ?? "null",
+                };
+                sb.AppendLine($"{pad}{what} fill={(geo.Brush as SolidColorBrush)?.Color.ToString() ?? "none"}" +
+                              $" pen={(geo.Pen?.Brush as SolidColorBrush)?.Color.ToString() ?? "none"}");
+                break;
+
+            case GlyphRunDrawing gr:
+                sb.AppendLine($"{pad}glyphs x{gr.GlyphRun?.GlyphIndices.Count ?? 0} " +
+                              $"at {gr.GlyphRun?.BaselineOrigin}");
+                break;
+
+            case ImageDrawing img:
+                sb.AppendLine($"{pad}image {img.Rect}");
+                break;
+
+            default:
+                sb.AppendLine($"{pad}{d.GetType().Name}");
+                break;
+        }
+    }
 
     public static ReplayWindow Open(string? file)
     {

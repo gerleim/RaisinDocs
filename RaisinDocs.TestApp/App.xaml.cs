@@ -31,6 +31,7 @@ public partial class App : Application
         if (e.Args.Contains("--nogesture")) HandoffWindow.NoGesture = true;
         if (e.Args.Contains("--wpfonly")) HandoffWindow.StartWithHandoffOff = true;
         if (e.Args.Contains("--bitblt")) HandoffWindow.UseBitblt = true;
+        if (e.Args.Contains("--dump")) ReplayWindow.Dump = true;
 
         string? mon = e.Args.FirstOrDefault(a => a.StartsWith("--monitor="));
         if (mon != null && int.TryParse(mon.AsSpan("--monitor=".Length), out int rm))
