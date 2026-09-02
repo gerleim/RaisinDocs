@@ -21,6 +21,9 @@ public partial class DocsCanvas
         }
         ComputeLayout();
         double scaledDelta = e.Delta * _measure.ZoomFactor;
+        // A message carrying more than one notch means the pump fell behind and Windows summed
+        // them; the scroll controller eases the repaint rate off when that starts happening.
+        _scroll.NoteWheelNotches(Math.Abs(e.Delta) / 120.0);
         _scroll.HandleWheel(scaledDelta);
         e.Handled = true;
     }
@@ -342,6 +345,11 @@ public partial class DocsCanvas
 
         switch (e.Key)
         {
+            case Key.F9 when !shift && !ctrl && !alt && EnableRenderPathToggle:
+                ToggleCachedLineVisuals();
+                e.Handled = true;
+                return;
+
             case Key.F6:
                 if (!shift && !ctrl && !alt && FormattingBar?.ActivateKeyboardNavigation() == true)
                 {

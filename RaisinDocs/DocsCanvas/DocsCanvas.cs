@@ -772,6 +772,9 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider, IDocsC
 
     public DocsCanvas()
     {
+        ContentLayer.Transform = ContentScroll;
+        _layers = new VisualCollection(this) { ContentLayer, OverlayLayer };
+
         _scroll = new ScrollController(InvalidateVisual, () => Math.Max(0, _totalContentHeight - ActualHeight),
             () => DisplayRefresh.GetRepaintInterval(this));
         _linkHandler = new LinkHandler((INavigationServices)this, (IDocumentServices)this, (IParsedContentServices)this, (ILayoutDataServices)this, (IVisualModeServices)this, (IScrollServices)this);
@@ -1046,6 +1049,80 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider, IDocsC
 
     internal void InvalidateRenderCache() => RenderVersion++;
 
+    /// <summary>
+    /// Rebuilds the cached line visuals and repaints, without touching layout.
+    /// </summary>
+    /// <remarks>
+    /// For a change that alters what a line looks like but not where anything sits - an image
+    /// arriving at a size layout already reserved. A bare InvalidateVisual is not enough now
+    /// that lines are cached: it would recomposite the same stale pictures.
+    /// </remarks>
+    internal void RedrawLinesWithImage(string url)
+    {
+        _renderingContext.DropLineVisualsForImage(url);
+        InvalidateVisual();
+    }
+
+    // --- Hosted visual layers (see design/Scroll Pre-Buffering.md) ---
+
+    /// <summary>
+    /// Line content, rendered once per line into cached child visuals and moved as a whole by
+    /// <see cref="ContentScroll"/>.
+    /// </summary>
+    /// <remarks>
+    /// A child visual draws above the element's own OnRender content, which fixes the layer
+    /// order for free: backgrounds and selection are painted by OnRender underneath, the text
+    /// sits in here, and anything that has to appear over the text goes in
+    /// <see cref="OverlayLayer"/>, added after this one.
+    ///
+    /// Scrolling moves one transform rather than redrawing every line, which is the whole
+    /// point: a table row costs a composite instead of ten DrawText calls, and the offset can
+    /// later be fractional without each line rounding independently.
+    /// </remarks>
+    /// <summary>
+    /// Enables F9, which switches between drawing lines into cached visuals and drawing them
+    /// straight into OnRender. Off by default; a diagnostic, not a feature.
+    /// </summary>
+    /// <remarks>
+    /// Kept because it is the only way to compare the two paths honestly. Frame-rate figures
+    /// taken from inside the process count OnRender calls, not frames the panel showed, and
+    /// DwmGetCompositionTimingInfo will not report the difference. Switching paths back to
+    /// back on the same document, and measuring from outside with FrameView, is what turned
+    /// "I cannot tell a difference" into 140 displayed frames a second against 119.
+    ///
+    /// Set it from a host app while investigating; leave it alone otherwise.
+    /// </remarks>
+    public static bool EnableRenderPathToggle { get; set; }
+
+    /// <summary>Which of the two drawing paths is in use. Always true unless F9 is enabled.</summary>
+    internal bool CachedLineVisuals { get; private set; } = true;
+
+    internal void ToggleCachedLineVisuals()
+    {
+        if (!EnableRenderPathToggle) return;
+        CachedLineVisuals = !CachedLineVisuals;
+        InvalidateRenderCache();   // drop the visuals either way, so neither path sees the other's
+        InvalidateVisual();
+    }
+
+    internal readonly ContainerVisual ContentLayer = new();
+
+    /// <summary>Moves <see cref="ContentLayer"/> by the scroll offset.</summary>
+    internal readonly TranslateTransform ContentScroll = new();
+
+    /// <summary>Caret, spelling squiggles and page breaks: drawn over the text, never cached.</summary>
+    internal readonly DrawingVisual OverlayLayer = new();
+
+    // Built in the constructor, never lazily: WPF queries VisualChildrenCount during its
+    // render pass, and creating the collection there would mutate the visual tree mid-render,
+    // which throws "Cannot call this API during the OnRender callback".
+    private VisualCollection? _layers;
+
+    protected override int VisualChildrenCount => _layers?.Count ?? 0;
+
+    protected override Visual GetVisualChild(int index) =>
+        _layers is { } l ? l[index] : throw new ArgumentOutOfRangeException(nameof(index));
+
 
     internal void InvalidateLayout()
     {
@@ -1088,7 +1165,7 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider, IDocsC
         // no dropped render cache, and nothing below the image moves when it appears.
         var known = _imageCache.GetPixelSize(img.Url, DocumentBasePath, maxWidth);
         _imageCache.RequestLoad(img.Url, DocumentBasePath,
-            known != null ? InvalidateVisual : InvalidateLayout);
+            known != null ? () => RedrawLinesWithImage(img.Url) : InvalidateLayout);
         return known ?? (20, 20);
     }
 

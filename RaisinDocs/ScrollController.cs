@@ -44,11 +44,25 @@ internal class ScrollController
     /// <summary>The display's own interval, before any allowance for how heavy the content is.</summary>
     private double _displayInterval = 1.0 / 60;
 
-    /// <summary>Rolling estimate of what one OnRender costs, in seconds.</summary>
-    private double _renderCost;
+    /// <summary>
+    /// Rolling average of how many notches each wheel message carried. One is healthy.
+    /// </summary>
+    /// <remarks>
+    /// This is the failure itself rather than a proxy for it. When the UI thread cannot keep
+    /// up, WM_MOUSEWHEEL messages queue and Windows sums their deltas, so a message arrives
+    /// carrying several notches at once and the coast builds in lurches. Measuring that
+    /// directly means the cap works wherever the cost actually lives.
+    ///
+    /// It replaced a measurement of how long OnRender took. That was a reasonable proxy while
+    /// OnRender did the drawing, but once lines were cached as visuals the drawing moved into
+    /// the visual tree, which WPF rasterises afterwards - so the old signal read a few hundred
+    /// microseconds and concluded frames were free, exactly when the real cost had moved
+    /// somewhere it could not see.
+    /// </remarks>
+    private double _notchesPerMessage = 1.0;
 
     /// <summary>
-    /// The share of the repaint interval OnRender is allowed to occupy.
+    /// How much merging is tolerated before the repaint rate is eased off.
     /// </summary>
     /// <remarks>
     /// Repainting at the display's rate assumes a frame is cheap enough to draw in the time
@@ -68,7 +82,7 @@ internal class ScrollController
     /// Heavy content then scrolls at a lower frame rate but an even one, which is the better
     /// trade: an uneven coast is far more noticeable than a slower one.
     /// </remarks>
-    private const double MaxRenderLoad = 0.30;
+    private const double MergeTolerance = 1.05;
 
     /// <summary>Never stretch further than this, however heavy a frame is.</summary>
     private const double MaxIntervalStretch = 4.0;
@@ -154,19 +168,30 @@ internal class ScrollController
     }
 
     /// <summary>
-    /// How long an OnRender took. Fed back so the repaint rate can allow for heavy content.
+    /// How many notches the wheel message just handled carried. One means the pump is keeping
+    /// up; more means messages queued and Windows summed them.
     /// </summary>
-    internal void NoteRenderCost(double seconds)
+    internal void NoteWheelNotches(double notches)
     {
-        // Weighted towards recent frames without chasing a single slow one: content varies as
-        // tables and images scroll in and out of view.
-        _renderCost = _renderCost <= 0 ? seconds : _renderCost * 0.9 + seconds * 0.1;
+        if (notches < 1) notches = 1;
+        // Reacts within a few messages, so a gesture that starts merging is caught during it,
+        // and recovers just as quickly once messages arrive singly again.
+        _notchesPerMessage = _notchesPerMessage * 0.8 + notches * 0.2;
     }
 
+    /// <summary>
+    /// The repaint interval: the display's own, stretched while messages are arriving merged.
+    /// </summary>
+    /// <remarks>
+    /// Stretching in proportion to the merging is self-correcting. Messages carrying two
+    /// notches halve the repaint rate, which frees the thread, which stops the merging, which
+    /// lets the rate climb back. It settles wherever the content can actually be drawn, with
+    /// no fixed idea of what a frame ought to cost.
+    /// </remarks>
     private double EffectiveInterval()
     {
-        if (_renderCost <= 0) return _displayInterval;
-        return Math.Clamp(_renderCost / MaxRenderLoad,
+        double stretch = _notchesPerMessage <= MergeTolerance ? 1.0 : _notchesPerMessage;
+        return Math.Clamp(_displayInterval * stretch,
             _displayInterval, _displayInterval * MaxIntervalStretch);
     }
 
@@ -199,7 +224,10 @@ internal class ScrollController
         if (!stop && Math.Round(_offset) != prevPixel
                   && Math.Abs(_wheelVelocity) < WheelDamping)
         {
-            _offset = prevPixel;
+            // Come to rest on a whole pixel so the frame that lingers is not resampled.
+            // Nearest, not the pixel this frame began on: the view moves sub-pixel now, so
+            // snapping backwards would be a visible step.
+            _offset = Math.Round(_offset);
             stop = true;
         }
 
@@ -218,6 +246,9 @@ internal class ScrollController
         // view makes them cheap again.
         _repaintInterval = EffectiveInterval();
 
+        // Only when the drawn image would differ, since the renderer rounds to whole pixels.
+        // This does limit the decaying tail to one paint per pixel - about 38 a second at
+        // 40px/s - which is the 1px stepping that sub-pixel scrolling was meant to cure.
         _sinceRepaint += dt;
         double pixel = Math.Round(_offset);
         bool painted = pixel != _paintedPixel && (stop || _sinceRepaint >= _repaintInterval);

@@ -34,9 +34,17 @@ internal static class DisplayRefresh
     /// panel's rate when the UI thread is free. It only reaches that when the thread is free,
     /// though, so past some point rasterising faster costs frames rather than gaining them.
     ///
-    /// Under trial at 144. Measured at 120 the scroll held 119-122 paints/sec while moving,
-    /// with 7-13% of gaps over 25ms; if that share grows here without the rate following,
-    /// the ceiling is doing its job and should come back down.
+    /// Measured with FrameView on a 280Hz panel, which presents on exact refresh divisors -
+    /// 280, 140, 93, 70. Raising this to 400 so the panel's own rate governed produced a
+    /// median of 140 displayed frames a second anyway, with a third of frames at 280, a
+    /// quarter at 93 or worse, and 13% of presents dropped: an uneven mixture, and wasted
+    /// work, for the same median.
+    ///
+    /// 144 lands on every second refresh of a 280Hz panel, so the rate is even and few
+    /// presents are discarded. Evenness beats peak here - an uneven coast is far more
+    /// noticeable than a slower one - but the trade has only been measured on this panel, and
+    /// the sustained-140 versus mixed-280 comparison is a one-constant experiment for anyone
+    /// who wants to revisit it.
     /// </remarks>
     internal const int MaxFps = 144;
 
