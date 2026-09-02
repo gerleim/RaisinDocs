@@ -22,8 +22,12 @@ public partial class App : Application
             e.Args.Contains("--presenter") ? new PresenterPrototypeWindow() :
             e.Args.Contains("--textpresenter") ? TextPresenterWindow.Open(file, AutoSpeed(e.Args)) :
             e.Args.Contains("--seam") ? SeamComparisonWindow.Open(file) :
-            e.Args.Contains("--handoff") ? HandoffWindow.Open(file, e.Args.Contains("--sweep")) :
+            e.Args.Contains("--handoff")
+                ? HandoffWindow.Open(file, e.Args.Contains("--sweep"), e.Args.Contains("--bgtest")) :
             new MainWindow(file);
+
+        if (e.Args.Contains("--magenta")) HandoffWindow.SetDebugMagenta();
+        if (e.Args.Contains("--nogesture")) HandoffWindow.NoGesture = true;
 
         MainWindow = window;
         window.Show();

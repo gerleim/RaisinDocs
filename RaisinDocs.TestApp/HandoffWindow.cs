@@ -100,10 +100,21 @@ public sealed class HandoffWindow : Window
     /// <summary>Whether to run the offset sweep before handing the window over.</summary>
     private readonly bool _sweep;
 
-    public HandoffWindow(string[] lines, bool sweep)
+    /// <summary>Drives its own gesture and watches its own pixels. See BackgroundTestAsync.</summary>
+    private readonly bool _bgTest;
+
+    /// <summary>
+    /// The control for the background test: sample for the same duration but never engage the
+    /// presenter. If the background brightens anyway, with the surface never shown, then the
+    /// window is being covered by something else and none of the other samples mean anything.
+    /// </summary>
+    internal static bool NoGesture;
+
+    public HandoffWindow(string[] lines, bool sweep, bool bgTest)
     {
         _lines = lines;
         _sweep = sweep;
+        _bgTest = bgTest;
         Title = "Handoff A/B (C3) - wheel to scroll, F9 toggles the presenter";
         Width = 1000;
         Height = 700;
@@ -111,7 +122,7 @@ public sealed class HandoffWindow : Window
         Background = new SolidColorBrush(BackColor);
 
         _wpf = new WpfTextPanel(lines);
-        _d2d = new PresenterSurface(lines) { Visibility = Visibility.Hidden };
+        _d2d = new PresenterSurface(lines);
         _readout = new TextBlock
         {
             Foreground = Brushes.Gainsboro,
@@ -124,13 +135,25 @@ public sealed class HandoffWindow : Window
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
         Grid.SetRow(_readout, 0);
-        var host = new Grid();
-        host.Children.Add(_wpf);
-        host.Children.Add(_d2d);
-        Grid.SetRow(host, 1);
+        Grid.SetRow(_wpf, 1);
         grid.Children.Add(_readout);
-        grid.Children.Add(host);
+        grid.Children.Add(_wpf);
         Content = grid;
+
+        // The presenter window is created once the WPF window has a handle to parent it to,
+        // and follows the text panel's bounds from then on. It is not in the visual tree: a
+        // hosted window makes WPF exclude that region from its own rendering, which is what
+        // left a see-through hole when it was hidden.
+        SourceInitialized += (_, _) =>
+        {
+            var b = PanelBounds();
+            _d2d.Create(new WindowInteropHelper(this).Handle, b.x, b.y, b.w, b.h);
+        };
+        _wpf.SizeChanged += (_, _) =>
+        {
+            var b = PanelBounds();
+            _d2d.SetBounds(b.x, b.y, b.w, b.h);
+        };
 
         try
         {
@@ -153,6 +176,15 @@ public sealed class HandoffWindow : Window
 
         ContentRendered += async (_, _) =>
         {
+            if (_bgTest)
+            {
+                CompositionTarget.Rendering += OnFrame;
+                try { await BackgroundTestAsync(); }
+                catch (Exception ex) { Log($"BG TEST FAILED: {ex.GetType().Name}: {ex.Message}"); }
+                Close();
+                return;
+            }
+
             if (!_sweep)
             {
                 // Straight to the A/B. The sweep depends on screen capture, which depends on
@@ -174,7 +206,10 @@ public sealed class HandoffWindow : Window
         Closed += (_, _) => _d2d.Stop();
     }
 
-    public static HandoffWindow Open(string? file, bool sweep)
+    /// <summary>Debug hook: paint the presenter background magenta. See DebugMagenta.</summary>
+    internal static void SetDebugMagenta() => PresenterSurface.DebugMagenta = true;
+
+    public static HandoffWindow Open(string? file, bool sweep, bool bgTest)
     {
         string path = file ?? Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
@@ -188,7 +223,7 @@ public sealed class HandoffWindow : Window
             .Where(l => l.Trim().Length > 0)
             .ToArray();
 
-        return new HandoffWindow(lines, sweep);
+        return new HandoffWindow(lines, sweep, bgTest);
     }
 
     // --- the gesture ----------------------------------------------------------------------
@@ -223,7 +258,7 @@ public sealed class HandoffWindow : Window
     {
         _presenting = true;
         _handingBack = false;
-        _d2d.Visibility = Visibility.Visible;
+        _d2d.Show();
         Log($"TAKE OVER at offset {_offset:F1}");
     }
 
@@ -253,7 +288,10 @@ public sealed class HandoffWindow : Window
                 $"presenting={_presenting}");
             // A new gesture may have started while this was queued, in which case the surface
             // is wanted after all.
-            if (!_presenting) _d2d.Visibility = Visibility.Hidden;
+            if (!_presenting)
+            {
+                _d2d.Hide();
+            }
             _handingBack = false;
         });
     }
@@ -281,6 +319,171 @@ public sealed class HandoffWindow : Window
 
         _wpf.Offset = _offset;
         _wpf.InvalidateVisual();
+    }
+
+    // --- watching its own pixels -----------------------------------------------------------
+
+    /// <summary>
+    /// Drives its own gesture and samples its own background, so the flash can be caught
+    /// without anyone having to see it.
+    /// </summary>
+    /// <remarks>
+    /// A thin strip down the right edge is sampled every few milliseconds. Text is lighter
+    /// than the background, so the darkest pixel in the strip is the background whatever the
+    /// text is doing, and a flash shows as that darkest value rising above the theme colour.
+    ///
+    /// Each sample is recorded against the state at the time - which renderer should be on
+    /// screen, and whether a handoff is in progress - so a spike can be attributed instead of
+    /// guessed at.
+    /// </remarks>
+    private async Task BackgroundTestAsync()
+    {
+        Topmost = true;
+        Activate();
+        await Task.Delay(600);
+
+        Log($"BG TEST start, theme background is {BackColor.R},{BackColor.G},{BackColor.B}, " +
+            $"magenta={PresenterSurface.DebugMagenta}, noGesture={NoGesture}");
+
+        var samples = new List<(double t, int min, string state)>(4000);
+        var clock = Stopwatch.StartNew();
+        double nextNotch = 0.4;
+
+        while (clock.Elapsed.TotalSeconds < 14)
+        {
+            double t = clock.Elapsed.TotalSeconds;
+
+            // A notch every 1.6s: long enough for a coast to finish and hand back, so both
+            // ends of a gesture are covered repeatedly.
+            if (t >= nextNotch && !NoGesture)
+            {
+                nextNotch += 1.6;
+                Log($"  [test] injecting notch at {t:F3}, presenting={_presenting}");
+                if (!_presenting) TakeOver();
+                _d2d.Wheel(1);
+            }
+
+            int min = SampleRightEdgeMinimum();
+
+            if (min > BackColor.R + 12 && _ownerLogs < 6)
+            {
+                _ownerLogs++;
+                var (sx, sy) = SamplePointScreen();
+                Log($"  [test] bright min={min} state={(_presenting ? "D2D" : "WPF")} " +
+                    $"owner: {WindowAtSamplePoint(sx, sy)}");
+            }
+            string state = _presenting ? (_handingBack ? "handing-back" : "D2D")
+                                       : (_d2d.IsShown ? "D2D-still-shown" : "WPF");
+
+            // Save the first bright frame, and one quiet one to compare it against. A
+            // percentage cannot say whether the window is flashing or whether the sampler is
+            // reading the wrong pixels; a picture can.
+            if (min > BackColor.R + 12 && state == "D2D" && !_savedFlash)
+            {
+                _savedFlash = true;
+                SaveFullCapture($"flash_D2D_t{t:F3}_min{min}");
+                Log($"  [test] saved D2D flash capture at t={t:F3}, min={min}");
+            }
+            else if (min > BackColor.R + 12 && state == "WPF" && !_savedWpfFlash)
+            {
+                _savedWpfFlash = true;
+                SaveFullCapture($"flash_WPF_t{t:F3}_min{min}");
+                Log($"  [test] saved WPF flash capture at t={t:F3}, min={min}");
+            }
+            else if (min <= BackColor.R + 12 && !_savedQuiet && t > 2)
+            {
+                _savedQuiet = true;
+                SaveFullCapture($"quiet_t{t:F3}_min{min}");
+                Log($"  [test] saved quiet capture at t={t:F3}, min={min}");
+            }
+            samples.Add((t, min, state));
+
+            await Task.Delay(8);
+        }
+
+        // Report: anything meaningfully lighter than the theme background is the flash.
+        int threshold = BackColor.R + 12;
+        var flashes = samples.Where(x => x.min > threshold).ToList();
+
+        Log($"BG TEST done: {samples.Count} samples, {flashes.Count} above {threshold}");
+
+        if (flashes.Count == 0)
+        {
+            Log("  no flash observed");
+        }
+        else
+        {
+            foreach (var g in flashes.GroupBy(x => x.state))
+                Log($"  state {g.Key,-16} {g.Count(),4} samples, " +
+                    $"brightest {g.Max(x => x.min)}, median {g.OrderBy(x => x.min).ElementAt(g.Count() / 2).min}");
+
+            Log("  first 25 flash samples:");
+            foreach (var f in flashes.Take(25))
+                Log($"    t={f.t,7:F3}  min={f.min,4}  state={f.state}");
+        }
+
+        // And the quiet baseline, to prove the sampling is reading our window at all.
+        var quiet = samples.Where(x => x.min <= threshold).ToList();
+        if (quiet.Count > 0)
+            Log($"  baseline: {quiet.Count} samples, darkest {quiet.Min(x => x.min)}, " +
+                $"brightest {quiet.Max(x => x.min)}");
+    }
+
+    private bool _savedFlash, _savedWpfFlash, _savedQuiet;
+    private int _ownerLogs;
+
+    /// <summary>The whole client area, saved so it can be looked at.</summary>
+    private void SaveFullCapture(string name)
+    {
+        try
+        {
+            Directory.CreateDirectory(OutDir);
+            using var shot = Capture();
+            shot.Save(Path.Combine(OutDir, name + ".png"),
+                System.Drawing.Imaging.ImageFormat.Png);
+        }
+        catch (Exception ex) { Log($"  [test] capture save failed: {ex.Message}"); }
+    }
+
+    /// <summary>Screen coordinates of the middle of the sampled strip.</summary>
+    private (int x, int y) SamplePointScreen()
+    {
+        IntPtr hwnd = new WindowInteropHelper(this).Handle;
+        GetClientRect(hwnd, out RECT r);
+        var origin = new POINT { X = r.Left, Y = r.Top };
+        ClientToScreen(hwnd, ref origin);
+        return (origin.X + (r.Right - r.Left) - 5, origin.Y + (r.Bottom - r.Top) / 2);
+    }
+
+    /// <summary>Darkest pixel in a strip down the right edge of the scrolling area.</summary>
+    private int SampleRightEdgeMinimum()
+    {
+        IntPtr hwnd = new WindowInteropHelper(this).Handle;
+        GetClientRect(hwnd, out RECT r);
+        var origin = new POINT { X = r.Left, Y = r.Top };
+        ClientToScreen(hwnd, ref origin);
+
+        var top = _wpf.TranslatePoint(new Point(0, 0), this);
+        int skip = (int)Math.Round(top.Y) + 40;        // below the "WPF"/"D2D" tag
+        int w = 6;
+        int h = r.Bottom - r.Top - skip - 4;
+        if (h <= 0) return 255;
+
+        using var bmp = new System.Drawing.Bitmap(w, h,
+            System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+        using (var g = System.Drawing.Graphics.FromImage(bmp))
+            g.CopyFromScreen(origin.X + (r.Right - r.Left) - w - 2, origin.Y + skip, 0, 0,
+                new System.Drawing.Size(w, h), System.Drawing.CopyPixelOperation.SourceCopy);
+
+        int min = 255;
+        for (int y = 0; y < h; y++)
+        for (int x = 0; x < w; x++)
+        {
+            var px = bmp.GetPixel(x, y);
+            int v = Math.Max(px.R, Math.Max(px.G, px.B));
+            if (v < min) min = v;
+        }
+        return min;
     }
 
     // --- the objective half ---------------------------------------------------------------
@@ -314,10 +517,10 @@ public sealed class HandoffWindow : Window
             _wpf.InvalidateVisual();
             _d2d.SetOffset(off);
 
-            _d2d.Visibility = Visibility.Hidden;
+            _d2d.Hide();
             using var wpf = await CaptureWhenVisibleAsync();
 
-            _d2d.Visibility = Visibility.Visible;
+            _d2d.Show();
             using var d2d = await CaptureWhenVisibleAsync();
 
             // Keep one pair mid-line, so the residual can be looked at rather than inferred
@@ -352,7 +555,7 @@ public sealed class HandoffWindow : Window
         report.AppendLine($"worst offset {worstOffset}: mean {worstMean:F2}, {worstOver8:F2}% differing by >8");
         report.AppendLine("(offset 0 alone measured mean 0.54 / 3.16% in the static comparison)");
 
-        _d2d.Visibility = Visibility.Hidden;
+        _d2d.Hide();
         _wpf.Offset = 0;
         _offset = 0;
         _wpf.InvalidateVisual();
@@ -371,6 +574,17 @@ public sealed class HandoffWindow : Window
     /// yield: the capture reads the composed desktop, so what matters is that DWM has
     /// presented, and idle priority is starved by anything animating.
     /// </summary>
+    /// <summary>The text panel's area in client pixels, where the presenter window goes.</summary>
+    private (int x, int y, int w, int h) PanelBounds()
+    {
+        var dpi = VisualTreeHelper.GetDpi(this);
+        var origin = _wpf.TranslatePoint(new Point(0, 0), this);
+        return ((int)Math.Round(origin.X * dpi.DpiScaleX),
+                (int)Math.Round(origin.Y * dpi.DpiScaleY),
+                (int)Math.Round(_wpf.ActualWidth * dpi.DpiScaleX),
+                (int)Math.Round(_wpf.ActualHeight * dpi.DpiScaleY));
+    }
+
     private static async Task SettleAsync() => await Task.Delay(200);
 
     /// <summary>
@@ -408,6 +622,40 @@ public sealed class HandoffWindow : Window
 
     [DllImport("user32.dll")]
     private static extern bool ClientToScreen(IntPtr hwnd, ref POINT point);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr WindowFromPoint(POINT point);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetAncestor(IntPtr hwnd, uint flags);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern int GetClassNameW(IntPtr hwnd, System.Text.StringBuilder name, int max);
+
+    [DllImport("user32.dll")]
+    private static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint pid);
+
+    /// <summary>
+    /// Which window actually owns the pixel being sampled. The alternative to knowing this is
+    /// another round of theories about why our window looks wrong, when it may not be our
+    /// window at all.
+    /// </summary>
+    private string WindowAtSamplePoint(int screenX, int screenY)
+    {
+        IntPtr at = WindowFromPoint(new POINT { X = screenX, Y = screenY });
+        IntPtr root = GetAncestor(at, 2);                 // GA_ROOT
+        IntPtr mine = new WindowInteropHelper(this).Handle;
+
+        var cls = new System.Text.StringBuilder(128);
+        GetClassNameW(at, cls, cls.Capacity);
+        GetWindowThreadProcessId(at, out uint pid);
+
+        string who;
+        try { who = System.Diagnostics.Process.GetProcessById((int)pid).ProcessName; }
+        catch { who = "?"; }
+
+        return $"hwnd={at} root={root} mine={mine} same={(root == mine)} class={cls} proc={who}";
+    }
 
     [StructLayout(LayoutKind.Sequential)]
     private struct RECT { public int Left, Top, Right, Bottom; }
@@ -513,9 +761,27 @@ public sealed class HandoffWindow : Window
     }
 
     /// <summary>The paced Direct2D presenter, settled to the parameters the seam sweep found.</summary>
-    private sealed class PresenterSurface : HwndHost
+    /// <remarks>
+    /// Deliberately not an HwndHost. WPF excludes a hosted window's region from its own
+    /// rendering for as long as the host is in the visual tree, so hiding the child left a hole
+    /// showing whatever was behind the window - which is the background "getting brighter".
+    /// Measured: with the presenter never shown, 907 samples of the background all read the
+    /// theme colour exactly; once it had been shown and hidden, over a hundred read between 68
+    /// and 163.
+    ///
+    /// Parenting the child window directly means WPF knows nothing about it. WPF renders its
+    /// whole client area as normal, and this window simply covers part of it while shown.
+    /// </remarks>
+    private sealed class PresenterSurface
     {
         private const int WS_CHILD = 0x40000000, WS_VISIBLE = 0x10000000;
+
+        /// <summary>
+        /// Paints the presenter background a colour nothing else could be, so that a captured
+        /// background either is that colour - the surface is opaque and the brightness comes
+        /// from somewhere else - or is a blend of it, which proves the surface is translucent.
+        /// </summary>
+        internal static bool DebugMagenta;
 
         [DllImport("user32.dll", CharSet = CharSet.Unicode)]
         private static extern IntPtr CreateWindowExW(int exStyle, string cls, string? name,
@@ -645,17 +911,48 @@ public sealed class HandoffWindow : Window
             return Interlocked.Read(ref _frames) - start;
         }
 
-        protected override HandleRef BuildWindowCore(HandleRef parent)
+        [DllImport("user32.dll")]
+        private static extern bool ShowWindow(IntPtr hwnd, int cmd);
+
+        [DllImport("user32.dll")]
+        private static extern bool MoveWindow(IntPtr hwnd, int x, int y, int w, int h, bool repaint);
+
+        private const int SW_HIDE = 0, SW_SHOWNA = 8;
+
+        public bool IsShown { get; private set; }
+
+        /// <summary>Creates the child window, hidden, and starts drawing into it.</summary>
+        public void Create(IntPtr parent, int x, int y, int w, int h)
         {
-            _hwnd = CreateWindowExW(0, EnsureWindowClass(), null, WS_CHILD | WS_VISIBLE,
-                0, 0, 100, 100, parent.Handle, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero);
+            // Created without WS_VISIBLE: it must not appear until the first gesture.
+            _hwnd = CreateWindowExW(0, EnsureWindowClass(), null, WS_CHILD,
+                x, y, Math.Max(1, w), Math.Max(1, h), parent, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero);
             _running = true;
             _thread = new Thread(Loop) { IsBackground = true, Name = "handoff-presenter" };
             _thread.Start();
-            return new HandleRef(this, _hwnd);
         }
 
-        protected override void DestroyWindowCore(HandleRef hwnd)
+        public void SetBounds(int x, int y, int w, int h)
+        {
+            if (_hwnd != IntPtr.Zero && w > 0 && h > 0) MoveWindow(_hwnd, x, y, w, h, false);
+        }
+
+        /// <summary>SW_SHOWNA: shown without taking activation away from the WPF window.</summary>
+        public void Show()
+        {
+            if (_hwnd == IntPtr.Zero || IsShown) return;
+            ShowWindow(_hwnd, SW_SHOWNA);
+            IsShown = true;
+        }
+
+        public void Hide()
+        {
+            if (_hwnd == IntPtr.Zero || !IsShown) return;
+            ShowWindow(_hwnd, SW_HIDE);
+            IsShown = false;
+        }
+
+        public void Destroy()
         {
             Stop();
             if (_hwnd != IntPtr.Zero) { DestroyWindow(_hwnd); _hwnd = IntPtr.Zero; }
@@ -695,12 +992,62 @@ public sealed class HandoffWindow : Window
                 BufferUsage = Usage.RenderTargetOutput,
                 SampleDescription = new SampleDescription(1, 0),
                 SwapEffect = SwapEffect.FlipSequential,
+                // Opaque, explicitly. The D2D target bitmap is created AlphaMode.Ignore so
+                // ClearType works, but the swapchain defaults to unspecified alpha - so its
+                // alpha channel was undefined and DWM composited the surface with whatever was
+                // behind it. That is the washed out, tinted background: the desktop showing
+                // through the presenter.
+                AlphaMode = Vortice.DXGI.AlphaMode.Ignore,
                 Flags = SwapChainFlags.FrameLatencyWaitableObject,
             }))
             {
                 _swapChain = sc1.QueryInterface<IDXGISwapChain2>();
             }
             _swapChain.MaximumFrameLatency = 1;
+
+            // What colour space is the display actually in? If it is one of the HDR ones, the
+            // system is tone mapping our SDR pixels and the brightness is not ours to fix in
+            // the renderer.
+            try
+            {
+                using var adapter1 = adapter.QueryInterface<IDXGIAdapter1>();
+                adapter1.EnumOutputs(0, out IDXGIOutput output).CheckError();
+                using var _ = output;
+                using var output6 = output.QueryInterface<IDXGIOutput6>();
+                var d = output6.Description1;
+                HandoffWindow.Log($"  [d2d] display colour space {d.ColorSpace}, " +
+                                  $"bits {d.BitsPerColor}, " +
+                                  $"maxLuminance {d.MaxLuminance:F0}, " +
+                                  $"minLuminance {d.MinLuminance:F4}");
+            }
+            catch (Exception ex)
+            {
+                HandoffWindow.Log($"  [d2d] output description unavailable: {ex.Message}");
+            }
+
+            // Declare SDR sRGB explicitly. Without it the composition of a DXGI swapchain can
+            // be treated as an unspecified colour space and tone mapped on an HDR capable
+            // display, which lifts midtones across the whole window - the background reading 71
+            // and 94 where the theme colour is 30, with pure black and white left untouched
+            // because they are fixed points of the transform.
+            try
+            {
+                using var sc3 = _swapChain.QueryInterface<IDXGISwapChain3>();
+                var space = ColorSpaceType.RgbFullG22NoneP709;
+                if (sc3.CheckColorSpaceSupport(space).HasFlag(SwapChainColorSpaceSupportFlags.Present))
+                {
+                    sc3.SetColorSpace1(space);
+                    HandoffWindow.Log("  [d2d] colour space set to RgbFullG22NoneP709 (SDR sRGB)");
+                }
+                else
+                {
+                    HandoffWindow.Log("  [d2d] RgbFullG22NoneP709 not supported for present");
+                }
+            }
+            catch (Exception ex)
+            {
+                HandoffWindow.Log($"  [d2d] colour space not set: {ex.GetType().Name}: {ex.Message}");
+            }
 
             _d2dFactory = D2D1.D2D1CreateFactory<ID2D1Factory1>(FactoryType.SingleThreaded);
             _d2dDevice = _d2dFactory.CreateDevice(dxgiDevice);
@@ -833,7 +1180,7 @@ public sealed class HandoffWindow : Window
             double offset = Volatile.Read(ref _offset);
 
             _d2d.BeginDraw();
-            _d2d.Clear(ToColor4(BackColor));
+            _d2d.Clear(DebugMagenta ? new Color4(1f, 0f, 1f, 1f) : ToColor4(BackColor));
 
             int first = Math.Max(0, (int)(offset / LineHeight));
             int last = Math.Min(_lines.Length - 1, (int)((offset + size.Height) / LineHeight));
