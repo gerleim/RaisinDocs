@@ -17,6 +17,32 @@ internal class ScrollController
     private readonly Stopwatch _wheelClock = new();
     private const double WheelDamping = 10.0;
 
+    /// <summary>
+    /// Speed, in pixels a second, below which a coast snaps to a whole pixel and stops.
+    /// </summary>
+    /// <remarks>
+    /// This decides how long the visibly stepped part of a coast lasts, because the renderer
+    /// rounds the offset to whole pixels: the image only changes when the offset crosses a
+    /// boundary, so at V pixels a second it changes V times a second however often we paint. At
+    /// 10 - which is where this sat, having borrowed WheelDamping's value rather than meaning
+    /// anything - the last pixel takes a tenth of a second, and the closing stretch of every
+    /// gesture steps at 10 to 30 changes a second against a panel showing 280.
+    ///
+    /// Ending the coast sooner shortens that stretch. It does not fix the stepping, which needs
+    /// sub-pixel positioning and therefore a renderer we control - see
+    /// design/Sub-Pixel Scrolling.md. It only stops the scroll before the stepping becomes the
+    /// thing you are looking at.
+    ///
+    /// Tunable without a rebuild through RAISINDOCS_SNAP_VELOCITY, for finding the point where
+    /// the stop stops being noticeable.
+    /// </remarks>
+    private static readonly double SnapVelocity =
+        double.TryParse(Environment.GetEnvironmentVariable("RAISINDOCS_SNAP_VELOCITY"),
+            System.Globalization.NumberStyles.Float,
+            System.Globalization.CultureInfo.InvariantCulture, out double v) && v > 0
+            ? v
+            : 40.0;
+
     // RenderingEventArgs.RenderingTime is the composition engine's frame stamp, not a wall
     // clock: it repeats or regresses when the UI thread and the render thread desync, which
     // gets likely once OnRender approaches the frame budget (tall window = many visible
@@ -203,7 +229,7 @@ internal class ScrollController
 
         bool stop = Math.Abs(_wheelVelocity) < 0.5;
         if (!stop && Math.Round(_offset) != prevPixel
-                  && Math.Abs(_wheelVelocity) < WheelDamping)
+                  && Math.Abs(_wheelVelocity) < SnapVelocity)
         {
             // Come to rest on a whole pixel so the frame that lingers is not resampled.
             // Nearest, not the pixel this frame began on: the view moves sub-pixel now, so

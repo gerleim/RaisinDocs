@@ -137,14 +137,19 @@ would give smooth motion at the cost of permanently softer text, scrolling or no
 Cheap to try and easy to revert. Likely rejected on appearance, but it costs an hour and it
 settles empirically how much of the crispness comes from vertical hinting.
 
-### D. End the coast earlier
+### D. End the coast earlier — **done, and it was enough for now**
 
-Not a fix. The stepping is visible below roughly 30px/s; the coast currently runs to 10px/s.
-Raising the stop threshold shortens the visibly-stepped phase at the cost of the scroll settling
-a little sooner and a little more abruptly.
+The stop threshold had borrowed `WheelDamping`'s value of 10px/s without meaning anything by it.
+At 10px/s a single pixel takes a tenth of a second, so the closing stretch of every gesture was
+guaranteed to step at 10 to 30 image changes a second against a panel showing 280.
 
-Worth measuring as a baseline for how much of the complaint is the last half second, because if
-most of it is, D is minutes of work against weeks.
+Raised to 40px/s as `SnapVelocity`, tunable through `RAISINDOCS_SNAP_VELOCITY`. Judged in
+Release on the trading report as "not perfect but acceptable" - which is the honest result: the
+stepping is unchanged, the coast simply no longer lingers where it is the thing you are looking
+at.
+
+It costs the scroll settling at about two lines a second rather than gliding to a halt. That
+trade was accepted; it is a knob, not a decision, if it ever needs revisiting.
 
 ## Related, and separate
 
@@ -215,12 +220,18 @@ output.
   held near constant velocity for several seconds is the test, and it has to be watched rather
   than measured.
 
-## Suggested order
+## Where this stands
 
-1. **D, as a baseline.** Minutes. Establishes how much of the complaint lives in the last half
-   second of a gesture, which bounds what the rest is worth.
-2. **C, as an experiment.** An hour. Settles how much crispness vertical hinting is actually
+**D is done and the complaint is closed for now.** The tail is acceptable, not perfect, and
+nothing further is planned unless it becomes irritating again.
+
+If it does, the order is unchanged and nothing above is invalidated:
+
+1. **C, as an experiment.** An hour. Settles how much crispness vertical hinting is actually
    buying, which decides whether A and B are solving a real constraint or an imagined one.
-3. **Then A or B, and only as part of the larger renderer decision.** Neither is worth doing on
+2. **Then A or B, and only as part of the larger renderer decision.** Neither is worth doing on
    its own: A needs a renderer WPF cannot provide, and B is a benefit of owning the canvas
    rather than a reason to.
+
+The reason to keep this document is that the next person to look at a jagged scroll will reach
+for sub-pixel scrolling, and would otherwise be the third to discover the two ways it fails.
