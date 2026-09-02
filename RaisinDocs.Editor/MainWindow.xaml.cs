@@ -40,10 +40,15 @@ public partial class MainWindow : Window
 
         Loaded += (_, _) =>
         {
-            var args = Environment.GetCommandLineArgs();
-            if (args.Length > 1)
+            // Skip switches, so a file path can be given alongside one - App has already
+            // read them.
+            string? path = Environment.GetCommandLineArgs()
+                .Skip(1)
+                .FirstOrDefault(a => !a.StartsWith('-'));
+
+            if (path is not null)
             {
-                TryOpenFileFromPath(args[1]);
+                TryOpenFileFromPath(path);
                 return;
             }
 

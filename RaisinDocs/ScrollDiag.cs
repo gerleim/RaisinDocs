@@ -18,10 +18,15 @@ namespace RaisinDocs;
 internal static class ScrollDiag
 {
     /// <summary>
-    /// Off unless RAISINDOCS_SCROLL_DIAG is set, so measuring costs nothing in a normal run and
-    /// needs no rebuild to turn on.
+    /// Off unless RAISINDOCS_SCROLL_DIAG is set or a host turns it on, so measuring costs
+    /// nothing in a normal run and needs no rebuild to turn on.
     /// </summary>
-    internal static readonly bool Enabled =
+    /// <remarks>
+    /// Settable because an environment variable is awkward to pass from a debugger or a
+    /// shortcut; DocsCanvas.ScrollDiagnostics is the public way in, and a host that sets it
+    /// must do so before the canvas is constructed.
+    /// </remarks>
+    internal static bool Enabled { get; set; } =
         !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("RAISINDOCS_SCROLL_DIAG"));
 
     private static readonly object Lock = new();

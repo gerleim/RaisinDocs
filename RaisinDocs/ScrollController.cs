@@ -129,6 +129,10 @@ internal class ScrollController
         _getMaxScroll = getMaxScroll;
         _getRepaintInterval = getRepaintInterval ?? (() => 1.0 / 60);
         _smoother = new SmoothScroller(invalidateVisual);
+
+        // Subscribed always and gated inside, so the flag can be set after construction
+        // without the wiring depending on when it was read.
+        _smoother.Frame += OnSmoothFrame;
     }
 
     internal void Clamp()
@@ -165,6 +169,7 @@ internal class ScrollController
             _wheelClock.Restart();
             _displayInterval = _getRepaintInterval();
             _paintedPixel = Math.Round(_offset);
+            _gestureSource = "wheel";
 
             CompositionTarget.Rendering += OnWheelFrame;
             _invalidateVisual();
@@ -186,6 +191,17 @@ internal class ScrollController
         _offset = Math.Clamp(targetOffset, 0, _getMaxScroll());
         double jump = _offset - oldScroll;
         _smoother.Offset -= jump;
+
+        // The jump has been added to _offset and taken off the smoother, so EffectiveOffset is
+        // still where the last paint left it - the right baseline for the first pixel step.
+        // A drag calls this on every scrollbar change, but Start no-ops while already running,
+        // so the measured gesture spans the whole drag and its settle.
+        if (!_smoother.IsAnimating)
+        {
+            _paintedPixel = Math.Round(EffectiveOffset);
+            _gestureSource = "smooth";
+        }
+
         _smoother.Start();
         _invalidateVisual();
     }
@@ -296,7 +312,7 @@ internal class ScrollController
     /// naturally once the speed drops near one pixel per frame - the same whole-pixel stepping
     /// sub-pixel scrolling was meant to cure, and nothing to do with dropped frames.
     /// </remarks>
-    internal static readonly bool Diagnostics = ScrollDiag.Enabled;
+    internal static bool Diagnostics => ScrollDiag.Enabled;
 
     private static readonly string DiagPath = System.IO.Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -310,6 +326,34 @@ internal class ScrollController
     private int _frames, _paints;
 
     private int _gc0, _gc1, _gc2;
+
+    private string _gestureSource = "wheel";
+
+    /// <summary>
+    /// Feeds the smoother's animation - scrollbar drags and minimap jumps - through the same
+    /// counters as the wheel coast, so the two are directly comparable in the log.
+    /// </summary>
+    /// <remarks>
+    /// The smoother owns no pixel of its own: what reaches the screen is EffectiveOffset, the
+    /// settled offset plus the animating remainder, so the step is measured from there rather
+    /// than from Offset.
+    /// </remarks>
+    private void OnSmoothFrame(double dt, bool stopped)
+    {
+        if (!Diagnostics) return;
+
+        // dt is 0 on the priming frame: counted as a tick, never as a gap.
+        DiagFrame(dt, dt > 0);
+
+        double pixel = Math.Round(EffectiveOffset);
+        if (pixel != _paintedPixel)
+        {
+            DiagPaint(pixel - _paintedPixel);
+            _paintedPixel = pixel;
+        }
+
+        if (stopped) DiagGestureEnd();
+    }
 
     private void DiagFrame(double dt, bool newFrame)
     {
@@ -359,7 +403,7 @@ internal class ScrollController
         {
             System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(DiagPath)!);
             System.IO.File.AppendAllText(DiagPath,
-                $"{DateTime.Now:HH:mm:ss.fff}  gesture {seconds:F2}s  " +
+                $"{DateTime.Now:HH:mm:ss.fff}  {_gestureSource} gesture {seconds:F2}s  " +
                 $"{_frames} ticks, {_paints} paints" + Environment.NewLine +
                 $"    {frames}" + Environment.NewLine +
                 $"    {paints}" + Environment.NewLine +
@@ -370,8 +414,10 @@ internal class ScrollController
                 Environment.NewLine +
                 $"    pixel steps: 1px {100.0 * oneP / Math.Max(1, _pixelSteps.Count):F0}%, " +
                 $"more {100.0 * multi / Math.Max(1, _pixelSteps.Count):F0}%, " +
-                $"largest {(steps.Length > 0 ? steps[^1] : 0):F0}px   " +
-                $"notches/message {_notchesPerMessage:F2}" + Environment.NewLine);
+                $"largest {(steps.Length > 0 ? steps[^1] : 0):F0}px" +
+                (_gestureSource == "wheel"
+                    ? $"   notches/message {_notchesPerMessage:F2}"
+                    : string.Empty) + Environment.NewLine);
         }
         catch (System.IO.IOException) { }
 
