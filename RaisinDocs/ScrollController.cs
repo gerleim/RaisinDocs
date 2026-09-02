@@ -17,6 +17,32 @@ internal class ScrollController
     private readonly Stopwatch _wheelClock = new();
     private const double WheelDamping = 10.0;
 
+    /// <summary>
+    /// Speed, in pixels a second, below which a coast snaps to a whole pixel and stops.
+    /// </summary>
+    /// <remarks>
+    /// This decides how long the visibly stepped part of a coast lasts, because the renderer
+    /// rounds the offset to whole pixels: the image only changes when the offset crosses a
+    /// boundary, so at V pixels a second it changes V times a second however often we paint. At
+    /// 10 - which is where this sat, having borrowed WheelDamping's value rather than meaning
+    /// anything - the last pixel takes a tenth of a second, and the closing stretch of every
+    /// gesture steps at 10 to 30 changes a second against a panel showing 280.
+    ///
+    /// Ending the coast sooner shortens that stretch. It does not fix the stepping, which needs
+    /// sub-pixel positioning and therefore a renderer we control - see
+    /// design/Sub-Pixel Scrolling.md. It only stops the scroll before the stepping becomes the
+    /// thing you are looking at.
+    ///
+    /// Tunable without a rebuild through RAISINDOCS_SNAP_VELOCITY, for finding the point where
+    /// the stop stops being noticeable.
+    /// </remarks>
+    private static readonly double SnapVelocity =
+        double.TryParse(Environment.GetEnvironmentVariable("RAISINDOCS_SNAP_VELOCITY"),
+            System.Globalization.NumberStyles.Float,
+            System.Globalization.CultureInfo.InvariantCulture, out double v) && v > 0
+            ? v
+            : 40.0;
+
     // RenderingEventArgs.RenderingTime is the composition engine's frame stamp, not a wall
     // clock: it repeats or regresses when the UI thread and the render thread desync, which
     // gets likely once OnRender approaches the frame budget (tall window = many visible
@@ -39,7 +65,6 @@ internal class ScrollController
     // The cap is the display's own rate (see DisplayRefresh), not a fixed 60: scrolling is
     // continuous motion, so every frame the panel can show is a frame worth drawing. Read
     // once per gesture, which is cheap and picks up a monitor or mode change.
-    private double _repaintInterval = 1.0 / 60;
 
     /// <summary>The display's own interval, before any allowance for how heavy the content is.</summary>
     private double _displayInterval = 1.0 / 60;
@@ -87,7 +112,6 @@ internal class ScrollController
     /// <summary>Never stretch further than this, however heavy a frame is.</summary>
     private const double MaxIntervalStretch = 4.0;
 
-    private double _sinceRepaint;
     private double _paintedPixel;
 
     internal double Offset
@@ -140,9 +164,8 @@ internal class ScrollController
             _wheelCoasting = true;
             _wheelClock.Restart();
             _displayInterval = _getRepaintInterval();
-            _repaintInterval = EffectiveInterval();
             _paintedPixel = Math.Round(_offset);
-            _sinceRepaint = _repaintInterval; // let the first frame paint immediately
+
             CompositionTarget.Rendering += OnWheelFrame;
             _invalidateVisual();
         }
@@ -179,22 +202,6 @@ internal class ScrollController
         _notchesPerMessage = _notchesPerMessage * 0.8 + notches * 0.2;
     }
 
-    /// <summary>
-    /// The repaint interval: the display's own, stretched while messages are arriving merged.
-    /// </summary>
-    /// <remarks>
-    /// Stretching in proportion to the merging is self-correcting. Messages carrying two
-    /// notches halve the repaint rate, which frees the thread, which stops the merging, which
-    /// lets the rate climb back. It settles wherever the content can actually be drawn, with
-    /// no fixed idea of what a frame ought to cost.
-    /// </remarks>
-    private double EffectiveInterval()
-    {
-        double stretch = _notchesPerMessage <= MergeTolerance ? 1.0 : _notchesPerMessage;
-        return Math.Clamp(_displayInterval * stretch,
-            _displayInterval, _displayInterval * MaxIntervalStretch);
-    }
-
     private void OnWheelFrame(object? sender, EventArgs e)
     {
         double dt = _wheelClock.Elapsed.TotalSeconds;
@@ -222,7 +229,7 @@ internal class ScrollController
 
         bool stop = Math.Abs(_wheelVelocity) < 0.5;
         if (!stop && Math.Round(_offset) != prevPixel
-                  && Math.Abs(_wheelVelocity) < WheelDamping)
+                  && Math.Abs(_wheelVelocity) < SnapVelocity)
         {
             // Come to rest on a whole pixel so the frame that lingers is not resampled.
             // Nearest, not the pixel this frame began on: the view moves sub-pixel now, so
@@ -239,28 +246,158 @@ internal class ScrollController
             CompositionTarget.Rendering -= OnWheelFrame;
         }
 
-        // Repaint only when the image would actually differ - the renderer rounds the offset
-        // to whole pixels - and at most once per display frame. The last coast frame always
-        // paints, so the final resting position is never left unpainted.
-        // Re-evaluated per frame: a table scrolling into view makes frames dearer, and out of
-        // view makes them cheap again.
-        _repaintInterval = EffectiveInterval();
+        // One repaint per composition frame, identified by the frame stamp rather than by a
+        // wall-clock interval.
+        //
+        // Repainting from inside this handler makes WPF schedule another pass and raise
+        // Rendering again, so it free-runs at about 500 a second. Gating that with a
+        // wall-clock interval was the mistake: the repaint lands on whichever free-running
+        // tick first crosses the threshold, so it arrives within a tick of the right time -
+        // about 2ms - which on a 3.571ms panel is more than half a refresh period, at a
+        // different phase every frame. Each repaint then independently catches or misses a
+        // composition deadline, which is the jagged scroll.
+        //
+        // RenderingTime is the composition engine's frame stamp. It repeats when Rendering
+        // fires more than once for the same frame, which is exactly what identifies the
+        // free-run duplicates. Painting only when it advances gives one repaint per frame WPF
+        // actually composes, and the invalidate then drives the next one - a loop that runs at
+        // the compositor's cadence instead of sliding against it.
+        var stamp = (e as RenderingEventArgs)?.RenderingTime ?? TimeSpan.MinValue;
+        bool newFrame = stamp == TimeSpan.MinValue || stamp != _lastRenderingTime;
+        _lastRenderingTime = stamp;
+        DiagFrame(dt, newFrame);
 
         // Only when the drawn image would differ, since the renderer rounds to whole pixels.
         // This does limit the decaying tail to one paint per pixel - about 38 a second at
         // 40px/s - which is the 1px stepping that sub-pixel scrolling was meant to cure.
-        _sinceRepaint += dt;
         double pixel = Math.Round(_offset);
-        bool painted = pixel != _paintedPixel && (stop || _sinceRepaint >= _repaintInterval);
-        if (painted)
+        if (pixel != _paintedPixel && (stop || newFrame))
         {
+            DiagPaint(pixel - _paintedPixel);
             _paintedPixel = pixel;
-            // Carry the remainder rather than zeroing. Ticks do not divide evenly into the
-            // repaint interval, so zeroing rounds every repaint up to the next whole tick:
-            // a 120Hz target served by ~137Hz ticks would beat down to about 68Hz. Clamped
-            // to one interval so a long stall cannot bank credit for a burst of catch-up.
-            _sinceRepaint = Math.Min(_sinceRepaint - _repaintInterval, _repaintInterval);
             _invalidateVisual();
         }
+
+        if (stop) DiagGestureEnd();
+    }
+
+    private TimeSpan _lastRenderingTime = TimeSpan.MinValue;
+
+    // --- diagnostics ------------------------------------------------------------------------
+
+    /// <summary>
+    /// Records how evenly a gesture's frames and pixel steps came out, to
+    /// %LOCALAPPDATA%\RaisinDocs\scroll.log.
+    /// </summary>
+    /// <remarks>
+    /// Two different things read as jagged and they need telling apart. A skipped composition
+    /// frame is the compositor not showing one we drew. An uneven pixel step is the offset
+    /// crossing pixel boundaries at irregular intervals, which is what a decaying coast does
+    /// naturally once the speed drops near one pixel per frame - the same whole-pixel stepping
+    /// sub-pixel scrolling was meant to cure, and nothing to do with dropped frames.
+    /// </remarks>
+    internal static readonly bool Diagnostics = ScrollDiag.Enabled;
+
+    private static readonly string DiagPath = System.IO.Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "RaisinDocs", "scroll.log");
+
+    private readonly List<double> _frameGaps = new(512);
+    private readonly List<double> _paintGaps = new(512);
+    private readonly List<double> _pixelSteps = new(512);
+    private readonly Stopwatch _gestureClock = new();
+    private double _sincePaint;
+    private int _frames, _paints;
+
+    private int _gc0, _gc1, _gc2;
+
+    private void DiagFrame(double dt, bool newFrame)
+    {
+        if (!Diagnostics) return;
+        if (!_gestureClock.IsRunning)
+        {
+            _gestureClock.Restart();
+            _gc0 = GC.CollectionCount(0);
+            _gc1 = GC.CollectionCount(1);
+            _gc2 = GC.CollectionCount(2);
+            ScrollDiag.Snapshot();   // discard anything from before the gesture
+        }
+        _frames++;
+        _sincePaint += dt;
+        if (newFrame && dt > 0 && dt < 0.5) _frameGaps.Add(dt * 1000);
+    }
+
+    private void DiagPaint(double step)
+    {
+        if (!Diagnostics) return;
+        _paints++;
+        if (_sincePaint > 0 && _sincePaint < 0.5) _paintGaps.Add(_sincePaint * 1000);
+        _sincePaint = 0;
+        _pixelSteps.Add(Math.Abs(step));
+    }
+
+    private void DiagGestureEnd()
+    {
+        if (!Diagnostics || _paints < 8) { DiagReset(); return; }
+
+        double seconds = _gestureClock.Elapsed.TotalSeconds;
+        string frames = Summarise(_frameGaps, "composition frame");
+        string paints = Summarise(_paintGaps, "paint interval");
+
+        // The tail is where a coast is slowest and whole-pixel stepping shows most, so it is
+        // reported on its own rather than averaged into the fast part.
+        int tailFrom = Math.Max(0, _paintGaps.Count - 20);
+        var tail = _paintGaps.GetRange(tailFrom, _paintGaps.Count - tailFrom);
+        string tailText = Summarise(tail, "tail paint interval");
+
+        var steps = _pixelSteps.ToArray();
+        Array.Sort(steps);
+        int oneP = 0, multi = 0;
+        foreach (var v in _pixelSteps) { if (v <= 1.0) oneP++; else multi++; }
+
+        try
+        {
+            System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(DiagPath)!);
+            System.IO.File.AppendAllText(DiagPath,
+                $"{DateTime.Now:HH:mm:ss.fff}  gesture {seconds:F2}s  " +
+                $"{_frames} ticks, {_paints} paints" + Environment.NewLine +
+                $"    {frames}" + Environment.NewLine +
+                $"    {paints}" + Environment.NewLine +
+                $"    {tailText}" + Environment.NewLine +
+                $"    costs: {ScrollDiag.Snapshot()}" + Environment.NewLine +
+                $"    gc during gesture: gen0 {GC.CollectionCount(0) - _gc0}, " +
+                $"gen1 {GC.CollectionCount(1) - _gc1}, gen2 {GC.CollectionCount(2) - _gc2}" +
+                Environment.NewLine +
+                $"    pixel steps: 1px {100.0 * oneP / Math.Max(1, _pixelSteps.Count):F0}%, " +
+                $"more {100.0 * multi / Math.Max(1, _pixelSteps.Count):F0}%, " +
+                $"largest {(steps.Length > 0 ? steps[^1] : 0):F0}px   " +
+                $"notches/message {_notchesPerMessage:F2}" + Environment.NewLine);
+        }
+        catch (System.IO.IOException) { }
+
+        DiagReset();
+    }
+
+    private static string Summarise(List<double> v, string label)
+    {
+        if (v.Count < 4) return $"{label}: too few samples";
+        var a = v.ToArray();
+        Array.Sort(a);
+        double med = a[a.Length / 2];
+        int late = 0;
+        foreach (var x in v) if (x > med * 1.5) late++;
+        return $"{label} median {med:F2}ms ({1000 / med:F0}/s), " +
+               $"p99 {a[(int)(a.Length * 0.99)]:F2}ms, max {a[^1]:F2}ms, " +
+               $"over 1.5x median {100.0 * late / v.Count:F1}%";
+    }
+
+    private void DiagReset()
+    {
+        _frameGaps.Clear();
+        _paintGaps.Clear();
+        _pixelSteps.Clear();
+        _gestureClock.Reset();
+        _sincePaint = 0;
+        _frames = _paints = 0;
     }
 }
