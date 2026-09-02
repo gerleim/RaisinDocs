@@ -110,6 +110,9 @@ public sealed class HandoffWindow : Window
     /// </summary>
     internal static bool NoGesture;
 
+    /// <summary>Starts with the handoff off, so the same injected gesture runs through WPF.</summary>
+    internal static bool StartWithHandoffOff;
+
     public HandoffWindow(string[] lines, bool sweep, bool bgTest)
     {
         _lines = lines;
@@ -182,6 +185,14 @@ public sealed class HandoffWindow : Window
 
         ContentRendered += async (_, _) =>
         {
+            // Read here, not in a field initialiser: App sets these after constructing the
+            // window, so an initialiser sees the default and the flag silently does nothing.
+            if (StartWithHandoffOff)
+            {
+                _handoffEnabled = false;
+                _readout.Text = "presenter OFF (F9 to toggle) - scrolling stays in WPF";
+            }
+
             if (_bgTest)
             {
                 CompositionTarget.Rendering += OnFrame;
@@ -305,6 +316,11 @@ public sealed class HandoffWindow : Window
     /// waits for actual frames, rather than for a dispatcher priority that says nothing about
     /// what has been presented.
     /// </remarks>
+    private readonly Stopwatch _lastTick = Stopwatch.StartNew();
+    private Stopwatch? _wpfCoast;
+    private double _wpfCoastFrom;
+    private int _wpfTicks;
+
     private int _handBackTicks;
     private Stopwatch? _handBackClock;
     private const int HandBackTicks = 3;
@@ -335,9 +351,37 @@ public sealed class HandoffWindow : Window
         // be shown without a stall or a stale frame.
         _d2d.SetOffset(_offset);
 
-        if (Math.Abs(_velocity) < 0.5) { _velocity = 0; return; }
+        if (Math.Abs(_velocity) < 0.5)
+        {
+            if (_velocity != 0 || _wpfCoast != null)
+            {
+                Log($"WPF COAST end: {_wpfTicks} ticks in " +
+                    $"{_wpfCoast?.Elapsed.TotalMilliseconds ?? 0:F0}ms, " +
+                    $"{Math.Abs(_offset - _wpfCoastFrom):F0}px, " +
+                    $"tick rate {_wpfTicks / Math.Max(0.001, _wpfCoast?.Elapsed.TotalSeconds ?? 1):F0}/s");
+                _wpfCoast = null;
+            }
+            _velocity = 0;
+            return;
+        }
 
-        double dt = 1.0 / 144;
+        if (_wpfCoast == null)
+        {
+            _wpfCoast = Stopwatch.StartNew();
+            _wpfCoastFrom = _offset;
+            _wpfTicks = 0;
+            _lastTick.Restart();
+        }
+        _wpfTicks++;
+
+        // Measured, as the presenter does it and as ScrollController does it. A fixed 1/144
+        // step made this path frame-count driven rather than time driven: always exactly 113
+        // ticks per coast, but anywhere from 464ms to 2609ms of real time depending on how
+        // fast the ticks happened to arrive. That is what made the two paths feel like
+        // different speeds - this one was running fast, not the presenter running slow.
+        double dt = _lastTick.Elapsed.TotalSeconds;
+        _lastTick.Restart();
+        if (dt <= 0 || dt > 0.05) dt = 0.05;
         double decay = Math.Exp(-dt * WheelDamping);
         _offset += _velocity * (1 - decay) / WheelDamping;
         _velocity *= decay;
@@ -385,8 +429,15 @@ public sealed class HandoffWindow : Window
             {
                 nextNotch += 1.6;
                 Log($"  [test] injecting notch at {t:F3}, presenting={_presenting}");
-                if (!_presenting) TakeOver();
-                _d2d.Wheel(1);
+                if (_handoffEnabled)
+                {
+                    if (!_presenting) TakeOver();
+                    _d2d.Wheel(1);
+                }
+                else
+                {
+                    _velocity += 1 * PixelsPerNotch * WheelDamping;
+                }
             }
 
             int min = SampleRightEdgeMinimum();

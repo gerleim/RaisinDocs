@@ -28,6 +28,7 @@ public partial class App : Application
 
         if (e.Args.Contains("--magenta")) HandoffWindow.SetDebugMagenta();
         if (e.Args.Contains("--nogesture")) HandoffWindow.NoGesture = true;
+        if (e.Args.Contains("--wpfonly")) HandoffWindow.StartWithHandoffOff = true;
 
         string? monitor = e.Args.FirstOrDefault(a => a.StartsWith("--monitor="));
         if (monitor != null && int.TryParse(monitor.AsSpan("--monitor=".Length), out int m))
