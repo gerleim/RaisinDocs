@@ -58,7 +58,6 @@ public partial class DocsCanvas
         /// cannot help when DrawText is the cost. Caching the rasterised line instead makes a
         /// row a composite regardless of how many cells it holds.
         /// </remarks>
-        private int _visualsBuilt; // TEMP
         /// <summary>How often the minimap thumbnail is refreshed while scrolling.</summary>
         private const int MinimapHz = 30;
         private long _lastMinimapTick;
@@ -126,10 +125,7 @@ public partial class DocsCanvas
             if (_lineVisuals == null || firstVisible < 0) return;
 
             for (int i = firstVisible; i <= lastVisible; i++)
-            {
-                if (BuildLineVisual(i))
-                    _visualsBuilt++; // TEMP: counts only lines built while already on screen
-            }
+                BuildLineVisual(i);
 
             int budget = PreRenderBudget;
             for (int d = 1; d <= PreRenderMargin && budget > 0; d++)
@@ -343,7 +339,6 @@ public partial class DocsCanvas
             // Timed so the scroll controller can pace repaints against what a frame costs.
             long _t0 = System.Diagnostics.Stopwatch.GetTimestamp();
             int _firstVisible = -1;
-            _visualsBuilt = 0; // TEMP
 
             _rendering.Measure.EnsureMeasured(_docsCanvas);
             dc.DrawRectangle(_rendering.Palette.Background, null,
@@ -402,7 +397,8 @@ public partial class DocsCanvas
             }
             else
             {
-                // TEMP comparison path: draw every visible line here, as before phase 2.
+                // The comparison path, reached only when the F9 toggle is enabled: draws
+                // every visible line here, as everything did before lines were cached.
                 if (_docsCanvas.ContentLayer.Children.Count > 0)
                     _docsCanvas.ContentLayer.Children.Clear();
 
@@ -434,15 +430,12 @@ public partial class DocsCanvas
                 if (!_visual.IsVisual && _images.ImagePreview == DocsCanvas.ImagePreviewMode.OnHover && _docsCanvas._hoveredImage != null)
                     DrawHoverImagePreview(odc);
 
-                DrawModeBadge(odc); // TEMP
+                if (DocsCanvas.EnableRenderPathToggle)
+                    DrawModeBadge(odc);
             }
 
             // Feeds the adaptive repaint cap: the scroll controller stretches its interval
             // when a frame is too dear to draw at the display's rate.
-            long _elapsed = System.Diagnostics.Stopwatch.GetTimestamp() - _t0;
-            Phase2Diag.Frame(_elapsed * 1_000_000 / System.Diagnostics.Stopwatch.Frequency,
-                _lastVisible - _firstVisible + 1, _visualsBuilt, _docsCanvas.RenderVersion,
-                _scroll.Scroll.RepaintIntervalMs, _scroll.Scroll.DisplayIntervalMs); // TEMP
 
             // Both at Background priority, below Input and Render. Queued at the default
             // Normal these outrank the very things they interrupt: the caller is a render, so
@@ -469,7 +462,7 @@ public partial class DocsCanvas
                 });
         }
 
-        /// <summary>TEMP: says which of the two paths is drawing, for the F9 comparison.</summary>
+        /// <summary>Says which of the two paths is drawing. Only shown when F9 is enabled.</summary>
         private void DrawModeBadge(DrawingContext dc)
         {
             string text = _docsCanvas.CachedLineVisuals ? "F9: cached visuals" : "F9: direct draw";

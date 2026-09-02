@@ -345,8 +345,8 @@ public partial class DocsCanvas
 
         switch (e.Key)
         {
-            case Key.F9 when !shift && !ctrl && !alt:
-                ToggleCachedLineVisuals(); // TEMP A/B switch
+            case Key.F9 when !shift && !ctrl && !alt && EnableRenderPathToggle:
+                ToggleCachedLineVisuals();
                 e.Handled = true;
                 return;
 

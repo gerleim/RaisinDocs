@@ -87,12 +87,6 @@ internal class ScrollController
     /// <summary>Never stretch further than this, however heavy a frame is.</summary>
     private const double MaxIntervalStretch = 4.0;
 
-    /// <summary>TEMP: the interval actually in force, after the display rate and the load cap.</summary>
-    internal double RepaintIntervalMs => _repaintInterval * 1000;
-
-    /// <summary>TEMP: the display's own interval, before the load cap.</summary>
-    internal double DisplayIntervalMs => _displayInterval * 1000;
-
     private double _sinceRepaint;
     private double _paintedPixel;
 
@@ -126,7 +120,6 @@ internal class ScrollController
         _wheelCoasting = false;
         _wheelClock.Reset();
         CompositionTarget.Rendering -= OnWheelFrame;
-        Phase2Diag.Flush(); // TEMP
     }
 
     internal void CancelSmooth() => _smoother.Cancel();

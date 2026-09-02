@@ -1080,19 +1080,26 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider, IDocsC
     /// later be fractional without each line rounding independently.
     /// </remarks>
     /// <summary>
-    /// TEMPORARY A/B switch: F9 flips between drawing lines into cached visuals and drawing
-    /// them straight into OnRender, so the two can be compared by eye on the same document.
+    /// Enables F9, which switches between drawing lines into cached visuals and drawing them
+    /// straight into OnRender. Off by default; a diagnostic, not a feature.
     /// </summary>
     /// <remarks>
-    /// Every frame-rate figure measured so far counts OnRender calls, not frames the panel
-    /// actually showed, and DwmGetCompositionTimingInfo declines to tell us the difference on
-    /// this machine. Rather than infer perception from a render rate, this lets the two paths
-    /// be switched back to back on identical content.
+    /// Kept because it is the only way to compare the two paths honestly. Frame-rate figures
+    /// taken from inside the process count OnRender calls, not frames the panel showed, and
+    /// DwmGetCompositionTimingInfo will not report the difference. Switching paths back to
+    /// back on the same document, and measuring from outside with FrameView, is what turned
+    /// "I cannot tell a difference" into 140 displayed frames a second against 119.
+    ///
+    /// Set it from a host app while investigating; leave it alone otherwise.
     /// </remarks>
+    public static bool EnableRenderPathToggle { get; set; }
+
+    /// <summary>Which of the two drawing paths is in use. Always true unless F9 is enabled.</summary>
     internal bool CachedLineVisuals { get; private set; } = true;
 
     internal void ToggleCachedLineVisuals()
     {
+        if (!EnableRenderPathToggle) return;
         CachedLineVisuals = !CachedLineVisuals;
         InvalidateRenderCache();   // drop the visuals either way, so neither path sees the other's
         InvalidateVisual();
