@@ -371,10 +371,37 @@ different luminance. Saturated colours are untouched - magenta comes back as exa
 which is the signature of a luminance mapping rather than a rendering fault. Declaring the
 swapchain `RgbFullG22NoneP709` succeeds and changes nothing.
 
-The seam depends on the two renderers producing the same pixels, so this is a real cost line
-the plan above does not account for. It also means the ClearType and gamma sweep was fitted on
-an HDR display against a target that was already being transformed, and those numbers should be
-taken again per display type before they are trusted.
+**Found: the flip model was bypassing composition.** DWM can promote a flip-model swapchain to
+a hardware overlay plane or DirectFlip and scan it out without compositing it at all. That is
+the performance feature the flip model is famous for, and on an HDR display it is exactly the
+wrong thing: composition is where SDR content gets its white level scaled to the display's SDR
+content brightness, so a bypassed swapchain skips the conversion every other window receives.
+
+Bitblt cannot be promoted - it always goes through composition - which makes it the test. Same
+build, same injected gesture, same HDR display, one line different:
+
+| swap effect | background samples above threshold |
+|---|---|
+| `FlipSequential` | 106 of 175 (presenter 72, WPF 117) |
+| `Discard` (bitblt) | **0 of 158 - every sample exactly 30** |
+
+**And the cadence survives it.** Sustained over thirteen consecutive samples on the 280Hz
+panel: median 3.57 to 3.64ms, 277 to 280 presents a second, 0.0 to 1.0% late. Against the flip
+model's 3.57ms and 0.0 to 1.3%, and against WPF's 7.00ms with 19% late.
+
+So the pacing never depended on bypassing the compositor. `Present(1, ...)` on a dedicated
+thread is what holds the cadence; WPF cannot do that because its presentation is driven from
+the UI thread. Composition costs about a percent of frames and buys pixel-exact agreement with
+WPF on every display type.
+
+The production form of this is a composition swapchain -
+`CreateSwapChainForComposition` with a DirectComposition visual, which is composed by design and
+still supports the frame latency waitable object. Bitblt proves the principle; that is the
+shape to build.
+
+What remains is that the ClearType and gamma sweep was fitted on an HDR display against a target
+that was already being transformed, so those numbers should be taken again now that both
+renderers are composed alike.
 
 ### How it was proved
 

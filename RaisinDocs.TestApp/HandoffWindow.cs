@@ -113,6 +113,10 @@ public sealed class HandoffWindow : Window
     /// <summary>Starts with the handoff off, so the same injected gesture runs through WPF.</summary>
     internal static bool StartWithHandoffOff;
 
+    /// <summary>Diagnostic: use the bitblt swap effect, which DWM must compose. See the
+    /// swapchain description for why.</summary>
+    internal static bool UseBitblt;
+
     public HandoffWindow(string[] lines, bool sweep, bool bgTest)
     {
         _lines = lines;
@@ -1078,6 +1082,7 @@ public sealed class HandoffWindow : Window
         private volatile bool _running;
         private long _frames;
         private int _bufferWidth, _bufferHeight;
+        private readonly List<double> _gaps = new(512);
         private SharpGen.Runtime.Result _lastPresent;
         private double _offset;
         private double _velocity;
@@ -1186,6 +1191,15 @@ public sealed class HandoffWindow : Window
 
         private void Loop()
         {
+            try { LoopCore(); }
+            catch (Exception ex)
+            {
+                HandoffWindow.Log($"  [d2d] RENDER THREAD FAILED: {ex.GetType().Name}: {ex.Message}");
+            }
+        }
+
+        private void LoopCore()
+        {
             var levels = new[] { FeatureLevel.Level_11_1, FeatureLevel.Level_11_0 };
             D3D11.D3D11CreateDevice(null, DriverType.Hardware, DeviceCreationFlags.BgraSupport,
                 levels, out ID3D11Device device, out ID3D11DeviceContext context).CheckError();
@@ -1196,27 +1210,39 @@ public sealed class HandoffWindow : Window
             using var adapter = dxgiDevice.GetAdapter();
             using var factory = adapter.GetParent<IDXGIFactory2>();
 
+            // Bitblt is the diagnostic, not a candidate: the flip model lets DWM promote a
+            // swapchain to a hardware overlay plane or DirectFlip and scan it out without
+            // compositing it at all, which on an HDR display means skipping the SDR white
+            // level scaling every other window gets. Bitblt cannot be promoted - it always
+            // goes through composition - so if the brightness matches WPF here and not under
+            // flip, that bypass is the cause.
+            bool bitblt = HandoffWindow.UseBitblt;
+            HandoffWindow.Log($"  [d2d] swap effect {(bitblt ? "Discard (bitblt, composed)" : "FlipSequential")}");
+
             using (var sc1 = factory.CreateSwapChainForHwnd(_device, _hwnd, new SwapChainDescription1
             {
                 Width = 0,
                 Height = 0,
                 Format = Format.B8G8R8A8_UNorm,
-                BufferCount = 2,
+                BufferCount = bitblt ? 1u : 2u,
                 BufferUsage = Usage.RenderTargetOutput,
                 SampleDescription = new SampleDescription(1, 0),
-                SwapEffect = SwapEffect.FlipSequential,
+                SwapEffect = bitblt ? SwapEffect.Discard : SwapEffect.FlipSequential,
                 // Opaque, explicitly. The D2D target bitmap is created AlphaMode.Ignore so
                 // ClearType works, but the swapchain defaults to unspecified alpha - so its
                 // alpha channel was undefined and DWM composited the surface with whatever was
                 // behind it. That is the washed out, tinted background: the desktop showing
                 // through the presenter.
                 AlphaMode = Vortice.DXGI.AlphaMode.Ignore,
-                Flags = SwapChainFlags.FrameLatencyWaitableObject,
+                // The waitable object is a flip-model feature, so the diagnostic path loses
+                // the pacing along with the bypass. That is fine: it is measuring colour.
+                Flags = bitblt ? SwapChainFlags.None : SwapChainFlags.FrameLatencyWaitableObject,
             }))
             {
                 _swapChain = sc1.QueryInterface<IDXGISwapChain2>();
             }
-            _swapChain.MaximumFrameLatency = 1;
+            // Both of these are flip-model features and throw on a bitblt swapchain.
+            if (!bitblt) _swapChain.MaximumFrameLatency = 1;
 
             // What colour space is the display actually in? If it is one of the HDR ones, the
             // system is tone mapping our SDR pixels and the brightness is not ours to fix in
@@ -1286,7 +1312,7 @@ public sealed class HandoffWindow : Window
                 Vortice.DirectWrite.FontStyle.Normal,
                 Vortice.DirectWrite.FontStretch.Normal, 20f);
 
-            var waitable = _swapChain.FrameLatencyWaitableObject;
+            var waitable = bitblt ? IntPtr.Zero : _swapChain.FrameLatencyWaitableObject;
             var clock = Stopwatch.StartNew();
             long last = clock.ElapsedTicks;
 
@@ -1302,6 +1328,26 @@ public sealed class HandoffWindow : Window
                 if (dt > 0.05) dt = 0.05;
 
                 EnsureBufferSize();
+                // Cadence, which is the whole reason the presenter exists. Reported only
+                // while it is on screen: a hidden surface is not being composed and its gaps
+                // say nothing about what a viewer would see.
+                if (IsShown && dt > 0 && dt < 0.5)
+                {
+                    _gaps.Add(dt * 1000);
+                    if (_gaps.Count >= 300)
+                    {
+                        var g = _gaps.ToArray();
+                        Array.Sort(g);
+                        double med = g[g.Length / 2];
+                        int late = 0;
+                        foreach (var x in _gaps) if (x > med * 1.5) late++;
+                        HandoffWindow.Log($"  [d2d] present gap median {med:F2}ms ({1000 / med:F0}/s), " +
+                                          $"p99 {g[(int)(g.Length * 0.99)]:F2}ms, " +
+                                          $"over 1.5x median {100.0 * late / _gaps.Count:F1}%");
+                        _gaps.Clear();
+                    }
+                }
+
                 Advance(dt);
                 Draw();
 
@@ -1340,7 +1386,8 @@ public sealed class HandoffWindow : Window
 
             HandoffWindow.Log($"  [d2d] resize {_bufferWidth}x{_bufferHeight} -> {w}x{h}");
             _swapChain!.ResizeBuffers(0, (uint)w, (uint)h, Format.Unknown,
-                SwapChainFlags.FrameLatencyWaitableObject);
+                HandoffWindow.UseBitblt ? SwapChainFlags.None
+                                        : SwapChainFlags.FrameLatencyWaitableObject);
 
             CreateTarget();
             _bufferWidth = w;
