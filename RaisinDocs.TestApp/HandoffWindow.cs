@@ -70,6 +70,7 @@ public sealed class HandoffWindow : Window
     private double _offset;
     private double _velocity;
     private bool _presenting;
+    private bool _handingBack;
 
     private const double WheelDamping = 10.0;
     private const double PixelsPerNotch = 120.0;
@@ -184,9 +185,10 @@ public sealed class HandoffWindow : Window
     private void TakeOver()
     {
         _d2d.SetOffset(_offset);
+        _presenting = true;
+        _handingBack = false;
         _d2d.WaitForFrame();
         _d2d.Visibility = Visibility.Visible;
-        _presenting = true;
     }
 
     /// <summary>
@@ -195,15 +197,24 @@ public sealed class HandoffWindow : Window
     /// </summary>
     private void HandBack()
     {
+        // _presenting has to be cleared here, not in the callback below. It is the flag that
+        // stops OnFrame calling this again, and OnFrame runs every frame: leaving it set until
+        // an asynchronous callback ran queued one hand-back per frame, each re-invalidating WPF
+        // and re-hiding the surface.
+        if (_handingBack) return;
+        _handingBack = true;
+        _presenting = false;
+
         _offset = _d2d.Offset;
         _wpf.Offset = _offset;
         _wpf.InvalidateVisual();
-        _wpf.UpdateLayout();
 
         Dispatcher.BeginInvoke(DispatcherPriority.Loaded, () =>
         {
-            _d2d.Visibility = Visibility.Collapsed;
-            _presenting = false;
+            // A new gesture may have started while this was queued, in which case the surface
+            // is wanted after all.
+            if (!_presenting) _d2d.Visibility = Visibility.Collapsed;
+            _handingBack = false;
         });
     }
 
@@ -465,6 +476,62 @@ public sealed class HandoffWindow : Window
         [DllImport("kernel32.dll")]
         private static extern uint WaitForSingleObject(IntPtr handle, uint ms);
 
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+        private static extern ushort RegisterClassExW(ref WNDCLASSEX cls);
+
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+        private static extern IntPtr DefWindowProcW(IntPtr hwnd, uint msg, IntPtr w, IntPtr l);
+
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
+        private static extern IntPtr GetModuleHandleW(string? name);
+
+        private delegate IntPtr WndProc(IntPtr hwnd, uint msg, IntPtr w, IntPtr l);
+
+        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+        private struct WNDCLASSEX
+        {
+            public int cbSize;
+            public int style;
+            [MarshalAs(UnmanagedType.FunctionPtr)] public WndProc lpfnWndProc;
+            public int cbClsExtra, cbWndExtra;
+            public IntPtr hInstance, hIcon, hCursor, hbrBackground;
+            public string? lpszMenuName;
+            public string lpszClassName;
+            public IntPtr hIconSm;
+        }
+
+        // Held for the lifetime of the process: the class keeps a pointer to this delegate, and
+        // letting it be collected would leave the window calling into freed memory.
+        private static WndProc? _wndProc;
+        private static string? _className;
+
+        /// <summary>
+        /// A window class with no background brush.
+        /// </summary>
+        /// <remarks>
+        /// The predefined "static" class carries a light background brush, so every time the
+        /// surface was shown Windows painted that area pale before Direct2D drew anything -
+        /// which is visible as the background flashing bright at the end of a gesture. With a
+        /// null brush nothing is erased and the swapchain's own pixels are all that appear.
+        /// </remarks>
+        private static string EnsureWindowClass()
+        {
+            if (_className != null) return _className;
+
+            _wndProc = DefWindowProcW;
+            var cls = new WNDCLASSEX
+            {
+                cbSize = Marshal.SizeOf<WNDCLASSEX>(),
+                lpfnWndProc = _wndProc,
+                hInstance = GetModuleHandleW(null),
+                hbrBackground = IntPtr.Zero,
+                lpszClassName = "RaisinDocsPresenterSurface",
+            };
+
+            RegisterClassExW(ref cls);
+            return _className = cls.lpszClassName;
+        }
+
         private readonly string[] _lines;
         private readonly Dictionary<int, IDWriteTextLayout> _layouts = new();
 
@@ -507,15 +574,18 @@ public sealed class HandoffWindow : Window
         /// <summary>Blocks until the surface has drawn a frame, so it is safe to show.</summary>
         public void WaitForFrame()
         {
+            // Bounded tightly: while the surface is hidden its swapchain may be occluded and
+            // stop advancing altogether, and this runs on the UI thread. Showing one stale
+            // frame is a far smaller fault than freezing the gesture that is starting.
             long start = Interlocked.Read(ref _frames);
             var sw = Stopwatch.StartNew();
-            while (Interlocked.Read(ref _frames) <= start + 1 && sw.ElapsedMilliseconds < 100)
+            while (Interlocked.Read(ref _frames) <= start + 1 && sw.ElapsedMilliseconds < 25)
                 Thread.Sleep(1);
         }
 
         protected override HandleRef BuildWindowCore(HandleRef parent)
         {
-            _hwnd = CreateWindowExW(0, "static", null, WS_CHILD | WS_VISIBLE,
+            _hwnd = CreateWindowExW(0, EnsureWindowClass(), null, WS_CHILD | WS_VISIBLE,
                 0, 0, 100, 100, parent.Handle, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero);
             _running = true;
             _thread = new Thread(Loop) { IsBackground = true, Name = "handoff-presenter" };
@@ -596,7 +666,9 @@ public sealed class HandoffWindow : Window
 
             while (_running)
             {
-                if (waitable != IntPtr.Zero) WaitForSingleObject(waitable, 1000);
+                // A short timeout, so a hidden or occluded swapchain cannot park this thread:
+                // it has to keep drawing at the current offset, ready to be shown.
+                if (waitable != IntPtr.Zero) WaitForSingleObject(waitable, 100);
 
                 long now = clock.ElapsedTicks;
                 double dt = (now - last) / (double)Stopwatch.Frequency;
