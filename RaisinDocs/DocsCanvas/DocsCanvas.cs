@@ -1360,6 +1360,11 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider, IDocsC
 
     protected override void OnRender(DrawingContext dc)
     {
+        ScrollDiag.Time("canvas-onrender", () => OnRenderCore(dc));
+    }
+
+    private void OnRenderCore(DrawingContext dc)
+    {
         _renderingContext.OnRender(dc);
     }
 
