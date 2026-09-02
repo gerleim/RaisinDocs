@@ -325,6 +325,57 @@ unstyled - bold, italic, code, colour spans and tables all still have to agree. 
 diff cannot say whether a single-frame change of that magnitude is perceptible at the moment of
 handoff; that needs an A/B on a real gesture.
 
+### C3, in practice: three faults, all in the handoff
+
+Built as `RaisinDocs.TestApp --handoff` (F9 toggles the presenter, `--bgtest` drives its own
+gesture and samples its own pixels, `--monitor=N` picks a display). Each fault was found by
+instrumenting rather than reasoning, after several wrong guesses each time.
+
+**The text jumped back for a few frames at the end of every gesture.** WPF is not updated while
+the presenter owns the scroll, so it still shows wherever the gesture began - the log reads
+"WPF was showing 0.0, 120px stale" every time. Hiding the surface from a queued callback
+uncovered WPF before its new frame had been presented. The surface now waits three
+`CompositionTarget.Rendering` ticks, which are real render passes rather than a queue priority.
+
+**The surface swallowed the wheel.** It covers the canvas during a gesture, so the pointer is
+over it rather than over WPF, and mouse messages go to the window under the pointer. Measured
+with synthetic wheel input: 2 of 6 notches arrived with the presenter engaged, against 6 of 6
+without it, so a spin travelled far less and felt slower. Returning `HTTRANSPARENT` from
+`WM_NCHITTEST` makes hit testing skip the surface entirely. **A presenter must be input
+transparent** - it is not only a thing to look at.
+
+**It must not be an `HwndHost`.** WPF excludes a hosted window's region from its own rendering
+for as long as the host is in the visual tree, so hiding the child left a hole showing whatever
+was behind the window. Parenting the child window directly means WPF renders its whole client
+area and the surface simply covers part of it.
+
+With those fixed, five rapid notches give 600px in 1.11s through WPF and 600px in 1.13s through
+the presenter, and the handoff itself is reported as a sub-pixel difference on an SDR display.
+
+### The colour management problem
+
+On an HDR display the two renderers do not agree, and it is not fixable in the renderer.
+
+Measured with the same build and the same injected gesture on three displays:
+
+| display | colour space | background samples above threshold |
+|---|---|---|
+| SDR, 8 bit, 270 nits | `RgbFullG22NoneP709` | 0 of 158 |
+| **HDR, 10 bit, 604 nits** | `RgbFullG2084NoneP2020` | **96 of 151** |
+| SDR, 8 bit, 270 nits | `RgbFullG22NoneP709` | 0 of 152 |
+
+On both SDR displays every background sample reads the theme colour exactly. On the HDR display
+the presenter reads about 72 and WPF about 99 where both should read 30: WPF goes through the
+SDR-in-HDR composition path and the swapchain does not, so the same nominal colour arrives at a
+different luminance. Saturated colours are untouched - magenta comes back as exactly 255,0,255 -
+which is the signature of a luminance mapping rather than a rendering fault. Declaring the
+swapchain `RgbFullG22NoneP709` succeeds and changes nothing.
+
+The seam depends on the two renderers producing the same pixels, so this is a real cost line
+the plan above does not account for. It also means the ClearType and gamma sweep was fitted on
+an HDR display against a target that was already being transformed, and those numbers should be
+taken again per display type before they are trusted.
+
 ### How it was proved
 
 Phase 1 of the pre-buffering work paid for itself by answering one question cheaply before

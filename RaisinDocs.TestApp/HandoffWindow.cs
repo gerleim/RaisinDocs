@@ -177,6 +177,14 @@ public sealed class HandoffWindow : Window
         {
             if (e.Key != Key.F9) return;
             _handoffEnabled = !_handoffEnabled;
+
+            // Stop both paths dead. Velocity left over from one mode kept decaying inside the
+            // other, which stretched a WPF coast to 3062ms for a single notch and made the
+            // measurement meaningless.
+            _velocity = 0;
+            _wpfCoast = null;
+            _d2d.SetOffset(_offset);
+            Log($"F9: handoff {(_handoffEnabled ? "ON" : "OFF")}, both paths stopped");
             _readout.Text = _handoffEnabled
                 ? "presenter ON  (F9 to toggle) - scrolling hands over to Direct2D"
                 : "presenter OFF (F9 to toggle) - scrolling stays in WPF";
@@ -252,10 +260,15 @@ public sealed class HandoffWindow : Window
         if (!_handoffEnabled)
         {
             _velocity += notches * PixelsPerNotch * WheelDamping;
+            Log($"wheel delta={e.Delta} notches={notches:F3}  [WPF]  " +
+                $"velocity now {_velocity:F0}px/s, predicted travel " +
+                $"{_velocity / WheelDamping:F0}px");
             return;
         }
 
-        Log($"wheel {notches:F0}, presenting={_presenting}");
+        Log($"wheel delta={e.Delta} notches={notches:F3}  [presenter]  " +
+            $"presenting={_presenting}, velocity now " +
+            $"{_d2d.Velocity + notches * PixelsPerNotch * WheelDamping:F0}px/s");
 
         if (!_presenting) TakeOver();
         _d2d.Wheel(notches);
@@ -941,6 +954,25 @@ public sealed class HandoffWindow : Window
         private static WndProc? _wndProc;
         private static string? _className;
 
+        private const uint WM_NCHITTEST = 0x0084;
+        private static readonly IntPtr HTTRANSPARENT = new(-1);
+
+        /// <summary>
+        /// Passes every mouse message straight through to the window underneath.
+        /// </summary>
+        /// <remarks>
+        /// The surface covers the canvas while a gesture runs, so the pointer is over it and
+        /// not over the WPF content. Mouse messages go to the window under the pointer, so
+        /// without this the surface swallowed every wheel notch after the first - measured as
+        /// 2 of 6 notches arriving, against 6 of 6 with the presenter off, which is why a spin
+        /// travelled far less with the presenter engaged.
+        ///
+        /// Returning HTTRANSPARENT makes hit testing skip this window entirely, so the wheel
+        /// reaches WPF exactly as it does when the surface is not there.
+        /// </remarks>
+        private static IntPtr SurfaceWndProc(IntPtr hwnd, uint msg, IntPtr w, IntPtr l)
+            => msg == WM_NCHITTEST ? HTTRANSPARENT : DefWindowProcW(hwnd, msg, w, l);
+
         /// <summary>
         /// A window class with no background brush.
         /// </summary>
@@ -954,7 +986,7 @@ public sealed class HandoffWindow : Window
         {
             if (_className != null) return _className;
 
-            _wndProc = DefWindowProcW;
+            _wndProc = SurfaceWndProc;
             var cls = new WNDCLASSEX
             {
                 cbSize = Marshal.SizeOf<WNDCLASSEX>(),
@@ -995,11 +1027,18 @@ public sealed class HandoffWindow : Window
         private SharpGen.Runtime.Result _lastPresent;
         private double _offset;
         private double _velocity;
+        /// <summary>
+        /// Pending wheel input in thousandths of a notch. Interlocked needs an integer, and a
+        /// whole-notch integer silently discarded everything a high-resolution wheel sends -
+        /// deltas smaller than one WHEEL_DELTA truncate to zero.
+        /// </summary>
         private int _wheelPending;
+        private const int NotchScale = 1000;
 
         public PresenterSurface(string[] lines) => _lines = lines;
 
         public double Offset => Volatile.Read(ref _offset);
+        public double Velocity => Volatile.Read(ref _velocity);
         /// <summary>
         /// Idle means nothing left to scroll - including input that has arrived but which the
         /// render thread has not applied yet. Without the pending check the presenter looks
@@ -1015,7 +1054,8 @@ public sealed class HandoffWindow : Window
             Volatile.Write(ref _velocity, 0);
         }
 
-        public void Wheel(double notches) => Interlocked.Add(ref _wheelPending, (int)notches);
+        public void Wheel(double notches) =>
+            Interlocked.Add(ref _wheelPending, (int)Math.Round(notches * NotchScale));
 
         /// <summary>Blocks until the surface has drawn a frame, so it is safe to show.</summary>
         public long WaitForFrame()
@@ -1267,9 +1307,10 @@ public sealed class HandoffWindow : Window
 
         private void Advance(double dt)
         {
-            int notches = Interlocked.Exchange(ref _wheelPending, 0);
+            int scaled = Interlocked.Exchange(ref _wheelPending, 0);
+            double notches = scaled / (double)NotchScale;
             double v = Volatile.Read(ref _velocity);
-            if (notches != 0)
+            if (scaled != 0)
             {
                 v += notches * PixelsPerNotch * WheelDamping;
                 // Immediately, not at the end of this method: between the exchange above and
