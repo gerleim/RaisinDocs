@@ -188,6 +188,48 @@ FrameView counted 140 reaching the display out of 228 presented - so the loss th
 the animation tick, in the blt-model present path, and this test cannot see it. Closing that gap
 needs FrameView or PresentMon, not instrumentation inside the process.
 
+## Open: the window changing display
+
+Not addressed, and it needs to be. Two separate faults, one WPF's and one ours.
+
+**WPF paces every window to one display.** Measured by animating a scroll and timing the
+interval between animation steps, with the window placed on each panel in turn:
+
+| panel | period | WPF animation step |
+|---|---|---|
+| 100Hz | 10.000 ms | 3.83 ms - 261/s |
+| 144Hz | 6.944 ms | 3.73 ms - 268/s |
+| 280Hz | 3.571 ms | 3.57 ms - 280/s |
+
+About 280 a second everywhere, which is the primary display's rate. On the 100Hz and 144Hz
+panels that is 2.6x and 1.9x more frames than the panel can show, and those are exactly the
+panels where the animation step came out uneven - 7.7 to 20% late, against 0.3 to 4.7% on the
+280Hz one. It matches `FindNextPrime(displayRefreshRate + 5)` operating on one global refresh
+rate rather than a per-window one.
+
+**And our own per-monitor interval is currently unused.** `DisplayRefresh.GetRepaintInterval`
+resolves the rate of the display the window is actually on, and `ScrollController` reads it once
+per gesture into `_displayInterval` - but since repaints were re-paced onto the compositor's
+frame stamp, nothing reads that field. The scroll now paints once per composed frame whatever
+the panel is, so on a non-primary display it inherits WPF's wrong clock directly.
+
+What has to be decided and then handled:
+
+- **Starting on a non-primary display.** The rate is resolved per gesture, so this is already
+  approximately right for `_displayInterval` - and irrelevant while nothing reads it.
+- **Moving the window between displays**, including mid-gesture. Nothing watches for it. The
+  right trigger is the window's monitor changing (`WM_DISPLAYCHANGE`, or a move that crosses a
+  monitor boundary), not a timer.
+- **Whether to reinstate a cap at all.** The frame stamp is the right pacing signal when it
+  tracks the panel. When it does not - any non-primary display here - a cap keyed to the
+  window's own monitor would stop us painting three times more often than the panel can show.
+  That is the same waste that caused wheel-message coalescing originally, so it is not
+  cosmetic.
+
+The measurement to make first is cheap: run a gesture on the 100Hz panel with `ScrollDiag`
+enabled and compare the paint interval against the panel's 10 ms period. If it comes out near
+3 ms, we are painting three frames for every one shown.
+
 ## A. Patch WPF
 
 Feasible, with real caveats.
