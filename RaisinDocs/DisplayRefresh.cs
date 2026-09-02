@@ -126,10 +126,32 @@ internal static class DisplayRefresh
     }
 
     /// <summary>
-    /// Seconds between repaints for the display <paramref name="visual"/> is on, capped at
-    /// <see cref="MaxFps"/>. Cheap enough to call once per gesture, which also picks up the
-    /// window being dragged to another monitor, or a mode change.
+    /// Seconds between repaints for the display <paramref name="visual"/> is on: the panel's
+    /// period times the smallest whole number of periods that stays within
+    /// <see cref="MaxFps"/>.
     /// </summary>
+    /// <remarks>
+    /// A whole number of refresh periods, never a fraction. Capping the rate directly - one over
+    /// min(refresh, 144) - lands on an exact period only when the panel is at or below the cap.
+    /// On a 280Hz panel it gives 6.944ms against a 3.571ms period, which is 1.944 periods: every
+    /// repaint arrives 0.198ms short of the two-refresh boundary, the phase drifts a whole period
+    /// every eighteen frames or so, and a frame is doubled or dropped about eight times a second.
+    /// That is the jagged scroll.
+    ///
+    /// The cap was chosen believing 144 landed on every second refresh of a 280Hz panel. It does
+    /// not: half of 280 is 140.
+    ///
+    /// Choosing the divisor instead makes the interval exact on any panel - 140 on a 280Hz
+    /// display, 144 on a 144Hz one, 100 on a 100Hz one - and evenness matters more than peak
+    /// rate, because an uneven coast is far more visible than a slower one.
+    ///
+    /// Cheap enough to call once per gesture, which also picks up the window being dragged to
+    /// another monitor, or a mode change.
+    /// </remarks>
     internal static double GetRepaintInterval(Visual? visual)
-        => 1.0 / Math.Max(1, Math.Min(GetMonitorRefreshRate(visual), MaxFps));
+    {
+        int refresh = Math.Max(1, GetMonitorRefreshRate(visual));
+        int periods = Math.Max(1, (int)Math.Ceiling(refresh / (double)MaxFps));
+        return periods / (double)refresh;
+    }
 }
