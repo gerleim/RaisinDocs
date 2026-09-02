@@ -173,6 +173,28 @@ That is worth deciding rather than inheriting. Restoring ClearType means making 
 opaque, which means moving everything currently drawn beneath a line into it - the row
 separators and per-row backgrounds are already done, selection and search highlights are not.
 
+**Can ClearType be told what the background is, instead?** No. It computes per-subpixel coverage
+against the pixels actually behind the glyph, so there is no colour to pass it.
+
+WPF has `RenderOptions.ClearTypeHint`, which sounds like that but is not: it overrides WPF's own
+check rather than supplying a backdrop. Microsoft's wording is that WPF disables ClearType when
+it detects the buffer could be transparent, and the hint forces it back on for the subtree - to
+be set "only when you can be certain that the text is rendering to a fully opaque background".
+It covers `BitmapCacheBrush` and other intermediate targets explicitly, which is our case, but
+asserting opacity that is not there gives fringes blended against nothing. It also has to be
+re-applied on any nested subtree that introduces another intermediate target, and
+[dotnet/wpf#8370](https://github.com/dotnet/wpf/issues/8370) reports it not always taking effect.
+
+Direct2D's equivalent is more honest about the requirement:
+`D2D1_LAYER_OPTIONS_INITIALIZE_FOR_CLEARTYPE` initialises the layer so there is something real
+to blend against.
+
+Evidence from the opaque experiment suggests the hint may not be needed at all: with
+`OpaqueLineVisuals` on, the presenter's ClearType output matched WPF, which implies WPF had
+already re-enabled ClearType once the line had an opaque fill. If that holds, filling the line is
+both necessary and sufficient, and the hint is only worth trying to find out whether it can be
+skipped - one attached property, and the answer is visible immediately.
+
 It bears on this document because option C proposes going further in the other direction, and
 turning vertical hinting off on text that is already greyscale would be a second reduction in
 crispness on top of one we never intended.
