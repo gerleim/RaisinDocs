@@ -47,10 +47,46 @@ small library used by wpfgfx, `bilinearspan.lib`, were not.
 
 **3. DWM** — closed, and not patchable. But it has settings-level levers, below.
 
-The measurement points at layer 2. A present rate above the display rate with drops is the
-signature of presenting without waiting on a frame-latency signal - exactly what our prototype
-fixed by using `DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT` and
-`MaximumFrameLatency = 1`.
+The measurement pointed at layer 2, and the module list confirmed it: milcore presents through
+Direct3D 9Ex. A present rate above the display rate with drops is the signature of presenting
+without waiting on a frame-latency signal, and on D3D9Ex there is no such signal to wait on -
+`DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT`, which the prototype used, arrived with
+DXGI 1.3 and has no D3D9 counterpart.
+
+## The free experiments, run
+
+Both were done before anything else, and between them they found the root cause.
+
+**Optimizations for windowed games: already on, and never applicable.**
+`HKCU\Software\Microsoft\DirectX\UserGpuPreferences` reads
+`DirectXUserGlobalSettings = AutoHDREnable=0;SwapEffectUpgradeEnable=1;` - the feature has been
+enabled globally all along. It upgrades **DirectX 10 and 11** windowed apps from blt-model to
+flip-model presentation. WPF is not one.
+
+**HAGS: unset, at the driver default.** `HwSchMode` is absent under
+`HKLM\SYSTEM\CurrentControlSet\Control\GraphicsDrivers`. Still worth a toggle, but it changes
+GPU scheduling rather than the presentation model, so it does not address the mechanism below.
+
+**The finding was in the module list.** Running the real editor on the real document and reading
+its loaded modules:
+
+```
+d3d9.dll          nvd3dumx.dll     nvldumdx.dll
+wpfgfx_cor3.dll   dwrite.dll       DWMAPI.dll
+```
+
+No `dxgi.dll`. No `d3d11.dll`. No `dcomp.dll`.
+
+**WPF's milcore renders and presents through Direct3D 9Ex.** That is the structural reason it
+cannot pace. The frame latency waitable object our prototype used to hold 280 frames a second is
+DXGI 1.3; D3D9Ex has no equivalent. This is not a scheduling bug inside WPF - it is the
+generation of the graphics API WPF still sits on, and it also explains why a setting aimed at
+DX10/11 apps could never have helped.
+
+It is not completely without pacing primitives, in fairness: D3D9Ex gained
+`D3DSWAPEFFECT_FLIPEX` in Windows 7, and `IDirect3DDevice9Ex` has `SetMaximumFrameLatency` and
+`WaitForVBlank`. Whether milcore uses any of them is the next thing to read in the source, and it
+decides whether A is a contained patch or a backend rewrite.
 
 ## A. Patch WPF
 
@@ -67,22 +103,15 @@ can break when the servicing branch moves.
 deployed with it. That is also the risk: we would be shipping a forked piece of the .NET
 runtime, and re-forking it on every servicing update.
 
-**What the patch would be.** Make the present path pace to the composition deadline - a
-waitable swapchain, one frame in flight - instead of presenting whenever a frame is ready.
-That is the change our prototype already validated in isolation.
+**What the patch would be**, and this is where the D3D9Ex finding bites. The prototype paced by
+waiting on a DXGI frame latency object, and there is none in D3D9Ex to wait on. The nearest
+equivalents are `D3DSWAPEFFECT_FLIPEX` with `SetMaximumFrameLatency(1)`, and possibly
+`WaitForVBlank`. If milcore already uses FlipEx, the patch is small. If it presents the older
+way, the patch grows towards replacing milcore's presentation layer.
 
-**Before any of that, two free experiments.** Both are reported triggers for precisely this
-class of stutter, and both are a settings toggle plus a re-measure:
-
-- **Hardware-accelerated GPU scheduling (HAGS)** — Settings → System → Display → Graphics →
-  Change default graphics settings. Reported to cause choppy dragging and scrolling on some
-  driver versions.
-- **Optimizations for windowed games** — same page. It moves windowed apps from the legacy
-  blt-model to the flip-model presentation path, which is the difference we already found
-  matters enormously (see the HDR composition finding in `Scroll Frame Pacing.md`).
-
-Neither is a fix we could ship, but either would tell us whether the fault is above or below
-WPF, which is worth an hour.
+**And note what it buys.** Even a successful patch leaves the editor on a 2006 graphics API,
+maintained by us, re-forked on every servicing update. That is the strongest argument for B -
+not that A cannot work, but that it spends real effort to stay where we are.
 
 ## B. Leave WPF
 
@@ -125,11 +154,16 @@ So the honest reading is not that a paced DirectWrite presenter is unworkable. I
 
 ## Suggested order
 
-1. **Toggle HAGS and windowed-game optimizations, re-measure.** An hour, and it separates
-   "WPF's fault" from "the machine's configuration".
-2. **Confirm the layer.** PresentMon reports the presentation mode - hardware composed flip
-   versus blt - which tells us directly whether milcore is on the modern path.
-3. **Only then choose.** If it is milcore and the patch is a contained change to the present
-   path, A is a few days plus a permanent maintenance tax. If not, B, and the realistic
-   candidates are WinUI 3 (stay on Microsoft's stack) or our own renderer with RmlUi or our own
-   controls above it.
+1. ~~Toggle HAGS and windowed-game optimizations~~ — **done**. The windowed-game optimization
+   was already on and never applied; HAGS remains untested but addresses the wrong mechanism.
+   The module list answered the question they were meant to answer.
+2. ~~Confirm the layer~~ — **done**. It is milcore, and it is on Direct3D 9Ex.
+3. **Read milcore's present path.** `src/Microsoft.DotNet.Wpf/src/WpfGfx` - does it use
+   `D3DSWAPEFFECT_FLIPEX` and `SetMaximumFrameLatency`, or the older copy path? This is the one
+   question left that separates a contained patch from a backend rewrite, and it costs an hour of
+   reading.
+4. **Then choose.** A contained patch means a forked runtime DLL, a pinned toolchain and a
+   re-fork on every servicing update - for a stack that will still be on a 2006 graphics API
+   afterwards. That last point is the argument for B, and specifically for owning the canvas
+   ourselves: the presenter already held 280 frames a second with matching text, and everything
+   that went wrong came from sharing a surface rather than from the presenter.
