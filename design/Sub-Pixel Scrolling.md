@@ -175,8 +175,23 @@ phase 2 is greyscale antialiased. Three independent things agree:
 
 So the editor's text has been greyscale since phase 2, by side effect, and nobody decided it.
 That is worth deciding rather than inheriting. Restoring ClearType means making each line visual
-opaque, which means moving everything currently drawn beneath a line into it - the row
-separators and per-row backgrounds are already done, selection and search highlights are not.
+opaque, so nothing may need to show through it from beneath.
+
+That is cheaper than it first appears. Selection and search highlights are drawn beneath the
+text today, and the obvious reading is that they would have to move *into* each line visual -
+which would mean rebuilding lines whenever the selection moved. They do not. They can move
+**up** instead, into the `OverlayLayer` that already exists and already redraws every frame
+independently of the cached lines, alongside the spell underlines, page breaks and caret. No
+new invalidation machinery.
+
+They are also already translucent. The dark palette selection is
+`Color.FromArgb(100, 38, 79, 120)` - 39% alpha - and search matches are `FromArgb(60, ...)` and
+`FromArgb(130, ...)`. So they are overlays in colour already; only their position in the stack
+is wrong for this.
+
+What changes is appearance, not architecture: painted beneath, the tint colours the background
+and the text keeps full contrast; painted above, it colours both. Whether 39% over glyphs reads
+as highlighted or as muddy is a matter of tuning the alpha, and of looking at it.
 
 **Can ClearType be told what the background is, instead?** No. It computes per-subpixel coverage
 against the pixels actually behind the glyph, so there is no colour to pass it.
