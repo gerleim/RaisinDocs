@@ -63,6 +63,34 @@ public partial class DocsCanvas
         private const int MinimapHz = 30;
         private long _lastMinimapTick;
 
+        /// <summary>How far either side of the viewport lines are kept rendered ahead.</summary>
+        /// <remarks>
+        /// Has to exceed a screenful, or a fling empties the buffer and the next frame builds
+        /// every newly visible line at once. At 40 - less than the ~50 lines on screen - that
+        /// is exactly what happened: 743 of 1008 rebuilds landed nowhere near an invalidation,
+        /// in bursts of about 14, which is the margin being outrun.
+        /// </remarks>
+        private const int PreRenderMargin = 120;
+
+        /// <summary>
+        /// Lines rendered ahead per frame, so no single frame carries the cost of the margin.
+        /// </summary>
+        /// <remarks>
+        /// Only needs to outpace what scrolling consumes - roughly two lines a frame at speed -
+        /// while leaving room to refill after a jump.
+        /// </remarks>
+        private const int PreRenderBudget = 6;
+
+        /// <summary>
+        /// How far outside the viewport cached visuals are kept before being dropped.
+        /// </summary>
+        /// <remarks>
+        /// Wider than the pre-render margin, so scrolling back a little finds them still
+        /// there, but bounded: each holds a rasterised bitmap the width of the canvas, which
+        /// is far dearer per line than the FormattedText cache alongside it.
+        /// </remarks>
+        private const int LineVisualWindow = 250;
+
         private DrawingVisual?[]? _lineVisuals;
         private int _lineVisualsVersion = -1;
         private int _visualsLo, _visualsHi = -1;
@@ -80,58 +108,153 @@ public partial class DocsCanvas
         }
 
         /// <summary>
-        /// Renders the lines in view that have no visual yet, and drops those that have
-        /// scrolled well outside it.
+        /// Renders the lines in view, keeps a margin either side rendered ahead of the
+        /// viewport, and drops those that have scrolled well outside it.
         /// </summary>
+        /// <remarks>
+        /// A line used to be rasterised at the moment it scrolled into view, which put that
+        /// work inside the frame that revealed it. It is only a mean of 0.3 lines a frame, but
+        /// 100 of 911 late frames had built one, and a line that is already drawn when it
+        /// arrives costs nothing.
+        ///
+        /// Visible lines are always built - they have to be. The margin is filled outward from
+        /// the viewport a few lines a frame, which comfortably outpaces the rate scrolling
+        /// consumes them without making any single frame dearer.
+        /// </remarks>
         private void SyncLineVisuals(int firstVisible, int lastVisible)
         {
             if (_lineVisuals == null || firstVisible < 0) return;
 
-            for (int i = firstVisible; i <= lastVisible && i < _lineVisuals.Length; i++)
+            for (int i = firstVisible; i <= lastVisible; i++)
             {
-                if (_lineVisuals[i] != null) continue;
+                if (BuildLineVisual(i))
+                    _visualsBuilt++; // TEMP: counts only lines built while already on screen
+            }
 
-                var vl = _layout.VisualLines[i];
-                var dv = new DrawingVisual
-                {
-                    // Rasterised once and composited thereafter. RenderAtScale has to follow
-                    // DPI and zoom, or the bitmap is resampled and the text is soft.
-                    CacheMode = new BitmapCache
-                    {
-                        RenderAtScale = _rendering.Measure.DpiScale,
-                        SnapsToDevicePixels = false,
-                    },
-                    // Whole pixels here, deliberately. The fractional part of the scroll
-                    // belongs to the one shared transform below, so every line carries the
-                    // same sub-pixel phase: if the compositor snaps a cached bitmap's
-                    // placement, it snaps all of them the same way and the spacing between
-                    // lines cannot breathe - which is what killed the earlier attempt at
-                    // sub-pixel scrolling over live-rasterised text.
-                    Transform = new TranslateTransform(0, Math.Round(_layout.LineYPositions[i])),
-                };
-                using (var dc = dv.RenderOpen())
-                {
-                    // lineY == scrollY draws the line at the origin of its own visual.
-                    double y = _layout.LineYPositions[i];
-                    DrawLineContent(dc, i, vl, y, y);
-                }
-
-                _visualsBuilt++; // TEMP
-                _lineVisuals[i] = dv;
-                _docsCanvas.ContentLayer.Children.Add(dv);
-                if (_visualsHi < _visualsLo) { _visualsLo = _visualsHi = i; }
-                else { if (i < _visualsLo) _visualsLo = i; if (i > _visualsHi) _visualsHi = i; }
+            int budget = PreRenderBudget;
+            for (int d = 1; d <= PreRenderMargin && budget > 0; d++)
+            {
+                if (BuildLineVisual(lastVisible + d)) budget--;
+                if (budget > 0 && BuildLineVisual(firstVisible - d)) budget--;
             }
 
             TrimLineVisuals(firstVisible, lastVisible);
+        }
+
+        /// <summary>
+        /// Index of the first visual line that could be visible at <paramref name="viewTop"/>.
+        /// </summary>
+        /// <remarks>
+        /// Line Y positions ascend, so this is a binary search rather than a walk from zero.
+        /// Several passes over the visible lines - backgrounds, colour spans, tables, the
+        /// range scan itself - each used to start at line 0 and skip forward, which costs
+        /// nothing on a short document and a great deal on a long one: scrolled into the
+        /// middle of a 2895-block report that is about 1500 wasted iterations per pass, five
+        /// passes, every frame.
+        ///
+        /// Steps back over any line tall enough to still intrude from above.
+        /// </remarks>
+        internal int FirstLineAt(double viewTop)
+        {
+            var ys = _layout.LineYPositions;
+            if (ys.Count == 0) return 0;
+
+            int lo = 0, hi = ys.Count - 1, found = ys.Count;
+            while (lo <= hi)
+            {
+                int mid = (lo + hi) / 2;
+                if (ys[mid] >= viewTop) { found = mid; hi = mid - 1; }
+                else lo = mid + 1;
+            }
+
+            int i = Math.Min(found, ys.Count - 1);
+            while (i > 0 && ys[i - 1] + _layout.GetEffectiveLineHeight(_layout.VisualLines[i - 1]) >= viewTop)
+                i--;
+            return i;
+        }
+
+        /// <summary>
+        /// Drops the cached visuals of lines that draw the given image, so they are rebuilt
+        /// with its pixels.
+        /// </summary>
+        /// <remarks>
+        /// An image finishing its load changes one or two lines. Bumping RenderVersion, which
+        /// is what this replaced, discarded every cached line instead - measured as a burst of
+        /// 641 rebuilds in a single frame while scrolling a document with several images, for
+        /// the sake of the handful of lines that actually changed.
+        ///
+        /// Layout is untouched: the size was read from the image header before it loaded, so
+        /// nothing moves and only these lines need redrawing.
+        /// </remarks>
+        internal void DropLineVisualsForImage(string url)
+        {
+            if (_lineVisuals == null || _content.ParsedBlocks == null) return;
+
+            int limit = Math.Min(_lineVisuals.Length, _layout.VisualLines.Count);
+            for (int i = 0; i < limit; i++)
+            {
+                if (_lineVisuals[i] is not { } dv) continue;
+                if (!LineDrawsImage(_layout.VisualLines[i], url)) continue;
+
+                _docsCanvas.ContentLayer.Children.Remove(dv);
+                _lineVisuals[i] = null;
+                if (_lineFt != null && i < _lineFt.Length) _lineFt[i] = null;
+            }
+        }
+
+        private bool LineDrawsImage(VisualLine vl, string url)
+        {
+            var images = vl.Group != null
+                ? vl.Group.JoinedParsed.Images
+                : (vl.BlockIndex >= 0 && vl.BlockIndex < _content.ParsedBlocks!.Count
+                    ? _content.ParsedBlocks[vl.BlockIndex].Images
+                    : null);
+
+            if (images == null) return false;
+            foreach (var img in images)
+                if (string.Equals(img.Url, url, StringComparison.Ordinal)) return true;
+            return false;
+        }
+
+        /// <summary>Renders one line into its own cached visual. False if it already had one.</summary>
+        private bool BuildLineVisual(int i)
+        {
+            if (_lineVisuals == null || i < 0 || i >= _lineVisuals.Length) return false;
+            if (i >= _layout.VisualLines.Count) return false;
+            if (_lineVisuals[i] != null) return false;
+
+            var vl = _layout.VisualLines[i];
+            var dv = new DrawingVisual
+            {
+                // Rasterised once and composited thereafter. RenderAtScale has to follow
+                // DPI and zoom, or the bitmap is resampled and the text is soft.
+                CacheMode = new BitmapCache
+                {
+                    RenderAtScale = _rendering.Measure.DpiScale,
+                    SnapsToDevicePixels = false,
+                },
+                Transform = new TranslateTransform(0, Math.Round(_layout.LineYPositions[i])),
+            };
+            using (var dc = dv.RenderOpen())
+            {
+                // lineY == scrollY draws the line at the origin of its own visual.
+                double y = _layout.LineYPositions[i];
+                DrawLineContent(dc, i, vl, y, y);
+            }
+
+            _lineVisuals[i] = dv;
+            _docsCanvas.ContentLayer.Children.Add(dv);
+            if (_visualsHi < _visualsLo) { _visualsLo = _visualsHi = i; }
+            else { if (i < _visualsLo) _visualsLo = i; if (i > _visualsHi) _visualsHi = i; }
+            return true;
         }
 
         private void TrimLineVisuals(int firstVisible, int lastVisible)
         {
             if (_lineVisuals == null || _visualsHi < _visualsLo) return;
 
-            int lo = Math.Max(0, firstVisible - LineFtWindow);
-            int hi = Math.Min(_lineVisuals.Length - 1, lastVisible + LineFtWindow);
+            int lo = Math.Max(0, firstVisible - LineVisualWindow);
+            int hi = Math.Min(_lineVisuals.Length - 1, lastVisible + LineVisualWindow);
 
             for (int i = _visualsLo; i < lo && i <= _visualsHi; i++) Drop(i);
             for (int i = _visualsHi; i > hi && i >= _visualsLo; i--) Drop(i);
@@ -256,7 +379,7 @@ public partial class DocsCanvas
             EnsureLineFtCache(_layout.VisualLines.Count, _docsCanvas.RenderVersion);
             int _lastVisible = -1;
 
-            for (int i = 0; i < _layout.VisualLines.Count; i++)
+            for (int i = FirstLineAt(viewTop); i < _layout.VisualLines.Count; i++)
             {
                 var vl = _layout.VisualLines[i];
                 double lineH = _layout.GetEffectiveLineHeight(vl);
@@ -1241,7 +1364,7 @@ public partial class DocsCanvas
         {
             double contentWidth = _rendering.ActualWidth;
 
-            for (int i = 0; i < _layout.VisualLines.Count; i++)
+            for (int i = FirstLineAt(viewTop); i < _layout.VisualLines.Count; i++)
             {
                 var vl = _layout.VisualLines[i];
                 if (vl.BlockKind is not BlockKind.FencedCodeLine and not BlockKind.IndentedCodeLine) continue;
@@ -1262,7 +1385,7 @@ public partial class DocsCanvas
             if (_content.ParsedBlocks == null) return;
             double contentWidth = _rendering.ActualWidth;
 
-            for (int i = 0; i < _layout.VisualLines.Count; i++)
+            for (int i = FirstLineAt(viewTop); i < _layout.VisualLines.Count; i++)
             {
                 var vl = _layout.VisualLines[i];
                 if (vl.BlockIndex >= _content.ParsedBlocks.Count) continue;
@@ -1285,7 +1408,7 @@ public partial class DocsCanvas
         {
             if (_content.ParsedBlocks == null) return;
 
-            for (int i = 0; i < _layout.VisualLines.Count; i++)
+            for (int i = FirstLineAt(viewTop); i < _layout.VisualLines.Count; i++)
             {
                 var vl = _layout.VisualLines[i];
                 double lineH = _layout.GetEffectiveLineHeight(vl);
@@ -1369,7 +1492,7 @@ public partial class DocsCanvas
             double viewTop = effectiveScroll;
             double viewBottom = effectiveScroll + _rendering.ActualHeight;
 
-            for (int i = 0; i < _layout.VisualLines.Count; i++)
+            for (int i = FirstLineAt(viewTop); i < _layout.VisualLines.Count; i++)
             {
                 var vl = _layout.VisualLines[i];
                 double lineH = _layout.GetEffectiveLineHeight(vl);
@@ -1454,7 +1577,7 @@ public partial class DocsCanvas
             double viewTop = effectiveScroll;
             double viewBottom = effectiveScroll + _rendering.ActualHeight;
 
-            for (int i = 0; i < _layout.VisualLines.Count; i++)
+            for (int i = FirstLineAt(viewTop); i < _layout.VisualLines.Count; i++)
             {
                 var vl = _layout.VisualLines[i];
                 if (vl.BlockIndex < startBlock || vl.BlockIndex > endBlock) continue;

@@ -1057,9 +1057,9 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider, IDocsC
     /// arriving at a size layout already reserved. A bare InvalidateVisual is not enough now
     /// that lines are cached: it would recomposite the same stale pictures.
     /// </remarks>
-    internal void RedrawLines()
+    internal void RedrawLinesWithImage(string url)
     {
-        InvalidateRenderCache();
+        _renderingContext.DropLineVisualsForImage(url);
         InvalidateVisual();
     }
 
@@ -1158,7 +1158,7 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider, IDocsC
         // no dropped render cache, and nothing below the image moves when it appears.
         var known = _imageCache.GetPixelSize(img.Url, DocumentBasePath, maxWidth);
         _imageCache.RequestLoad(img.Url, DocumentBasePath,
-            known != null ? RedrawLines : InvalidateLayout);
+            known != null ? () => RedrawLinesWithImage(img.Url) : InvalidateLayout);
         return known ?? (20, 20);
     }
 

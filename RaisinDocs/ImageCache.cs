@@ -12,6 +12,16 @@ public class ImageCache
     private readonly ConcurrentDictionary<string, CacheEntry> _cache = new();
     private readonly ConcurrentDictionary<string, Task<CacheEntry?>> _pending = new();
     private readonly ConcurrentDictionary<string, (double W, double H)> _sizes = new();
+
+    /// <summary>
+    /// Keys that failed to load, so a broken reference is attempted once rather than forever.
+    /// </summary>
+    /// <remarks>
+    /// A failed load used to clear itself from _pending without ever populating _cache, so the
+    /// next layout pass asked again and started another Task - once per frame, for every
+    /// missing or unreadable image, indefinitely.
+    /// </remarks>
+    private readonly ConcurrentDictionary<string, bool> _failed = new();
     private static readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(15) };
 
     public (BitmapImage Image, double Width, double Height)? Get(string url, string? basePath, double maxWidth)
@@ -82,7 +92,11 @@ public class ImageCache
             if (!File.Exists(path)) return null;
 
             using var fs = File.OpenRead(path);
-            var frame = BitmapFrame.Create(fs, BitmapCreateOptions.DelayCreation, BitmapCacheOption.None);
+            var decoder = BitmapDecoder.Create(fs,
+                BitmapCreateOptions.DelayCreation | BitmapCreateOptions.IgnoreColorProfile,
+                BitmapCacheOption.None);
+            if (decoder.Frames.Count == 0) return null;
+            var frame = decoder.Frames[0];
             double w = frame.PixelWidth, h = frame.PixelHeight;
             if (w <= 0 || h <= 0) return null;
 
@@ -116,6 +130,9 @@ public class ImageCache
         if (_pending.ContainsKey(key))
             return;
 
+        if (_failed.ContainsKey(key))
+            return;
+
         var dispatcher = System.Windows.Threading.Dispatcher.FromThread(System.Threading.Thread.CurrentThread);
         var task = Task.Run(() => LoadEntry(key, url, basePath));
         _pending.TryAdd(key, task);
@@ -131,13 +148,17 @@ public class ImageCache
                         _cache[key] = t.Result;
                         onLoaded();
                     }
+                    else
+                    {
+                        _failed[key] = true;
+                    }
                 });
             }
             else
             {
                 _pending.TryRemove(key, out _);
-                if (t.Result != null)
-                    _cache[key] = t.Result;
+                if (t.Result != null) _cache[key] = t.Result;
+                else _failed[key] = true;
             }
         });
     }

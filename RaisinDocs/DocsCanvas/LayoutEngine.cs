@@ -920,7 +920,7 @@ public partial class DocsCanvas
             // has to repaint, rather than invalidate layout from under a running scroll.
             var known = _image.ImageCache.GetPixelSize(img.Url, _image.DocumentBasePath, maxWidth);
             _image.ImageCache.RequestLoad(img.Url, _image.DocumentBasePath,
-                known != null ? _canvas.RedrawLines : _layout.InvalidateLayout);
+                known != null ? () => _canvas.RedrawLinesWithImage(img.Url) : _layout.InvalidateLayout);
             return known ?? (20, 20);
         }
 
