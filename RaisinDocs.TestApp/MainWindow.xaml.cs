@@ -14,11 +14,16 @@ public partial class MainWindow : Window
     private static readonly string ContentPath = Path.Combine(SaveDir, "scratch.md");
     private static readonly string StatePath = Path.Combine(SaveDir, "editor-state.json");
 
-    public MainWindow()
+    /// <summary>Document to open instead of the scratch pad, if one was given.</summary>
+    private readonly string? _file;
+
+    public MainWindow(string? file = null)
     {
+        _file = file;
         InitializeComponent();
         Loaded += (_, _) => LoadContent();
-        Closing += (_, _) => SaveContent();
+        // A document opened by path is not ours to write back over. Only the scratch pad is.
+        Closing += (_, _) => { if (_file == null) SaveContent(); };
     }
 
     protected override void OnSourceInitialized(EventArgs e)
@@ -30,9 +35,13 @@ public partial class MainWindow : Window
 
     private void LoadContent()
     {
-        Editor.DocumentBasePath = Path.GetDirectoryName(ContentPath)!;
-        if (File.Exists(ContentPath))
-            Editor.SetText(File.ReadAllText(ContentPath));
+        string path = _file ?? ContentPath;
+        Editor.DocumentBasePath = Path.GetDirectoryName(Path.GetFullPath(path))!;
+        if (File.Exists(path))
+        {
+            Editor.SetText(File.ReadAllText(path));
+            if (_file != null) Title = $"{Path.GetFileName(_file)} - RaisinDocs sandbox (read-only)";
+        }
         if (File.Exists(StatePath))
         {
             try

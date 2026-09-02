@@ -182,6 +182,50 @@ What it still costs is unchanged and unmeasured: the seam at both ends of a gest
 buffer for running off the texture, airspace while the surface is up, and the interop itself.
 Those are the things to weigh now that the payoff is known rather than guessed.
 
+### But the pixels cannot come from WPF
+
+The prototype settled the pacing. It left the other half open: where the presenter gets its
+pixels. The design assumes `RenderTargetBitmap` over the cached line visuals, since those are
+already exactly the content being scrolled. Measured on the trading report, 2894 lines, a
+1000x1000 viewport:
+
+| capture | cost |
+|---|---|
+| canvas, 1x viewport | 20.8 ms |
+| canvas, 2x viewport | 20.2 ms |
+| canvas, 3x viewport | 20.6 ms |
+| `ContentLayer` alone, 3x viewport | 18.0 ms |
+| canvas, 1x viewport, direct draw (no cached children) | 12.9 ms |
+
+**The cost is flat in area.** Tripling the bitmap changes nothing, so this is not pixel work -
+it is re-rasterising the visual tree, and the same 51 line visuals are the whole bill whatever
+size bitmap they are drawn into. `ContentLayer` on its own costs 18.0 ms with no `OnRender`
+involved, which puts it at **~350 us per cached line visual against 8.6 us to composite the
+same line live**, a factor of 40.
+
+The reason is that `RenderTargetBitmap` rasterises in software, through WIC, with no GPU. That
+makes `BitmapCache` a liability rather than a help there: 20.8 ms with cached children against
+12.9 ms drawing directly. The cache that made live compositing fast makes capture slow.
+
+Three consequences, and they compound:
+
+1. A capture at the start of a gesture costs **four to six refreshes** - a visible hitch at the
+   start of every scroll, which is the defect the whole exercise exists to remove.
+2. A larger margin is not free. Flat-in-area is only flat because the same visuals are being
+   drawn; three viewports of real content is three times the visuals, so about 50 ms.
+3. `RenderTargetBitmap.Render` has visual thread affinity, so **every capture is UI-thread
+   time**, competing with the scroll it is meant to smooth. It cannot be moved to the
+   presenter thread.
+
+So "WPF rasterises, we only present" does not survive contact with measurement. The pacing
+works; there is no cheap way to feed it. Feeding it means drawing the text into the texture
+ourselves with Direct2D/DirectWrite on the presenter thread - which needs the styled-run,
+table and image pipeline duplicated off the UI thread, and is the second renderer this whole
+approach existed to avoid.
+
+That is the decision now on the table: pay for a second text renderer for the scrolling case,
+or keep the gains from A and B and accept WPF's cadence.
+
 ### How it was proved
 
 Phase 1 of the pre-buffering work paid for itself by answering one question cheaply before
