@@ -200,8 +200,13 @@ public class MinimapScrollbar : FrameworkElement, IMinimapDataProvider
 
         if (needsRebuild)
         {
-            ScrollDiag.Time("minimap-rebuild", () =>
-                RebuildBitmap((int)w, cacheBitmapH, cacheFirstLine, cacheLineCount, 0, bg, fg, codeBg, canvasTextWidth));
+            // Direct call when diagnostics are off, so the captured locals below cost nothing
+            // in a normal run.
+            if (!ScrollDiag.Enabled)
+                RebuildBitmap((int)w, cacheBitmapH, cacheFirstLine, cacheLineCount, 0, bg, fg, codeBg, canvasTextWidth);
+            else
+                ScrollDiag.Time("minimap-rebuild", () =>
+                    RebuildBitmap((int)w, cacheBitmapH, cacheFirstLine, cacheLineCount, 0, bg, fg, codeBg, canvasTextWidth));
             _cachedVersion = version;
             _cachedBitmapFirstLine = cacheFirstLine;
             _cachedBitmapLineCount = cacheLineCount;
