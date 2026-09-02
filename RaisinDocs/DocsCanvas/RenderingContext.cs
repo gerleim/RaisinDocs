@@ -154,12 +154,17 @@ public partial class DocsCanvas
         /// ActualHeight is updated, so on the first arrange it still reads zero - which made
         /// every line count as out of view and built nothing at all.
         /// </param>
-        internal void UpdateContentLayer(double viewportHeight)
+        /// <param name="viewTopOverride">
+        /// Where to build for, when that is not where the canvas is scrolled to. A paced
+        /// presenter owns the offset during a gesture and the canvas does not move, so without
+        /// this the presenter runs off the end of the built lines within a few frames.
+        /// </param>
+        internal void UpdateContentLayer(double viewportHeight, double? viewTopOverride = null)
         {
             if (_content.ParsedBlocks == null || !_docsCanvas.CachedLineVisuals) return;
             if (_layout.VisualLines.Count == 0 || viewportHeight <= 0) return;
 
-            double effectiveScroll = Math.Round(_scroll.Scroll.EffectiveOffset);
+            double effectiveScroll = Math.Round(viewTopOverride ?? _scroll.Scroll.EffectiveOffset);
             double viewTop = effectiveScroll;
             double viewBottom = effectiveScroll + viewportHeight;
 
@@ -181,8 +186,64 @@ public partial class DocsCanvas
             EnsureLineFtCache(_layout.VisualLines.Count, _docsCanvas.RenderVersion);
             EnsureLineVisualCache(_layout.VisualLines.Count, _docsCanvas.RenderVersion);
             SyncLineVisuals(firstVisible, lastVisible);
-            _docsCanvas.ContentScroll.Y = -effectiveScroll;
+            if (viewTopOverride == null) _docsCanvas.ContentScroll.Y = -effectiveScroll;
         }
+
+        /// <summary>
+        /// The display list of every line visual currently built, frozen so another thread can
+        /// read it.
+        /// </summary>
+        /// <remarks>
+        /// A paced presenter has to draw what this canvas draws, exactly, or the handoff at
+        /// each end of a scroll shows a jump. Handing over the display list is the only way to
+        /// guarantee that: reproducing it from the document would mean a second implementation
+        /// of wrapping, block fonts, inline styles, colour spans, tables and images, and every
+        /// one of those is somewhere the two could disagree.
+        ///
+        /// Frozen because a presenter runs on its own thread and WPF's drawing types have
+        /// thread affinity until they are. Cloned before freezing so the visual keeps a
+        /// mutable drawing of its own to re-record into.
+        ///
+        /// Only lines that have been built are here. A gesture that outruns them is the
+        /// caller's problem to solve, by keeping the built range ahead of where it is looking.
+        /// </remarks>
+        internal void SnapshotLineDrawings(List<(int Index, double Y, Drawing Drawing)> into)
+        {
+            into.Clear();
+            if (_lineVisuals == null || _visualsHi < _visualsLo) return;
+
+            int limit = Math.Min(_lineVisuals.Length, _layout.LineYPositions.Count);
+            for (int i = Math.Max(0, _visualsLo); i <= _visualsHi && i < limit; i++)
+            {
+                if (_lineVisuals[i] is not { } dv) continue;
+
+                if (_frozenDrawings.TryGetValue(i, out var entry)
+                    && entry.Version == _docsCanvas.RenderVersion)
+                {
+                    into.Add((i, _layout.LineYPositions[i], entry.Drawing));
+                    continue;
+                }
+
+                if (dv.Drawing is not { } drawing) continue;
+
+                var copy = drawing.CloneCurrentValue();
+                if (copy.CanFreeze) copy.Freeze(); else continue;
+
+                _frozenDrawings[i] = (_docsCanvas.RenderVersion, copy);
+                into.Add((i, _layout.LineYPositions[i], copy));
+            }
+
+            // The cache follows the built range, so it cannot grow without bound on a long
+            // document the way the line visuals themselves cannot.
+            if (_frozenDrawings.Count > 2000)
+            {
+                foreach (int k in _frozenDrawings.Keys
+                             .Where(k => k < _visualsLo || k > _visualsHi).ToList())
+                    _frozenDrawings.Remove(k);
+            }
+        }
+
+        private readonly Dictionary<int, (int Version, Drawing Drawing)> _frozenDrawings = new();
 
         /// <summary>
         /// Index of the first visual line that could be visible at <paramref name="viewTop"/>.
@@ -282,6 +343,28 @@ public partial class DocsCanvas
             {
                 // lineY == scrollY draws the line at the origin of its own visual.
                 double y = _layout.LineYPositions[i];
+
+                // An opaque ground under the line, when asked for.
+                //
+                // ClearType needs to know what is behind a glyph, so it is unavailable on a
+                // transparent surface - and a BitmapCache is transparent, which means every
+                // line cached since phase 2 has been greyscale antialiased rather than
+                // ClearType. Filling the line's own background first gives ClearType something
+                // to work against, at the cost of the visual no longer being able to show
+                // whatever the element draws underneath it.
+                if (DocsCanvas.OpaqueLineVisuals)
+                {
+                    // At local y zero, not at the line's document position. DrawLineContent is
+                    // called with lineY == scrollY so it draws the line at the origin of its
+                    // own visual, and the visual's transform carries the document position.
+                    // Using the document position here applies it twice, which is invisible at
+                    // the top of a document and puts the background thousands of pixels away
+                    // further down.
+                    double h = _layout.GetEffectiveLineHeight(vl);
+                    dc.DrawRectangle(_rendering.Palette.Background, null,
+                        new Rect(0, 0, Math.Max(1, _rendering.ActualWidth), h));
+                }
+
                 DrawLineContent(dc, i, vl, y, y);
             }
 

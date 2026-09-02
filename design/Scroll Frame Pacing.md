@@ -403,6 +403,63 @@ What remains is that the ClearType and gamma sweep was fitted on an HDR display 
 that was already being transformed, so those numbers should be taken again now that both
 renderers are composed alike.
 
+### C3 against the real renderer: the presenter replays the canvas display list
+
+`RaisinDocs.TestApp --replay --monitor=N`. The real DocsCanvas with the trading report in
+visual mode, F9 switching between its own scrolling and the presenter.
+
+**The presenter does not render the document.** DocsCanvas already draws each visual line into
+a DrawingVisual, and a DrawingVisual keeps the display list: glyph runs carrying the indices and
+advances WPF resolved, geometries with their brushes, images with their rectangles. The
+presenter replays that, so the two draw the same thing by construction. Reproducing wrapping,
+block fonts, inline styles, colour spans, tables and images a second time would have made every
+one of them a place the two could disagree.
+
+The list is cloned and frozen per line before it crosses to the render thread, and the canvas is
+asked to keep building lines under wherever the presenter has reached
+(`PrepareLineVisualsAt`), since the canvas itself does not move during a gesture.
+
+**Replaying every frame was far too dear**: 7 to 11ms on table-heavy content, which made the
+presenter slower than WPF. It is the same work each frame, so each line is now drawn once into
+a GPU texture and a frame is a few hundred blits - phase 2's trick applied on our side of the
+fence. That is legitimate only because nothing moves sub-pixel: glyphs sit on a whole pixel
+grid, horizontal position is fixed per line, and scrolling is whole-pixel, so a pre-rendered
+line is exactly valid at every offset it will be drawn at.
+
+| | per frame | rate |
+|---|---|---|
+| replay every frame | 7 - 11 ms | 95 - 132/s |
+| **texture cache** | **0.29 - 0.57 ms** | **268 - 279/s** |
+
+Sustained over twelve gestures on the real document: present median 3.58 to 3.73ms, 2.5 to 7.1%
+late, UI thread 0.03 to 0.60ms a frame. Against the real canvas at 140/s with 19% late.
+
+Three faults were found by looking rather than reasoning, and all three were mine: the display
+list was replayed at `Round(y - offset)` where the canvas rounds the line and the offset
+separately, so line spacing changed every frame and the text jiggled; the texture was
+translated vertically but not horizontally, so every indent was applied twice; and images were
+not drawn at all.
+
+### ClearType is missing from the editor's own cache
+
+The last visible difference was antialiasing, and chasing it found something about the shipping
+renderer rather than the presenter.
+
+ClearType needs to know what is behind a glyph, so it cannot be used on a transparent surface -
+and a `BitmapCache` is one. **Every line the editor has cached since phase 2 has been greyscale
+antialiased rather than ClearType.** Confirmed by filling each line visual with the theme
+background first (`DocsCanvas.OpaqueLineVisuals`): the text visibly sharpens.
+
+That also settles the seam. Both sides render through a transparent cache, so both are
+greyscale at DirectWrite's own gamma, and at that setting the presenter and the canvas produce
+the same text - with no fitted constant. The gamma 2.2 the earlier sweep produced was fitted
+against a directly drawn panel on an HDR display, and does not apply here.
+
+Making lines opaque is a real improvement and a real piece of work, not a flag. Anything drawn
+at or under a line boundary is covered by the next line's background: table row separators
+disappear, and selection, search highlights and the code and colour block backgrounds would go
+the same way. Restoring ClearType means moving all of those into the line visuals.
+
 ### How it was proved
 
 Phase 1 of the pre-buffering work paid for itself by answering one question cheaply before

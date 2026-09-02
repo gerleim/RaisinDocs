@@ -335,6 +335,7 @@ public sealed class HandoffWindow : Window
     /// what has been presented.
     /// </remarks>
     private readonly Stopwatch _lastTick = Stopwatch.StartNew();
+    private readonly List<double> _wpfGaps = new(2048);
     private Stopwatch? _wpfCoast;
     private double _wpfCoastFrom;
     private int _wpfTicks;
@@ -373,10 +374,22 @@ public sealed class HandoffWindow : Window
         {
             if (_velocity != 0 || _wpfCoast != null)
             {
+                string spread = "";
+                if (_wpfGaps.Count > 8)
+                {
+                    var g = _wpfGaps.ToArray();
+                    Array.Sort(g);
+                    double med = g[g.Length / 2];
+                    int late = 0;
+                    foreach (var x in _wpfGaps) if (x > med * 1.5) late++;
+                    spread = $"  |  frame gap median {med:F2}ms ({1000 / med:F0}/s), " +
+                             $"p99 {g[(int)(g.Length * 0.99)]:F2}ms, " +
+                             $"over 1.5x median {100.0 * late / _wpfGaps.Count:F1}%";
+                }
+
                 Log($"WPF COAST end: {_wpfTicks} ticks in " +
                     $"{_wpfCoast?.Elapsed.TotalMilliseconds ?? 0:F0}ms, " +
-                    $"{Math.Abs(_offset - _wpfCoastFrom):F0}px, " +
-                    $"tick rate {_wpfTicks / Math.Max(0.001, _wpfCoast?.Elapsed.TotalSeconds ?? 1):F0}/s");
+                    $"{Math.Abs(_offset - _wpfCoastFrom):F0}px{spread}");
                 _wpfCoast = null;
             }
             _velocity = 0;
@@ -388,6 +401,7 @@ public sealed class HandoffWindow : Window
             _wpfCoast = Stopwatch.StartNew();
             _wpfCoastFrom = _offset;
             _wpfTicks = 0;
+            _wpfGaps.Clear();
             _lastTick.Restart();
         }
         _wpfTicks++;
@@ -399,6 +413,7 @@ public sealed class HandoffWindow : Window
         // different speeds - this one was running fast, not the presenter running slow.
         double dt = _lastTick.Elapsed.TotalSeconds;
         _lastTick.Restart();
+        if (dt > 0 && dt < 0.5) _wpfGaps.Add(dt * 1000);
         if (dt <= 0 || dt > 0.05) dt = 0.05;
         double decay = Math.Exp(-dt * WheelDamping);
         _offset += _velocity * (1 - decay) / WheelDamping;

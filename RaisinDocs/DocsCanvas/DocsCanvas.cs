@@ -1274,6 +1274,76 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider, IDocsC
 
     // --- Rendering ---
 
+    /// <summary>
+    /// Fills each cached line visual with the theme background before drawing it.
+    /// </summary>
+    /// <remarks>
+    /// Diagnostic for now. ClearType cannot be used on a transparent surface, and a
+    /// BitmapCache is one, so cached lines are greyscale antialiased where directly drawn text
+    /// is ClearType. If that difference is visible, this is the lever: an opaque line can carry
+    /// ClearType again.
+    ///
+    /// Not free - an opaque line hides anything the element paints underneath it, which today
+    /// includes selection, search highlights and the code and colour block backgrounds.
+    /// </remarks>
+    public static bool OpaqueLineVisuals;
+
+    /// <summary>Drops the cached line visuals so they are drawn again.</summary>
+    /// <remarks>Public for a presenter or a diagnostic that changes how lines are rendered.</remarks>
+    public void RebuildLineVisuals()
+    {
+        InvalidateRenderCache();
+        InvalidateVisual();
+    }
+
+    /// <summary>One built line's display list, with the y it belongs at.</summary>
+    public readonly record struct LineDrawing(int Index, double Y, Drawing Drawing);
+
+    private readonly List<(int Index, double Y, Drawing Drawing)> _snapshotScratch = new();
+
+    /// <summary>
+    /// The display list of every line currently built, frozen for reading off the UI thread.
+    /// </summary>
+    /// <remarks>
+    /// For a paced presenter that has to draw exactly what this canvas draws. See
+    /// RenderingContext.SnapshotLineDrawings for why handing over the display list is the only
+    /// way to guarantee the two agree.
+    /// </remarks>
+    public void SnapshotLineDrawings(List<LineDrawing> into)
+    {
+        _renderingContext.SnapshotLineDrawings(_snapshotScratch);
+        into.Clear();
+        foreach (var (index, y, drawing) in _snapshotScratch)
+            into.Add(new LineDrawing(index, y, drawing));
+    }
+
+    /// <summary>
+    /// Builds line visuals around <paramref name="offset"/> without scrolling there.
+    /// </summary>
+    /// <remarks>
+    /// A presenter owning the scroll leaves the canvas where the gesture started, so nothing
+    /// would build the lines it is about to need. Called from the UI thread as the presenter
+    /// advances, this keeps the built range under it.
+    /// </remarks>
+    public void PrepareLineVisualsAt(double offset)
+    {
+        if (ActualHeight <= 0) return;
+        _renderingContext.UpdateContentLayer(ActualHeight, offset);
+    }
+
+    /// <summary>Total scrollable height, for a presenter that owns the offset.</summary>
+    public double ContentHeight => _totalContentHeight;
+
+    /// <summary>
+    /// Where the canvas is scrolled to. Public for a presenter, which has to take the offset
+    /// from here when a gesture starts and give it back when the gesture ends.
+    /// </summary>
+    public double ViewOffset
+    {
+        get => _scroll.Offset;
+        set => _scroll.SetDirect(value);
+    }
+
     protected override Size ArrangeOverride(Size finalSize)
     {
         var result = base.ArrangeOverride(finalSize);

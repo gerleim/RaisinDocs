@@ -22,6 +22,7 @@ public partial class App : Application
             e.Args.Contains("--presenter") ? new PresenterPrototypeWindow() :
             e.Args.Contains("--textpresenter") ? TextPresenterWindow.Open(file, AutoSpeed(e.Args)) :
             e.Args.Contains("--seam") ? SeamComparisonWindow.Open(file) :
+            e.Args.Contains("--replay") ? ReplayWindow.Open(file) :
             e.Args.Contains("--handoff")
                 ? HandoffWindow.Open(file, e.Args.Contains("--sweep"), e.Args.Contains("--bgtest")) :
             new MainWindow(file);
@@ -30,6 +31,10 @@ public partial class App : Application
         if (e.Args.Contains("--nogesture")) HandoffWindow.NoGesture = true;
         if (e.Args.Contains("--wpfonly")) HandoffWindow.StartWithHandoffOff = true;
         if (e.Args.Contains("--bitblt")) HandoffWindow.UseBitblt = true;
+
+        string? mon = e.Args.FirstOrDefault(a => a.StartsWith("--monitor="));
+        if (mon != null && int.TryParse(mon.AsSpan("--monitor=".Length), out int rm))
+            ReplayWindow.MonitorIndex = rm;
 
         string? monitor = e.Args.FirstOrDefault(a => a.StartsWith("--monitor="));
         if (monitor != null && int.TryParse(monitor.AsSpan("--monitor=".Length), out int m))
