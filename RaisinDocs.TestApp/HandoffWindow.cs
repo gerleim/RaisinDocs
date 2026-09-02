@@ -58,6 +58,28 @@ public sealed class HandoffWindow : Window
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "RaisinDocs", "seam");
 
+    private static readonly string LogPath = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "RaisinDocs", "handoff.log");
+
+    private static readonly Stopwatch Clock = Stopwatch.StartNew();
+    private static readonly object LogLock = new();
+
+    /// <summary>
+    /// Appends a timestamped line. Three rounds of guessing at what causes a flash and a
+    /// freeze have cost more than instrumenting would have; this is the instrument.
+    /// </summary>
+    internal static void Log(string message)
+    {
+        try
+        {
+            lock (LogLock)
+                File.AppendAllText(LogPath,
+                    $"{Clock.Elapsed.TotalSeconds,9:F3}  {message}{Environment.NewLine}");
+        }
+        catch (IOException) { }
+    }
+
     private readonly string[] _lines;
     private readonly WpfTextPanel _wpf;
     private readonly PresenterSurface _d2d;
@@ -89,7 +111,7 @@ public sealed class HandoffWindow : Window
         Background = new SolidColorBrush(BackColor);
 
         _wpf = new WpfTextPanel(lines);
-        _d2d = new PresenterSurface(lines) { Visibility = Visibility.Collapsed };
+        _d2d = new PresenterSurface(lines) { Visibility = Visibility.Hidden };
         _readout = new TextBlock
         {
             Foreground = Brushes.Gainsboro,
@@ -109,6 +131,14 @@ public sealed class HandoffWindow : Window
         grid.Children.Add(_readout);
         grid.Children.Add(host);
         Content = grid;
+
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(LogPath)!);
+            File.WriteAllText(LogPath, $"handoff log, {lines.Length} lines, {DateTime.Now:HH:mm:ss}"
+                + Environment.NewLine);
+        }
+        catch (IOException) { }
 
         MouseWheel += OnWheel;
         PreviewKeyDown += (_, e) =>
@@ -173,6 +203,8 @@ public sealed class HandoffWindow : Window
             return;
         }
 
+        Log($"wheel {notches:F0}, presenting={_presenting}");
+
         if (!_presenting) TakeOver();
         _d2d.Wheel(notches);
     }
@@ -182,13 +214,17 @@ public sealed class HandoffWindow : Window
     /// over the WPF content, so showing it before it holds the right pixels would put one
     /// frame of stale content - or an empty buffer - on screen.
     /// </summary>
+    /// <summary>
+    /// Shows the surface. Nothing is waited for: the presenter has been drawing this very
+    /// offset all along, so its buffer is already right. Waiting for frames here put up to
+    /// 26ms of UI thread into the start of every gesture, which is what froze the scroll.
+    /// </summary>
     private void TakeOver()
     {
-        _d2d.SetOffset(_offset);
         _presenting = true;
         _handingBack = false;
-        _d2d.WaitForFrame();
         _d2d.Visibility = Visibility.Visible;
+        Log($"TAKE OVER at offset {_offset:F1}");
     }
 
     /// <summary>
@@ -205,15 +241,19 @@ public sealed class HandoffWindow : Window
         _handingBack = true;
         _presenting = false;
 
+        var sw = Stopwatch.StartNew();
         _offset = _d2d.Offset;
         _wpf.Offset = _offset;
         _wpf.InvalidateVisual();
+        Log($"HAND BACK at offset {_offset:F1}");
 
         Dispatcher.BeginInvoke(DispatcherPriority.Loaded, () =>
         {
+            Log($"  hide surface {sw.Elapsed.TotalMilliseconds:F1}ms after hand back, " +
+                $"presenting={_presenting}");
             // A new gesture may have started while this was queued, in which case the surface
             // is wanted after all.
-            if (!_presenting) _d2d.Visibility = Visibility.Collapsed;
+            if (!_presenting) _d2d.Visibility = Visibility.Hidden;
             _handingBack = false;
         });
     }
@@ -226,6 +266,10 @@ public sealed class HandoffWindow : Window
             if (_d2d.IsIdle) HandBack();
             return;
         }
+
+        // While WPF owns the scroll the presenter shadows it, so its buffer is always ready to
+        // be shown without a stall or a stale frame.
+        _d2d.SetOffset(_offset);
 
         if (Math.Abs(_velocity) < 0.5) { _velocity = 0; return; }
 
@@ -270,7 +314,7 @@ public sealed class HandoffWindow : Window
             _wpf.InvalidateVisual();
             _d2d.SetOffset(off);
 
-            _d2d.Visibility = Visibility.Collapsed;
+            _d2d.Visibility = Visibility.Hidden;
             using var wpf = await CaptureWhenVisibleAsync();
 
             _d2d.Visibility = Visibility.Visible;
@@ -308,7 +352,7 @@ public sealed class HandoffWindow : Window
         report.AppendLine($"worst offset {worstOffset}: mean {worstMean:F2}, {worstOver8:F2}% differing by >8");
         report.AppendLine("(offset 0 alone measured mean 0.54 / 3.16% in the static comparison)");
 
-        _d2d.Visibility = Visibility.Collapsed;
+        _d2d.Visibility = Visibility.Hidden;
         _wpf.Offset = 0;
         _offset = 0;
         _wpf.InvalidateVisual();
@@ -458,6 +502,13 @@ public sealed class HandoffWindow : Window
                     System.Windows.FlowDirection.LeftToRight, typeface, FontSize, brush, dpi);
                 dc.DrawText(ft, new Point(PaddingX, Math.Round(i * LineHeight - Offset)));
             }
+
+            // Which renderer is on screen, so a flash can be attributed to one of them by
+            // looking rather than by theory.
+            var tag = new FormattedText("WPF", CultureInfo.InvariantCulture,
+                System.Windows.FlowDirection.LeftToRight, typeface, 20,
+                new SolidColorBrush(Color.FromRgb(0xFF, 0x60, 0x60)), dpi);
+            dc.DrawText(tag, new Point(ActualWidth - 60, 6));
         }
     }
 
@@ -546,6 +597,8 @@ public sealed class HandoffWindow : Window
         private IDWriteFactory? _dwrite;
         private IDWriteTextFormat? _format;
         private ID2D1SolidColorBrush? _brush;
+        private ID2D1SolidColorBrush? _tagBrush;
+        private IDWriteTextFormat? _tagFormat;
 
         [DllImport("user32.dll")]
         private static extern bool GetClientRect(IntPtr hwnd, out RECT rect);
@@ -554,6 +607,7 @@ public sealed class HandoffWindow : Window
         private volatile bool _running;
         private long _frames;
         private int _bufferWidth, _bufferHeight;
+        private SharpGen.Runtime.Result _lastPresent;
         private double _offset;
         private double _velocity;
         private int _wheelPending;
@@ -561,7 +615,14 @@ public sealed class HandoffWindow : Window
         public PresenterSurface(string[] lines) => _lines = lines;
 
         public double Offset => Volatile.Read(ref _offset);
-        public bool IsIdle => Math.Abs(Volatile.Read(ref _velocity)) < 0.5;
+        /// <summary>
+        /// Idle means nothing left to scroll - including input that has arrived but which the
+        /// render thread has not applied yet. Without the pending check the presenter looks
+        /// idle in the moment between a wheel notch being queued and the next frame consuming
+        /// it, so the handoff unwound a millisecond after it was set up, on every notch.
+        /// </summary>
+        public bool IsIdle => Volatile.Read(ref _wheelPending) == 0
+                              && Math.Abs(Volatile.Read(ref _velocity)) < 0.5;
 
         public void SetOffset(double offset)
         {
@@ -572,7 +633,7 @@ public sealed class HandoffWindow : Window
         public void Wheel(double notches) => Interlocked.Add(ref _wheelPending, (int)notches);
 
         /// <summary>Blocks until the surface has drawn a frame, so it is safe to show.</summary>
-        public void WaitForFrame()
+        public long WaitForFrame()
         {
             // Bounded tightly: while the surface is hidden its swapchain may be occluded and
             // stop advancing altogether, and this runs on the UI thread. Showing one stale
@@ -581,6 +642,7 @@ public sealed class HandoffWindow : Window
             var sw = Stopwatch.StartNew();
             while (Interlocked.Read(ref _frames) <= start + 1 && sw.ElapsedMilliseconds < 25)
                 Thread.Sleep(1);
+            return Interlocked.Read(ref _frames) - start;
         }
 
         protected override HandleRef BuildWindowCore(HandleRef parent)
@@ -605,6 +667,7 @@ public sealed class HandoffWindow : Window
             _thread?.Join(500);
             foreach (var l in _layouts.Values) l.Dispose();
             _layouts.Clear();
+            _tagBrush?.Dispose(); _tagFormat?.Dispose();
             _brush?.Dispose(); _format?.Dispose(); _dwrite?.Dispose();
             _target?.Dispose(); _d2d?.Dispose(); _d2dDevice?.Dispose(); _d2dFactory?.Dispose();
             _swapChain?.Dispose(); _context?.Dispose(); _device?.Dispose();
@@ -659,6 +722,11 @@ public sealed class HandoffWindow : Window
                 Vortice.DirectWrite.RenderingMode.Natural);
 
             _brush = _d2d.CreateSolidColorBrush(ToColor4(TextColor));
+            _tagBrush = _d2d.CreateSolidColorBrush(new Color4(0.38f, 1f, 0.45f, 1f));
+            _tagFormat = _dwrite.CreateTextFormat(FontFamily,
+                Vortice.DirectWrite.FontWeight.Normal,
+                Vortice.DirectWrite.FontStyle.Normal,
+                Vortice.DirectWrite.FontStretch.Normal, 20f);
 
             var waitable = _swapChain.FrameLatencyWaitableObject;
             var clock = Stopwatch.StartNew();
@@ -678,8 +746,20 @@ public sealed class HandoffWindow : Window
                 EnsureBufferSize();
                 Advance(dt);
                 Draw();
-                _swapChain.Present(1, PresentFlags.None);
+
+                var result = _swapChain.Present(1, PresentFlags.None);
+                if (result != _lastPresent)
+                {
+                    HandoffWindow.Log($"  [d2d] Present -> {result} (was {_lastPresent}), " +
+                                      $"frame {_frames}");
+                    _lastPresent = result;
+                }
+
                 Interlocked.Increment(ref _frames);
+
+                double frameMs = (clock.ElapsedTicks - now) / (double)Stopwatch.Frequency * 1000;
+                if (frameMs > 20)
+                    HandoffWindow.Log($"  [d2d] slow frame {frameMs:F1}ms at offset {_offset:F1}");
             }
         }
 
@@ -700,6 +780,7 @@ public sealed class HandoffWindow : Window
             _target?.Dispose();
             _target = null;
 
+            HandoffWindow.Log($"  [d2d] resize {_bufferWidth}x{_bufferHeight} -> {w}x{h}");
             _swapChain!.ResizeBuffers(0, (uint)w, (uint)h, Format.Unknown,
                 SwapChainFlags.FrameLatencyWaitableObject);
 
@@ -724,7 +805,13 @@ public sealed class HandoffWindow : Window
         {
             int notches = Interlocked.Exchange(ref _wheelPending, 0);
             double v = Volatile.Read(ref _velocity);
-            if (notches != 0) v += notches * PixelsPerNotch * WheelDamping;
+            if (notches != 0)
+            {
+                v += notches * PixelsPerNotch * WheelDamping;
+                // Immediately, not at the end of this method: between the exchange above and
+                // the write below, the surface would otherwise read as idle.
+                Volatile.Write(ref _velocity, v);
+            }
 
             double offset = Volatile.Read(ref _offset);
             if (Math.Abs(v) > 0.5)
@@ -769,6 +856,13 @@ public sealed class HandoffWindow : Window
                     new System.Numerics.Vector2((float)PaddingX,
                         (float)Math.Round(i * LineHeight - offset)),
                     layout, _brush!);
+            }
+
+            using (var tag = _dwrite!.CreateTextLayout("D2D", _tagFormat!, 100, 30))
+            {
+                tag.WordWrapping = Vortice.DirectWrite.WordWrapping.NoWrap;
+                _d2d.DrawTextLayout(new System.Numerics.Vector2((float)size.Width - 60, 6),
+                    tag, _tagBrush!);
             }
 
             _d2d.EndDraw();
