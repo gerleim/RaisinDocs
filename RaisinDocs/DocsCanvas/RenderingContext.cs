@@ -138,6 +138,53 @@ public partial class DocsCanvas
         }
 
         /// <summary>
+        /// Builds and positions the cached line visuals for the current scroll offset.
+        /// </summary>
+        /// <remarks>
+        /// Called from ArrangeOverride, deliberately, not from OnRender. Adding children to a
+        /// visual mid-render mutates the tree during a render pass, which WPF does not allow -
+        /// the same restriction that throws "Cannot call this API during the OnRender
+        /// callback" for a transform. It happened to work through the live compositor, but
+        /// under RenderTargetBitmap the adds simply did not take, leaving a canvas that laid
+        /// out 2101 lines and drew none of them. Arrange runs before every render pass, and
+        /// InvalidateVisual schedules one, so this is both legal and no less frequent.
+        /// </remarks>
+        /// <param name="viewportHeight">
+        /// The height to treat as visible. Passed in because ArrangeOverride runs before
+        /// ActualHeight is updated, so on the first arrange it still reads zero - which made
+        /// every line count as out of view and built nothing at all.
+        /// </param>
+        internal void UpdateContentLayer(double viewportHeight)
+        {
+            if (_content.ParsedBlocks == null || !_docsCanvas.CachedLineVisuals) return;
+            if (_layout.VisualLines.Count == 0 || viewportHeight <= 0) return;
+
+            double effectiveScroll = Math.Round(_scroll.Scroll.EffectiveOffset);
+            double viewTop = effectiveScroll;
+            double viewBottom = effectiveScroll + viewportHeight;
+
+            int firstVisible = -1, lastVisible = -1;
+            for (int i = FirstLineAt(viewTop); i < _layout.VisualLines.Count; i++)
+            {
+                var vl = _layout.VisualLines[i];
+                double lineY = _layout.LineYPositions[i];
+                if (lineY + _layout.GetEffectiveLineHeight(vl) < viewTop) continue;
+                if (lineY > viewBottom) break;
+                if (firstVisible < 0) firstVisible = i;
+                lastVisible = i;
+            }
+
+            // Both caches, in this order: building a line visual draws the line, and drawing a
+            // line reads the FormattedText cache. That used to be safe because everything ran
+            // inside OnRender; now that this runs at arrange time, ahead of the render, the
+            // text cache has to be ready here rather than there.
+            EnsureLineFtCache(_layout.VisualLines.Count, _docsCanvas.RenderVersion);
+            EnsureLineVisualCache(_layout.VisualLines.Count, _docsCanvas.RenderVersion);
+            SyncLineVisuals(firstVisible, lastVisible);
+            _docsCanvas.ContentScroll.Y = -effectiveScroll;
+        }
+
+        /// <summary>
         /// Index of the first visual line that could be visible at <paramref name="viewTop"/>.
         /// </summary>
         /// <remarks>
@@ -386,16 +433,9 @@ public partial class DocsCanvas
                 _lastVisible = i;
             }
 
-            if (_docsCanvas.CachedLineVisuals)
-            {
-                // Each line is rendered once into its own cached visual and the whole layer is
-                // moved by one transform, so a frame costs a composite rather than a redraw of
-                // everything on screen.
-                EnsureLineVisualCache(_layout.VisualLines.Count, _docsCanvas.RenderVersion);
-                SyncLineVisuals(_firstVisible, _lastVisible);
-                _docsCanvas.ContentScroll.Y = -effectiveScroll;
-            }
-            else
+            // On the cached path there is nothing to draw here: the line visuals were built
+            // and positioned in ArrangeOverride, ahead of this render pass. See UpdateContentLayer.
+            if (!_docsCanvas.CachedLineVisuals)
             {
                 // The comparison path, reached only when the F9 toggle is enabled: draws
                 // every visible line here, as everything did before lines were cached.

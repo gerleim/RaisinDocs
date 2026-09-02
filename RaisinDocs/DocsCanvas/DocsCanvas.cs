@@ -1279,7 +1279,12 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider, IDocsC
         var result = base.ArrangeOverride(finalSize);
         _measure.EnsureMeasured(this);
         if (ActualHeight > 0 && ActualWidth > 0)
+        {
             ComputeLayout();
+            // Before the render pass, not during it: building the cached line visuals adds
+            // children, and the tree cannot be mutated while it is being rendered.
+            _renderingContext.UpdateContentLayer(finalSize.Height);
+        }
         return result;
     }
 
