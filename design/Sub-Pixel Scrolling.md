@@ -148,10 +148,34 @@ most of it is, D is minutes of work against weeks.
 
 ## Related, and separate
 
-Frame delivery when the window starts on or moves to another display is a different defect and
-is tracked in `Rendering Direction.md`. It matters here only because both are about which clock
-the scroll runs on: this document is about the offset moving in whole pixels, that one is about
-the frames arriving at the wrong rate on a non-primary panel.
+**Frame delivery when the window changes display** is a different defect, tracked in
+`Rendering Direction.md`. It matters here only because both are about which clock the scroll
+runs on: this document is about the offset moving in whole pixels, that one about frames
+arriving at the wrong rate on a non-primary panel.
+
+**Greyscale antialiasing, which nobody chose.** Worth stating plainly because the question comes
+up whenever text quality does: we do not set a text rendering mode anywhere. There is no
+`TextRenderingMode`, `TextFormattingMode`, `TextHintingMode` or `TextOptions` in the library or
+in either host app. WPF's default is ClearType.
+
+But the editor is not getting ClearType. ClearType needs to know what is behind a glyph, so it
+cannot be used on a transparent surface, and a `BitmapCache` is one - so every line cached since
+phase 2 is greyscale antialiased. Three independent things agree:
+
+- Filling each line visual with the theme background first
+  (`DocsCanvas.OpaqueLineVisuals`) makes the text visibly sharper.
+- The Direct2D presenter only matched WPF's output at greyscale; at ClearType it was sharper
+  than the thing it was standing in for.
+- Nothing in the codebase asks for greyscale, so it cannot be deliberate.
+
+So the editor's text has been greyscale since phase 2, by side effect, and nobody decided it.
+That is worth deciding rather than inheriting. Restoring ClearType means making each line visual
+opaque, which means moving everything currently drawn beneath a line into it - the row
+separators and per-row backgrounds are already done, selection and search highlights are not.
+
+It bears on this document because option C proposes going further in the other direction, and
+turning vertical hinting off on text that is already greyscale would be a second reduction in
+crispness on top of one we never intended.
 
 ## How we would know it worked
 
