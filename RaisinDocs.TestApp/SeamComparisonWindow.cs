@@ -544,6 +544,9 @@ public sealed class SeamComparisonWindow : Window
             {
                 using var layout = _dwrite!.CreateTextLayout(
                     _lines[i], _format!, size.Width - (float)PaddingX * 2, (float)LineHeight);
+                // WPF's FormattedText has no MaxTextWidth here, so it does not wrap; without
+                // this DirectWrite would, and the comparison would be of different text.
+                layout.WordWrapping = Vortice.DirectWrite.WordWrapping.NoWrap;
                 _d2d.DrawTextLayout(
                     new System.Numerics.Vector2((float)PaddingX, (float)Math.Round(i * LineHeight)),
                     layout, _brush!);

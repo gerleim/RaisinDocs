@@ -370,6 +370,9 @@ public sealed class TextPresenterWindow : Window
                 if (!_layouts.TryGetValue(i, out var layout))
                 {
                     layout = _dwrite!.CreateTextLayout(_lines[i], _format!, size.Width - PaddingX * 2, LineHeight);
+                    // The canvas wraps in LayoutEngine and hands over final visual lines, so
+                    // wrapping again here would re-flow text that is already laid out.
+                    layout.WordWrapping = Vortice.DirectWrite.WordWrapping.NoWrap;
                     _layouts[i] = layout;
                     built++;
                 }

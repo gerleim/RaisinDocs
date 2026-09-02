@@ -22,6 +22,7 @@ public partial class App : Application
             e.Args.Contains("--presenter") ? new PresenterPrototypeWindow() :
             e.Args.Contains("--textpresenter") ? TextPresenterWindow.Open(file, AutoSpeed(e.Args)) :
             e.Args.Contains("--seam") ? SeamComparisonWindow.Open(file) :
+            e.Args.Contains("--handoff") ? HandoffWindow.Open(file, e.Args.Contains("--sweep")) :
             new MainWindow(file);
 
         MainWindow = window;

@@ -298,6 +298,25 @@ Amplifying the residual 6x shows faint outlines around glyph edges and nothing e
 glyphs, no doubled edges, no structural disagreement. What is left is a small difference in
 antialiasing weight.
 
+**Treat the exact figures above as indicative, not settled.** Two faults were found in the
+harness afterwards:
+
+- **DirectWrite was re-wrapping the text.** `CreateTextLayout` takes a maximum width and wraps
+  inside it by default, while the `FormattedText` it was being compared against had no
+  `MaxTextWidth` and did not wrap at all. Any line long enough to wrap had its tail clipped,
+  because the layout was given a maximum height of one line. `WordWrapping.NoWrap` is also the
+  correct setting for the presenter proper: the canvas wraps in `LayoutEngine` and hands the
+  renderer visual lines that are already final, so wrapping again would re-flow finished text.
+- **The capture reads the desktop.** `CopyFromScreen` returns whatever is on screen at those
+  coordinates, so anything covering the window is measured instead. It shows up as a near
+  uniform shift - close to 100% of pixels differing a little and almost none differing a lot -
+  and it is not reliably avoidable while sharing a desktop. The sweep now checks the captured
+  background against the theme colour and refuses to report numbers when they disagree.
+
+The qualitative findings hold: alignment is exact, ClearType versus greyscale was the whole
+disagreement, and the amplified difference image shows glyph edges rather than displaced text.
+The decimals do not, and the A/B on a real gesture is what settles it anyway.
+
 **So the seam is workable and C3 proceeds as planned.** The always-on presenter, which would
 have dissolved the seam by never handing back, is not forced on us.
 
