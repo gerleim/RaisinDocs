@@ -100,7 +100,7 @@ public sealed class ReplayWindow : Window
             Foreground = Brushes.Gainsboro,
             FontFamily = new System.Windows.Media.FontFamily("Consolas"),
             Margin = new Thickness(8, 4, 8, 4),
-            Text = "presenter ON (F9) - F8 cycles text antialiasing mode",
+            Text = "presenter ON (F9), F7 opaque lines, F8 text mode (Auto follows F7)",
         };
 
         _surface = new ReplaySurface();
@@ -669,8 +669,13 @@ public sealed class ReplayWindow : Window
         /// </remarks>
         internal enum TextMode
         {
-            /// <summary>Matches WPF. Both sides render through a transparent cache, where
-            /// ClearType is unavailable, so both are greyscale at DirectWrite's own gamma.</summary>
+            /// <summary>
+            /// Follow the canvas. Opaque line visuals mean WPF has an opaque surface to
+            /// rasterise against and uses ClearType, so the textures are opaque and ClearType
+            /// too; transparent means greyscale on both sides. Matching how the other side
+            /// rasterises is the only thing that makes a handoff invisible.
+            /// </summary>
+            Auto,
             GreyscaleDefault,
             GreyscaleGamma22,
             ClearTypeDefault,
@@ -684,7 +689,7 @@ public sealed class ReplayWindow : Window
         /// <summary>Switches mode and drops the textures, so they are rebuilt the new way.</summary>
         public TextMode CycleTextMode()
         {
-            _textMode = (_textMode + 1) % 4;
+            _textMode = (_textMode + 1) % 5;
             _dropTextures = true;
             return Mode;
         }
@@ -740,17 +745,32 @@ public sealed class ReplayWindow : Window
         private IDWriteRenderingParams? _renderParams;
         private int _paramsMode = -1;
 
+        /// <summary>Whether line textures should be opaque, for the mode in force.</summary>
+        private bool OpaqueTextures => Mode switch
+        {
+            TextMode.Auto => DocsCanvas.OpaqueLineVisuals,
+            TextMode.ClearTypeDefault or TextMode.ClearTypeGamma22 => true,
+            _ => false,
+        };
+
         /// <summary>Sets antialiasing and gamma for the current text mode.</summary>
         private void ApplyTextMode()
         {
             var mode = Mode;
 
-            _d2d!.TextAntialiasMode =
-                mode is TextMode.ClearTypeGamma22 or TextMode.ClearTypeDefault
-                    ? Vortice.Direct2D1.TextAntialiasMode.Cleartype
-                    : Vortice.Direct2D1.TextAntialiasMode.Grayscale;
+            bool clearType = mode switch
+            {
+                TextMode.Auto => DocsCanvas.OpaqueLineVisuals,
+                TextMode.ClearTypeGamma22 or TextMode.ClearTypeDefault => true,
+                _ => false,
+            };
 
-            if (_paramsMode == (int)mode) return;
+            _d2d!.TextAntialiasMode = clearType
+                ? Vortice.Direct2D1.TextAntialiasMode.Cleartype
+                : Vortice.Direct2D1.TextAntialiasMode.Grayscale;
+
+            // Auto is resolved against a flag that can change, so it is never cached.
+            if (mode != TextMode.Auto && _paramsMode == (int)mode) return;
             _paramsMode = (int)mode;
 
             _renderParams?.Dispose();
@@ -817,18 +837,28 @@ public sealed class ReplayWindow : Window
                 int h = (int)Math.Ceiling(bounds.Height) + 2;
                 if (w <= 0 || h <= 0 || w > 8192 || h > 8192) continue;
 
+                bool opaque = OpaqueTextures;
+
                 ID2D1Bitmap1? bitmap = null;
                 try
                 {
+                    // An opaque texture is what lets ClearType be used at all: it needs to know
+                    // what is behind a glyph, and an alpha channel means it does not. It also
+                    // removes the second blend - glyphs antialiased against nothing and then
+                    // composited over the background - which is the extra softness transparent
+                    // caching produces on both sides.
                     bitmap = _d2d.CreateBitmap(new Vortice.Mathematics.SizeI(w, h), IntPtr.Zero, 0,
                         new BitmapProperties1(
                             new Vortice.DCommon.PixelFormat(Format.B8G8R8A8_UNorm,
-                                Vortice.DCommon.AlphaMode.Premultiplied),
+                                opaque ? Vortice.DCommon.AlphaMode.Ignore
+                                       : Vortice.DCommon.AlphaMode.Premultiplied),
                             96, 96, BitmapOptions.Target));
 
                     _d2d.Target = bitmap;
                     _d2d.BeginDraw();
-                    _d2d.Clear(new Color4(0f, 0f, 0f, 0f));
+                    _d2d.Clear(opaque
+                        ? new Color4(0x1E / 255f, 0x1E / 255f, 0x1E / 255f, 1f)
+                        : new Color4(0f, 0f, 0f, 0f));
 
                     ApplyTextMode();
 
