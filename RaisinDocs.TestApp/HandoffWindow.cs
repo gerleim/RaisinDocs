@@ -282,25 +282,32 @@ public sealed class HandoffWindow : Window
         _handingBack = true;
         _presenting = false;
 
-        var sw = Stopwatch.StartNew();
+        double was = _wpf.Offset;
         _offset = _d2d.Offset;
         _wpf.Offset = _offset;
         _wpf.InvalidateVisual();
-        Log($"HAND BACK at offset {_offset:F1}");
-
-        Dispatcher.BeginInvoke(DispatcherPriority.Loaded, () =>
-        {
-            Log($"  hide surface {sw.Elapsed.TotalMilliseconds:F1}ms after hand back, " +
-                $"presenting={_presenting}");
-            // A new gesture may have started while this was queued, in which case the surface
-            // is wanted after all.
-            if (!_presenting)
-            {
-                _d2d.Hide();
-            }
-            _handingBack = false;
-        });
+        _handBackTicks = 0;
+        _handBackClock = Stopwatch.StartNew();
+        Log($"HAND BACK at offset {_offset:F1} (WPF was showing {was:F1}, " +
+            $"{Math.Abs(_offset - was):F0}px stale)");
     }
+
+    /// <summary>
+    /// Render ticks counted since a hand-back, before the surface is allowed to go.
+    /// </summary>
+    /// <remarks>
+    /// WPF is not updated during a gesture, so when the presenter finishes it is still showing
+    /// wherever the scroll began - up to a whole coast away. Setting its offset and then hiding
+    /// the surface on a queued callback uncovered it before its new frame had reached the
+    /// screen, so the text jumped back to the old position for a few frames.
+    ///
+    /// CompositionTarget.Rendering fires before each render pass, so counting a few of those
+    /// waits for actual frames, rather than for a dispatcher priority that says nothing about
+    /// what has been presented.
+    /// </remarks>
+    private int _handBackTicks;
+    private Stopwatch? _handBackClock;
+    private const int HandBackTicks = 3;
 
     /// <summary>WPF's own scrolling, used when the presenter is switched off.</summary>
     private void OnFrame(object? sender, EventArgs e)
@@ -308,6 +315,19 @@ public sealed class HandoffWindow : Window
         if (_presenting)
         {
             if (_d2d.IsIdle) HandBack();
+            return;
+        }
+
+        if (_handingBack)
+        {
+            // The surface keeps covering WPF until WPF has genuinely drawn the new offset.
+            if (++_handBackTicks >= HandBackTicks)
+            {
+                _d2d.Hide();
+                _handingBack = false;
+                Log($"  surface hidden after {_handBackTicks} render ticks, " +
+                    $"{_handBackClock?.Elapsed.TotalMilliseconds ?? 0:F1}ms");
+            }
             return;
         }
 
