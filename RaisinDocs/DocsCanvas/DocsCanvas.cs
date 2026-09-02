@@ -309,6 +309,21 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider, IDocsC
     public bool ShowWhitespace => _showWhitespace;
 
     public IDocsLogger? Logger { get; set; }
+
+    /// <summary>
+    /// Records scroll cadence to %LOCALAPPDATA%\RaisinDocs\scroll.log: one line per gesture
+    /// with frame and paint intervals, pixel steps and per-piece costs.
+    /// </summary>
+    /// <remarks>
+    /// Defaults to whether RAISINDOCS_SCROLL_DIAG is set. Set it before the canvas is built -
+    /// from Application.OnStartup, not a window's Loaded - because the canvas wires its
+    /// counters up in its constructor.
+    /// </remarks>
+    public static bool ScrollDiagnostics
+    {
+        get => ScrollDiag.Enabled;
+        set => ScrollDiag.Enabled = value;
+    }
     internal DocsFormattingBar? FormattingBar { get; set; }
     internal FindBarController? FindBar { get; set; }
 

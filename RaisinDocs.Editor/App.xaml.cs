@@ -8,6 +8,22 @@ namespace RaisinDocs.Editor;
 public partial class App : Application
 {
     public static readonly IDocsLogger Logger = new FileLogger();
+
+    /// <summary>Switches the editor accepts ahead of the file to open.</summary>
+    internal const string ScrollDiagSwitch = "--scroll-diag";
+
+    protected override void OnStartup(StartupEventArgs e)
+    {
+        // Here rather than in a window's Loaded: the canvas wires its scroll counters up in
+        // its constructor, which runs during InitializeComponent, before Loaded fires.
+        foreach (var arg in e.Args)
+        {
+            if (string.Equals(arg, ScrollDiagSwitch, StringComparison.OrdinalIgnoreCase))
+                DocsCanvas.ScrollDiagnostics = true;
+        }
+
+        base.OnStartup(e);
+    }
 }
 
 internal class FileLogger : IDocsLogger
