@@ -20,9 +20,18 @@ public partial class App : Application
         Window window =
             e.Args.Contains("--scrollproto") ? new ScrollPrototypeWindow() :
             e.Args.Contains("--presenter") ? new PresenterPrototypeWindow() :
+            e.Args.Contains("--textpresenter") ? TextPresenterWindow.Open(file, AutoSpeed(e.Args)) :
             new MainWindow(file);
 
         MainWindow = window;
         window.Show();
+    }
+
+    /// <summary>--speed=N sets the text presenter sweep speed in pixels a second.</summary>
+    private static double AutoSpeed(string[] args)
+    {
+        string? arg = args.FirstOrDefault(a => a.StartsWith("--speed="));
+        return arg != null && double.TryParse(arg.AsSpan("--speed=".Length), out double v)
+            ? v : 1200;
     }
 }

@@ -226,6 +226,46 @@ approach existed to avoid.
 That is the decision now on the table: pay for a second text renderer for the scrolling case,
 or keep the gains from A and B and accept WPF's cadence.
 
+### C2: the presenter draws text, and it is cheap
+
+`RaisinDocs.TestApp --textpresenter [--speed=N]`. Direct2D and DirectWrite drawing the report's
+lines straight into the paced swapchain, no capture anywhere. Whole viewport redrawn every
+frame at the exact offset:
+
+```
+present  median 3.57ms (280/s)  p99 3.64ms  over 1.5x median 0.0%
+draw     median 0.14ms  p99 0.23ms  max 0.29ms
+per line 3.4us   lines/frame 43   layouts built/frame 0.21
+```
+
+| drawing one line | cost |
+|---|---|
+| WPF, live `OnRender` | 28.9 us |
+| WPF, compositing a cached `BitmapCache` visual | 8.6 us |
+| **DirectWrite, drawn fresh** | **3.4 us** |
+
+**Drawing every line from scratch is cheaper than WPF compositing bitmaps it had already
+rasterised.** A frame costs 0.14 ms of a 3.57 ms budget - 4%, with 25x headroom - and the
+cadence is the prototype's, unchanged by doing real work: 280 a second, not one frame late.
+
+Held at 6000 px/s and at 20000 px/s, far faster than any real fling. Layout construction, the
+one thing a fast scroll adds, rises to 3.6 layouts a frame at 20000 px/s and changes nothing:
+draw stays at 0.18 ms.
+
+**This removes the ring buffer.** C4 existed because a fling outruns any captured texture and
+new strips would have to be rendered into it. There is no texture to run off: every frame is
+drawn fresh at its own offset, so a fling is the same work as a crawl. The seam and airspace
+remain; the hardest piece of the design does not.
+
+It also reopens sub-pixel scrolling, which was abandoned twice. Both failures were WPF's: over
+live text each line grid-fits independently so the spacing wriggles, and over cached bitmaps a
+fractional translate resamples and blurs. Neither applies to one Direct2D pass placing all
+lines at fractional offsets. Unproven, but worth retrying once the seam works.
+
+What C2 has **not** covered, and what the cost will grow by: this is one text format, no word
+wrap, and none of the tables, images, colour spans, selection or search highlights the canvas
+draws. The headroom is large but the pipeline is not yet real.
+
 ### How it was proved
 
 Phase 1 of the pre-buffering work paid for itself by answering one question cheaply before
