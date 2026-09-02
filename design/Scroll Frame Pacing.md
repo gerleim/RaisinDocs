@@ -266,6 +266,46 @@ What C2 has **not** covered, and what the cost will grow by: this is one text fo
 wrap, and none of the tables, images, colour spans, selection or search highlights the canvas
 draws. The headroom is large but the pipeline is not yet real.
 
+### C3: the seam can be invisible
+
+`RaisinDocs.TestApp --seam`. The same 24 lines, Segoe UI 16, drawn once by WPF and once by
+Direct2D at the same positions, both captured from the composed desktop - not through
+RenderTargetBitmap, which would compare against software rasterisation that never reaches the
+screen.
+
+**The two paths already agree on where glyphs go.** Best alignment over a +/-3px search is
+dx=0, dy=0: DirectWrite and WPF place the lines identically, with no offset to correct.
+
+They disagreed on how glyphs are *rasterised*, and it was one setting. WPF draws ClearType;
+Direct2D was drawing greyscale, because ClearType needs an opaque target and the swapchain
+bitmap had been created with a premultiplied alpha channel. Measured on glyph edge pixels:
+99.6% carried colour fringing on the WPF side, 0% on ours.
+
+`AlphaMode.Ignore` plus `TextAntialiasMode.Cleartype`, then a sweep of rendering mode, gamma,
+contrast and ClearType level against the WPF capture:
+
+| | mean abs diff | pixels differing by >8 | by >64 | max |
+|---|---|---|---|---|
+| greyscale (default) | 2.79 | 8.73% | 4.12% | 139 |
+| ClearType | 0.80 | 7.74% | 0.12% | 67 |
+| ClearType, Natural, gamma 2.2 | **0.54** | **3.16%** | **0.12%** | **67** |
+
+Gamma plateaus at 2.2 - identical results through 3.0 - and contrast changes nothing at all.
+`NaturalSymmetric` is worse than `Natural`. The system's own per-monitor ClearType parameters
+ranked mid-pack rather than best, so WPF is not simply using those either.
+
+Amplifying the residual 6x shows faint outlines around glyph edges and nothing else: no shifted
+glyphs, no doubled edges, no structural disagreement. What is left is a small difference in
+antialiasing weight.
+
+**So the seam is workable and C3 proceeds as planned.** The always-on presenter, which would
+have dissolved the seam by never handing back, is not forced on us.
+
+Two things this does not yet cover. It is one font at one size in one colour, unwrapped and
+unstyled - bold, italic, code, colour spans and tables all still have to agree. And a static
+diff cannot say whether a single-frame change of that magnitude is perceptible at the moment of
+handoff; that needs an A/B on a real gesture.
+
 ### How it was proved
 
 Phase 1 of the pre-buffering work paid for itself by answering one question cheaply before

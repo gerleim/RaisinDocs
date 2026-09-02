@@ -21,6 +21,7 @@ public partial class App : Application
             e.Args.Contains("--scrollproto") ? new ScrollPrototypeWindow() :
             e.Args.Contains("--presenter") ? new PresenterPrototypeWindow() :
             e.Args.Contains("--textpresenter") ? TextPresenterWindow.Open(file, AutoSpeed(e.Args)) :
+            e.Args.Contains("--seam") ? SeamComparisonWindow.Open(file) :
             new MainWindow(file);
 
         MainWindow = window;
