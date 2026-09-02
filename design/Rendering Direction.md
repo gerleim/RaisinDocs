@@ -159,6 +159,35 @@ not native milcore. No `bilinearspan.lib`, no pinned MSVC, no LTCG. That makes A
 than the earlier estimate - but it is still a forked runtime assembly, and the roadmap gives no
 sign of an upstream fix to converge with.
 
+## Testing the 60Hz theory, and refuting it
+
+The prediction was that WPF's pacing constants are sized for a 16.7ms period and fall apart at
+3.571ms, so the stutter should vanish on a slower panel. Measured by animating the scroll offset
+and timing the interval between animation steps, on three panels of this machine:
+
+| panel | period | WPF animation step | late |
+|---|---|---|---|
+| 100Hz | 10.000 ms | 3.83 ms — **261/s** | 7.7 - 12.7% |
+| 144Hz | 6.944 ms | 3.73 ms — **268/s** | 6.0 - 20.0% |
+| 280Hz | 3.571 ms | 3.57 ms — **280/s** | **0.3 - 4.7%** |
+
+**The theory is wrong.** The 280Hz panel has the cleanest cadence of the three by a wide margin.
+
+What the numbers show instead is that **the animation clock runs at about 280 a second on every
+monitor** - the primary display's rate, whichever panel the window is on. On the 100Hz and 144Hz
+panels that is 2.6x and 1.9x faster than the display can show, and those are exactly the panels
+where frames arrive unevenly.
+
+That matches `_adjustedRefreshRate = FindNextPrime(displayRefreshRate + 5)` operating on one
+global refresh rate rather than a per-window one. On a mixed-refresh desktop, every window that
+is not on the primary display is paced to the wrong clock by construction.
+
+**Two limits on this result.** It measures the render side: the interval between animation steps,
+not frames confirmed on the glass. On the 280Hz panel the clock ticks a clean 280 a second while
+FrameView counted 140 reaching the display out of 228 presented - so the loss there happens after
+the animation tick, in the blt-model present path, and this test cannot see it. Closing that gap
+needs FrameView or PresentMon, not instrumentation inside the process.
+
 ## A. Patch WPF
 
 Feasible, with real caveats.

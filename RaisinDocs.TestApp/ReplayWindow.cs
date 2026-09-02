@@ -62,6 +62,12 @@ public sealed class ReplayWindow : Window
     /// <summary>Dump the display list at a few offsets and exit. See DumpAsync.</summary>
     internal static bool Dump;
 
+    /// <summary>
+    /// Scroll the canvas at a fixed rate with the presenter off, and report WPF's own frame
+    /// cadence. See AutoScroll.
+    /// </summary>
+    internal static bool AutoScrollTest;
+
     private readonly DocsEditor _editor;
     private readonly TextBlock _readout;
     private readonly ReplaySurface _surface;
@@ -186,7 +192,11 @@ public sealed class ReplayWindow : Window
         ContentRendered += async (_, _) =>
         {
             Log($"content height {Canvas.ContentHeight:F0}px");
+            LogRefreshRate();
             CompositionTarget.Rendering += OnFrame;
+
+            if (AutoScrollTest) StartAutoScroll();
+
             if (Dump)
             {
                 try { await DumpAsync(); }
@@ -349,9 +359,120 @@ public sealed class ReplayWindow : Window
         MeasureWpfFrame();
     }
 
+    /// <summary>Scroll offset, animated, so WPF drives the frames rather than we do.</summary>
+    public static readonly DependencyProperty ScrollProbeProperty =
+        DependencyProperty.Register(nameof(ScrollProbe), typeof(double), typeof(ReplayWindow),
+            new PropertyMetadata(0.0, (d, e) =>
+            {
+                var w = (ReplayWindow)d;
+                w.Canvas.ViewOffset = (double)e.NewValue;
+                w.Canvas.InvalidateVisual();
+            }));
+
+    public double ScrollProbe
+    {
+        get => (double)GetValue(ScrollProbeProperty);
+        set => SetValue(ScrollProbeProperty, value);
+    }
+
+    private Stopwatch? _autoScroll;
+
+    /// <summary>
+    /// Scrolls by animating a property, and reports how evenly WPF's frames arrive.
+    /// </summary>
+    /// <remarks>
+    /// An animation, deliberately, and not a loop that invalidates from inside
+    /// CompositionTarget.Rendering: invalidating there makes WPF schedule another pass and raise
+    /// the event again, so it free-runs at 800 to 1200 a second and measures nothing. An
+    /// animation is also the case WPF's interlocked presentation exists to pace, so it is the
+    /// fair test of it.
+    ///
+    /// The canvas's own ScrollController is bypassed for the same reason in reverse: it caps
+    /// repaints at DisplayRefresh.MaxFps, which is 144, and that is our ceiling rather than
+    /// WPF's.
+    /// </remarks>
+    private void StartAutoScroll()
+    {
+        _handoffEnabled = false;
+        _readout.Text = "auto-scroll cadence test — WPF only, animated";
+
+        double span = Math.Min(Math.Max(0, Canvas.ContentHeight - Canvas.ActualHeight), 12000);
+        var anim = new System.Windows.Media.Animation.DoubleAnimation
+        {
+            From = 0,
+            To = span,
+            Duration = new Duration(TimeSpan.FromSeconds(8)),
+            AutoReverse = true,
+            RepeatBehavior = System.Windows.Media.Animation.RepeatBehavior.Forever,
+        };
+
+        BeginAnimation(ScrollProbeProperty, anim);
+        _autoScroll = Stopwatch.StartNew();
+        Log($"AUTOSCROLL start, animating 0..{span:F0}px, presenter off");
+
+        var stop = new System.Windows.Threading.DispatcherTimer
+        {
+            Interval = TimeSpan.FromSeconds(18),
+        };
+        stop.Tick += (_, _) => { stop.Stop(); Log("AUTOSCROLL done"); Close(); };
+        stop.Start();
+    }
+
+    // --- the display this is running on -----------------------------------------------------
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]
+    private struct DEVMODE
+    {
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)] public string dmDeviceName;
+        public short dmSpecVersion, dmDriverVersion, dmSize, dmDriverExtra;
+        public int dmFields, dmPositionX, dmPositionY, dmDisplayOrientation, dmDisplayFixedOutput;
+        public short dmColor, dmDuplex, dmYResolution, dmTTOption, dmCollate;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)] public string dmFormName;
+        public short dmLogPixels;
+        public int dmBitsPerPel, dmPelsWidth, dmPelsHeight, dmDisplayFlags, dmDisplayFrequency;
+        public int dmICMMethod, dmICMIntent, dmMediaType, dmDitherType;
+        public int dmReserved1, dmReserved2, dmPanningWidth, dmPanningHeight;
+    }
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]
+    private struct MONITORINFOEX
+    {
+        public int cbSize;
+        public int mL, mT, mR, mB, wL, wT, wR, wB, dwFlags;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)] public string szDevice;
+    }
+
+    [DllImport("user32.dll", CharSet = CharSet.Auto)]
+    private static extern bool EnumDisplaySettings(string? device, int mode, ref DEVMODE dm);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr MonitorFromWindow(IntPtr hwnd, uint flags);
+
+    [DllImport("user32.dll", CharSet = CharSet.Auto)]
+    private static extern bool GetMonitorInfo(IntPtr monitor, ref MONITORINFOEX info);
+
+    private void LogRefreshRate()
+    {
+        string? device = null;
+        IntPtr mon = MonitorFromWindow(new WindowInteropHelper(this).Handle, 2);
+        if (mon != IntPtr.Zero)
+        {
+            var info = new MONITORINFOEX { cbSize = Marshal.SizeOf<MONITORINFOEX>() };
+            if (GetMonitorInfo(mon, ref info)) device = info.szDevice;
+        }
+
+        var dm = new DEVMODE { dmSize = (short)Marshal.SizeOf<DEVMODE>() };
+        if (EnumDisplaySettings(device, -1, ref dm) && dm.dmDisplayFrequency > 0)
+            Log($"display {device} {dm.dmPelsWidth}x{dm.dmPelsHeight} @ {dm.dmDisplayFrequency}Hz " +
+                $"(period {1000.0 / dm.dmDisplayFrequency:F3}ms)");
+        else
+            Log("display refresh rate unavailable");
+    }
+
     private readonly List<double> _wpfGaps = new(1024);
     private readonly Stopwatch _wpfTick = Stopwatch.StartNew();
     private double _lastWpfOffset = -1;
+    private int _ticks, _movingTicks;
 
     /// <summary>
     /// The canvas's own frame cadence while it is scrolling itself.
@@ -364,20 +485,31 @@ public sealed class ReplayWindow : Window
     /// presenter's Present gaps. Treat the WPF figure as the best case: a render that never
     /// reached the screen still counts here, and one that reached it late counts as on time.
     /// </remarks>
+    /// <summary>
+    /// The interval between animation updates - WPF's animation clock, in effect.
+    /// </summary>
+    /// <remarks>
+    /// Measured between changes of the scroll offset, not between CompositionTarget.Rendering
+    /// ticks. The event free-runs at 500 a second here because the property callback
+    /// invalidates and WPF then schedules another pass, so its rate says nothing; how often the
+    /// animated value actually advances is the pacing loop's real output.
+    ///
+    /// This is still a render-side measurement, not a display-side one. A frame counted here may
+    /// never have reached the glass, and one that arrived late counts as on time - so treat these
+    /// figures as WPF's best case.
+    /// </remarks>
     private void MeasureWpfFrame()
     {
         double offset = Canvas.ViewOffset;
-        double dt = _wpfTick.Elapsed.TotalMilliseconds;
-        _wpfTick.Restart();
-
-        bool moving = _lastWpfOffset >= 0 && Math.Abs(offset - _lastWpfOffset) > 0.01;
+        if (Math.Abs(offset - _lastWpfOffset) <= 0.01) return;
         _lastWpfOffset = offset;
 
-        if (!moving) { if (_wpfGaps.Count < 40) _wpfGaps.Clear(); return; }
+        double dt = _wpfTick.Elapsed.TotalMilliseconds;
+        _wpfTick.Restart();
         if (dt <= 0 || dt > 500) return;
 
         _wpfGaps.Add(dt);
-        if (_wpfGaps.Count < 240) return;
+        if (_wpfGaps.Count < 300) return;
 
         var g = _wpfGaps.ToArray();
         Array.Sort(g);
@@ -385,12 +517,12 @@ public sealed class ReplayWindow : Window
         int late = 0;
         foreach (var x in _wpfGaps) if (x > med * 1.5) late++;
 
-        Log($"  [wpf] render median {med:F2}ms ({1000 / med:F0}/s), " +
-            $"p99 {g[(int)(g.Length * 0.99)]:F2}ms, " +
-            $"over 1.5x median {100.0 * late / _wpfGaps.Count:F1}%  " +
-            $"(render passes, not confirmed display changes)");
+        Log($"  [wpf] animation step median {med:F2}ms ({1000 / med:F0}/s), " +
+            $"p99 {g[(int)(g.Length * 0.99)]:F2}ms, max {g[^1]:F2}ms, " +
+            $"over 1.5x median {100.0 * late / _wpfGaps.Count:F1}%");
         _wpfGaps.Clear();
     }
+
 
     // --- placement -------------------------------------------------------------------------
 
