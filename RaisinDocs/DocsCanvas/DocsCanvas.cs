@@ -1305,6 +1305,15 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider, IDocsC
 
     protected override void OnRender(DrawingContext dc)
     {
+        // Straight through when diagnostics are off. The lambda below captures dc, so handing
+        // it to Time would allocate a closure and a delegate on every render - hundreds a
+        // second during a scroll - for Time to discard.
+        if (!ScrollDiag.Enabled)
+        {
+            OnRenderCore(dc);
+            return;
+        }
+
         ScrollDiag.Time("canvas-onrender", () => OnRenderCore(dc));
     }
 
