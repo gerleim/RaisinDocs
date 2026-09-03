@@ -1,6 +1,7 @@
 # Opaque Line Visuals
 
-Status: **scoped**, not started. Written 2026-09-03, on branch `opaque-line-visuals`.
+Status: **phase 1 done and confirmed**. Written 2026-09-03, on branch
+`opaque-line-visuals`; phase 1 on `opaque-line-visuals-phase1`.
 
 Restores ClearType to the editor's text, which has been greyscale antialiased since
 `337e009` without anyone intending it.
@@ -181,6 +182,38 @@ phase 5 commits.
    Measure a drag: lines rebuilt per frame must stay in low single digits.
 5. **Delete the flag.** `OnRender`'s remaining job is the canvas fill behind the paragraph
    gaps, and the overlay.
+
+## Phase 1 result
+
+**Confirmed 2026-09-03: the text is sharper with the fill on.** The gate is passed and
+phases 2 to 5 are worth building.
+
+Judged in the editor under `--render-diag`, flipping F8 on a stationary page, against the
+F9 direct-draw path as a reference for what ClearType looked like before `337e009`.
+
+### Noticed while comparing: the two paths space their lines differently
+
+Flipping F9 shifts which lines sit a pixel further apart. Nothing is wrong, and phase 1 did
+not cause it - it has been true since `337e009` and is only visible now that the two paths
+can be switched between.
+
+A line height of 21.28 px cannot be honoured on a whole-pixel grid, so both paths alternate
+21 and 22 px gaps and average out correctly. They differ in *which* lines get the extra
+pixel, because they round at different points:
+
+| | gaps between consecutive lines (px) |
+|---|---|
+| cached | 21, **22**, 21, 21, 21, **22**, 21, 21, **22** |
+| direct | **22**, 21, 21, 21, **22**, 21, 21, **22**, 21 |
+
+The cached path rounds the line's origin (`RenderingContext.cs:279`) and draws the text at
+local zero inside the visual; the direct path draws at the unrounded position and lets WPF
+snap the glyph run, which comes out rounded about the baseline instead. Over twelve lines
+they disagree on three.
+
+Both are stable as the view scrolls, since the offset is an integer, so this is not the
+spacing breathe that killed sub-pixel scrolling in `design/Sub-Pixel Scrolling.md`. It does
+mean F9 is a reference for *antialiasing*, not for layout: do not use it to judge spacing.
 
 ## Things that will bite
 
