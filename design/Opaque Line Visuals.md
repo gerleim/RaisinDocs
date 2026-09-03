@@ -1,7 +1,8 @@
 # Opaque Line Visuals
 
-Status: **phase 1 done and confirmed**. Written 2026-09-03, on branch
-`opaque-line-visuals`; phase 1 on `opaque-line-visuals-phase1`.
+Status: **phases 1 to 3 done and confirmed**; phase 4 next. Written 2026-09-03, on branch
+`opaque-line-visuals`, with a branch per phase stacked on it
+(`opaque-line-visuals-phase1`, `-phase2`, `-phase3`).
 
 Restores ClearType to the editor's text, which has been greyscale antialiased since
 `337e009` without anyone intending it.
@@ -183,7 +184,9 @@ phase 5 commits.
 5. **Delete the flag.** `OnRender`'s remaining job is the canvas fill behind the paragraph
    gaps, and the overlay.
 
-## Phase 1 result
+## Results so far
+
+### Phase 1
 
 **Confirmed 2026-09-03: the text is sharper with the fill on.** The gate is passed and
 phases 2 to 5 are worth building.
@@ -214,6 +217,29 @@ they disagree on three.
 Both are stable as the view scrolls, since the offset is an integer, so this is not the
 spacing breathe that killed sub-pixel scrolling in `design/Sub-Pixel Scrolling.md`. It does
 mean F9 is a reference for *antialiasing*, not for layout: do not use it to judge spacing.
+
+### Phases 2 and 3
+
+**Confirmed 2026-09-03 by eye, and by the direct-draw path being indistinguishable from the
+cached one.** Code, colour block, inline colour and table tints all survive the fill; the
+table's borders and separators draw over it. Judged with F8 both ways and F9 both ways, on a
+document with a fenced code block, coloured spans and a table.
+
+Both phases changed the shipping path as well as the F8 one, since the tints moved into
+`DrawLineContent`, which the cached and direct paths both call. So the regression surface was
+the default render, not just the flag, and it was checked with F8 off as well as on.
+
+UI tests: 26 of 904 failing before and after, all pre-existing and none in rendering. Model
+tests: 4 of 999, likewise.
+
+**That the two paths now look the same is the pass condition, not a reason to prefer direct
+draw.** Direct draw always had ClearType, since it paints onto the already-opaque canvas -
+what these phases did was bring the cached path up to it. The cached path remains
+substantially faster while scrolling: 140.2 displayed fps against 119.3, and 8.6 µs a line
+against 28.9 (`337e009`, measured with FrameView).
+
+The one visible difference left between them is the line-spacing distribution described
+above, which predates all of this.
 
 ## Things that will bite
 
