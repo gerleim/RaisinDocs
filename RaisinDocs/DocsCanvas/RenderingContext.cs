@@ -259,6 +259,27 @@ public partial class DocsCanvas
             return false;
         }
 
+        /// <summary>
+        /// A line's height in whole pixels: from its own snapped origin to the next line's.
+        /// </summary>
+        /// <remarks>
+        /// Backgrounds have to use this rather than the effective line height. A line box is
+        /// 21.28 px at the default font, and a cached visual is placed at a rounded origin, so
+        /// a rect of 21.28 either stops short of the next line - leaving a hairline of
+        /// untinted canvas through a code block - or laps over it and doubles the alpha there.
+        /// Rounding both ends of the same line makes each one end exactly where the next
+        /// begins.
+        ///
+        /// A paragraph gap is not swallowed by this: the height is derived from the line's own
+        /// box, not from the distance to the next line, so a gap stays the canvas colour as it
+        /// does today.
+        /// </remarks>
+        private double SnappedLineHeight(int i, VisualLine vl)
+        {
+            double y = _layout.LineYPositions[i];
+            return Math.Round(y + _layout.GetEffectiveLineHeight(vl)) - Math.Round(y);
+        }
+
         /// <summary>Renders one line into its own cached visual. False if it already had one.</summary>
         private bool BuildLineVisual(int i)
         {
@@ -289,7 +310,7 @@ public partial class DocsCanvas
                 // line shows the canvas fill, which is this same brush.
                 if (_docsCanvas.OpaqueLineVisuals)
                     dc.DrawRectangle(_rendering.Palette.Background, null,
-                        new Rect(0, 0, _rendering.ActualWidth, _layout.GetEffectiveLineHeight(vl)));
+                        new Rect(0, 0, _rendering.ActualWidth, SnappedLineHeight(i, vl)));
 
                 DrawLineContent(dc, i, vl, y, y);
             }
@@ -412,9 +433,10 @@ public partial class DocsCanvas
             double viewTop = effectiveScroll;
             double viewBottom = effectiveScroll + _rendering.ActualHeight;
 
-            DrawCodeBlockBackgrounds(dc, effectiveScroll, viewTop, viewBottom);
-            DrawColorBlockBackgrounds(dc, effectiveScroll, viewTop, viewBottom);
-            DrawInlineColorBackgrounds(dc, effectiveScroll, viewTop, viewBottom);
+            // The code, colour block and inline colour tints used to be three passes here.
+            // They draw from DrawLineContent now, under the opaque fill rather than beneath
+            // it - see design/Opaque Line Visuals.md phase 2. Table backgrounds are phase 3
+            // and still run from here.
             if (_visual.IsVisual)
                 _table.TableRenderer.DrawTableBackgrounds(dc, effectiveScroll, viewTop, viewBottom);
 
@@ -537,6 +559,15 @@ public partial class DocsCanvas
         private void DrawLineContent(DrawingContext dc, int i, VisualLine vl,
             double lineY, double scrollY)
         {
+            // Before the vl.Length guard, so an empty line inside a code or colour block is
+            // still tinted. Drawn from here rather than from OnRender because an opaque line
+            // visual covers anything painted beneath it - and because both render paths call
+            // this method, so one copy serves them both.
+            double bgH = SnappedLineHeight(i, vl);
+            DrawCodeBlockBackground(dc, vl, lineY, scrollY, bgH);
+            DrawColorBlockBackground(dc, vl, lineY, scrollY, bgH);
+            DrawInlineColorBackground(dc, vl, lineY, scrollY, bgH);
+
             if (vl.Length > 0)
             {
                 if (vl.Group != null)
@@ -1407,122 +1438,95 @@ public partial class DocsCanvas
             dc.DrawRectangle(barBrush, null, new Rect(barX, barY, barWidth, barHeight));
         }
 
-        private void DrawCodeBlockBackgrounds(DrawingContext dc, double effectiveScroll,
-            double viewTop, double viewBottom)
+        /// <summary>Tints one line of a fenced or indented code block.</summary>
+        private void DrawCodeBlockBackground(DrawingContext dc, VisualLine vl,
+            double lineY, double scrollY, double bgH)
         {
-            double contentWidth = _rendering.ActualWidth;
+            if (vl.BlockKind is not BlockKind.FencedCodeLine and not BlockKind.IndentedCodeLine) return;
 
-            for (int i = FirstLineAt(viewTop); i < _layout.VisualLines.Count; i++)
-            {
-                var vl = _layout.VisualLines[i];
-                if (vl.BlockKind is not BlockKind.FencedCodeLine and not BlockKind.IndentedCodeLine) continue;
-
-                double lineH = _rendering.Measure.GetLineHeight(vl.BlockKind);
-                double lineY = _layout.LineYPositions[i];
-                if (lineY + lineH < viewTop) continue;
-                if (lineY > viewBottom) break;
-
-                dc.DrawRectangle(_rendering.Palette.CodeBackground, null,
-                    new Rect(0, lineY - effectiveScroll, contentWidth, lineH));
-            }
+            dc.DrawRectangle(_rendering.Palette.CodeBackground, null,
+                new Rect(0, lineY - scrollY, _rendering.ActualWidth, bgH));
         }
 
-        private void DrawColorBlockBackgrounds(DrawingContext dc, double effectiveScroll,
-            double viewTop, double viewBottom)
+        /// <summary>Tints one line of a block carrying a colour tag's background.</summary>
+        private void DrawColorBlockBackground(DrawingContext dc, VisualLine vl,
+            double lineY, double scrollY, double bgH)
         {
             if (_content.ParsedBlocks == null) return;
-            double contentWidth = _rendering.ActualWidth;
+            if (vl.BlockIndex >= _content.ParsedBlocks.Count) return;
 
-            for (int i = FirstLineAt(viewTop); i < _layout.VisualLines.Count; i++)
+            var parsed = _content.ParsedBlocks[vl.BlockIndex];
+            if (parsed.Kind is BlockKind.FencedCodeLine or BlockKind.IndentedCodeLine) return;
+            if (parsed.BlockColor?.Background is not { } bg) return;
+
+            dc.DrawRectangle(_docsCanvas.GetCachedBrush(40, bg.R, bg.G, bg.B), null,
+                new Rect(0, lineY - scrollY, _rendering.ActualWidth, bgH));
+        }
+
+        /// <summary>Tints the spans of one line that carry an inline colour background.</summary>
+        private void DrawInlineColorBackground(DrawingContext dc, VisualLine vl,
+            double lineY, double scrollY, double bgH)
+        {
+            if (_content.ParsedBlocks == null) return;
+
+            string blockText;
+            ParsedBlock parsed;
+            BlockVisualMap? map;
+            IReadOnlyList<ColorSpan>? colorSpans;
+
+            if (vl.Group != null)
             {
-                var vl = _layout.VisualLines[i];
-                if (vl.BlockIndex >= _content.ParsedBlocks.Count) continue;
-                var parsed = _content.ParsedBlocks[vl.BlockIndex];
-                if (parsed.Kind is BlockKind.FencedCodeLine or BlockKind.IndentedCodeLine) continue;
-                if (parsed.BlockColor?.Background is not { } bg) continue;
+                var group = vl.Group;
+                blockText = group.JoinedText;
+                parsed = group.JoinedParsed;
+                map = group.JoinedMap;
+                colorSpans = map.ColorSpans;
+            }
+            else
+            {
+                if (vl.BlockIndex >= _content.ParsedBlocks.Count) return;
+                parsed = _content.ParsedBlocks[vl.BlockIndex];
+                if (parsed.Kind is BlockKind.FencedCodeLine or BlockKind.IndentedCodeLine) return;
+                blockText = _doc.Document.GetBlockText(vl.BlockIndex);
+                map = _visual.IsVisual ? _content.VisualMaps?[vl.BlockIndex] : null;
+                colorSpans = _visual.IsVisual ? map?.ColorSpans : parsed.ColorSpans;
+            }
 
-                double lineH = _layout.GetEffectiveLineHeight(vl);
-                double lineY = _layout.LineYPositions[i];
-                if (lineY + lineH < viewTop) continue;
-                if (lineY > viewBottom) break;
+            if (colorSpans == null) return;
+            if (_visual.IsVisual && parsed.Table != null && parsed.TableRow != null) return;
 
+            int hardBreakClip = MarkdownParser.IsTrailingHardBreak(parsed, blockText)
+                ? MarkdownParser.GetContentEnd(blockText) - 1
+                : int.MaxValue;
+            int vlEnd = vl.StartOffset + vl.Length;
+
+            foreach (var cs in colorSpans)
+            {
+                if (cs.Background == null) continue;
+                int csEnd = Math.Min(cs.Start + cs.Length, hardBreakClip);
+                if (csEnd <= vl.StartOffset || cs.Start >= vlEnd) continue;
+
+                int rangeStart = Math.Max(cs.Start, vl.StartOffset);
+                int rangeEnd = Math.Min(csEnd, vlEnd);
+
+                double x1 = _rendering.MeasureRangeWidth(blockText, vl.StartOffset, rangeStart - vl.StartOffset,
+                    parsed.Runs, parsed.Kind, map);
+                double x2 = _rendering.MeasureRangeWidth(blockText, vl.StartOffset, rangeEnd - vl.StartOffset,
+                    parsed.Runs, parsed.Kind, map);
+
+                if (map?.ReplacementPrefix != null && vl.StartOffset == 0)
+                {
+                    double prefixW = _rendering.Measure.MeasureReplacementPrefix(map.ReplacementPrefix!, map.PrefixMeasureKind);
+                    x1 += prefixW;
+                    x2 += prefixW;
+                }
+
+                double w = x2 - x1;
+                if (w <= 0) continue;
+
+                var bg = cs.Background.Value;
                 dc.DrawRectangle(_docsCanvas.GetCachedBrush(40, bg.R, bg.G, bg.B), null,
-                    new Rect(0, lineY - effectiveScroll, contentWidth, lineH));
-            }
-        }
-
-        private void DrawInlineColorBackgrounds(DrawingContext dc, double effectiveScroll,
-            double viewTop, double viewBottom)
-        {
-            if (_content.ParsedBlocks == null) return;
-
-            for (int i = FirstLineAt(viewTop); i < _layout.VisualLines.Count; i++)
-            {
-                var vl = _layout.VisualLines[i];
-                double lineH = _layout.GetEffectiveLineHeight(vl);
-                double lineY = _layout.LineYPositions[i];
-                if (lineY + lineH < viewTop) continue;
-                if (lineY > viewBottom) break;
-
-                string blockText;
-                ParsedBlock parsed;
-                BlockVisualMap? map;
-                IReadOnlyList<ColorSpan>? colorSpans;
-
-                if (vl.Group != null)
-                {
-                    var group = vl.Group;
-                    blockText = group.JoinedText;
-                    parsed = group.JoinedParsed;
-                    map = group.JoinedMap;
-                    colorSpans = map.ColorSpans;
-                }
-                else
-                {
-                    if (vl.BlockIndex >= _content.ParsedBlocks.Count) continue;
-                    parsed = _content.ParsedBlocks[vl.BlockIndex];
-                    if (parsed.Kind is BlockKind.FencedCodeLine or BlockKind.IndentedCodeLine) continue;
-                    blockText = _doc.Document.GetBlockText(vl.BlockIndex);
-                    map = _visual.IsVisual ? _content.VisualMaps?[vl.BlockIndex] : null;
-                    colorSpans = _visual.IsVisual ? map?.ColorSpans : parsed.ColorSpans;
-                }
-
-                if (colorSpans == null) continue;
-                if (_visual.IsVisual && parsed.Table != null && parsed.TableRow != null) continue;
-
-                int hardBreakClip = MarkdownParser.IsTrailingHardBreak(parsed, blockText)
-                    ? MarkdownParser.GetContentEnd(blockText) - 1
-                    : int.MaxValue;
-                int vlEnd = vl.StartOffset + vl.Length;
-
-                foreach (var cs in colorSpans)
-                {
-                    if (cs.Background == null) continue;
-                    int csEnd = Math.Min(cs.Start + cs.Length, hardBreakClip);
-                    if (csEnd <= vl.StartOffset || cs.Start >= vlEnd) continue;
-
-                    int rangeStart = Math.Max(cs.Start, vl.StartOffset);
-                    int rangeEnd = Math.Min(csEnd, vlEnd);
-
-                    double x1 = _rendering.MeasureRangeWidth(blockText, vl.StartOffset, rangeStart - vl.StartOffset,
-                        parsed.Runs, parsed.Kind, map);
-                    double x2 = _rendering.MeasureRangeWidth(blockText, vl.StartOffset, rangeEnd - vl.StartOffset,
-                        parsed.Runs, parsed.Kind, map);
-
-                    if (map?.ReplacementPrefix != null && vl.StartOffset == 0)
-                    {
-                        double prefixW = _rendering.Measure.MeasureReplacementPrefix(map.ReplacementPrefix!, map.PrefixMeasureKind);
-                        x1 += prefixW;
-                        x2 += prefixW;
-                    }
-
-                    double w = x2 - x1;
-                    if (w <= 0) continue;
-
-                    var bg = cs.Background.Value;
-                    dc.DrawRectangle(_docsCanvas.GetCachedBrush(40, bg.R, bg.G, bg.B), null,
-                        new Rect(DocsCanvas._padding + x1, lineY - effectiveScroll, w, lineH));
-                }
+                    new Rect(DocsCanvas._padding + x1, lineY - scrollY, w, bgH));
             }
         }
 
