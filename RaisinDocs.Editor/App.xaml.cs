@@ -12,6 +12,12 @@ public partial class App : Application
     /// <summary>Switches the editor accepts ahead of the file to open.</summary>
     internal const string ScrollDiagSwitch = "--scroll-diag";
 
+    /// <summary>
+    /// Logs what each stage of a layout pass costs, which is what a keystroke pays for.
+    /// See %LOCALAPPDATA%\RaisinDocs\layout.log.
+    /// </summary>
+    internal const string LayoutDiagSwitch = "--layout-diag";
+
     protected override void OnStartup(StartupEventArgs e)
     {
         // Here rather than in a window's Loaded: the canvas wires its scroll counters up in
@@ -20,6 +26,8 @@ public partial class App : Application
         {
             if (string.Equals(arg, ScrollDiagSwitch, StringComparison.OrdinalIgnoreCase))
                 DocsCanvas.ScrollDiagnostics = true;
+            else if (string.Equals(arg, LayoutDiagSwitch, StringComparison.OrdinalIgnoreCase))
+                DocsCanvas.LayoutDiagnostics = true;
         }
 
         base.OnStartup(e);

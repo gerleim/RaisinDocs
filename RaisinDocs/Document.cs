@@ -1059,8 +1059,17 @@ public class Document
     }
 
     // Merge paragraph continuation blocks
-    internal void MergeParagraphContinuations(List<ParsedBlock> parsedBlocks)
+    /// <summary>
+    /// Folds lazy paragraph continuations into their parent block. True if anything moved.
+    /// </summary>
+    /// <remarks>
+    /// The return value exists so the caller can skip re-parsing. Every mutation here is
+    /// inside the branch that found continuations, so when none were found the blocks and the
+    /// parse handed in are both still current.
+    /// </remarks>
+    internal bool MergeParagraphContinuations(List<ParsedBlock> parsedBlocks)
     {
+        bool merged = false;
         // Process in reverse to avoid index shifting issues when removing
         int i = parsedBlocks.Count - 1;
         while (i >= 0)
@@ -1142,9 +1151,12 @@ public class Document
 
                 // Update the parent block to clear Children since they're merged
                 parsedBlocks[i] = parsed with { Children = null };
+                merged = true;
             }
 
             i--;
         }
+
+        return merged;
     }
 }
