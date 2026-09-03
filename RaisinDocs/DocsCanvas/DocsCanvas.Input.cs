@@ -350,6 +350,11 @@ public partial class DocsCanvas
                 e.Handled = true;
                 return;
 
+            case Key.F10 when !shift && !ctrl && !alt && EnableRenderPathToggle:
+                ToggleOpaqueLineVisuals();
+                e.Handled = true;
+                return;
+
             case Key.F6:
                 if (!shift && !ctrl && !alt && FormattingBar?.ActivateKeyboardNavigation() == true)
                 {

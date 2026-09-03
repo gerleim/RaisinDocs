@@ -12,6 +12,12 @@ public partial class App : Application
     /// <summary>Switches the editor accepts ahead of the file to open.</summary>
     internal const string ScrollDiagSwitch = "--scroll-diag";
 
+    /// <summary>
+    /// Turns on F9 (cached visuals against direct draw) and F10 (opaque line visuals), and
+    /// the badge that says which is active. See design/Opaque Line Visuals.md.
+    /// </summary>
+    internal const string RenderDiagSwitch = "--render-diag";
+
     protected override void OnStartup(StartupEventArgs e)
     {
         // Here rather than in a window's Loaded: the canvas wires its scroll counters up in
@@ -20,6 +26,8 @@ public partial class App : Application
         {
             if (string.Equals(arg, ScrollDiagSwitch, StringComparison.OrdinalIgnoreCase))
                 DocsCanvas.ScrollDiagnostics = true;
+            else if (string.Equals(arg, RenderDiagSwitch, StringComparison.OrdinalIgnoreCase))
+                DocsCanvas.EnableRenderPathToggle = true;
         }
 
         base.OnStartup(e);

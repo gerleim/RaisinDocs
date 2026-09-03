@@ -1153,6 +1153,31 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider, IDocsC
         InvalidateVisual();
     }
 
+    /// <summary>
+    /// Fills each cached line visual with the theme background before drawing its text, which
+    /// is what ClearType needs to run. Phase 1 of design/Opaque Line Visuals.md.
+    /// </summary>
+    /// <remarks>
+    /// A BitmapCache rasterises into a Pbgra32 surface, and ClearType cannot filter against a
+    /// background it does not know, so every line cached since 337e009 has been greyscale
+    /// antialiased. An opaque fill gives it one back.
+    ///
+    /// Deliberately incomplete, and off by default. Anything OnRender paints beneath the
+    /// content layer - code and colour block backgrounds, table tints, selection, search
+    /// highlights - is covered by the fill and disappears while this is on. Moving those in is
+    /// phases 2 to 4; this phase only answers whether the text sharpens at all, which is the
+    /// gate on the rest being worth building.
+    /// </remarks>
+    internal bool OpaqueLineVisuals { get; private set; }
+
+    internal void ToggleOpaqueLineVisuals()
+    {
+        if (!EnableRenderPathToggle) return;
+        OpaqueLineVisuals = !OpaqueLineVisuals;
+        InvalidateRenderCache();   // the fill is baked into the bitmap, so every line rebuilds
+        InvalidateVisual();
+    }
+
     internal readonly ContainerVisual ContentLayer = new();
 
     /// <summary>Moves <see cref="ContentLayer"/> by the scroll offset.</summary>

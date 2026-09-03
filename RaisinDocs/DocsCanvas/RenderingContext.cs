@@ -282,6 +282,15 @@ public partial class DocsCanvas
             {
                 // lineY == scrollY draws the line at the origin of its own visual.
                 double y = _layout.LineYPositions[i];
+
+                // Before the text, so ClearType has a known background to filter against.
+                // Full canvas width, because that is what the passes this will eventually
+                // absorb cover; the gap a fractional line height leaves against the next
+                // line shows the canvas fill, which is this same brush.
+                if (_docsCanvas.OpaqueLineVisuals)
+                    dc.DrawRectangle(_rendering.Palette.Background, null,
+                        new Rect(0, 0, _rendering.ActualWidth, _layout.GetEffectiveLineHeight(vl)));
+
                 DrawLineContent(dc, i, vl, y, y);
             }
 
@@ -505,7 +514,10 @@ public partial class DocsCanvas
         /// <summary>Says which of the two paths is drawing. Only shown when F9 is enabled.</summary>
         private void DrawModeBadge(DrawingContext dc)
         {
-            string text = _docsCanvas.CachedLineVisuals ? "F9: cached visuals" : "F9: direct draw";
+            string text = (_docsCanvas.CachedLineVisuals ? "F9: cached visuals" : "F9: direct draw")
+                + (_docsCanvas.CachedLineVisuals
+                    ? _docsCanvas.OpaqueLineVisuals ? "  |  F10: opaque (ClearType)" : "  |  F10: transparent (greyscale)"
+                    : "");
             var ft = new FormattedText(text, CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
                 TextMeasurer.NormalTypeface, 11, _rendering.Palette.Syntax, _rendering.Measure.DpiScale);
             double x = _rendering.ActualWidth - ft.Width - 12;
