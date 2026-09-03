@@ -26,8 +26,46 @@ internal static class ScrollDiag
     /// shortcut; DocsCanvas.ScrollDiagnostics is the public way in, and a host that sets it
     /// must do so before the canvas is constructed.
     /// </remarks>
-    internal static bool Enabled { get; set; } =
+    internal static bool Enabled
+    {
+        get => _enabled;
+        set
+        {
+            if (_enabled == value) return;
+            _enabled = value;
+            if (value)
+                Log($"scroll diagnostics enabled - {Environment.ProcessPath}");
+        }
+    }
+
+    private static bool _enabled =
         !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("RAISINDOCS_SCROLL_DIAG"));
+
+    /// <summary>Where the gesture log is written.</summary>
+    internal static readonly string LogPath = System.IO.Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "RaisinDocs", "scroll.log");
+
+    /// <summary>
+    /// Appends one line, stamped. Used for the gesture summaries and for the marker written
+    /// when diagnostics come on.
+    /// </summary>
+    /// <remarks>
+    /// The marker exists so the file distinguishes three situations that otherwise all look
+    /// like an empty log: diagnostics never switched on, switched on but no gesture ever
+    /// ended, and switched on with gestures that were not worth recording.
+    /// </remarks>
+    internal static void Log(string text)
+    {
+        try
+        {
+            System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(LogPath)!);
+            System.IO.File.AppendAllText(LogPath,
+                $"{DateTime.Now:HH:mm:ss.fff}  {text}{Environment.NewLine}");
+        }
+        catch (System.IO.IOException) { }
+        catch (UnauthorizedAccessException) { }
+    }
 
     private static readonly object Lock = new();
     private static readonly Dictionary<string, (double Max, double Total, int Count)> Costs = new();
