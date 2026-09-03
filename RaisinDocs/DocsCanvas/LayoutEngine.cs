@@ -58,10 +58,13 @@ public partial class DocsCanvas
             _content.ParsedBlocks ??= MarkdownParser.Parse(i => _doc.GetBlockText(i), _doc.BlockCount, _rendering.SyntaxHighlighter);
 
             // Merge paragraph lazy continuations in the Document (logical structure per CommonMark spec)
-            _doc.Document.MergeParagraphContinuations(_content.ParsedBlocks);
-
-            // After merging, always rebuild parsedBlocks to reflect current block structure and content
-            _content.ParsedBlocks = MarkdownParser.Parse(i => _doc.GetBlockText(i), _doc.BlockCount, _rendering.SyntaxHighlighter);
+            // Only re-parse if that actually moved something. The rebuild was unconditional,
+            // which made every keystroke parse the whole document twice: measured at 52 ms a
+            // character on a 2895-block report, against 26 for one parse. A merge needs the
+            // rebuild because it changes the block structure underneath the parse; no merge
+            // leaves both the blocks and the parse above still current.
+            if (_doc.Document.MergeParagraphContinuations(_content.ParsedBlocks))
+                _content.ParsedBlocks = MarkdownParser.Parse(i => _doc.GetBlockText(i), _doc.BlockCount, _rendering.SyntaxHighlighter);
             _content.VisualMaps = null;
 
             // Build visual block structure for visual mode rendering
