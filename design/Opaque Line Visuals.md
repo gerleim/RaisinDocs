@@ -236,10 +236,21 @@ mean F9 is a reference for *antialiasing*, not for layout: do not use it to judg
 - **Empty lines currently draw nothing.** `DrawLineContent` is guarded by `if (vl.Length > 0)`
   (`RenderingContext.cs:525`), so an empty line's visual is empty. Under the opaque scheme it
   must still paint its background, or blank lines punch holes in a code block's tint.
-- **The F9 direct-draw path draws its backgrounds from `OnRender`.** It is the only honest
-  way to compare the two paths, and it is what produced the 140-vs-119 measurement. Either it
-  keeps its own copies of the moved code or it retires with the flag. Prefer keeping both
-  through phase 4 and deciding at phase 5.
+- **Move the drawing into `DrawLineContent`, not into `BuildLineVisual`.** Both paths already
+  call `DrawLineContent` - the cached one inside the visual (`RenderingContext.cs:295`), the
+  direct one from `OnRender` (`:447`) - so anything moved there serves both, and the
+  `OnRender` pass it came from is then deleted rather than duplicated. Put a background next
+  to the fill in `BuildLineVisual` instead and it works on the cached path while silently
+  stranding F9. The fill itself is the one thing that does belong in `BuildLineVisual`: the
+  direct path draws onto the already-opaque canvas and has ClearType without it.
+- **The F9 path is a measurement rig, not a shipping path.** It is unreachable without
+  `--render-diag`, and it is what produced the 140-vs-119 displayed-frame figure and the
+  ClearType baseline phase 1 was judged against. Kept for free if the rule above is followed,
+  so there is no retire-or-duplicate decision to make at phase 5 after all.
+- **Do not delete the `OnRender` background passes until their replacement is shared.**
+  Leaving both live double-draws the alpha tints on the direct path and darkens them; the
+  cached path hides the duplicate under its opaque fill and looks fine, so this will not show
+  up unless F9 is checked.
 - **Print has its own duplicate of the table border drawing** (`DocsCanvas.Print.cs:359`-`:407`,
   against `_printPalette`). Printing does not go through line visuals and is unaffected, but
   the table decomposition must not be refactored in a way that leaves the two copies to
