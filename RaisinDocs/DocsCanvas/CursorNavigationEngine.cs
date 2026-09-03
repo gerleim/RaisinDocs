@@ -399,9 +399,21 @@ public partial class DocsCanvas
 
     // --- Key handlers (navigation) ---
 
-    internal void HandleLeft(bool shift, bool ctrl = false)
+    /// <summary>
+    /// Ends the current undo group, then makes sure the layout the caller is about to read is
+    /// current. Sealing raises <c>ContentChanged</c>, which invalidates the layout and drops the
+    /// parsed blocks; a handler that sealed and then read the visual lines would be reading lines
+    /// left over from before the seal, with no parse behind them.
+    /// </summary>
+    private void SealAndEnsureLayout()
     {
         _canvas.SealAndStopTimer();
+        _layout.ComputeLayout();
+    }
+
+    internal void HandleLeft(bool shift, bool ctrl = false)
+    {
+        SealAndEnsureLayout();
         if (ctrl)
         {
             if (!shift && _doc.Document.HasSelection)
@@ -434,7 +446,7 @@ public partial class DocsCanvas
 
     internal void HandleRight(bool shift, bool ctrl = false)
     {
-        _canvas.SealAndStopTimer();
+        SealAndEnsureLayout();
         if (ctrl)
         {
             if (!shift && _doc.Document.HasSelection)
@@ -467,7 +479,7 @@ public partial class DocsCanvas
 
     internal void HandleHome(bool shift, bool ctrl)
     {
-        _canvas.SealAndStopTimer();
+        SealAndEnsureLayout();
         if (ctrl)
         {
             _doc.Document.CursorBlock = 0;
@@ -512,7 +524,7 @@ public partial class DocsCanvas
 
     internal void HandleEnd(bool shift, bool ctrl)
     {
-        _canvas.SealAndStopTimer();
+        SealAndEnsureLayout();
         _canvas.CursorAtLineEnd = false;
         if (ctrl)
         {
@@ -574,7 +586,7 @@ public partial class DocsCanvas
 
     internal void HandleUp(bool shift)
     {
-        _canvas.SealAndStopTimer();
+        SealAndEnsureLayout();
         int vli = CursorToVisualLineIndex();
         if (vli > 0)
         {
@@ -588,7 +600,7 @@ public partial class DocsCanvas
 
     internal void HandleDown(bool shift)
     {
-        _canvas.SealAndStopTimer();
+        SealAndEnsureLayout();
         int vli = CursorToVisualLineIndex();
         if (vli < _layout.VisualLines.Count - 1)
         {
@@ -602,7 +614,7 @@ public partial class DocsCanvas
 
     internal void HandlePageUp(bool shift)
     {
-        _canvas.SealAndStopTimer();
+        SealAndEnsureLayout();
         int vli = CursorToVisualLineIndex();
         double x = CursorXInVisualLine(vli);
         double cursorY = _layout.LineYPositions[vli];
@@ -621,7 +633,7 @@ public partial class DocsCanvas
 
     internal void HandlePageDown(bool shift)
     {
-        _canvas.SealAndStopTimer();
+        SealAndEnsureLayout();
         int vli = CursorToVisualLineIndex();
         double x = CursorXInVisualLine(vli);
         double cursorY = _layout.LineYPositions[vli];
