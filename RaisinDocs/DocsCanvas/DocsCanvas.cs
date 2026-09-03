@@ -324,6 +324,22 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider, IDocsC
         get => ScrollDiag.Enabled;
         set => ScrollDiag.Enabled = value;
     }
+
+    /// <summary>
+    /// Records what each stage of a layout pass costs to
+    /// %LOCALAPPDATA%\RaisinDocs\layout.log: one line per twenty passes, with the average
+    /// and worst of parse, structure, maps and wrapping.
+    /// </summary>
+    /// <remarks>
+    /// Typing invalidates layout, and layout redoes every stage over the whole document, so
+    /// this is what a slow keystroke is made of. Unlike the scroll log it can be turned on at
+    /// any time - nothing is wired up in the constructor.
+    /// </remarks>
+    public static bool LayoutDiagnostics
+    {
+        get => LayoutDiag.Enabled;
+        set => LayoutDiag.Enabled = value;
+    }
     internal DocsFormattingBar? FormattingBar { get; set; }
     internal FindBarController? FindBar { get; set; }
 

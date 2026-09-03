@@ -55,7 +55,14 @@ public partial class DocsCanvas
             _layout.LayoutDirty = false;
             _rendering.Measure.EnsureMeasured(_canvas);
 
+            // Stage timings for LayoutDiag. Every stage below runs over the whole document on
+            // every keystroke, so which of them dominates is worth knowing on a real document
+            // rather than a synthetic one. Mark is a timestamp and an early return when
+            // diagnostics are off; there is no closure per stage.
+            long _t = System.Diagnostics.Stopwatch.GetTimestamp();
+
             _content.ParsedBlocks ??= MarkdownParser.Parse(i => _doc.GetBlockText(i), _doc.BlockCount, _rendering.SyntaxHighlighter);
+            _t = LayoutDiag.Mark("parse", _t);
 
             // Merge paragraph lazy continuations in the Document (logical structure per CommonMark spec)
             // Only re-parse if that actually moved something. The rebuild was unconditional,
@@ -64,7 +71,11 @@ public partial class DocsCanvas
             // rebuild because it changes the block structure underneath the parse; no merge
             // leaves both the blocks and the parse above still current.
             if (_doc.Document.MergeParagraphContinuations(_content.ParsedBlocks))
+            {
                 _content.ParsedBlocks = MarkdownParser.Parse(i => _doc.GetBlockText(i), _doc.BlockCount, _rendering.SyntaxHighlighter);
+                LayoutDiag.NoteReparse();
+            }
+            _t = LayoutDiag.Mark("merge", _t);
             _content.VisualMaps = null;
 
             // Build visual block structure for visual mode rendering
@@ -72,6 +83,7 @@ public partial class DocsCanvas
             {
                 _content.VisualBlockStructure = VisualBlockStructure.Build(_content.ParsedBlocks, i => _doc.GetBlockText(i));
             }
+            _t = LayoutDiag.Mark("structure", _t);
 
             if (_visual.IsVisual && _content.VisualMaps == null)
             {
@@ -84,11 +96,16 @@ public partial class DocsCanvas
                 for (int i = 0; i < _doc.BlockCount; i++)
                     _content.VisualMaps.Add(BlockVisualMap.Compute(_content.ParsedBlocks[i], getText(i), _content.ParsedBlocks, getText, parentMap));
             }
+            _t = LayoutDiag.Mark("maps", _t);
 
             ComputeLayoutCore(_rendering.ActualWidth - DocsCanvas._padding * 2);
+            _t = LayoutDiag.Mark("wrap", _t);
 
             if (_visual.IsVisual)
                 _visual.ClampCursorAwayFromHidden();
+            LayoutDiag.Mark("clamp", _t);
+
+            LayoutDiag.EndPass(_doc.BlockCount, _layout.VisualLines.Count);
         }
 
         private void BuildParagraphGroups()
