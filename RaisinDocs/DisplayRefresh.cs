@@ -6,48 +6,17 @@ using System.Windows.Media;
 namespace RaisinDocs;
 
 /// <summary>
-/// Resolves how often the scroll animation should repaint.
+/// Reports the refresh rate of the display a window is on.
 /// </summary>
 /// <remarks>
-/// We do not synchronise to vsync, and do not need to: WPF presents through DWM, which
-/// composites and presents at the refresh rate itself, so no rasterisation rate we pick can
-/// tear. Vsync matters here only as a ceiling. Frames rasterised faster than the compositor
-/// presents are discarded, and that waste is not free — it is taken from the UI thread, which
-/// runs the message pump. Overshooting it is what made Windows coalesce queued WM_MOUSEWHEEL
-/// messages into single multi-notch deltas and turned smooth scrolling into bursts.
-///
-/// <see cref="CompositionTarget.Rendering"/> cannot be used as the clock instead: repainting
-/// from inside its handler makes WPF schedule another pass and raise it again, so it free-runs
-/// well past the display rate rather than tracking it.
-///
-/// Scrolling is continuous motion of high-contrast text, which is exactly where the eye
-/// resolves frame rate, so it takes the full ceiling rather than the 60 that suits a panel of
-/// static text.
+/// This once chose how often the scroll animation repainted. It no longer does: painting once
+/// per composed frame takes its cadence from the compositor's own frame stamp, which already
+/// carries the display's rate, and needs no rate of its own. What survives is the ability to
+/// name the panel - so a gesture measured on one monitor can be told apart from a gesture
+/// measured on another, which the diagnostic log records rather than infers.
 /// </remarks>
 internal static class DisplayRefresh
 {
-    /// <summary>
-    /// Ceiling for the repaint target, in frames per second.
-    /// </summary>
-    /// <remarks>
-    /// WPF's compositor is not capped at 60Hz on .NET 8 / Windows 11 — it will present at the
-    /// panel's rate when the UI thread is free. It only reaches that when the thread is free,
-    /// though, so past some point rasterising faster costs frames rather than gaining them.
-    ///
-    /// Measured with FrameView on a 280Hz panel, which presents on exact refresh divisors -
-    /// 280, 140, 93, 70. Raising this to 400 so the panel's own rate governed produced a
-    /// median of 140 displayed frames a second anyway, with a third of frames at 280, a
-    /// quarter at 93 or worse, and 13% of presents dropped: an uneven mixture, and wasted
-    /// work, for the same median.
-    ///
-    /// 144 lands on every second refresh of a 280Hz panel, so the rate is even and few
-    /// presents are discarded. Evenness beats peak here - an uneven coast is far more
-    /// noticeable than a slower one - but the trade has only been measured on this panel, and
-    /// the sustained-140 versus mixed-280 comparison is a one-constant experiment for anyone
-    /// who wants to revisit it.
-    /// </remarks>
-    internal const int MaxFps = 144;
-
     private const int ENUM_CURRENT_SETTINGS = -1;
     private const uint MONITOR_DEFAULTTONEAREST = 2;
 
@@ -101,7 +70,22 @@ internal static class DisplayRefresh
     /// Capping to a faster panel than the window occupies reintroduces exactly the overshoot
     /// this throttle exists to avoid.
     /// </remarks>
-    internal static int GetMonitorRefreshRate(Visual? visual)
+    internal static int GetMonitorRefreshRate(Visual? visual) => GetDisplay(visual).Hz;
+
+    /// <summary>
+    /// The device name and refresh rate of the display <paramref name="visual"/> is on.
+    /// </summary>
+    /// <remarks>
+    /// The name matters as much as the rate. A rate alone cannot show that a window has moved
+    /// to another panel, because the interesting failure - WPF continuing to pace to the
+    /// display it started on - produces the old rate on the new monitor, which is
+    /// indistinguishable from not having moved. The device name comes from the window handle,
+    /// so it says where the window is however WPF is pacing it.
+    ///
+    /// An empty name means the lookup fell back to the current display device, and the rate
+    /// that comes with it should not be trusted to describe this window.
+    /// </remarks>
+    internal static (string Device, int Hz) GetDisplay(Visual? visual)
     {
         string? device = null;
 
@@ -121,37 +105,8 @@ internal static class DisplayRefresh
         // when the visual is not yet attached to a window.
         var dm = new DEVMODE { dmSize = (short)Marshal.SizeOf(typeof(DEVMODE)) };
         if (EnumDisplaySettings(device, ENUM_CURRENT_SETTINGS, ref dm) && dm.dmDisplayFrequency > 0)
-            return dm.dmDisplayFrequency;
-        return 60;
+            return (device ?? string.Empty, dm.dmDisplayFrequency);
+        return (device ?? string.Empty, 60);
     }
 
-    /// <summary>
-    /// Seconds between repaints for the display <paramref name="visual"/> is on: the panel's
-    /// period times the smallest whole number of periods that stays within
-    /// <see cref="MaxFps"/>.
-    /// </summary>
-    /// <remarks>
-    /// A whole number of refresh periods, never a fraction. Capping the rate directly - one over
-    /// min(refresh, 144) - lands on an exact period only when the panel is at or below the cap.
-    /// On a 280Hz panel it gives 6.944ms against a 3.571ms period, which is 1.944 periods: every
-    /// repaint arrives 0.198ms short of the two-refresh boundary, the phase drifts a whole period
-    /// every eighteen frames or so, and a frame is doubled or dropped about eight times a second.
-    /// That is the jagged scroll.
-    ///
-    /// The cap was chosen believing 144 landed on every second refresh of a 280Hz panel. It does
-    /// not: half of 280 is 140.
-    ///
-    /// Choosing the divisor instead makes the interval exact on any panel - 140 on a 280Hz
-    /// display, 144 on a 144Hz one, 100 on a 100Hz one - and evenness matters more than peak
-    /// rate, because an uneven coast is far more visible than a slower one.
-    ///
-    /// Cheap enough to call once per gesture, which also picks up the window being dragged to
-    /// another monitor, or a mode change.
-    /// </remarks>
-    internal static double GetRepaintInterval(Visual? visual)
-    {
-        int refresh = Math.Max(1, GetMonitorRefreshRate(visual));
-        int periods = Math.Max(1, (int)Math.Ceiling(refresh / (double)MaxFps));
-        return periods / (double)refresh;
-    }
 }

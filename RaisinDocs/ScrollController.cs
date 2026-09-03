@@ -8,7 +8,7 @@ internal class ScrollController
 {
     private readonly Action _invalidateVisual;
     private readonly Func<double> _getMaxScroll;
-    private readonly Func<double> _getRepaintInterval;
+    private readonly Func<(string Device, int Hz)> _getDisplay;
     private readonly SmoothScroller _smoother;
 
     private double _offset;
@@ -58,16 +58,11 @@ internal class ScrollController
     // Windows sums their deltas - 276 notches arrived as 83 messages, half of them carrying
     // 2 to 12 notches, each becoming one oversized velocity impulse.
     //
-    // The physics still integrates on every tick and stays dt-correct; only the repaint is
-    // capped, which is all the display can show anyway. The spare time lets the message
-    // pump keep up so notches arrive one at a time.
-    //
-    // The cap is the display's own rate (see DisplayRefresh), not a fixed 60: scrolling is
-    // continuous motion, so every frame the panel can show is a frame worth drawing. Read
-    // once per gesture, which is cheap and picks up a monitor or mode change.
-
-    /// <summary>The display's own interval, before any allowance for how heavy the content is.</summary>
-    private double _displayInterval = 1.0 / 60;
+    // Painting once per composed frame is what stops that, and it needs no notion of the
+    // display's rate: the compositor's frame stamp already carries it. The interval this
+    // once computed from DisplayRefresh is gone with the wall-clock gate that read it; the
+    // refresh rate survives only as a label on a diagnostic line, so a gesture recorded on
+    // one monitor can be told from a gesture recorded on another.
 
     /// <summary>
     /// Rolling average of how many notches each wheel message carried. One is healthy.
@@ -114,6 +109,28 @@ internal class ScrollController
 
     private double _paintedPixel;
 
+    /// <summary>
+    /// Seconds per refresh of the display this gesture is on; zero if it could not be read.
+    /// </summary>
+    /// <remarks>
+    /// WPF does not pace a window to the panel it occupies. Measured with the window on a
+    /// 60Hz display while the app had started on a 280Hz one: composition frames arrived at
+    /// 320 to 357 a second and we painted 279 of them, so four in five were composed and
+    /// discarded before the panel could show them - 9.55 seconds of scrolling that collected
+    /// 46 gen0, 20 gen1 and 17 gen2 collections.
+    ///
+    /// So the frame stamp does not carry the display's rate, and pacing to it alone is not
+    /// enough. Painting no more than once per refresh period costs nothing visible - the panel
+    /// cannot show more - and removes the rest.
+    ///
+    /// Read once per gesture, which is cheap and picks up the window having been dragged to
+    /// another monitor since the last one.
+    /// </remarks>
+    private double _displayPeriod;
+
+    /// <summary>Time since the last painted frame, against <see cref="_displayPeriod"/>.</summary>
+    private double _sinceDisplayFrame;
+
     internal double Offset
     {
         get => _offset;
@@ -123,11 +140,11 @@ internal class ScrollController
     internal double EffectiveOffset => _offset + _smoother.Offset;
 
     internal ScrollController(Action invalidateVisual, Func<double> getMaxScroll,
-        Func<double>? getRepaintInterval = null)
+        Func<(string Device, int Hz)>? getDisplay = null)
     {
         _invalidateVisual = invalidateVisual;
         _getMaxScroll = getMaxScroll;
-        _getRepaintInterval = getRepaintInterval ?? (() => 1.0 / 60);
+        _getDisplay = getDisplay ?? (() => (string.Empty, 0));
         _smoother = new SmoothScroller(invalidateVisual);
 
         // Subscribed always and gated inside, so the flag can be set after construction
@@ -167,9 +184,12 @@ internal class ScrollController
         {
             _wheelCoasting = true;
             _wheelClock.Restart();
-            _displayInterval = _getRepaintInterval();
             _paintedPixel = Math.Round(_offset);
             _gestureSource = "wheel";
+
+            int hz = SafeDisplay().Hz;
+            _displayPeriod = hz > 0 ? 1.0 / hz : 0;
+            _sinceDisplayFrame = _displayPeriod;   // let the first frame paint at once
 
             CompositionTarget.Rendering += OnWheelFrame;
             _invalidateVisual();
@@ -216,6 +236,16 @@ internal class ScrollController
         // Reacts within a few messages, so a gesture that starts merging is caught during it,
         // and recovers just as quickly once messages arrive singly again.
         _notchesPerMessage = _notchesPerMessage * 0.8 + notches * 0.2;
+    }
+
+    /// <summary>
+    /// The display query, which must never be able to break a frame: it runs inside the
+    /// Rendering handler, where an exception would escape into the render loop.
+    /// </summary>
+    private (string Device, int Hz) SafeDisplay()
+    {
+        try { return _getDisplay(); }
+        catch (Exception ex) { return ("query failed: " + ex.GetType().Name, 0); }
     }
 
     private void OnWheelFrame(object? sender, EventArgs e)
@@ -286,9 +316,26 @@ internal class ScrollController
         // Only when the drawn image would differ, since the renderer rounds to whole pixels.
         // This does limit the decaying tail to one paint per pixel - about 38 a second at
         // 40px/s - which is the 1px stepping that sub-pixel scrolling was meant to cure.
+        //
+        // Capped at the panel's own rate as well. This is a wall-clock interval, which was
+        // wrong when it was the only gate - a repaint landed on whichever free-running tick
+        // first crossed the threshold, at a different phase every time. Here it only decides
+        // which composed frames to skip, and the frame stamp still decides when to paint, so
+        // the phase comes from the compositor rather than from the accumulator. The period is
+        // subtracted rather than zeroed to keep the average exact, and never banks arrears,
+        // so a slow patch cannot be followed by a burst.
+        _sinceDisplayFrame += dt;
+        bool due = _displayPeriod <= 0 || _sinceDisplayFrame >= _displayPeriod;
+
         double pixel = Math.Round(_offset);
-        if (pixel != _paintedPixel && (stop || newFrame))
+        if (pixel != _paintedPixel && (stop || (newFrame && due)))
         {
+            if (_displayPeriod > 0)
+            {
+                _sinceDisplayFrame -= _displayPeriod;
+                if (_sinceDisplayFrame > _displayPeriod) _sinceDisplayFrame = _displayPeriod;
+            }
+
             DiagPaint(pixel - _paintedPixel);
             _paintedPixel = pixel;
             _invalidateVisual();
@@ -314,16 +361,23 @@ internal class ScrollController
     /// </remarks>
     internal static bool Diagnostics => ScrollDiag.Enabled;
 
-    private static readonly string DiagPath = System.IO.Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "RaisinDocs", "scroll.log");
-
     private readonly List<double> _frameGaps = new(512);
     private readonly List<double> _paintGaps = new(512);
     private readonly List<double> _pixelSteps = new(512);
     private readonly Stopwatch _gestureClock = new();
     private double _sincePaint;
     private int _frames, _paints;
+
+    /// <summary>
+    /// The refresh rate of the display this gesture ran on, read once as it starts.
+    /// </summary>
+    /// <remarks>
+    /// Recorded rather than inferred from the measured cadence, because whether the cadence
+    /// matches the panel is the question a monitor-change investigation is asking: inferring
+    /// the panel from the cadence would assume the answer.
+    /// </remarks>
+    private int _gestureHz;
+    private string _gestureDevice = string.Empty;
 
     private int _gc0, _gc1, _gc2;
 
@@ -361,6 +415,16 @@ internal class ScrollController
         if (!_gestureClock.IsRunning)
         {
             _gestureClock.Restart();
+            // A display query must never be able to break a frame: this runs inside the
+            // Rendering handler, where an exception would escape into the render loop. The
+            // label is worth nothing next to that.
+            (_gestureDevice, _gestureHz) = SafeDisplay();
+
+            // Written as the gesture begins, not only when it ends. A gesture that starts and
+            // never finishes is the failure worth seeing, and until now it looked exactly like
+            // a gesture that never happened: both left the file empty.
+            ScrollDiag.Log($"{_gestureSource} gesture started on " +
+                $"{(_gestureDevice.Length > 0 ? _gestureDevice : "unknown display")} {_gestureHz}Hz");
             _gc0 = GC.CollectionCount(0);
             _gc1 = GC.CollectionCount(1);
             _gc2 = GC.CollectionCount(2);
@@ -382,7 +446,12 @@ internal class ScrollController
 
     private void DiagGestureEnd()
     {
-        if (!Diagnostics || _paints < 8) { DiagReset(); return; }
+        // Every gesture that ends is recorded, however short. A threshold here made three
+        // different situations - diagnostics off, gesture too small, gesture never ended -
+        // look identical in the file, and the one it discarded was the short drag on a slow
+        // panel, which is exactly what a monitor comparison needs. Summarise says "too few
+        // samples" where a median would be noise, which is the honest form of the same point.
+        if (!Diagnostics) { DiagReset(); return; }
 
         double seconds = _gestureClock.Elapsed.TotalSeconds;
         string frames = Summarise(_frameGaps, "composition frame");
@@ -401,9 +470,13 @@ internal class ScrollController
 
         try
         {
-            System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(DiagPath)!);
-            System.IO.File.AppendAllText(DiagPath,
+            System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(ScrollDiag.LogPath)!);
+            System.IO.File.AppendAllText(ScrollDiag.LogPath,
                 $"{DateTime.Now:HH:mm:ss.fff}  {_gestureSource} gesture {seconds:F2}s  " +
+                (_gestureHz > 0
+                    ? $"on {(_gestureDevice.Length > 0 ? _gestureDevice : "unknown display")} " +
+                      $"{_gestureHz}Hz  "
+                    : string.Empty) +
                 $"{_frames} ticks, {_paints} paints" + Environment.NewLine +
                 $"    {frames}" + Environment.NewLine +
                 $"    {paints}" + Environment.NewLine +
@@ -445,5 +518,7 @@ internal class ScrollController
         _gestureClock.Reset();
         _sincePaint = 0;
         _frames = _paints = 0;
+        _gestureHz = 0;
+        _gestureDevice = string.Empty;
     }
 }
