@@ -63,7 +63,8 @@ order.
 | inline colour backgrounds | `:1439` | **yes** |
 | selection | `:1514` | **yes** |
 | search highlights | `FindAndReplaceController.cs:243` | **yes** |
-| table backgrounds and borders | `TableRenderer.cs:80` | **no - whole-table geometry** |
+| table background and header tints | `TableRenderer.cs:80` | no - but trivially per-row |
+| table borders and separators | `TableRenderer.cs:131`-`:148` | **no - but need not move down at all** |
 | table rectangular selection | `RenderingContext.cs:1598` | no - whole-region |
 | blockquote bar | `:1383` | already inside `DrawLineContent` |
 
@@ -85,34 +86,53 @@ except `_paragraphGap` between paragraphs. Opaque line rects therefore cover the
 contiguously, and the paragraph gaps keep showing the canvas fill - the same colour they
 show today.
 
-## The two real problems
+## The two problems, one of which mostly dissolves
 
-### A. Tables are whole-table geometry
+### A. Tables: lines above, tints below
 
 `DrawTableBackgrounds` (`TableRenderer.cs:80`-`:150`) does not think in lines. It finds a
-table's line range and then draws:
+table's line range and then draws the table background over `tableY` → `tableBottom`, the
+header tint over the first row, an outer border rect around the whole table, a row separator
+at the top edge of every row after the first, and column separators as vertical lines from
+`yTop` to `yTop + tableH`, crossing every row.
 
-- the table background over `tableY` → `tableBottom`, all rows at once
-- the header tint over the first row
-- an outer border rect around the whole table
-- a row separator at `rowY`, the **top edge** of every row after the first
-- **column separators as vertical lines from `yTop` to `yTop + tableH`, crossing every row**
+Decomposing all of that per row is real work with many ways to look subtly wrong. It is also
+mostly unnecessary, because **only the fills need to be behind the text**. The lines never
+cross a glyph, so they can be drawn in a pass *after* the content layer and keep their
+whole-table geometry unchanged.
 
-The column separators are the piece that genuinely cannot survive as written: a vertical
-line crossing N opaque row visuals has to become N segments, one inside each row. So this
-becomes `DrawTableBackgroundForRow(row)`, drawing that row's slice of the table background,
-the header tint if it is the first row, its top separator if it is not, its own vertical
-column-separator segments, its left and right outer edges, and the top or bottom outer edge
-if it is the first or last row.
+That splits the method in two:
 
-This is the largest single piece and the one with the most ways to look subtly wrong:
-separators doubled or missing where rows join, column lines a pixel out between adjacent
-rows, the outer border broken at the seams.
+- **Per-row tints, into the line visual.** A row's slice of the table background, plus the
+  header tint on the first row. Both are a single `(rowY, rowH)` rect of `tableWidth` - no
+  cross-row geometry, no seams.
+- **The line geometry, unchanged, into the overlay.** Outer border rect, row separators,
+  column separators. The code moves as it stands; only the `DrawingContext` it writes to
+  changes, from `OnRender`'s to the `OverlayLayer`'s. The overlay already re-renders per
+  frame in screen coordinates with `effectiveScroll` applied, exactly as this pass does
+  today, so the cost is identical and no new layer is needed.
 
-One caveat to check rather than assume: a `_paragraphGap` inside a table would leave an
-untinted stripe under per-row decomposition where the whole-table rect covers it today.
-Tables should not contain empty blocks, so this is probably moot - but it is a test, not an
-assumption.
+**Clearance, measured** (2026-09-03, `FormattedText.BuildGeometry().Bounds` against
+`GetLineHeight`, which is `FormattedText("M").Height`):
+
+| | line box | descender ink ends | clearance |
+|---|---|---|---|
+| Segoe UI 16 (body, table cells) | 21.280 | 21.032 | 0.248 |
+| Segoe UI bold 16 (table header) | 21.280 | 21.024 | 0.256 |
+| Cascadia Mono 14 (code) | 16.270 | 16.268 | **0.002** |
+
+Horizontally the lines are safe outright: column widths are the widest cell's content plus
+`_tableCellPadding * 2` (`TableRenderer.cs:70`, padding is 8), so a column separator is at
+least 8 DIP from the nearest glyph and cell text cannot overflow into that gap.
+
+Vertically the margin is a quarter of a pixel, and for the code font it is nothing at all.
+Ink still *fits* inside the line box - see the resolved note below - but a 1 px separator
+centred on a row boundary covers the half pixel above it, which is where the row above's
+descenders put their antialiased tail. Drawn beneath the text today, the glyph wins there;
+drawn above, an alpha-60 grey grazes it. This is half a pixel of a descender's fade and
+should be invisible, but it is the one place this approach is not bit-identical. If it ever
+shows, the fix is small: move just the row separators into the lower row's visual at local
+`y = 0`, where they sit behind that row's own text and are still free of cross-row geometry.
 
 ### B. Selection and search highlights are view state
 
@@ -155,7 +175,8 @@ phase 5 commits.
    colour. All four are already per-line loops. After this, prose and code render correctly
    and only tables and selection are wrong. Measure cost per line: this adds one
    `DrawRectangle` to a bitmap that is built once, so it should not move.
-3. **Decompose the table backgrounds.** `DrawTableBackgroundForRow`, per section A.
+3. **Split the table drawing.** Per-row tints into the line visual, line geometry into the
+   overlay, per section A. Check the row separators against a descender-heavy table by eye.
 4. **Move selection and search highlights in**, with targeted invalidation per option 1.
    Measure a drag: lines rebuilt per frame must stay in low single digits.
 5. **Delete the flag.** `OnRender`'s remaining job is the canvas fill behind the paragraph
@@ -173,6 +194,12 @@ phase 5 commits.
   is illegal; the note there records that under RTB the adds silently did not take and the
   canvas laid out 2101 lines and drew none. Any new pixel test has to arrange before it
   renders.
+- **Resolved: glyph ink does not overhang its line box**, so an opaque fill never clips the
+  line above. Measured 2026-09-03: descender ink ends 0.248 DIP inside the box for Segoe UI 16
+  and 0.002 for Cascadia Mono 14, and accented capitals clear the top by 2.47 and 0.27. It
+  fits everywhere - but with so little room that anything drawn *on* a line boundary shares
+  the boundary pixel with a descender. That is the whole of the row-separator caveat in
+  section A, and it is worth re-measuring if the fonts or the line-height rule ever change.
 - **Empty lines currently draw nothing.** `DrawLineContent` is guarded by `if (vl.Length > 0)`
   (`RenderingContext.cs:525`), so an empty line's visual is empty. Under the opaque scheme it
   must still paint its background, or blank lines punch holes in a code block's tint.
