@@ -8,7 +8,6 @@ internal class ScrollController
 {
     private readonly Action _invalidateVisual;
     private readonly Func<double> _getMaxScroll;
-    private readonly Func<(string Device, int Hz)> _getDisplay;
     private readonly SmoothScroller _smoother;
 
     private double _offset;
@@ -128,6 +127,22 @@ internal class ScrollController
     /// </remarks>
     private double _displayPeriod;
 
+    /// <summary>
+    /// Tells the controller which display its window is on. Pushed by the canvas from the
+    /// window's WindowDisplayInfo, at startup and whenever that reports a change, so a window
+    /// dragged to another monitor is honoured from the next frame - including mid-gesture.
+    /// </summary>
+    internal void SetDisplay(string devices, int refreshRate)
+    {
+        _displayDevices = devices;
+        _displayHz = refreshRate;
+        _displayPeriod = refreshRate > 0 ? 1.0 / refreshRate : 0;
+        _smoother.DisplayPeriod = _displayPeriod;
+    }
+
+    private string _displayDevices = string.Empty;
+    private int _displayHz;
+
     /// <summary>Time since the last painted frame, against <see cref="_displayPeriod"/>.</summary>
     private double _sinceDisplayFrame;
 
@@ -139,12 +154,10 @@ internal class ScrollController
 
     internal double EffectiveOffset => _offset + _smoother.Offset;
 
-    internal ScrollController(Action invalidateVisual, Func<double> getMaxScroll,
-        Func<(string Device, int Hz)>? getDisplay = null)
+    internal ScrollController(Action invalidateVisual, Func<double> getMaxScroll)
     {
         _invalidateVisual = invalidateVisual;
         _getMaxScroll = getMaxScroll;
-        _getDisplay = getDisplay ?? (() => (string.Empty, 0));
         _smoother = new SmoothScroller(invalidateVisual);
 
         // Subscribed always and gated inside, so the flag can be set after construction
@@ -187,8 +200,6 @@ internal class ScrollController
             _paintedPixel = Math.Round(_offset);
             _gestureSource = "wheel";
 
-            int hz = SafeDisplay().Hz;
-            _displayPeriod = hz > 0 ? 1.0 / hz : 0;
             _sinceDisplayFrame = _displayPeriod;   // let the first frame paint at once
 
             CompositionTarget.Rendering += OnWheelFrame;
@@ -236,16 +247,6 @@ internal class ScrollController
         // Reacts within a few messages, so a gesture that starts merging is caught during it,
         // and recovers just as quickly once messages arrive singly again.
         _notchesPerMessage = _notchesPerMessage * 0.8 + notches * 0.2;
-    }
-
-    /// <summary>
-    /// The display query, which must never be able to break a frame: it runs inside the
-    /// Rendering handler, where an exception would escape into the render loop.
-    /// </summary>
-    private (string Device, int Hz) SafeDisplay()
-    {
-        try { return _getDisplay(); }
-        catch (Exception ex) { return ("query failed: " + ex.GetType().Name, 0); }
     }
 
     private void OnWheelFrame(object? sender, EventArgs e)
@@ -418,7 +419,8 @@ internal class ScrollController
             // A display query must never be able to break a frame: this runs inside the
             // Rendering handler, where an exception would escape into the render loop. The
             // label is worth nothing next to that.
-            (_gestureDevice, _gestureHz) = SafeDisplay();
+            _gestureDevice = _displayDevices;
+            _gestureHz = _displayHz;
 
             // Written as the gesture begins, not only when it ends. A gesture that starts and
             // never finishes is the failure worth seeing, and until now it looked exactly like

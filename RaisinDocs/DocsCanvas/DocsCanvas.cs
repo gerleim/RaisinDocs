@@ -790,8 +790,7 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider, IDocsC
         ContentLayer.Transform = ContentScroll;
         _layers = new VisualCollection(this) { ContentLayer, OverlayLayer };
 
-        _scroll = new ScrollController(InvalidateVisual, () => Math.Max(0, _totalContentHeight - ActualHeight),
-            () => DisplayRefresh.GetDisplay(this));
+        _scroll = new ScrollController(InvalidateVisual, () => Math.Max(0, _totalContentHeight - ActualHeight));
         _linkHandler = new LinkHandler((INavigationServices)this, (IDocumentServices)this, (IParsedContentServices)this, (ILayoutDataServices)this, (IVisualModeServices)this, (IScrollServices)this);
         _linkPopup = new LinkPopupController(_doc, this);
         _tableInputHandler = new TableInputHandler((IDocumentServices)this, (IParsedContentServices)this, (ICanvasOperations)this);
@@ -875,6 +874,7 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider, IDocsC
         Loaded += (_, _) =>
         {
             _measure.EnsureMeasured(this);
+            AttachDisplayInfo();
         };
         IsVisibleChanged += (_, e) =>
         {
@@ -889,7 +889,40 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider, IDocsC
         _blinkTimer.Stop();
         _undoSealTimer.Stop();
         CleanupSpellCheck();
+
+        if (_displayInfo is not null)
+        {
+            _displayInfo.Changed -= OnDisplayChanged;
+            _displayInfo = null;
+        }
     }
+
+    private WindowDisplayInfo? _displayInfo;
+
+    /// <summary>
+    /// Follows the display of the window this canvas is in, so scrolling can be paced to the
+    /// panel rather than to whatever rate WPF happens to be composing at.
+    /// </summary>
+    /// <remarks>
+    /// In Loaded rather than the constructor because the canvas has no window until then, and
+    /// WindowDisplayInfo is per top-level window - a host with floating windows gets one for
+    /// each, and each follows its own.
+    /// </remarks>
+    private void AttachDisplayInfo()
+    {
+        if (_displayInfo is not null)
+            return;
+
+        _displayInfo = WindowDisplayInfo.For(this);
+        if (_displayInfo is null)
+            return;
+
+        _displayInfo.Changed += OnDisplayChanged;
+        OnDisplayChanged(_displayInfo);
+    }
+
+    private void OnDisplayChanged(WindowDisplayInfo info) =>
+        _scroll.SetDisplay(info.Devices, info.RefreshRate);
 
     private void ResetUndoSealTimer()
     {
