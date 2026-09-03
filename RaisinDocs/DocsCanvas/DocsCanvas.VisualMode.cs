@@ -328,9 +328,9 @@ public partial class DocsCanvas
     private void ComputeAllTableColumnWidths(double maxWidth)
         => _tableRenderer.ComputeAllTableColumnWidths(maxWidth);
 
-    private void DrawTableBackgrounds(DrawingContext dc, double effectiveScroll,
+    private void DrawTableLines(DrawingContext dc, double effectiveScroll,
         double viewTop, double viewBottom)
-        => _tableRenderer.DrawTableBackgrounds(dc, effectiveScroll, viewTop, viewBottom);
+        => _tableRenderer.DrawTableLines(dc, effectiveScroll, viewTop, viewBottom);
 
     private void DrawTableRow(DrawingContext dc, VisualLine vl, string blockText,
         ParsedBlock parsed, double lineY, double effectiveScroll,

@@ -433,12 +433,10 @@ public partial class DocsCanvas
             double viewTop = effectiveScroll;
             double viewBottom = effectiveScroll + _rendering.ActualHeight;
 
-            // The code, colour block and inline colour tints used to be three passes here.
-            // They draw from DrawLineContent now, under the opaque fill rather than beneath
-            // it - see design/Opaque Line Visuals.md phase 2. Table backgrounds are phase 3
-            // and still run from here.
-            if (_visual.IsVisual)
-                _table.TableRenderer.DrawTableBackgrounds(dc, effectiveScroll, viewTop, viewBottom);
+            // The code, colour block, inline colour and table tints used to be four passes
+            // here. They draw from DrawLineContent now, under the opaque fill rather than
+            // beneath it. A table's borders are not a fill and stay whole-table geometry, in
+            // the overlay below. See design/Opaque Line Visuals.md phases 2 and 3.
 
             // Selection first: navigating to a match also selects it, so the two overlap.
             // Painted the other way round the selection covers the current-match colour,
@@ -483,6 +481,10 @@ public partial class DocsCanvas
             // draws after the element's own content, and these would otherwise be underneath.
             using (var odc = _docsCanvas.OverlayLayer.RenderOpen())
             {
+                // First in the overlay, so the caret and squiggles still sit above them.
+                if (_visual.IsVisual)
+                    _table.TableRenderer.DrawTableLines(odc, effectiveScroll, viewTop, viewBottom);
+
                 if (_docsCanvas.SpellCheckEnabled)
                     DrawSpellingErrors(odc, effectiveScroll, viewTop, viewBottom);
 
@@ -567,6 +569,10 @@ public partial class DocsCanvas
             DrawCodeBlockBackground(dc, vl, lineY, scrollY, bgH);
             DrawColorBlockBackground(dc, vl, lineY, scrollY, bgH);
             DrawInlineColorBackground(dc, vl, lineY, scrollY, bgH);
+            if (_visual.IsVisual && _content.ParsedBlocks != null
+                && vl.BlockIndex < _content.ParsedBlocks.Count)
+                _table.TableRenderer.DrawTableRowBackground(
+                    dc, _content.ParsedBlocks[vl.BlockIndex], lineY, scrollY, bgH);
 
             if (vl.Length > 0)
             {

@@ -74,10 +74,52 @@ public partial class DocsCanvas
         }
 
         /// <summary>
-        /// Draws table backgrounds, borders, and column separators for visible tables.
-        /// This is called before cell content is drawn.
+        /// Tints one row: its slice of the table background, and the header shade on row one.
         /// </summary>
-        public void DrawTableBackgrounds(DrawingContext dc, double effectiveScroll,
+        /// <remarks>
+        /// Drawn into the row's own line visual rather than under the whole table, because an
+        /// opaque line visual covers anything painted beneath it. Only the fills need to be
+        /// behind the text; the borders do not touch a glyph and stay whole-table geometry in
+        /// <see cref="DrawTableLines"/>.
+        ///
+        /// A table's visual lines are exactly its header and data rows - the separator row is
+        /// IsSkippedInVisual and never gets one - so every line with a Table is one this
+        /// paints, which is the same set the whole-table rect used to cover.
+        /// </remarks>
+        public void DrawTableRowBackground(DrawingContext dc, ParsedBlock parsed,
+            double lineY, double scrollY, double bgH)
+        {
+            if (parsed.Table == null) return;
+            if (!_table.TableColumnWidths.TryGetValue(parsed.Table, out var colWidths)) return;
+
+            double tableWidth = 0;
+            foreach (var w in colWidths) tableWidth += w;
+
+            double y = lineY - scrollY;
+            dc.DrawRectangle(_rendering.Palette.TableBackground, null,
+                new Rect(DocsCanvas._padding, y, tableWidth, bgH));
+
+            if (parsed.Kind == BlockKind.TableHeaderRow)
+                dc.DrawRectangle(_rendering.Palette.TableHeaderBackground, null,
+                    new Rect(DocsCanvas._padding, y, tableWidth, bgH));
+        }
+
+        /// <summary>
+        /// Draws every visible table's border, row separators and column separators.
+        /// </summary>
+        /// <remarks>
+        /// Runs from the overlay, above the line visuals, which is why it can keep whole-table
+        /// geometry: a column separator crosses every row, and decomposing it per row would be
+        /// all of the seam risk and none of the benefit. The lines never cross a glyph - a
+        /// column is the widest cell plus twice the 8 DIP cell padding - so drawing them over
+        /// the text is not drawing them over anything. See design/Opaque Line Visuals.md.
+        ///
+        /// Positions are snapped to the same whole-pixel grid the row tints now use, or the
+        /// borders drift up to a pixel from the fills they are supposed to bound. The half
+        /// pixel puts a 1 px stroke inside one pixel row rather than across two, which is also
+        /// what stops it rendering as two half-intensity lines.
+        /// </remarks>
+        public void DrawTableLines(DrawingContext dc, double effectiveScroll,
             double viewTop, double viewBottom)
         {
             int i = 0;
@@ -118,22 +160,15 @@ public partial class DocsCanvas
                     double tableWidth = 0;
                     foreach (var w in colWidths) tableWidth += w;
                     double tableX = DocsCanvas._padding;
-                    double yTop = tableY - effectiveScroll;
-                    double tableH = tableBottom - tableY;
-
-                    dc.DrawRectangle(_rendering.Palette.TableBackground, null,
-                        new Rect(tableX, yTop, tableWidth, tableH));
-
-                    double headerH = _rendering.Measure.GetLineHeight(_layout.VisualLines[tableStart].BlockKind);
-                    dc.DrawRectangle(_rendering.Palette.TableHeaderBackground, null,
-                        new Rect(tableX, yTop, tableWidth, headerH));
+                    double yTop = Math.Round(tableY) - effectiveScroll;
+                    double tableH = Math.Round(tableBottom) - Math.Round(tableY);
 
                     dc.DrawRectangle(null, _rendering.Palette.TableBorderPen,
-                        new Rect(tableX, yTop, tableWidth, tableH));
+                        new Rect(tableX + 0.5, yTop + 0.5, tableWidth - 1, tableH - 1));
 
                     for (int row = tableStart; row < tableEnd; row++)
                     {
-                        double rowY = _layout.LineYPositions[row] - effectiveScroll;
+                        double rowY = Math.Round(_layout.LineYPositions[row]) - effectiveScroll + 0.5;
                         if (row > tableStart)
                             dc.DrawLine(_rendering.Palette.TableBorderPen,
                                 new Point(tableX, rowY), new Point(tableX + tableWidth, rowY));
@@ -143,8 +178,9 @@ public partial class DocsCanvas
                     for (int c = 0; c < colWidths.Length - 1; c++)
                     {
                         cx += colWidths[c];
+                        double sx = Math.Round(cx) + 0.5;
                         dc.DrawLine(_rendering.Palette.TableBorderPen,
-                            new Point(cx, yTop), new Point(cx, yTop + tableH));
+                            new Point(sx, yTop), new Point(sx, yTop + tableH));
                     }
                 }
 
