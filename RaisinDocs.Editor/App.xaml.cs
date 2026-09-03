@@ -13,7 +13,7 @@ public partial class App : Application
     internal const string ScrollDiagSwitch = "--scroll-diag";
 
     /// <summary>
-    /// Turns on F9 (cached visuals against direct draw) and F10 (opaque line visuals), and
+    /// Turns on F9 (cached visuals against direct draw) and F8 (opaque line visuals), and
     /// the badge that says which is active. See design/Opaque Line Visuals.md.
     /// </summary>
     internal const string RenderDiagSwitch = "--render-diag";

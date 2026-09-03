@@ -343,19 +343,13 @@ public partial class DocsCanvas
         if (e.Key != Key.End)
             _cursorAtLineEnd = false;
 
-        // Ahead of the switch, and off rawKey, because Windows reserves F10 for activating
-        // the menu: it arrives as Key.System with the real key in SystemKey, so a case on
-        // e.Key never matches it. Handling it here also stops the menu opening. F9 needs
-        // none of this, which is why it sits in the switch below.
-        if (EnableRenderPathToggle && rawKey == Key.F10 && !shift && !ctrl && !alt)
-        {
-            ToggleOpaqueLineVisuals();
-            e.Handled = true;
-            return;
-        }
-
         switch (e.Key)
         {
+            case Key.F8 when !shift && !ctrl && !alt && EnableRenderPathToggle:
+                ToggleOpaqueLineVisuals();
+                e.Handled = true;
+                return;
+
             case Key.F9 when !shift && !ctrl && !alt && EnableRenderPathToggle:
                 ToggleCachedLineVisuals();
                 e.Handled = true;

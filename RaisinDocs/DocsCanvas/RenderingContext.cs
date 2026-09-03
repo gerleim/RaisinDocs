@@ -514,10 +514,13 @@ public partial class DocsCanvas
         /// <summary>Says which of the two paths is drawing. Only shown when F9 is enabled.</summary>
         private void DrawModeBadge(DrawingContext dc)
         {
-            string text = (_docsCanvas.CachedLineVisuals ? "F9: cached visuals" : "F9: direct draw")
-                + (_docsCanvas.CachedLineVisuals
-                    ? _docsCanvas.OpaqueLineVisuals ? "  |  F10: opaque (ClearType)" : "  |  F10: transparent (greyscale)"
-                    : "");
+            // F8 first, so the switches read in key order. The fill only exists on the cached
+            // path, so on direct draw there is nothing to report for it.
+            string path = _docsCanvas.CachedLineVisuals ? "F9: cached visuals" : "F9: direct draw";
+            string text = _docsCanvas.CachedLineVisuals
+                ? (_docsCanvas.OpaqueLineVisuals ? "F8: opaque (ClearType)" : "F8: transparent (greyscale)")
+                  + "  |  " + path
+                : path;
             var ft = new FormattedText(text, CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
                 TextMeasurer.NormalTypeface, 11, _rendering.Palette.Syntax, _rendering.Measure.DpiScale);
             double x = _rendering.ActualWidth - ft.Width - 12;
