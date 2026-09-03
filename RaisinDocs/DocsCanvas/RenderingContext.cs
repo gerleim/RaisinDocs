@@ -1480,26 +1480,32 @@ public partial class DocsCanvas
             BlockVisualMap? map;
             IReadOnlyList<ColorSpan>? colorSpans;
 
+            // Everything that can rule the line out comes before the block text is
+            // materialised. GetBlockText is a StringBuilder.ToString(), the drawing path
+            // below defers it deliberately for that reason, and a document with no colour
+            // spans at all would otherwise pay for one per line on every rebuild - and
+            // typing rebuilds every visible line.
             if (vl.Group != null)
             {
                 var group = vl.Group;
-                blockText = group.JoinedText;
                 parsed = group.JoinedParsed;
                 map = group.JoinedMap;
                 colorSpans = map.ColorSpans;
+                if (colorSpans == null || colorSpans.Count == 0) return;
+                if (_visual.IsVisual && parsed.Table != null && parsed.TableRow != null) return;
+                blockText = group.JoinedText;
             }
             else
             {
                 if (vl.BlockIndex >= _content.ParsedBlocks.Count) return;
                 parsed = _content.ParsedBlocks[vl.BlockIndex];
                 if (parsed.Kind is BlockKind.FencedCodeLine or BlockKind.IndentedCodeLine) return;
-                blockText = _doc.Document.GetBlockText(vl.BlockIndex);
                 map = _visual.IsVisual ? _content.VisualMaps?[vl.BlockIndex] : null;
                 colorSpans = _visual.IsVisual ? map?.ColorSpans : parsed.ColorSpans;
+                if (colorSpans == null || colorSpans.Count == 0) return;
+                if (_visual.IsVisual && parsed.Table != null && parsed.TableRow != null) return;
+                blockText = _doc.Document.GetBlockText(vl.BlockIndex);
             }
-
-            if (colorSpans == null) return;
-            if (_visual.IsVisual && parsed.Table != null && parsed.TableRow != null) return;
 
             int hardBreakClip = MarkdownParser.IsTrailingHardBreak(parsed, blockText)
                 ? MarkdownParser.GetContentEnd(blockText) - 1
