@@ -293,48 +293,55 @@ The direct-draw path was kept. It costs nothing now that the drawing is shared t
 
 ## Things that will bite
 
+Unlike the phases above, this section is meant to be true now.
+
+- **Anything that belongs behind the text goes in `DrawLineContent`, never in `OnRender`.** An
+  opaque line covers whatever the canvas painted beneath it, so a background added to
+  `OnRender` will simply not appear - and it will not look like a z-order bug, it will look
+  like the code never ran. This is the single rule the whole design leaves behind. The fill
+  itself is the one thing that belongs in `BuildLineVisual`.
+- **If what you add is view state, it brings an invalidation obligation.** A line's picture is
+  cached, so anything in it that changes without the text changing must drop the lines it
+  affects. Selection does this per block over the union of old and new
+  (`DropLineVisualsForSelectionChange`); the search highlights drop everything, which is only
+  affordable because they change on a keystroke in the find box rather than on every frame of
+  a drag. Derive the signature from the state rather than maintaining a counter beside it -
+  a dozen sites mutate the match list, and the first one anybody forgets leaves a stale
+  highlight baked into a bitmap.
 - **You cannot assert ClearType from a `RenderTargetBitmap` test.** RTB is itself a Pbgra32
-  transparent surface, so it renders greyscale whatever the line visuals do. Pixel tests can
-  verify the *geometry* of phases 2 to 4 - seams, separators, background coverage - which is
-  exactly what those phases need. Confirming ClearType itself is by eye, or by an external
-  screen capture, against the F9 direct-draw path.
-- **RTB tests must force an arrange first.** `UpdateContentLayer` runs from
-  `ArrangeOverride`, deliberately (`RenderingContext.cs:148`), and adding children mid-render
-  is illegal; the note there records that under RTB the adds silently did not take and the
-  canvas laid out 2101 lines and drew none. Any new pixel test has to arrange before it
-  renders.
+  transparent surface, so it renders greyscale whatever the line visuals do. Confirming
+  ClearType is by eye, or by a screen capture taken outside the process. What RTB *is* good
+  for is geometry - seams, separators, background coverage, and before/after comparison.
+- **RTB tests must force an arrange first.** `UpdateContentLayer` builds the line visuals from
+  `ArrangeOverride`, deliberately, because adding children mid-render is illegal; under RTB
+  the adds silently did not take and the canvas laid out 2101 lines and drew none. Measure,
+  arrange, `UpdateLayout`, then render.
+- **That makes a cheap proof available for any refactor of the drawing chain.** Render a
+  document carrying every feature the chain can produce, in both edit modes, with and without
+  a selection, to a PNG before and after, and compare bytes. The `lineY`/`scrollY` collapse
+  across 69 sites was verified that way in minutes rather than by reading it.
 - **Resolved: glyph ink does not overhang its line box**, so an opaque fill never clips the
   line above. Measured 2026-09-03: descender ink ends 0.248 DIP inside the box for Segoe UI 16
   and 0.002 for Cascadia Mono 14, and accented capitals clear the top by 2.47 and 0.27. It
   fits everywhere - but with so little room that anything drawn *on* a line boundary shares
-  the boundary pixel with a descender. That is the whole of the row-separator caveat in
-  section A, and it is worth re-measuring if the fonts or the line-height rule ever change.
-- **Empty lines currently draw nothing.** `DrawLineContent` is guarded by `if (vl.Length > 0)`
-  (`RenderingContext.cs:525`), so an empty line's visual is empty. Under the opaque scheme it
-  must still paint its background, or blank lines punch holes in a code block's tint.
-- **Move the drawing into `DrawLineContent`, not into `BuildLineVisual`.** Both paths already
-  call `DrawLineContent` - the cached one inside the visual (`RenderingContext.cs:295`), the
-  direct one from `OnRender` (`:447`) - so anything moved there serves both, and the
-  `OnRender` pass it came from is then deleted rather than duplicated. Put a background next
-  to the fill in `BuildLineVisual` instead and it works on the cached path while silently
-  stranding F9. The fill itself is the one thing that does belong in `BuildLineVisual`: the
-  direct path draws onto the already-opaque canvas and has ClearType without it.
-- **The F9 path is a measurement rig, not a shipping path.** It is unreachable without
-  `--render-diag`, and it is what produced the 140-vs-119 displayed-frame figure and the
-  ClearType baseline phase 1 was judged against. Kept for free if the rule above is followed,
-  so there is no retire-or-duplicate decision to make at phase 5 after all.
-- **Do not delete the `OnRender` background passes until their replacement is shared.**
-  Leaving both live double-draws the alpha tints on the direct path and darkens them; the
-  cached path hides the duplicate under its opaque fill and looks fine, so this will not show
-  up unless F9 is checked.
-- **Print has its own duplicate of the table border drawing** (`DocsCanvas.Print.cs:359`-`:407`,
-  against `_printPalette`). Printing does not go through line visuals and is unaffected, but
-  the table decomposition must not be refactored in a way that leaves the two copies to
-  drift.
-- **The minimap renders its own `RenderTargetBitmap`** (`MinimapScrollbar.cs:697`, `:765`)
-  and does not use line visuals. Unaffected.
-- **Theme switching bumps `RenderVersion`**, which drops every line visual, so the opaque
-  fill picks up the new background for free. No new invalidation needed there.
+  the boundary pixel with a descender. Worth re-measuring if the fonts or the line-height rule
+  ever change.
+- **Backgrounds use a snapped line height, not the effective one.** A line box is 21.28 px and
+  a visual sits at a rounded origin, so a rect of 21.28 either stops short of the next line -
+  a hairline of untinted canvas through a code block - or laps it and doubles the alpha.
+  `SnappedLineHeight` rounds both ends of the same line so each ends where the next begins,
+  without swallowing a paragraph gap.
+- **Backgrounds draw before the `vl.Length` guard.** An empty line has no content but still
+  needs its tint, or blank lines punch holes through a code block.
+- **Print has its own duplicate of the table border drawing** (`DocsCanvas.Print.cs`, against
+  `_printPalette`), and its own copies of several line drawers in `DocsCanvas.cs` and
+  `DocsCanvas.VisualMode.cs`. Printing does not go through line visuals, so it is unaffected by
+  the caching - but the copies can drift, and a change to the shared drawers is not
+  automatically a change to printing.
+- **The minimap renders its own `RenderTargetBitmap`** and does not use line visuals.
+  Unaffected.
+- **Theme switching bumps `RenderVersion`**, which drops every line visual, so the fill picks
+  up the new background for free. No new invalidation needed there.
 
 ## What this does not do
 
