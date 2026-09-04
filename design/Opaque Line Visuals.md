@@ -1,8 +1,8 @@
 # Opaque Line Visuals
 
-Status: **phases 1 to 3 done and confirmed**; phase 4 next. Written 2026-09-03, on branch
-`opaque-line-visuals`, with a branch per phase stacked on it
-(`opaque-line-visuals-phase1`, `-phase2`, `-phase3`).
+Status: **done**. All five phases complete and confirmed; the opaque fill ships. Written
+2026-09-03, on branch `opaque-line-visuals`, with a branch per phase stacked on it
+(`opaque-line-visuals-phase1` through `-phase4`, the last of which carries phase 5).
 
 Restores ClearType to the editor's text, which has been greyscale antialiased since
 `337e009` without anyone intending it.
@@ -240,6 +240,49 @@ against 28.9 (`337e009`, measured with FrameView).
 
 The one visible difference left between them is the line-spacing distribution described
 above, which predates all of this.
+
+### Phase 4
+
+**Confirmed 2026-09-04.** Selection and the search highlights both draw inside the line now,
+in that order, and nothing the canvas paints is under the content layer any more except the
+full-canvas background fill that shows through the paragraph gaps.
+
+Selection invalidation is targeted, per option 1 above: `DropLineVisualsForSelectionChange`
+drops the union of the old and the new selection at block granularity. The rectangular table
+selection carries its **columns** in the signature as well - it can be dragged sideways with
+its block range unchanged, and the highlight would otherwise sit still while the drag
+continued.
+
+The search highlights went the other way and drop every cached line, because matches sit
+anywhere rather than in one contiguous run and the signature is a hash - it reports that
+something changed, not what. That is affordable only because a highlight change is
+user-initiated, a keystroke in the find box or F3, costing one screenful; a selection changes
+on every frame of a drag and could not be treated this way.
+
+Both signatures are **derived from the state rather than maintained beside it**. A dozen sites
+in `FindAndReplaceController` add to, clear or reindex the match list, and a version counter
+bumped at each would leave a stale highlight baked into a cached line the first time one was
+missed. Same reasoning as the syntax token cache key in `design/Typing Performance.md`.
+
+Inverting the highlight loop - from a pass per match walking every line, to a line asking
+which matches fall on it - was also less work than what it replaced: a match in another block
+is now rejected on an integer compare, and a joined line rejects out-of-group matches before
+`SourceToJoined` rather than after.
+
+### Phase 5
+
+**Done 2026-09-04.** `OpaqueLineVisuals` defaults to true, so ClearType is back for everyone.
+
+The toggles stayed, and stopped needing a switch: F8 and F9 work in every host, the viewer
+included, which is where a reader is most likely to be looking at text closely enough to care.
+The badge follows the state instead - it appears when the path is not the one that ships and
+goes away when the toggles come back, so a reader who has never heard of these keys never sees
+one. `--render-diag` survives only to pin it on while measuring, since the honest frame-rate
+figures come from a capture taken outside the process and the badge is what names the path in
+it.
+
+The direct-draw path was kept. It costs nothing now that the drawing is shared through
+`DrawLineContent`, and it is the only thing that would catch a pass left half-moved.
 
 ## Things that will bite
 

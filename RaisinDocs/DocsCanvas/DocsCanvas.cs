@@ -1169,7 +1169,7 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider, IDocsC
     /// back - so it needs no state of its own. A host can force it on with
     /// <see cref="EnableRenderPathToggle"/> while investigating.
     /// </remarks>
-    internal bool ShowRenderPathBadge => EnableRenderPathToggle || !CachedLineVisuals || OpaqueLineVisuals;
+    internal bool ShowRenderPathBadge => EnableRenderPathToggle || !CachedLineVisuals || !OpaqueLineVisuals;
 
     /// <summary>Which of the two drawing paths is in use. Always true unless F9 is enabled.</summary>
     internal bool CachedLineVisuals { get; private set; } = true;
@@ -1183,20 +1183,23 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider, IDocsC
 
     /// <summary>
     /// Fills each cached line visual with the theme background before drawing its text, which
-    /// is what ClearType needs to run. Phase 1 of design/Opaque Line Visuals.md.
+    /// is what ClearType needs to run. See design/Opaque Line Visuals.md.
     /// </summary>
     /// <remarks>
     /// A BitmapCache rasterises into a Pbgra32 surface, and ClearType cannot filter against a
-    /// background it does not know, so every line cached since 337e009 has been greyscale
-    /// antialiased. An opaque fill gives it one back.
+    /// background it does not know, so every line cached between 337e009 and this was greyscale
+    /// antialiased - softer and thinner than the text had been, stationary as well as scrolling.
     ///
-    /// Deliberately incomplete, and off by default. Anything OnRender paints beneath the
-    /// content layer - code and colour block backgrounds, table tints, selection, search
-    /// highlights - is covered by the fill and disappears while this is on. Moving those in is
-    /// phases 2 to 4; this phase only answers whether the text sharpens at all, which is the
-    /// gate on the rest being worth building.
+    /// On by default, which it could only become once nothing was left painting under the
+    /// content layer: an opaque line covers whatever OnRender drew beneath it, so the code and
+    /// colour block tints, the table tints, the selection and the search highlights all had to
+    /// move into the line first. All that OnRender still paints below is the canvas fill, which
+    /// shows through the paragraph gaps and under the last line.
+    ///
+    /// F8 turns it off, which is worth keeping: it is the only way to see what the greyscale
+    /// fallback actually looked like.
     /// </remarks>
-    internal bool OpaqueLineVisuals { get; private set; }
+    internal bool OpaqueLineVisuals { get; private set; } = true;
 
     internal void ToggleOpaqueLineVisuals()
     {
