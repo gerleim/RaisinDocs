@@ -13,8 +13,9 @@ public partial class App : Application
     internal const string ScrollDiagSwitch = "--scroll-diag";
 
     /// <summary>
-    /// Turns on F9 (cached visuals against direct draw) and F8 (opaque line visuals), and
-    /// the badge that says which is active. See design/Opaque Line Visuals.md.
+    /// Pins the render-path badge on screen. F8 and F9 themselves need no switch - they work
+    /// in every host - and the badge appears on its own once either is off the default path.
+    /// See design/Opaque Line Visuals.md.
     /// </summary>
     internal const string RenderDiagSwitch = "--render-diag";
 

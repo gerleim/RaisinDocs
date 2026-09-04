@@ -1144,26 +1144,38 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider, IDocsC
     /// later be fractional without each line rounding independently.
     /// </remarks>
     /// <summary>
-    /// Enables F9, which switches between drawing lines into cached visuals and drawing them
-    /// straight into OnRender. Off by default; a diagnostic, not a feature.
+    /// Keeps the render-path badge on screen even while the default path is drawing.
     /// </summary>
     /// <remarks>
-    /// Kept because it is the only way to compare the two paths honestly. Frame-rate figures
-    /// taken from inside the process count OnRender calls, not frames the panel showed, and
-    /// DwmGetCompositionTimingInfo will not report the difference. Switching paths back to
-    /// back on the same document, and measuring from outside with FrameView, is what turned
-    /// "I cannot tell a difference" into 140 displayed frames a second against 119.
+    /// It used to gate F8 and F9 as well. Those work everywhere now, in every host, so all
+    /// this does is pin the badge - useful when measuring, because it names the path in a
+    /// screen capture taken from outside the process.
     ///
-    /// Set it from a host app while investigating; leave it alone otherwise.
+    /// That outside view is the point. Frame-rate figures taken from inside count OnRender
+    /// calls, not frames the panel showed, and DwmGetCompositionTimingInfo will not report the
+    /// difference. Switching paths back to back on the same document and measuring with
+    /// FrameView is what turned "I cannot tell a difference" into 140 displayed frames a
+    /// second against 119.
     /// </remarks>
     public static bool EnableRenderPathToggle { get; set; }
+
+    /// <summary>
+    /// Whether to draw the badge naming the current render path.
+    /// </summary>
+    /// <remarks>
+    /// F8 and F9 work everywhere and in every host, so a reader who has never heard of them
+    /// must not see a badge. It appears once the render path is not the one that ships, which
+    /// is exactly when knowing the path matters, and goes away again when the toggles come
+    /// back - so it needs no state of its own. A host can force it on with
+    /// <see cref="EnableRenderPathToggle"/> while investigating.
+    /// </remarks>
+    internal bool ShowRenderPathBadge => EnableRenderPathToggle || !CachedLineVisuals || OpaqueLineVisuals;
 
     /// <summary>Which of the two drawing paths is in use. Always true unless F9 is enabled.</summary>
     internal bool CachedLineVisuals { get; private set; } = true;
 
     internal void ToggleCachedLineVisuals()
     {
-        if (!EnableRenderPathToggle) return;
         CachedLineVisuals = !CachedLineVisuals;
         InvalidateRenderCache();   // drop the visuals either way, so neither path sees the other's
         InvalidateVisual();
@@ -1188,7 +1200,6 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider, IDocsC
 
     internal void ToggleOpaqueLineVisuals()
     {
-        if (!EnableRenderPathToggle) return;
         OpaqueLineVisuals = !OpaqueLineVisuals;
         InvalidateRenderCache();   // the fill is baked into the bitmap, so every line rebuilds
         InvalidateVisual();

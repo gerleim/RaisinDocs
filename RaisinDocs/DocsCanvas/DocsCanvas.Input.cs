@@ -345,12 +345,12 @@ public partial class DocsCanvas
 
         switch (e.Key)
         {
-            case Key.F8 when !shift && !ctrl && !alt && EnableRenderPathToggle:
+            case Key.F8 when !shift && !ctrl && !alt:
                 ToggleOpaqueLineVisuals();
                 e.Handled = true;
                 return;
 
-            case Key.F9 when !shift && !ctrl && !alt && EnableRenderPathToggle:
+            case Key.F9 when !shift && !ctrl && !alt:
                 ToggleCachedLineVisuals();
                 e.Handled = true;
                 return;

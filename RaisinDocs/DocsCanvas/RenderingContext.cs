@@ -592,7 +592,7 @@ public partial class DocsCanvas
                 if (!_visual.IsVisual && _images.ImagePreview == DocsCanvas.ImagePreviewMode.OnHover && _docsCanvas._hoveredImage != null)
                     DrawHoverImagePreview(odc);
 
-                if (DocsCanvas.EnableRenderPathToggle)
+                if (_docsCanvas.ShowRenderPathBadge)
                     DrawModeBadge(odc);
             }
 
@@ -624,7 +624,7 @@ public partial class DocsCanvas
                 });
         }
 
-        /// <summary>Says which of the two paths is drawing. Only shown when F9 is enabled.</summary>
+        /// <summary>Says which of the two paths is drawing. Only shown off the default path.</summary>
         private void DrawModeBadge(DrawingContext dc)
         {
             // F8 first, so the switches read in key order. The fill only exists on the cached
