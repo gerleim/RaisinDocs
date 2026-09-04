@@ -160,6 +160,19 @@ internal interface ISearchServices
     /// Must not force construction of the find/replace controller.
     /// </summary>
     bool HasSearchHighlights { get; }
+
+    /// <summary>
+    /// Changes whenever the highlights would draw differently, so cached lines carrying them
+    /// can be dropped. Zero when no search has ever been run.
+    /// </summary>
+    int SearchHighlightSignature { get; }
+
+    /// <summary>Re-runs the search if an edit invalidated it. Must be idempotent and cheap.</summary>
+    void EnsureSearchMatchesCurrent();
+
+    /// <summary>Draws the matches falling on one line, behind its text.</summary>
+    void DrawSearchHighlightsForLine(DrawingContext dc, DocsCanvas.VisualLine vl,
+        double lineY, double scrollY, double bgH);
 }
 
 /// <summary>

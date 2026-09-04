@@ -178,9 +178,11 @@ public partial class DocsCanvas
             // line reads the FormattedText cache. That used to be safe because everything ran
             // inside OnRender; now that this runs at arrange time, ahead of the render, the
             // text cache has to be ready here rather than there.
+            _search.EnsureSearchMatchesCurrent();
             EnsureLineFtCache(_layout.VisualLines.Count, _docsCanvas.RenderVersion);
             EnsureLineVisualCache(_layout.VisualLines.Count, _docsCanvas.RenderVersion);
             DropLineVisualsForSelectionChange();
+            DropLineVisualsForHighlightChange();
             SyncLineVisuals(firstVisible, lastVisible);
             _docsCanvas.ContentScroll.Y = -effectiveScroll;
         }
@@ -334,6 +336,36 @@ public partial class DocsCanvas
                 int bi = _layout.VisualLines[i].BlockIndex;
                 if (bi < lo || bi > hi) continue;
 
+                _docsCanvas.ContentLayer.Children.Remove(dv);
+                _lineVisuals[i] = null;
+            }
+        }
+
+        /// <summary>The search highlights the cached line visuals were built under.</summary>
+        private int _visualsHighlightSig;
+
+        /// <summary>
+        /// Drops every cached line when the search highlights change.
+        /// </summary>
+        /// <remarks>
+        /// Wholesale, unlike the selection, and for two reasons. Matches sit anywhere in the
+        /// document rather than in one contiguous run, so there is no cheap range to drop; and
+        /// the signature is a hash, which says that something changed but not what. It is
+        /// affordable because a highlight change is user-initiated - a keystroke in the find
+        /// box, or F3 - and costs one screenful of rebuilds, where the selection changes on
+        /// every frame of a drag and could not be treated this way.
+        /// </remarks>
+        private void DropLineVisualsForHighlightChange()
+        {
+            int now = _search.SearchHighlightSignature;
+            if (now == _visualsHighlightSig) return;
+            _visualsHighlightSig = now;
+
+            if (_lineVisuals == null || _visualsHi < _visualsLo) return;
+
+            for (int i = _visualsLo; i <= _visualsHi && i < _lineVisuals.Length; i++)
+            {
+                if (_lineVisuals[i] is not { } dv) continue;
                 _docsCanvas.ContentLayer.Children.Remove(dv);
                 _lineVisuals[i] = null;
             }
@@ -497,14 +529,12 @@ public partial class DocsCanvas
             // beneath it. A table's borders are not a fill and stay whole-table geometry, in
             // the overlay below. See design/Opaque Line Visuals.md phases 2 and 3.
 
-            // Selection draws from DrawLineContent now, inside the line rather than beneath
-            // it - see design/Opaque Line Visuals.md phase 4. It still goes down before the
-            // current-match colour, which is why the search highlights below have not moved
-            // yet: navigating to a match also selects it, and painted the other way round the
-            // selection would cover the current match and make it indistinguishable.
-
-            if (_search.HasSearchHighlights)
-                DrawSearchHighlights(dc, effectiveScroll);
+            // Selection and the search highlights both draw from DrawLineContent now, inside
+            // the line rather than beneath it, and in that order - navigating to a match also
+            // selects it, and painted the other way round the selection would cover the
+            // current match and make it indistinguishable from the rest. Nothing the canvas
+            // paints is under the content layer any more; see design/Opaque Line Visuals.md.
+            _search.EnsureSearchMatchesCurrent();
 
             EnsureLineFtCache(_layout.VisualLines.Count, _docsCanvas.RenderVersion);
             int _lastVisible = -1;
@@ -633,6 +663,7 @@ public partial class DocsCanvas
                 _table.TableRenderer.DrawTableRowBackground(
                     dc, _content.ParsedBlocks[vl.BlockIndex], lineY, scrollY, bgH);
             DrawSelectionForLine(dc, vl, lineY, scrollY, bgH);
+            _search.DrawSearchHighlightsForLine(dc, vl, lineY, scrollY, bgH);
 
             if (vl.Length > 0)
             {
@@ -1859,9 +1890,6 @@ public partial class DocsCanvas
         }
 
         // Search-related rendering (delegated from parent)
-        private void DrawSearchHighlights(DrawingContext dc, double effectiveScroll)
-            => _docsCanvas.DrawSearchHighlights(dc, effectiveScroll);
-
         private void DrawSpellingErrors(DrawingContext dc, double effectiveScroll, double viewTop, double viewBottom)
             => _docsCanvas.DrawSpellingErrors(dc, effectiveScroll, viewTop, viewBottom);
 

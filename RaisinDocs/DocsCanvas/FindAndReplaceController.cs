@@ -240,15 +240,58 @@ internal class FindAndReplaceController
             _searchDirty = true;
     }
 
-    internal void DrawSearchHighlights(DrawingContext dc, double effectiveScroll)
+    /// <summary>
+    /// A value that changes whenever the highlights would draw differently.
+    /// </summary>
+    /// <remarks>
+    /// Derived from the matches rather than maintained beside them. A dozen places in here
+    /// add to, clear or reindex the list, and a version counter would have to be bumped at
+    /// every one - miss a single site and a stale highlight stays baked into a cached line,
+    /// which is the kind of wrong that is hard to notice. Walking the list is a few hundred
+    /// integer operations, once per arrange.
+    /// </remarks>
+    internal int HighlightSignature
     {
-        if (_searchDirty)
-            RefreshMatchesAfterEdit();
+        get
+        {
+            var hash = new HashCode();
+            hash.Add(_currentMatchIndex);
+            hash.Add(_searchMatches.Count);
+            foreach (var m in _searchMatches)
+            {
+                hash.Add(m.Block);
+                hash.Add(m.Offset);
+                hash.Add(m.Length);
+            }
+            return hash.ToHashCode();
+        }
+    }
 
+    /// <summary>Re-runs the search if an edit invalidated it. Idempotent.</summary>
+    /// <remarks>
+    /// Used to happen inside the drawing pass. Lines are built at arrange time now, ahead of
+    /// the render, so the matches have to be current by then or a line bakes in the previous
+    /// search's highlights.
+    /// </remarks>
+    internal void EnsureMatchesCurrent()
+    {
+        if (_searchDirty) RefreshMatchesAfterEdit();
+    }
+
+    /// <summary>Draws every match that falls on one line.</summary>
+    /// <remarks>
+    /// Inverted from the old shape, which was a loop over matches each walking every visual
+    /// line. Per line is what a cached line visual needs, and it is also less work: a match in
+    /// another block is now rejected on an integer compare instead of a coordinate
+    /// computation.
+    ///
+    /// Two passes, so the current match's colour lands on top of any ordinary match it
+    /// overlaps rather than under it.
+    /// </remarks>
+    internal void DrawSearchHighlightsForLine(DrawingContext dc, DocsCanvas.VisualLine vl,
+        double lineY, double scrollY, double bgH)
+    {
         if (_searchMatches.Count == 0) return;
-
-        double viewTop = effectiveScroll;
-        double viewBottom = effectiveScroll + _rendering.ActualHeight;
 
         for (int pass = 0; pass < 2; pass++)
         {
@@ -258,11 +301,65 @@ internal class FindAndReplaceController
                 if (pass == 0 && isCurrent) continue;
                 if (pass == 1 && !isCurrent) continue;
 
-                var match = _searchMatches[mi];
                 var brush = isCurrent ? _rendering.Palette.CurrentSearchMatch : _rendering.Palette.SearchMatch;
-                DrawMatchOnVisualLines(dc, match, brush, effectiveScroll, viewTop, viewBottom);
+                DrawMatchOnLine(dc, vl, _searchMatches[mi], brush, lineY, scrollY, bgH);
             }
         }
+    }
+
+    private void DrawMatchOnLine(DrawingContext dc, DocsCanvas.VisualLine vl, SearchMatch match,
+        Brush brush, double lineY, double scrollY, double bgH)
+    {
+        if (vl.Group is { } group)
+        {
+            // Cheap reject before SourceToJoined, which the old per-match loop paid for on
+            // every joined line in view whether the match was in the group or not.
+            if (match.Block < group.FirstBlock || match.Block > group.LastBlock) return;
+            DrawMatchOnJoinedLine(dc, vl, match, brush, lineY, scrollY, bgH);
+            return;
+        }
+
+        if (vl.BlockIndex != match.Block) return;
+
+        int matchEnd = match.Offset + match.Length;
+        int vlEnd = vl.StartOffset + vl.Length;
+        if (match.Offset >= vlEnd || matchEnd <= vl.StartOffset) return;
+
+        int hlStart = Math.Max(match.Offset, vl.StartOffset);
+        int hlEnd = Math.Min(matchEnd, vlEnd);
+
+        string blockText = _doc.GetBlockText(vl.BlockIndex);
+        var parsed = _content.ParsedBlocks![vl.BlockIndex];
+        var map = _visual.IsVisual ? _content.VisualMaps?[vl.BlockIndex] : null;
+
+        double x1, x2;
+        if (_visual.IsVisual && parsed.Table != null && parsed.TableRow != null)
+        {
+            if (_table.TableColumnWidths.TryGetValue(parsed.Table, out var colWidths))
+            {
+                x1 = _table.CursorXInTableRow(vl.BlockIndex, parsed, colWidths, hlStart);
+                x2 = _table.CursorXInTableRow(vl.BlockIndex, parsed, colWidths, hlEnd);
+            }
+            else return;
+        }
+        else
+        {
+            x1 = _rendering.MeasureRangeWidth(blockText, vl.StartOffset, hlStart - vl.StartOffset,
+                parsed.Runs, parsed.Kind, map);
+            x2 = _rendering.MeasureRangeWidth(blockText, vl.StartOffset, hlEnd - vl.StartOffset,
+                parsed.Runs, parsed.Kind, map);
+
+            if (map?.ReplacementPrefix != null && vl.StartOffset == 0)
+            {
+                double prefixW = _rendering.Measure.MeasureReplacementPrefix(map.ReplacementPrefix!, map.PrefixMeasureKind);
+                x1 += prefixW;
+                x2 += prefixW;
+            }
+        }
+
+        double w = Math.Max(0, x2 - x1);
+        if (w > 0)
+            dc.DrawRectangle(brush, null, new Rect(DocsCanvas._padding + x1, lineY - scrollY, w, bgH));
     }
 
     // --- Private helpers ---
@@ -307,73 +404,9 @@ internal class FindAndReplaceController
         _rendering.InvalidateVisual();
     }
 
-    private void DrawMatchOnVisualLines(DrawingContext dc, SearchMatch match, Brush brush,
-        double effectiveScroll, double viewTop, double viewBottom)
+    private void DrawMatchOnJoinedLine(DrawingContext dc, DocsCanvas.VisualLine vl,
+        SearchMatch match, Brush brush, double lineY, double scrollY, double bgH)
     {
-        int matchEnd = match.Offset + match.Length;
-
-        for (int i = 0; i < _layout.VisualLines.Count; i++)
-        {
-            var vl = _layout.VisualLines[i];
-            double lineH = _layout.GetEffectiveLineHeight(vl);
-            double lineY = _layout.LineYPositions[i];
-            if (lineY + lineH < viewTop) continue;
-            if (lineY > viewBottom) break;
-
-            if (vl.Group != null)
-            {
-                DrawMatchOnJoinedLine(dc, i, match, brush, lineY, lineH, effectiveScroll);
-                continue;
-            }
-
-            if (vl.BlockIndex != match.Block) continue;
-
-            int vlEnd = vl.StartOffset + vl.Length;
-            if (match.Offset >= vlEnd || matchEnd <= vl.StartOffset) continue;
-
-            int hlStart = Math.Max(match.Offset, vl.StartOffset);
-            int hlEnd = Math.Min(matchEnd, vlEnd);
-
-            string blockText = _doc.GetBlockText(vl.BlockIndex);
-            var parsed = _content.ParsedBlocks![vl.BlockIndex];
-            var map = _visual.IsVisual ? _content.VisualMaps?[vl.BlockIndex] : null;
-
-            double x1, x2;
-            if (_visual.IsVisual && parsed.Table != null && parsed.TableRow != null)
-            {
-                if (_table.TableColumnWidths.TryGetValue(parsed.Table, out var colWidths))
-                {
-                    x1 = _table.CursorXInTableRow(vl.BlockIndex, parsed, colWidths, hlStart);
-                    x2 = _table.CursorXInTableRow(vl.BlockIndex, parsed, colWidths, hlEnd);
-                }
-                else continue;
-            }
-            else
-            {
-                x1 = _rendering.MeasureRangeWidth(blockText, vl.StartOffset, hlStart - vl.StartOffset,
-                    parsed.Runs, parsed.Kind, map);
-                x2 = _rendering.MeasureRangeWidth(blockText, vl.StartOffset, hlEnd - vl.StartOffset,
-                    parsed.Runs, parsed.Kind, map);
-
-                if (map?.ReplacementPrefix != null && vl.StartOffset == 0)
-                {
-                    double prefixW = _rendering.Measure.MeasureReplacementPrefix(map.ReplacementPrefix!, map.PrefixMeasureKind);
-                    x1 += prefixW;
-                    x2 += prefixW;
-                }
-            }
-
-            double w = Math.Max(0, x2 - x1);
-            if (w > 0)
-                dc.DrawRectangle(brush, null,
-                    new Rect(DocsCanvas._padding + x1, lineY - effectiveScroll, w, lineH));
-        }
-    }
-
-    private void DrawMatchOnJoinedLine(DrawingContext dc, int visualLineIndex,
-        SearchMatch match, Brush brush, double lineY, double lineH, double effectiveScroll)
-    {
-        var vl = _layout.VisualLines[visualLineIndex];
         var group = vl.Group!;
         int matchStartJoined = group.SourceToJoined(match.Block, match.Offset);
         int matchEndJoined = group.SourceToJoined(match.Block, match.Offset + match.Length);
@@ -392,8 +425,7 @@ internal class FindAndReplaceController
 
         double w = Math.Max(0, x2 - x1);
         if (w > 0)
-            dc.DrawRectangle(brush, null,
-                new Rect(DocsCanvas._padding + x1, lineY - effectiveScroll, w, lineH));
+            dc.DrawRectangle(brush, null, new Rect(DocsCanvas._padding + x1, lineY - scrollY, w, bgH));
     }
 
     // --- Test hooks ---

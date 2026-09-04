@@ -130,6 +130,11 @@ public partial class DocsCanvas
     // Reads the controller only if it already exists - never force the lazy FindAndReplace
     // property, which would allocate on the first render of every canvas.
     bool ISearchServices.HasSearchHighlights => _findAndReplaceController?.HasHighlights ?? false;
+    int ISearchServices.SearchHighlightSignature => _findAndReplaceController?.HighlightSignature ?? 0;
+    void ISearchServices.EnsureSearchMatchesCurrent() => _findAndReplaceController?.EnsureMatchesCurrent();
+    void ISearchServices.DrawSearchHighlightsForLine(DrawingContext dc, VisualLine vl,
+        double lineY, double scrollY, double bgH)
+        => _findAndReplaceController?.DrawSearchHighlightsForLine(dc, vl, lineY, scrollY, bgH);
 
     // ====== ILoggingServices ======
     IDocsLogger? ILoggingServices.Logger => Logger;

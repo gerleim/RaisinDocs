@@ -70,9 +70,6 @@ public partial class DocsCanvas
     private void InvalidateSearchOnContentChange() =>
         FindAndReplace.InvalidateSearchOnContentChange();
 
-    private void DrawSearchHighlights(DrawingContext dc, double effectiveScroll) =>
-        FindAndReplace.DrawSearchHighlights(dc, effectiveScroll);
-
     // Test hooks
     internal int TestSearchMatchCount => FindAndReplace.TestSearchMatchCount;
     internal int TestCurrentMatchIndex => FindAndReplace.TestCurrentMatchIndex;
