@@ -180,6 +180,7 @@ public partial class DocsCanvas
             // text cache has to be ready here rather than there.
             EnsureLineFtCache(_layout.VisualLines.Count, _docsCanvas.RenderVersion);
             EnsureLineVisualCache(_layout.VisualLines.Count, _docsCanvas.RenderVersion);
+            DropLineVisualsForSelectionChange();
             SyncLineVisuals(firstVisible, lastVisible);
             _docsCanvas.ContentScroll.Y = -effectiveScroll;
         }
@@ -278,6 +279,64 @@ public partial class DocsCanvas
         {
             double y = _layout.LineYPositions[i];
             return Math.Round(y + _layout.GetEffectiveLineHeight(vl)) - Math.Round(y);
+        }
+
+        /// <summary>The selection the cached line visuals were built under.</summary>
+        private (bool Has, int Sb, int So, int Eb, int Eo, bool Rect, int C0, int C1) _visualsSel;
+
+        /// <summary>
+        /// Drops the cached visuals of every line the selection has moved across.
+        /// </summary>
+        /// <remarks>
+        /// A line's picture now contains its slice of the selection, so changing the selection
+        /// makes those pictures wrong. Bumping RenderVersion would drop every cached line for
+        /// what is usually a one-line change, which is the mistake
+        /// <see cref="DropLineVisualsForImage"/> was written to avoid; this drops the union of
+        /// the old and the new selection instead.
+        ///
+        /// Block granularity, and the union rather than the symmetric difference, because both
+        /// are simple to get right and a selection is contiguous: dragging down a line touches
+        /// the lines of one or two blocks, and only a select-all reaches the whole screen -
+        /// once, not per frame.
+        ///
+        /// The columns are part of the signature as well. A rectangular table selection can be
+        /// dragged sideways without its block range changing at all, and the highlight would
+        /// otherwise stay where it was.
+        /// </remarks>
+        private void DropLineVisualsForSelectionChange()
+        {
+            var doc = _doc.Document;
+            var rect = _docsCanvas.TryGetTableRectSelection();
+
+            (bool, int, int, int, int, bool, int, int) now;
+            if (rect is { } r)
+                now = (true, r.StartBlock, 0, r.EndBlock, 0, true, r.StartCol, r.EndCol);
+            else if (doc.HasSelection)
+            {
+                var (sb, so, eb, eo) = doc.GetOrderedSelection();
+                now = (true, sb, so, eb, eo, false, 0, 0);
+            }
+            else now = (false, 0, 0, 0, 0, false, 0, 0);
+
+            if (now.Equals(_visualsSel)) return;
+
+            int lo = int.MaxValue, hi = int.MinValue;
+            if (_visualsSel.Has) { lo = Math.Min(lo, _visualsSel.Sb); hi = Math.Max(hi, _visualsSel.Eb); }
+            if (now.Item1) { lo = Math.Min(lo, now.Item2); hi = Math.Max(hi, now.Item4); }
+            _visualsSel = now;
+
+            if (lo > hi || _lineVisuals == null || _visualsHi < _visualsLo) return;
+
+            for (int i = _visualsLo; i <= _visualsHi && i < _lineVisuals.Length; i++)
+            {
+                if (_lineVisuals[i] is not { } dv) continue;
+                if (i >= _layout.VisualLines.Count) continue;
+                int bi = _layout.VisualLines[i].BlockIndex;
+                if (bi < lo || bi > hi) continue;
+
+                _docsCanvas.ContentLayer.Children.Remove(dv);
+                _lineVisuals[i] = null;
+            }
         }
 
         /// <summary>Renders one line into its own cached visual. False if it already had one.</summary>
@@ -438,11 +497,11 @@ public partial class DocsCanvas
             // beneath it. A table's borders are not a fill and stay whole-table geometry, in
             // the overlay below. See design/Opaque Line Visuals.md phases 2 and 3.
 
-            // Selection first: navigating to a match also selects it, so the two overlap.
-            // Painted the other way round the selection covers the current-match colour,
-            // and the current match becomes indistinguishable from the rest.
-            if (_doc.Document.HasSelection)
-                DrawSelection(dc, effectiveScroll);
+            // Selection draws from DrawLineContent now, inside the line rather than beneath
+            // it - see design/Opaque Line Visuals.md phase 4. It still goes down before the
+            // current-match colour, which is why the search highlights below have not moved
+            // yet: navigating to a match also selects it, and painted the other way round the
+            // selection would cover the current match and make it indistinguishable.
 
             if (_search.HasSearchHighlights)
                 DrawSearchHighlights(dc, effectiveScroll);
@@ -573,6 +632,7 @@ public partial class DocsCanvas
                 && vl.BlockIndex < _content.ParsedBlocks.Count)
                 _table.TableRenderer.DrawTableRowBackground(
                     dc, _content.ParsedBlocks[vl.BlockIndex], lineY, scrollY, bgH);
+            DrawSelectionForLine(dc, vl, lineY, scrollY, bgH);
 
             if (vl.Length > 0)
             {
@@ -1542,120 +1602,106 @@ public partial class DocsCanvas
             }
         }
 
-        private void DrawSelection(DrawingContext dc, double effectiveScroll)
+        /// <summary>Draws the selection over one line, if it covers any of it.</summary>
+        /// <remarks>
+        /// Inside the line visual rather than under it: an opaque line covers anything OnRender
+        /// paints beneath. That makes a line's picture depend on the selection, which is view
+        /// state and changes without the content changing, so
+        /// <see cref="DropLineVisualsForSelectionChange"/> drops the lines it moved across.
+        /// </remarks>
+        private void DrawSelectionForLine(DrawingContext dc, VisualLine vl,
+            double lineY, double scrollY, double bgH)
         {
             var rectSel = _docsCanvas.TryGetTableRectSelection();
             if (rectSel != null)
             {
-                var r = rectSel.Value;
-                DrawTableRectSelection(dc, effectiveScroll, r.StartCol, r.EndCol, r.StartBlock, r.EndBlock, r.Table);
+                DrawTableRectSelectionForLine(dc, vl, lineY, scrollY, bgH, rectSel.Value);
                 return;
             }
 
+            if (!_doc.Document.HasSelection) return;
+
             var (sb, so, eb, eo) = _doc.Document.GetOrderedSelection();
-            double viewTop = effectiveScroll;
-            double viewBottom = effectiveScroll + _rendering.ActualHeight;
 
-            for (int i = FirstLineAt(viewTop); i < _layout.VisualLines.Count; i++)
+            if (vl.Group != null)
             {
-                var vl = _layout.VisualLines[i];
-                double lineH = _layout.GetEffectiveLineHeight(vl);
-                double lineY = _layout.LineYPositions[i];
-                if (lineY + lineH < viewTop) continue;
-                if (lineY > viewBottom) break;
+                DrawJoinedSelection(dc, vl, lineY, bgH, scrollY, sb, so, eb, eo);
+                return;
+            }
 
-                if (vl.Group != null)
+            int vlEnd = vl.StartOffset + vl.Length;
+
+            bool startsBeforeSelEnd = Document.ComparePositions(vl.BlockIndex, vl.StartOffset, eb, eo) < 0;
+            bool endsAfterSelStart = Document.ComparePositions(vl.BlockIndex, vlEnd, sb, so) > 0;
+            if (!startsBeforeSelEnd || !endsAfterSelStart) return;
+
+            int hlStart = Document.ComparePositions(vl.BlockIndex, vl.StartOffset, sb, so) >= 0
+                ? vl.StartOffset : so;
+            int hlEnd = Document.ComparePositions(vl.BlockIndex, vlEnd, eb, eo) <= 0
+                ? vlEnd : eo;
+
+            var parsed = _content.ParsedBlocks![vl.BlockIndex];
+            string blockText = _doc.Document.GetBlockText(vl.BlockIndex);
+            var map = _visual.IsVisual ? _content.VisualMaps?[vl.BlockIndex] : null;
+
+            double x1, x2;
+            if (_visual.IsVisual && parsed.Table != null && parsed.TableRow != null)
+            {
+                if (_table.TableColumnWidths.TryGetValue(parsed.Table, out var colWidths))
                 {
-                    DrawJoinedSelection(dc, vl, lineY, lineH, effectiveScroll, sb, so, eb, eo);
-                    continue;
-                }
-
-                int vlEnd = vl.StartOffset + vl.Length;
-
-                bool startsBeforeSelEnd = Document.ComparePositions(vl.BlockIndex, vl.StartOffset, eb, eo) < 0;
-                bool endsAfterSelStart = Document.ComparePositions(vl.BlockIndex, vlEnd, sb, so) > 0;
-                if (!startsBeforeSelEnd || !endsAfterSelStart) continue;
-
-                int hlStart = Document.ComparePositions(vl.BlockIndex, vl.StartOffset, sb, so) >= 0
-                    ? vl.StartOffset : so;
-                int hlEnd = Document.ComparePositions(vl.BlockIndex, vlEnd, eb, eo) <= 0
-                    ? vlEnd : eo;
-
-                var parsed = _content.ParsedBlocks![vl.BlockIndex];
-                string blockText = _doc.Document.GetBlockText(vl.BlockIndex);
-                var map = _visual.IsVisual ? _content.VisualMaps?[vl.BlockIndex] : null;
-
-                double x1, x2;
-                if (_visual.IsVisual && parsed.Table != null && parsed.TableRow != null)
-                {
-                    if (_table.TableColumnWidths.TryGetValue(parsed.Table, out var colWidths))
-                    {
-                        x1 = _table.TableRenderer.CursorXInTableRow(vl.BlockIndex, parsed, colWidths, hlStart);
-                        x2 = _table.TableRenderer.CursorXInTableRow(vl.BlockIndex, parsed, colWidths, hlEnd);
-                    }
-                    else
-                    {
-                        x1 = 0; x2 = 0;
-                    }
+                    x1 = _table.TableRenderer.CursorXInTableRow(vl.BlockIndex, parsed, colWidths, hlStart);
+                    x2 = _table.TableRenderer.CursorXInTableRow(vl.BlockIndex, parsed, colWidths, hlEnd);
                 }
                 else
                 {
-                    x1 = _rendering.MeasureRangeWidth(blockText, vl.StartOffset, hlStart - vl.StartOffset,
-                        parsed.Runs, parsed.Kind, map);
-                    x2 = _rendering.MeasureRangeWidth(blockText, vl.StartOffset, hlEnd - vl.StartOffset,
-                        parsed.Runs, parsed.Kind, map);
-
-                    if (map != null && map.ReplacementPrefix != null && vl.StartOffset == 0)
-                    {
-                        double prefixW = _rendering.Measure.MeasureReplacementPrefix(map.ReplacementPrefix!, map.PrefixMeasureKind);
-                        x1 += prefixW;
-                        x2 += prefixW;
-                    }
+                    x1 = 0; x2 = 0;
                 }
-
-                bool selectionContinues = Document.ComparePositions(vl.BlockIndex, vlEnd, eb, eo) < 0;
-                if (selectionContinues && x2 - x1 < 4)
-                    x2 = x1 + 4;
-                else if (selectionContinues)
-                    x2 += 4;
-
-                double selW = Math.Max(0, x2 - x1);
-                if (selW > 0)
-                    dc.DrawRectangle(_rendering.Palette.Selection, null,
-                        new Rect(DocsCanvas._padding + x1, lineY - effectiveScroll, selW, lineH));
             }
+            else
+            {
+                x1 = _rendering.MeasureRangeWidth(blockText, vl.StartOffset, hlStart - vl.StartOffset,
+                    parsed.Runs, parsed.Kind, map);
+                x2 = _rendering.MeasureRangeWidth(blockText, vl.StartOffset, hlEnd - vl.StartOffset,
+                    parsed.Runs, parsed.Kind, map);
+
+                if (map != null && map.ReplacementPrefix != null && vl.StartOffset == 0)
+                {
+                    double prefixW = _rendering.Measure.MeasureReplacementPrefix(map.ReplacementPrefix!, map.PrefixMeasureKind);
+                    x1 += prefixW;
+                    x2 += prefixW;
+                }
+            }
+
+            bool selectionContinues = Document.ComparePositions(vl.BlockIndex, vlEnd, eb, eo) < 0;
+            if (selectionContinues && x2 - x1 < 4)
+                x2 = x1 + 4;
+            else if (selectionContinues)
+                x2 += 4;
+
+            double selW = Math.Max(0, x2 - x1);
+            if (selW > 0)
+                dc.DrawRectangle(_rendering.Palette.Selection, null,
+                    new Rect(DocsCanvas._padding + x1, lineY - scrollY, selW, bgH));
         }
 
-        private void DrawTableRectSelection(DrawingContext dc, double effectiveScroll,
-            int startCol, int endCol, int startBlock, int endBlock, TableInfo table)
+        /// <summary>One line's slice of a rectangular table selection.</summary>
+        private void DrawTableRectSelectionForLine(DrawingContext dc, VisualLine vl,
+            double lineY, double scrollY, double bgH,
+            (int StartCol, int EndCol, int StartBlock, int EndBlock, TableInfo Table) r)
         {
-            if (!_table.TableColumnWidths.TryGetValue(table, out var colWidths)) return;
+            if (vl.BlockIndex < r.StartBlock || vl.BlockIndex > r.EndBlock) return;
+            if (!_table.TableColumnWidths.TryGetValue(r.Table, out var colWidths)) return;
+            if (_content.ParsedBlocks![vl.BlockIndex].IsTableSeparator) return;
 
             double xStart = 0;
-            for (int c = 0; c < startCol && c < colWidths.Length; c++)
+            for (int c = 0; c < r.StartCol && c < colWidths.Length; c++)
                 xStart += colWidths[c];
             double xEnd = xStart;
-            for (int c = startCol; c <= endCol && c < colWidths.Length; c++)
+            for (int c = r.StartCol; c <= r.EndCol && c < colWidths.Length; c++)
                 xEnd += colWidths[c];
 
-            double viewTop = effectiveScroll;
-            double viewBottom = effectiveScroll + _rendering.ActualHeight;
-
-            for (int i = FirstLineAt(viewTop); i < _layout.VisualLines.Count; i++)
-            {
-                var vl = _layout.VisualLines[i];
-                if (vl.BlockIndex < startBlock || vl.BlockIndex > endBlock) continue;
-                var parsed = _content.ParsedBlocks![vl.BlockIndex];
-                if (parsed.IsTableSeparator) continue;
-
-                double lineY = _layout.LineYPositions[i];
-                double lineH = _layout.GetEffectiveLineHeight(vl);
-                if (lineY + lineH < viewTop) continue;
-                if (lineY > viewBottom) break;
-
-                dc.DrawRectangle(_rendering.Palette.Selection, null,
-                    new Rect(DocsCanvas._padding + xStart, lineY - effectiveScroll, xEnd - xStart, lineH));
-            }
+            dc.DrawRectangle(_rendering.Palette.Selection, null,
+                new Rect(DocsCanvas._padding + xStart, lineY - scrollY, xEnd - xStart, bgH));
         }
 
         private void DrawJoinedSelection(DrawingContext dc, VisualLine vl,
