@@ -18,6 +18,12 @@ public partial class App : Application
     /// </summary>
     internal const string RenderDiagSwitch = "--render-diag";
 
+    /// <summary>
+    /// Logs what each stage of a layout pass costs, which is what a keystroke pays for.
+    /// See %LOCALAPPDATA%\RaisinDocs\layout.log.
+    /// </summary>
+    internal const string LayoutDiagSwitch = "--layout-diag";
+
     protected override void OnStartup(StartupEventArgs e)
     {
         // Here rather than in a window's Loaded: the canvas wires its scroll counters up in
@@ -28,6 +34,8 @@ public partial class App : Application
                 DocsCanvas.ScrollDiagnostics = true;
             else if (string.Equals(arg, RenderDiagSwitch, StringComparison.OrdinalIgnoreCase))
                 DocsCanvas.EnableRenderPathToggle = true;
+            else if (string.Equals(arg, LayoutDiagSwitch, StringComparison.OrdinalIgnoreCase))
+                DocsCanvas.LayoutDiagnostics = true;
         }
 
         base.OnStartup(e);

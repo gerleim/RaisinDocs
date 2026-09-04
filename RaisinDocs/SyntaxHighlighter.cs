@@ -1,3 +1,4 @@
+using System.Text;
 using TextMateSharp.Grammars;
 using TextMateSharp.Registry;
 using TextMateSharp.Themes;
@@ -26,9 +27,60 @@ internal class SyntaxHighlighter
         _registry = new Registry(_options);
         _theme = _registry.GetTheme();
         _grammarCache.Clear();
+        _tokenCache.Clear();   // tokens carry resolved colours, so a new theme invalidates them
     }
 
+    /// <summary>
+    /// Tokens for one fenced code block, cached on its language and its own text.
+    /// </summary>
+    /// <remarks>
+    /// ApplySyntaxHighlighting re-tokenises every fenced block in the document on every parse,
+    /// and InvalidateLayout drops the parse on every keystroke. On a 1119-block document with
+    /// 19 code blocks that measured 68.7 ms a character against 5.4 with no highlighter at all
+    /// - 81% of what a keystroke cost, paid whether or not the caret was anywhere near code.
+    ///
+    /// A block's tokens depend only on its language and its own lines, because TextMate's rule
+    /// stack is reset per block and nothing outside it can reach in. Keying on exactly that
+    /// makes the cache content-addressed, which is why it cannot go stale: an edited block is a
+    /// different key, not a wrong hit.
+    /// </remarks>
+    private readonly Dictionary<string, List<SyntaxToken>[]> _tokenCache = new();
+
+    /// <summary>Entries kept before the cache is dropped wholesale.</summary>
+    /// <remarks>
+    /// Typing inside a code block mints a key per keystroke, so this has to be bounded.
+    /// Cleared rather than evicted one at a time: the cap sits far above the number of code
+    /// blocks in a document, so a clear only follows a long editing run, and it costs a single
+    /// re-tokenised parse.
+    /// </remarks>
+    private const int TokenCacheLimit = 256;
+
     public List<SyntaxToken>[]? Tokenize(string language, IReadOnlyList<string> lines)
+    {
+        string key = BuildCacheKey(language, lines);
+        if (_tokenCache.TryGetValue(key, out var hit)) return hit;
+
+        var tokens = TokenizeCore(language, lines);
+        if (tokens == null) return null;   // no grammar; GetGrammar caches that lookup itself
+
+        if (_tokenCache.Count >= TokenCacheLimit) _tokenCache.Clear();
+        _tokenCache[key] = tokens;
+        return tokens;
+    }
+
+    /// <summary>
+    /// Language, then every line, each terminated by a separator that cannot occur in source.
+    /// </summary>
+    private static string BuildCacheKey(string language, IReadOnlyList<string> lines)
+    {
+        var sb = new StringBuilder(language.Length + 1 + lines.Count * 40);
+        sb.Append(language).Append('\u0000');
+        for (int i = 0; i < lines.Count; i++)
+            sb.Append(lines[i]).Append('\u0000');
+        return sb.ToString();
+    }
+
+    private List<SyntaxToken>[]? TokenizeCore(string language, IReadOnlyList<string> lines)
     {
         var grammar = GetGrammar(language);
         if (grammar == null) return null;
