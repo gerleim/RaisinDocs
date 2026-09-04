@@ -13,13 +13,6 @@ public partial class App : Application
     internal const string ScrollDiagSwitch = "--scroll-diag";
 
     /// <summary>
-    /// Pins the render-path badge on screen. F8 and F9 themselves need no switch - they work
-    /// in every host - and the badge appears on its own once either is off the default path.
-    /// See design/Opaque Line Visuals.md.
-    /// </summary>
-    internal const string RenderDiagSwitch = "--render-diag";
-
-    /// <summary>
     /// Logs what each stage of a layout pass costs, which is what a keystroke pays for.
     /// See %LOCALAPPDATA%\RaisinDocs\layout.log.
     /// </summary>
@@ -33,8 +26,6 @@ public partial class App : Application
         {
             if (string.Equals(arg, ScrollDiagSwitch, StringComparison.OrdinalIgnoreCase))
                 DocsCanvas.ScrollDiagnostics = true;
-            else if (string.Equals(arg, RenderDiagSwitch, StringComparison.OrdinalIgnoreCase))
-                DocsCanvas.EnableRenderPathToggle = true;
             else if (string.Equals(arg, LayoutDiagSwitch, StringComparison.OrdinalIgnoreCase))
                 DocsCanvas.LayoutDiagnostics = true;
         }

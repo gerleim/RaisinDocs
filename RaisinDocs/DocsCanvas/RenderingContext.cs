@@ -156,7 +156,7 @@ public partial class DocsCanvas
         /// </param>
         internal void UpdateContentLayer(double viewportHeight)
         {
-            if (_content.ParsedBlocks == null || !_docsCanvas.CachedLineVisuals) return;
+            if (_content.ParsedBlocks == null) return;
             if (_layout.VisualLines.Count == 0 || viewportHeight <= 0) return;
 
             double effectiveScroll = Math.Round(_scroll.Scroll.EffectiveOffset);
@@ -399,9 +399,8 @@ public partial class DocsCanvas
                 // Full canvas width, because that is what the passes this will eventually
                 // absorb cover; the gap a fractional line height leaves against the next
                 // line shows the canvas fill, which is this same brush.
-                if (_docsCanvas.OpaqueLineVisuals)
-                    dc.DrawRectangle(_rendering.Palette.Background, null,
-                        new Rect(0, 0, _rendering.ActualWidth, SnappedLineHeight(i, vl)));
+                dc.DrawRectangle(_rendering.Palette.Background, null,
+                    new Rect(0, 0, _rendering.ActualWidth, SnappedLineHeight(i, vl)));
 
                 DrawLineContent(dc, i, vl, y, y);
             }
@@ -551,18 +550,8 @@ public partial class DocsCanvas
                 _lastVisible = i;
             }
 
-            // On the cached path there is nothing to draw here: the line visuals were built
-            // and positioned in ArrangeOverride, ahead of this render pass. See UpdateContentLayer.
-            if (!_docsCanvas.CachedLineVisuals)
-            {
-                // The comparison path, reached only when the F9 toggle is enabled: draws
-                // every visible line here, as everything did before lines were cached.
-                if (_docsCanvas.ContentLayer.Children.Count > 0)
-                    _docsCanvas.ContentLayer.Children.Clear();
-
-                for (int i = Math.Max(0, _firstVisible); i <= _lastVisible; i++)
-                    DrawLineContent(dc, i, _layout.VisualLines[i], _layout.LineYPositions[i], effectiveScroll);
-            }
+            // Nothing draws the lines here: they were built and positioned in ArrangeOverride,
+            // ahead of this render pass. See UpdateContentLayer.
 
             if (_firstVisible >= 0) TrimLineFtCache(_firstVisible, _lastVisible);
 
@@ -592,8 +581,6 @@ public partial class DocsCanvas
                 if (!_visual.IsVisual && _images.ImagePreview == DocsCanvas.ImagePreviewMode.OnHover && _docsCanvas._hoveredImage != null)
                     DrawHoverImagePreview(odc);
 
-                if (_docsCanvas.ShowRenderPathBadge)
-                    DrawModeBadge(odc);
             }
 
             // Feeds the adaptive repaint cap: the scroll controller stretches its interval
@@ -622,24 +609,6 @@ public partial class DocsCanvas
                         fe.InvalidateVisual();
                     _docsCanvas.ScrollStateChanged?.Invoke();
                 });
-        }
-
-        /// <summary>Says which of the two paths is drawing. Only shown off the default path.</summary>
-        private void DrawModeBadge(DrawingContext dc)
-        {
-            // F8 first, so the switches read in key order. The fill only exists on the cached
-            // path, so on direct draw there is nothing to report for it.
-            string path = _docsCanvas.CachedLineVisuals ? "F9: cached visuals" : "F9: direct draw";
-            string text = _docsCanvas.CachedLineVisuals
-                ? (_docsCanvas.OpaqueLineVisuals ? "F8: opaque (ClearType)" : "F8: transparent (greyscale)")
-                  + "  |  " + path
-                : path;
-            var ft = new FormattedText(text, CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
-                TextMeasurer.NormalTypeface, 11, _rendering.Palette.Syntax, _rendering.Measure.DpiScale);
-            double x = _rendering.ActualWidth - ft.Width - 12;
-            dc.DrawRectangle(_rendering.Palette.CodeBackground, null,
-                new Rect(x - 6, 4, ft.Width + 12, ft.Height + 4));
-            dc.DrawText(ft, new Point(x, 6));
         }
 
         /// <summary>

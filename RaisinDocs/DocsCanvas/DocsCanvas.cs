@@ -1144,70 +1144,16 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider, IDocsC
     /// later be fractional without each line rounding independently.
     /// </remarks>
     /// <summary>
-    /// Keeps the render-path badge on screen even while the default path is drawing.
+    /// Every visual line is drawn into its own BitmapCache'd visual, filled with the theme
+    /// background first so ClearType has something to filter against.
     /// </summary>
     /// <remarks>
-    /// It used to gate F8 and F9 as well. Those work everywhere now, in every host, so all
-    /// this does is pin the badge - useful when measuring, because it names the path in a
-    /// screen capture taken from outside the process.
-    ///
-    /// That outside view is the point. Frame-rate figures taken from inside count OnRender
-    /// calls, not frames the panel showed, and DwmGetCompositionTimingInfo will not report the
-    /// difference. Switching paths back to back on the same document and measuring with
-    /// FrameView is what turned "I cannot tell a difference" into 140 displayed frames a
-    /// second against 119.
+    /// Both were toggles once - F9 switched to drawing straight into OnRender, F8 turned the
+    /// fill off - kept while design/Opaque Line Visuals.md moved the backgrounds, selection and
+    /// search highlights into the line one phase at a time. With that done there is one path
+    /// and one appearance, and a key that quietly makes the editor slower and softer is a
+    /// hazard rather than a diagnostic. The notes record what the comparison measured.
     /// </remarks>
-    public static bool EnableRenderPathToggle { get; set; }
-
-    /// <summary>
-    /// Whether to draw the badge naming the current render path.
-    /// </summary>
-    /// <remarks>
-    /// F8 and F9 work everywhere and in every host, so a reader who has never heard of them
-    /// must not see a badge. It appears once the render path is not the one that ships, which
-    /// is exactly when knowing the path matters, and goes away again when the toggles come
-    /// back - so it needs no state of its own. A host can force it on with
-    /// <see cref="EnableRenderPathToggle"/> while investigating.
-    /// </remarks>
-    internal bool ShowRenderPathBadge => EnableRenderPathToggle || !CachedLineVisuals || !OpaqueLineVisuals;
-
-    /// <summary>Which of the two drawing paths is in use. Always true unless F9 is enabled.</summary>
-    internal bool CachedLineVisuals { get; private set; } = true;
-
-    internal void ToggleCachedLineVisuals()
-    {
-        CachedLineVisuals = !CachedLineVisuals;
-        InvalidateRenderCache();   // drop the visuals either way, so neither path sees the other's
-        InvalidateVisual();
-    }
-
-    /// <summary>
-    /// Fills each cached line visual with the theme background before drawing its text, which
-    /// is what ClearType needs to run. See design/Opaque Line Visuals.md.
-    /// </summary>
-    /// <remarks>
-    /// A BitmapCache rasterises into a Pbgra32 surface, and ClearType cannot filter against a
-    /// background it does not know, so every line cached between 337e009 and this was greyscale
-    /// antialiased - softer and thinner than the text had been, stationary as well as scrolling.
-    ///
-    /// On by default, which it could only become once nothing was left painting under the
-    /// content layer: an opaque line covers whatever OnRender drew beneath it, so the code and
-    /// colour block tints, the table tints, the selection and the search highlights all had to
-    /// move into the line first. All that OnRender still paints below is the canvas fill, which
-    /// shows through the paragraph gaps and under the last line.
-    ///
-    /// F8 turns it off, which is worth keeping: it is the only way to see what the greyscale
-    /// fallback actually looked like.
-    /// </remarks>
-    internal bool OpaqueLineVisuals { get; private set; } = true;
-
-    internal void ToggleOpaqueLineVisuals()
-    {
-        OpaqueLineVisuals = !OpaqueLineVisuals;
-        InvalidateRenderCache();   // the fill is baked into the bitmap, so every line rebuilds
-        InvalidateVisual();
-    }
-
     internal readonly ContainerVisual ContentLayer = new();
 
     /// <summary>Moves <see cref="ContentLayer"/> by the scroll offset.</summary>
