@@ -333,9 +333,8 @@ public partial class DocsCanvas
         => _tableRenderer.DrawTableLines(dc, effectiveScroll, viewTop, viewBottom);
 
     private void DrawTableRow(DrawingContext dc, VisualLine vl, string blockText,
-        ParsedBlock parsed, double lineY, double effectiveScroll,
-        double fontSize, Typeface baseTypeface)
-        => _tableRenderer.DrawTableRow(dc, vl, blockText, parsed, lineY, effectiveScroll, fontSize, baseTypeface);
+        ParsedBlock parsed, double y, double fontSize, Typeface baseTypeface)
+        => _tableRenderer.DrawTableRow(dc, vl, blockText, parsed, y, fontSize, baseTypeface);
 
 
     private void ClampCursorToTableCell()
@@ -448,12 +447,12 @@ public partial class DocsCanvas
 
     private void DrawVisualLineWithImages(DrawingContext dc, VisualLine vl,
         string blockText, ParsedBlock parsed, BlockVisualMap map,
-        double lineY, double effectiveScroll, double fontSize, Typeface baseTypeface)
+        double y, double fontSize, Typeface baseTypeface)
     {
         if (map.Images == null) return;
 
         double x = _padding;
-        double screenY = lineY - effectiveScroll;
+        double screenY = y;
         double textLineH = _measure.GetLineHeight(vl.BlockKind);
         double totalLineH = vl.OverrideHeight > textLineH ? vl.OverrideHeight : textLineH;
 

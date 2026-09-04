@@ -133,8 +133,8 @@ public partial class DocsCanvas
     int ISearchServices.SearchHighlightSignature => _findAndReplaceController?.HighlightSignature ?? 0;
     void ISearchServices.EnsureSearchMatchesCurrent() => _findAndReplaceController?.EnsureMatchesCurrent();
     void ISearchServices.DrawSearchHighlightsForLine(DrawingContext dc, VisualLine vl,
-        double lineY, double scrollY, double bgH)
-        => _findAndReplaceController?.DrawSearchHighlightsForLine(dc, vl, lineY, scrollY, bgH);
+        double y, double bgH)
+        => _findAndReplaceController?.DrawSearchHighlightsForLine(dc, vl, y, bgH);
 
     // ====== ILoggingServices ======
     IDocsLogger? ILoggingServices.Logger => Logger;

@@ -172,7 +172,7 @@ internal interface ISearchServices
 
     /// <summary>Draws the matches falling on one line, behind its text.</summary>
     void DrawSearchHighlightsForLine(DrawingContext dc, DocsCanvas.VisualLine vl,
-        double lineY, double scrollY, double bgH);
+        double y, double bgH);
 }
 
 /// <summary>

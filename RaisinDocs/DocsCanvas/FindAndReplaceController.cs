@@ -289,7 +289,7 @@ internal class FindAndReplaceController
     /// overlaps rather than under it.
     /// </remarks>
     internal void DrawSearchHighlightsForLine(DrawingContext dc, DocsCanvas.VisualLine vl,
-        double lineY, double scrollY, double bgH)
+        double y, double bgH)
     {
         if (_searchMatches.Count == 0) return;
 
@@ -302,20 +302,20 @@ internal class FindAndReplaceController
                 if (pass == 1 && !isCurrent) continue;
 
                 var brush = isCurrent ? _rendering.Palette.CurrentSearchMatch : _rendering.Palette.SearchMatch;
-                DrawMatchOnLine(dc, vl, _searchMatches[mi], brush, lineY, scrollY, bgH);
+                DrawMatchOnLine(dc, vl, _searchMatches[mi], brush, y, bgH);
             }
         }
     }
 
     private void DrawMatchOnLine(DrawingContext dc, DocsCanvas.VisualLine vl, SearchMatch match,
-        Brush brush, double lineY, double scrollY, double bgH)
+        Brush brush, double y, double bgH)
     {
         if (vl.Group is { } group)
         {
             // Cheap reject before SourceToJoined, which the old per-match loop paid for on
             // every joined line in view whether the match was in the group or not.
             if (match.Block < group.FirstBlock || match.Block > group.LastBlock) return;
-            DrawMatchOnJoinedLine(dc, vl, match, brush, lineY, scrollY, bgH);
+            DrawMatchOnJoinedLine(dc, vl, match, brush, y, bgH);
             return;
         }
 
@@ -359,7 +359,7 @@ internal class FindAndReplaceController
 
         double w = Math.Max(0, x2 - x1);
         if (w > 0)
-            dc.DrawRectangle(brush, null, new Rect(DocsCanvas._padding + x1, lineY - scrollY, w, bgH));
+            dc.DrawRectangle(brush, null, new Rect(DocsCanvas._padding + x1, y, w, bgH));
     }
 
     // --- Private helpers ---
@@ -405,7 +405,7 @@ internal class FindAndReplaceController
     }
 
     private void DrawMatchOnJoinedLine(DrawingContext dc, DocsCanvas.VisualLine vl,
-        SearchMatch match, Brush brush, double lineY, double scrollY, double bgH)
+        SearchMatch match, Brush brush, double y, double bgH)
     {
         var group = vl.Group!;
         int matchStartJoined = group.SourceToJoined(match.Block, match.Offset);
@@ -425,7 +425,7 @@ internal class FindAndReplaceController
 
         double w = Math.Max(0, x2 - x1);
         if (w > 0)
-            dc.DrawRectangle(brush, null, new Rect(DocsCanvas._padding + x1, lineY - scrollY, w, bgH));
+            dc.DrawRectangle(brush, null, new Rect(DocsCanvas._padding + x1, y, w, bgH));
     }
 
     // --- Test hooks ---

@@ -391,7 +391,7 @@ partial class DocsCanvas
 
                 if (vl.Group != null)
                 {
-                    _canvas.DrawJoinedLine(dc, vl, lineY, effectiveScroll);
+                    _canvas.DrawJoinedLine(dc, vl, lineY - effectiveScroll);
                     continue;
                 }
 
@@ -409,14 +409,14 @@ partial class DocsCanvas
                 }
                 else if (parsed.Table != null && parsed.TableRow != null)
                 {
-                    _canvas.DrawTableRow(dc, vl, blockText, parsed, lineY, effectiveScroll, fontSize, baseTypeface);
+                    _canvas.DrawTableRow(dc, vl, blockText, parsed, lineY - effectiveScroll, fontSize, baseTypeface);
                 }
                 else if (map != null)
                 {
                     if (_canvas.HasImagesOnLine(vl, map))
                     {
                         _canvas.DrawVisualLineWithImages(dc, vl, blockText, parsed, map,
-                            lineY, effectiveScroll, fontSize, baseTypeface);
+                            lineY - effectiveScroll, fontSize, baseTypeface);
                     }
                     else
                     {

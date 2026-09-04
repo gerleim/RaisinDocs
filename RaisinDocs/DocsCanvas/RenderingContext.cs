@@ -392,8 +392,9 @@ public partial class DocsCanvas
             };
             using (var dc = dv.RenderOpen())
             {
-                // lineY == scrollY draws the line at the origin of its own visual.
-                double y = _layout.LineYPositions[i];
+                // A line draws at the origin of its own visual. The transform above is what
+                // puts it in the right place on the page.
+                const double y = 0;
 
                 // Before the text, so ClearType has a known background to filter against.
                 // Full canvas width, because that is what the passes this will eventually
@@ -402,7 +403,7 @@ public partial class DocsCanvas
                 dc.DrawRectangle(_rendering.Palette.Background, null,
                     new Rect(0, 0, _rendering.ActualWidth, SnappedLineHeight(i, vl)));
 
-                DrawLineContent(dc, i, vl, y, y);
+                DrawLineContent(dc, i, vl, y);
             }
 
             _lineVisuals[i] = dv;
@@ -612,33 +613,37 @@ public partial class DocsCanvas
         }
 
         /// <summary>
-        /// Draws one visual line's own content. Everything here positions itself as
-        /// <c>lineY - scrollY</c>, so passing the two equal draws the line at the origin -
-        /// which is how a line is rendered into its own cached visual.
+        /// Draws one visual line's own content at <paramref name="y"/>, where the line sits
+        /// inside its own cached visual - which is the origin, always.
         /// </summary>
-        private void DrawLineContent(DrawingContext dc, int i, VisualLine vl,
-            double lineY, double scrollY)
+        /// <remarks>
+        /// This used to take a lineY and a scrollY and position everything at their
+        /// difference, so that passing the two equal drew a line at its own origin. That
+        /// existed for the direct-draw path, which passed the real scroll offset; with that
+        /// path gone the difference was always zero and the convention only obscured it.
+        /// </remarks>
+        private void DrawLineContent(DrawingContext dc, int i, VisualLine vl, double y)
         {
             // Before the vl.Length guard, so an empty line inside a code or colour block is
             // still tinted. Drawn from here rather than from OnRender because an opaque line
             // visual covers anything painted beneath it - and because both render paths call
             // this method, so one copy serves them both.
             double bgH = SnappedLineHeight(i, vl);
-            DrawCodeBlockBackground(dc, vl, lineY, scrollY, bgH);
-            DrawColorBlockBackground(dc, vl, lineY, scrollY, bgH);
-            DrawInlineColorBackground(dc, vl, lineY, scrollY, bgH);
+            DrawCodeBlockBackground(dc, vl, y, bgH);
+            DrawColorBlockBackground(dc, vl, y, bgH);
+            DrawInlineColorBackground(dc, vl, y, bgH);
             if (_visual.IsVisual && _content.ParsedBlocks != null
                 && vl.BlockIndex < _content.ParsedBlocks.Count)
                 _table.TableRenderer.DrawTableRowBackground(
-                    dc, _content.ParsedBlocks[vl.BlockIndex], lineY, scrollY, bgH);
-            DrawSelectionForLine(dc, vl, lineY, scrollY, bgH);
-            _search.DrawSearchHighlightsForLine(dc, vl, lineY, scrollY, bgH);
+                    dc, _content.ParsedBlocks[vl.BlockIndex], y, bgH);
+            DrawSelectionForLine(dc, vl, y, bgH);
+            _search.DrawSearchHighlightsForLine(dc, vl, y, bgH);
 
             if (vl.Length > 0)
             {
                 if (vl.Group != null)
                 {
-                    DrawJoinedLine(dc, vl, lineY, scrollY, i);
+                    DrawJoinedLine(dc, vl, y, i);
                 }
                 else
                 {
@@ -655,25 +660,25 @@ public partial class DocsCanvas
 
                     if (_visual.IsVisual && parsed.Kind == BlockKind.Blockquote && vl.StartOffset == 0)
                     {
-                        DrawBlockquoteBar(dc, lineY, scrollY);
+                        DrawBlockquoteBar(dc, y);
                     }
 
                     if (_visual.IsVisual && parsed.Kind == BlockKind.ThematicBreak)
                     {
-                        double ruleY = lineY - scrollY + 10;
+                        double ruleY = y + 10;
                         double ruleRight = _rendering.ActualWidth - DocsCanvas._padding;
                         dc.DrawLine(_rendering.Palette.TableBorderPen, new Point(DocsCanvas._padding, ruleY), new Point(ruleRight, ruleY));
                     }
                     else if (_visual.IsVisual && parsed.Table != null && parsed.TableRow != null)
                     {
-                        _table.TableRenderer.DrawTableRow(dc, vl, blockText(), parsed, lineY, scrollY, fontSize, baseTypeface);
+                        _table.TableRenderer.DrawTableRow(dc, vl, blockText(), parsed, y, fontSize, baseTypeface);
                     }
                     else if (map != null)
                     {
                         if (HasImagesOnLine(vl, map))
                         {
                             DrawVisualLineWithImages(dc, vl, blockText(), parsed, map,
-                                lineY, scrollY, fontSize, baseTypeface);
+                                y, fontSize, baseTypeface);
                         }
                         else
                         {
@@ -687,7 +692,7 @@ public partial class DocsCanvas
                                     if (spacing != null)
                                     {
                                         DrawTaskListCheckbox(dc, parsed.Kind == BlockKind.TaskListItemChecked,
-                                            new AbsoluteX(spacing.MarkerStartX), new AbsoluteY(lineY - scrollY),
+                                            new AbsoluteX(spacing.MarkerStartX), new AbsoluteY(y),
                                             parsed.Kind);
                                     }
                                 }
@@ -697,7 +702,7 @@ public partial class DocsCanvas
                                     if (spacing != null)
                                     {
                                         DrawListBullet(dc, new AbsoluteX(spacing.MarkerStartX),
-                                            new AbsoluteY(lineY - scrollY),
+                                            new AbsoluteY(y),
                                             parsed.Kind, parsed.ListNestingLevel);
                                     }
                                 }
@@ -707,7 +712,7 @@ public partial class DocsCanvas
                                     if (spacing != null)
                                     {
                                         DrawOrderedListNumber(dc, new AbsoluteX(spacing.MarkerStartX),
-                                            new AbsoluteY(lineY - scrollY),
+                                            new AbsoluteY(y),
                                             map.ReplacementPrefix!, fontSize, parsed.ListNestingLevel);
                                     }
                                 }
@@ -716,7 +721,7 @@ public partial class DocsCanvas
                                     var prefixFt = new FormattedText(map.ReplacementPrefix!,
                                         CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
                                         TextMeasurer.NormalTypeface, fontSize, _rendering.Palette.Syntax, _rendering.Measure.DpiScale);
-                                    dc.DrawText(prefixFt, new Point(DocsCanvas._padding, lineY - scrollY));
+                                    dc.DrawText(prefixFt, new Point(DocsCanvas._padding, y));
                                 }
                             }
 
@@ -740,7 +745,7 @@ public partial class DocsCanvas
                                 }
                             }
                             if (ft != null)
-                                dc.DrawText(ft, new Point(textX, lineY - scrollY));
+                                dc.DrawText(ft, new Point(textX, y));
                         }
                     }
                     else
@@ -756,13 +761,13 @@ public partial class DocsCanvas
                             _lineFt[i] = ft;
                             NoteCached(i);
                         }
-                        dc.DrawText(ft, new Point(textX, lineY - scrollY));
+                        dc.DrawText(ft, new Point(textX, y));
 
                         if (_docsCanvas._showWhitespace)
-                            DrawTrailingSpaceDots(dc, vl, blockText(), parsed, textX, lineY - scrollY);
+                            DrawTrailingSpaceDots(dc, vl, blockText(), parsed, textX, y);
 
                         if (_images.ImagePreview == DocsCanvas.ImagePreviewMode.Inline && parsed.Images != null)
-                            DrawSourceInlineImages(dc, vl, parsed.Images, lineY, scrollY);
+                            DrawSourceInlineImages(dc, vl, parsed.Images, y);
                     }
                 }
             }
@@ -770,7 +775,7 @@ public partial class DocsCanvas
 
 
         private void DrawJoinedLine(DrawingContext dc, VisualLine vl,
-            double lineY, double effectiveScroll, int index)
+            double y, int index)
         {
             var group = vl.Group!;
 
@@ -779,7 +784,7 @@ public partial class DocsCanvas
                 // Not cached: this path draws images as well as text, so it does not reduce to
                 // a single FormattedText the way the others do.
                 DrawVisualLineWithImages(dc, vl, group.JoinedText, group.JoinedParsed,
-                    group.JoinedMap, lineY, effectiveScroll,
+                    group.JoinedMap, y,
                     _rendering.Measure.GetBlockFontSize(BlockKind.Paragraph), TextMeasurer.GetBlockBaseTypeface(BlockKind.Paragraph));
                 return;
             }
@@ -793,7 +798,7 @@ public partial class DocsCanvas
                 NoteCached(index);
             }
 
-            dc.DrawText(ft, new Point(DocsCanvas._padding, lineY - effectiveScroll));
+            dc.DrawText(ft, new Point(DocsCanvas._padding, y));
         }
 
         /// <summary>
@@ -1261,12 +1266,12 @@ public partial class DocsCanvas
 
         private void DrawVisualLineWithImages(DrawingContext dc, VisualLine vl,
             string blockText, ParsedBlock parsed, BlockVisualMap map,
-            double lineY, double effectiveScroll, double fontSize, Typeface baseTypeface)
+            double y, double fontSize, Typeface baseTypeface)
         {
             if (map.Images == null) return;
 
             double x = DocsCanvas._padding;
-            double screenY = lineY - effectiveScroll;
+            double screenY = y;
             double textLineH = _rendering.Measure.GetLineHeight(vl.BlockKind);
             double totalLineH = vl.OverrideHeight > textLineH ? vl.OverrideHeight : textLineH;
 
@@ -1492,12 +1497,12 @@ public partial class DocsCanvas
             dc.DrawText(ftDelimiter, new Point(delimiterX, screenY.Value));
         }
 
-        private void DrawBlockquoteBar(DrawingContext dc, double lineY, double effectiveScroll)
+        private void DrawBlockquoteBar(DrawingContext dc, double y)
         {
             var aligner = new ContentBlockAligner(DocsCanvas._padding, _rendering.Measure.ListIndent);
             double barX = aligner.GetBlockquoteBarX();
             double barWidth = 3;
-            double barY = lineY - effectiveScroll;
+            double barY = y;
             double barHeight = _rendering.Measure.GetLineHeight(BlockKind.Blockquote);
             var barBrush = new SolidColorBrush(Color.FromArgb(80, 150, 150, 150));
             barBrush.Freeze();
@@ -1506,17 +1511,17 @@ public partial class DocsCanvas
 
         /// <summary>Tints one line of a fenced or indented code block.</summary>
         private void DrawCodeBlockBackground(DrawingContext dc, VisualLine vl,
-            double lineY, double scrollY, double bgH)
+            double y, double bgH)
         {
             if (vl.BlockKind is not BlockKind.FencedCodeLine and not BlockKind.IndentedCodeLine) return;
 
             dc.DrawRectangle(_rendering.Palette.CodeBackground, null,
-                new Rect(0, lineY - scrollY, _rendering.ActualWidth, bgH));
+                new Rect(0, y, _rendering.ActualWidth, bgH));
         }
 
         /// <summary>Tints one line of a block carrying a colour tag's background.</summary>
         private void DrawColorBlockBackground(DrawingContext dc, VisualLine vl,
-            double lineY, double scrollY, double bgH)
+            double y, double bgH)
         {
             if (_content.ParsedBlocks == null) return;
             if (vl.BlockIndex >= _content.ParsedBlocks.Count) return;
@@ -1526,12 +1531,12 @@ public partial class DocsCanvas
             if (parsed.BlockColor?.Background is not { } bg) return;
 
             dc.DrawRectangle(_docsCanvas.GetCachedBrush(40, bg.R, bg.G, bg.B), null,
-                new Rect(0, lineY - scrollY, _rendering.ActualWidth, bgH));
+                new Rect(0, y, _rendering.ActualWidth, bgH));
         }
 
         /// <summary>Tints the spans of one line that carry an inline colour background.</summary>
         private void DrawInlineColorBackground(DrawingContext dc, VisualLine vl,
-            double lineY, double scrollY, double bgH)
+            double y, double bgH)
         {
             if (_content.ParsedBlocks == null) return;
 
@@ -1598,7 +1603,7 @@ public partial class DocsCanvas
 
                 var bg = cs.Background.Value;
                 dc.DrawRectangle(_docsCanvas.GetCachedBrush(40, bg.R, bg.G, bg.B), null,
-                    new Rect(DocsCanvas._padding + x1, lineY - scrollY, w, bgH));
+                    new Rect(DocsCanvas._padding + x1, y, w, bgH));
             }
         }
 
@@ -1610,12 +1615,12 @@ public partial class DocsCanvas
         /// <see cref="DropLineVisualsForSelectionChange"/> drops the lines it moved across.
         /// </remarks>
         private void DrawSelectionForLine(DrawingContext dc, VisualLine vl,
-            double lineY, double scrollY, double bgH)
+            double y, double bgH)
         {
             var rectSel = _docsCanvas.TryGetTableRectSelection();
             if (rectSel != null)
             {
-                DrawTableRectSelectionForLine(dc, vl, lineY, scrollY, bgH, rectSel.Value);
+                DrawTableRectSelectionForLine(dc, vl, y, bgH, rectSel.Value);
                 return;
             }
 
@@ -1625,7 +1630,7 @@ public partial class DocsCanvas
 
             if (vl.Group != null)
             {
-                DrawJoinedSelection(dc, vl, lineY, bgH, scrollY, sb, so, eb, eo);
+                DrawJoinedSelection(dc, vl, y, bgH, sb, so, eb, eo);
                 return;
             }
 
@@ -1681,12 +1686,12 @@ public partial class DocsCanvas
             double selW = Math.Max(0, x2 - x1);
             if (selW > 0)
                 dc.DrawRectangle(_rendering.Palette.Selection, null,
-                    new Rect(DocsCanvas._padding + x1, lineY - scrollY, selW, bgH));
+                    new Rect(DocsCanvas._padding + x1, y, selW, bgH));
         }
 
         /// <summary>One line's slice of a rectangular table selection.</summary>
         private void DrawTableRectSelectionForLine(DrawingContext dc, VisualLine vl,
-            double lineY, double scrollY, double bgH,
+            double y, double bgH,
             (int StartCol, int EndCol, int StartBlock, int EndBlock, TableInfo Table) r)
         {
             if (vl.BlockIndex < r.StartBlock || vl.BlockIndex > r.EndBlock) return;
@@ -1701,11 +1706,11 @@ public partial class DocsCanvas
                 xEnd += colWidths[c];
 
             dc.DrawRectangle(_rendering.Palette.Selection, null,
-                new Rect(DocsCanvas._padding + xStart, lineY - scrollY, xEnd - xStart, bgH));
+                new Rect(DocsCanvas._padding + xStart, y, xEnd - xStart, bgH));
         }
 
         private void DrawJoinedSelection(DrawingContext dc, VisualLine vl,
-            double lineY, double lineH, double effectiveScroll,
+            double y, double lineH,
             int sb, int so, int eb, int eo)
         {
             var group = vl.Group!;
@@ -1736,7 +1741,7 @@ public partial class DocsCanvas
             double selW = Math.Max(0, x2 - x1);
             if (selW > 0)
                 dc.DrawRectangle(_rendering.Palette.Selection, null,
-                    new Rect(DocsCanvas._padding + x1, lineY - effectiveScroll, selW, lineH));
+                    new Rect(DocsCanvas._padding + x1, y, selW, lineH));
         }
 
         private void DrawTrailingSpaceDots(DrawingContext dc, VisualLine vl,
@@ -1797,10 +1802,10 @@ public partial class DocsCanvas
         }
 
         private void DrawSourceInlineImages(DrawingContext dc, VisualLine vl,
-            IReadOnlyList<InlineImage> images, double lineY, double effectiveScroll)
+            IReadOnlyList<InlineImage> images, double y)
         {
             double textLineH = _rendering.Measure.GetLineHeight(vl.BlockKind);
-            double imgY = lineY - effectiveScroll + textLineH;
+            double imgY = y + textLineH;
             int vlEnd = vl.StartOffset + vl.Length;
 
             foreach (var img in images)

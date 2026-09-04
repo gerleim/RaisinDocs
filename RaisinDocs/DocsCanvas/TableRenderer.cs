@@ -87,7 +87,7 @@ public partial class DocsCanvas
         /// paints, which is the same set the whole-table rect used to cover.
         /// </remarks>
         public void DrawTableRowBackground(DrawingContext dc, ParsedBlock parsed,
-            double lineY, double scrollY, double bgH)
+            double y, double bgH)
         {
             if (parsed.Table == null) return;
             if (!_table.TableColumnWidths.TryGetValue(parsed.Table, out var colWidths)) return;
@@ -95,7 +95,6 @@ public partial class DocsCanvas
             double tableWidth = 0;
             foreach (var w in colWidths) tableWidth += w;
 
-            double y = lineY - scrollY;
             dc.DrawRectangle(_rendering.Palette.TableBackground, null,
                 new Rect(DocsCanvas._padding, y, tableWidth, bgH));
 
@@ -192,7 +191,7 @@ public partial class DocsCanvas
         /// Draws the content of a table row, including cell text with proper alignment and styling.
         /// </summary>
         public void DrawTableRow(DrawingContext dc, VisualLine vl, string blockText,
-            ParsedBlock parsed, double lineY, double effectiveScroll,
+            ParsedBlock parsed, double y,
             double fontSize, Typeface baseTypeface)
         {
             if (parsed.TableRow == null || parsed.Table == null) return;
@@ -203,7 +202,6 @@ public partial class DocsCanvas
                 map = _content.VisualMaps[vl.BlockIndex];
 
             double x = DocsCanvas._padding;
-            double y = lineY - effectiveScroll;
             double lineH = _rendering.Measure.GetLineHeight(vl.BlockKind);
             bool isHeader = parsed.Kind == BlockKind.TableHeaderRow;
 

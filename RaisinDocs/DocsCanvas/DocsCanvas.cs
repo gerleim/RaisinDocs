@@ -1356,15 +1356,14 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider, IDocsC
         _renderingContext.OnRender(dc);
     }
 
-    private void DrawJoinedLine(DrawingContext dc, VisualLine vl,
-        double lineY, double effectiveScroll)
+    private void DrawJoinedLine(DrawingContext dc, VisualLine vl, double y)
     {
         var group = vl.Group!;
 
         if (HasImagesOnLine(vl, group.JoinedMap))
         {
             DrawVisualLineWithImages(dc, vl, group.JoinedText, group.JoinedParsed,
-                group.JoinedMap, lineY, effectiveScroll,
+                group.JoinedMap, y,
                 _measure.GetBlockFontSize(BlockKind.Paragraph), TextMeasurer.GetBlockBaseTypeface(BlockKind.Paragraph));
             return;
         }
@@ -1417,7 +1416,7 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider, IDocsC
             visPos++;
         }
 
-        dc.DrawText(ft, new Point(_padding, lineY - effectiveScroll));
+        dc.DrawText(ft, new Point(_padding, y));
     }
 
     private string BuildJoinedDisplayString(ParagraphGroup group, int start, int length)
