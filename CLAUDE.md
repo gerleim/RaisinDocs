@@ -133,12 +133,16 @@ Each extracted class depends on specific interfaces, not on DocsCanvas directly:
 
 ### Data flow and rendering pipeline
 
-The render pipeline is: **Document → MarkdownParser → BlockVisualMap → DocsCanvas.OnRender**.
+The render pipeline is: **Document → MarkdownParser → BlockVisualMap → cached line visuals**.
 
 1. **Document** stores raw text as `List<StringBuilder>` blocks (one per line). It knows nothing about markdown — only text, cursor, and undo.
 2. **MarkdownParser.Parse()** is called during `ComputeLayout()`. It classifies each block into a `BlockKind` and produces `StyledRun` lists (bold, italic, code, etc.), `InlineImage`/`InlineLink` lists, and `ColorSpan` lists. A post-pass (`DetectTables`) groups adjacent pipe-delimited blocks into table structures with `TableInfo`/`TableRowInfo`.
 3. **BlockVisualMap.Compute()** (visual mode only) builds hidden ranges from the parsed block — style markers (`**`, `~~`), heading prefixes, color tags, image syntax, link URL portions. It provides `BuildDisplayString` (strips hidden chars), `RawToVisual`/`VisualToRaw` (offset mapping), and `IsHidden`/`SkipHidden` (cursor navigation).
-4. **DocsCanvas.OnRender** draws visible lines using `FormattedText`. In source mode it renders raw text with syntax dimming; in visual mode it uses the display string from `BlockVisualMap`. Tables, images, and selection are drawn as separate passes.
+4. **Each visual line is drawn into its own cached visual**, by `RenderingContext.BuildLineVisual` → `DrawLineContent`. A line is filled with the theme background, then its backgrounds, selection and search highlights, then its text via `FormattedText` — source mode renders raw text with syntax dimming, visual mode the display string from `BlockVisualMap`. The visual is `BitmapCache`d and positioned by a transform, so scrolling moves one transform rather than redrawing.
+
+   This happens in `ArrangeOverride` (via `UpdateContentLayer`), **not** in `OnRender` — adding children to a visual mid-render is illegal, and arrange runs before every render pass. `OnRender` itself now paints only the full-canvas background that shows through paragraph gaps; everything above the text (caret, spelling squiggles, page breaks, table borders) goes in `OverlayLayer`.
+
+   The fill is what makes ClearType work: a `BitmapCache` is a transparent surface, and ClearType cannot filter against a background it does not know. That is why nothing may be drawn beneath the content layer — an opaque line covers it. See `design/Opaque Line Visuals.md`.
 
 Key invariant: `Document` never depends on `MarkdownParser` or `BlockVisualMap`. All markdown awareness flows one way — from parser output into the rendering/navigation layer.
 
@@ -147,7 +151,7 @@ Key invariant: `Document` never depends on `MarkdownParser` or `BlockVisualMap`.
 The partial class is split by edit mode and by concern. All files share the same fields. The major functional areas within DocsCanvas are:
 
 - **Layout** (`ComputeLayout`, `ComputeLayoutCore`, `WrapSegment`, `FitLine`, `BuildParagraphGroups`) — word wrapping, visual line computation, paragraph group joining for soft breaks
-- **Rendering** (`OnRender`, `DrawJoinedLine`, `ApplyInlineStyles`, `ApplyColorSpans`, `ApplySyntaxDimming`, `DrawSelection`, background drawing methods) — all drawing happens here
+- **Rendering** (`DrawLineContent` and the per-line drawers it calls, `DrawJoinedLine`, `ApplyInlineStyles`, `ApplyColorSpans`, `ApplySyntaxDimming`) — everything a line contains is drawn from `DrawLineContent`, at `y` in the line's own visual. Anything new that belongs *behind* the text goes there too, never into `OnRender`
 - **Text measurement** (`MeasureCharWidth`, `MeasureStringWidth`, `MeasureRangeWidth`, `GetLineHeight`, glyph/typeface management, `_charWidthCache`)
 - **Input handling** (`OnKeyDown`, `OnTextInput`, `OnMouseDown/Move/Up`, `Handle*` key dispatch methods)
 - **Cursor/navigation mapping** (`CursorToVisualLineIndex`, `CursorXInVisualLine`, `HitTestVisualLine`, `HitTestToPosition`, `SetCursorFromVisualLine`)

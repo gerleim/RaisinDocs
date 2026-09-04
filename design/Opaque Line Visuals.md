@@ -1,11 +1,18 @@
 # Opaque Line Visuals
 
-Status: **done**. All five phases complete and confirmed; the opaque fill ships. Written
-2026-09-03, on branch `opaque-line-visuals`, with a branch per phase stacked on it
-(`opaque-line-visuals-phase1` through `-phase4`, the last of which carries phase 5).
+Status: **done and shipped.** All five phases complete, then the toggles that made them
+reviewable were removed. Written 2026-09-03 on branch `opaque-line-visuals`, with a branch per
+phase stacked on it (`opaque-line-visuals-phase1` through `-phase4`, the last carrying phase 5
+and the removals).
 
-Restores ClearType to the editor's text, which has been greyscale antialiased since
-`337e009` without anyone intending it.
+Restores ClearType to the editor's text, which had been greyscale antialiased since `337e009`
+without anyone intending it.
+
+> **Reading this later:** the phases below are written in the present tense of the work, and
+> refer throughout to F8, F9, `--render-diag`, `CachedLineVisuals`, `OpaqueLineVisuals` and a
+> direct-draw path. **None of those exist any more** - see *How it ended* at the bottom. The
+> line numbers cited have all moved as well. The reasoning is the point of keeping this; the
+> code references are a snapshot.
 
 ## The problem
 
@@ -334,3 +341,35 @@ The direct-draw path was kept. It costs nothing now that the drawing is shared t
 Nothing for scroll smoothness. The fractional-offset ambition in
 `design/Scroll Pre-Buffering.md` phase 3 is a separate question, blocked on its own grounds,
 and neither helped nor hurt by this.
+
+## How it ended
+
+The toggles were scaffolding for reviewing the phases, and they came out once the phases were
+done (`94c590a`, `9a086fa`).
+
+- **F8 and the `OpaqueLineVisuals` flag are gone.** The fill in `BuildLineVisual` is
+  unconditional; there is one appearance.
+- **F9 and the direct-draw path are gone.** They existed to compare against, and with one path
+  there is nothing to compare. They had also stopped needing `--render-diag`, which turned them
+  from a diagnostic into a hazard: any user could hit F9 and land on a path drawing ~18% fewer
+  frames and spacing lines differently, with a corner badge as the only explanation.
+- **The badge, `ShowRenderPathBadge`, `EnableRenderPathToggle` and `--render-diag` went with
+  them.**
+- **`lineY`/`scrollY` collapsed into a single `y`.** Every per-line drawer positioned itself at
+  the difference of the two, so that passing them equal drew a line at its own origin. That was
+  for the direct-draw path; with it gone the difference was always zero. 69 sites across eight
+  files, including two service interfaces and the print path, which draws at page coordinates
+  and now subtracts at the call site instead.
+
+That refactor was proved rather than eyeballed: a throwaway harness rendered a document
+carrying every feature the drawing chain can produce, in both edit modes, with and without a
+selection spanning twenty blocks, to a `RenderTargetBitmap` before and after. All four images
+were byte-for-byte identical.
+
+What the removed comparison measured is not lost - the 140 against 119 displayed frames a
+second, and 8.6 against 28.9 µs a line, are recorded above and in `337e009`. Bringing the path
+back is a revert if the frame-pacing work ever needs to re-measure.
+
+**What is left beneath the content layer:** only the full-canvas background fill, which shows
+through the paragraph gaps and under the last line. Anything added later that belongs *behind*
+the text must go into `DrawLineContent`, not into `OnRender`, or an opaque line will cover it.
