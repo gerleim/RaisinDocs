@@ -834,9 +834,11 @@ window the machine has, on the fastest panel. Compare the refresh axis above, wh
 metric reaches 117% of budget. **Size is a minor effect and refresh rate is a major one** - which
 is the ranking worth taking away, and the opposite of what a per-frame cost model would predict.
 
-One app-side cost is large enough to name: `minimap-rebuild` runs 2-13 ms, and 13.3 ms is nearly
-four frames at 280 Hz. It appears on the drag path rather than the wheel path and had not been
-looked at before. Not investigated here.
+One app-side cost was large enough to name: `minimap-rebuild` ran 2-13 ms, and 13.3 ms is nearly
+four frames at 280 Hz. **Investigated and fixed** - the minimap's bitmap cache was invalidating
+itself on a single line of movement, so it rebuilt about fifty times per drag instead of once. The
+same sweep now records 4 rebuilds where it recorded 73, and none at all during a drag. The
+per-rebuild cost is unchanged; it is simply no longer paid every frame.
 
 ### Superseded: what the remaining cells were expected to test
 

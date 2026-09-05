@@ -11,6 +11,9 @@ using System.Windows.Media.Imaging;
 public class MinimapScrollbar : FrameworkElement, IMinimapDataProvider
 {
     private const double CharHeight = 4.0;
+
+    /// <summary>Slack for the band-coverage test, so float error alone cannot force a rebuild.</summary>
+    private const double Tolerance = 0.001;
     private const int GlyphH = 3;
 
     private struct GlyphInfo
@@ -57,8 +60,6 @@ public class MinimapScrollbar : FrameworkElement, IMinimapDataProvider
     private readonly Dictionary<BitmapSource, (byte[] Pixels, int Width, int Height)> _thumbCache = new();
 
     // Incremental rendering state
-    private int _cachedBitmapFirstLine;
-    private int _cachedBitmapLineCount;
     private double _cachedBitmapStartY;
     private bool _needsFullRebuild = true;
 
@@ -145,72 +146,68 @@ public class MinimapScrollbar : FrameworkElement, IMinimapDataProvider
 
         ComputeViewport(h);
 
+        // ComputeViewport has already turned the canvas scroll offset into _minimapScroll, which is
+        // the top of the visible window in minimap coordinates - the only position the band below
+        // needs. The per-frame scan that used to sit here, working out which lines are visible,
+        // fed nothing but the band arithmetic and is gone with it.
         double totalMinimapH = _totalMinimapH;
-        double effectiveScroll = Canvas.MinimapScrollOffset;
-        double totalContentH = Canvas.MinimapTotalHeight;
-        double canvasH = Canvas.ActualHeight;
-        double maxScroll = Math.Max(0, totalContentH - canvasH);
-
-        double scrollFrac = maxScroll > 0 ? Math.Clamp(effectiveScroll / maxScroll, 0, 1) : 0;
-
-        int firstLine;
-        int visibleCount;
-        double subPixelOff = 0;
-
-        if (totalMinimapH <= h)
-        {
-            firstLine = 0;
-            visibleCount = totalLines;
-        }
-        else
-        {
-            firstLine = FindFirstLine(_minimapScroll);
-            subPixelOff = _minimapScroll - _lineYPos![firstLine];
-
-            double yEnd = _minimapScroll + h;
-            visibleCount = 0;
-            for (int i = firstLine; i < totalLines; i++)
-            {
-                if (_lineYPos[i] >= yEnd) break;
-                visibleCount++;
-            }
-            visibleCount = Math.Min(visibleCount + 1, totalLines - firstLine);
-        }
-
         double canvasTextWidth = Canvas.MinimapCanvasTextWidth;
 
-        // Incremental rendering: build larger cache to avoid frequent rebuilds
-        // Use 3x height multiplier with significant overlap to hide cache boundaries
+        // The bitmap holds a band taller than the control, so that scrolling inside it is free.
+        //
+        // Everything below is in minimap Y, which is the coordinate the draw already works in: the
+        // bitmap holds content from _cachedBitmapStartY for PixelHeight pixels, so it is valid
+        // exactly while the visible window lies inside that. The previous test compared a *padded*
+        // required band against the *padded* cached band, and since the cached band was set from
+        // the padded one at the last rebuild, the padding appeared on both sides and cancelled -
+        // one line of movement in either direction invalidated the cache. It rebuilt about fifty
+        // times per drag gesture at ~3ms each, which is most of what the cache existed to avoid.
         const double CacheHeightMultiplier = 3.0;
-        double cacheHeight = Math.Max(h * CacheHeightMultiplier, h + CharHeight * 30);
-        double cacheOverlapFraction = 0.4; // 40% overlap on each side
+        int cacheBitmapH = (int)Math.Max(h * CacheHeightMultiplier, h + CharHeight * 30);
 
-        int cachePadLineCount = (int)Math.Ceiling(cacheHeight / CharHeight * cacheOverlapFraction);
-        int cacheFirstLine = Math.Max(0, firstLine - cachePadLineCount);
-        int cacheLastLine = Math.Min(totalLines - 1, firstLine + visibleCount + cachePadLineCount);
-        int cacheLineCount = cacheLastLine - cacheFirstLine + 1;
-        int cacheBitmapH = Math.Max((int)cacheHeight, (int)h);
+        double viewTop = _minimapScroll;
+        bool bandCovers = _bitmap != null
+            && viewTop >= _cachedBitmapStartY - Tolerance
+            && viewTop + h <= _cachedBitmapStartY + _bitmap.PixelHeight + Tolerance;
 
         bool needsRebuild = _needsFullRebuild
             || _bitmap == null
             || _bitmap.PixelWidth != (int)w || _bitmap.PixelHeight != cacheBitmapH
             || version != _cachedVersion
             || bg != _cachedBg || fg != _cachedFg || codeBg != _cachedCodeBg
-            || cacheFirstLine < _cachedBitmapFirstLine || cacheLastLine > _cachedBitmapFirstLine + _cachedBitmapLineCount - 1;
+            || !bandCovers;
 
         if (needsRebuild)
         {
+            // Centred on the viewport, so there is slack to scroll into in both directions rather
+            // than only downwards.
+            double bandTop = Math.Clamp(viewTop - (cacheBitmapH - h) / 2.0,
+                0, Math.Max(0, totalMinimapH - cacheBitmapH));
+            int bandFirstLine = FindFirstLine(bandTop);
+            double bandStartY = _lineYPos![bandFirstLine];
+
+            // Measured against the bitmap in pixels, not as a line count times an average height.
+            // Line heights vary, so the old count - derived from CharHeight - ran about 13% past
+            // the end of the bitmap, rasterising lines that were then discarded. Harmless while
+            // every frame rebuilt anyway; with the cache working, that overhang would be content
+            // the test above believes is cached when it was never drawn.
+            int bandLineCount = 0;
+            for (int i = bandFirstLine; i < totalLines; i++)
+            {
+                if (_lineYPos[i] - bandStartY >= cacheBitmapH) break;
+                bandLineCount++;
+            }
+            bandLineCount = Math.Max(1, bandLineCount);
+
             // Direct call when diagnostics are off, so the captured locals below cost nothing
             // in a normal run.
             if (!ScrollDiag.Enabled)
-                RebuildBitmap((int)w, cacheBitmapH, cacheFirstLine, cacheLineCount, 0, bg, fg, codeBg, canvasTextWidth);
+                RebuildBitmap((int)w, cacheBitmapH, bandFirstLine, bandLineCount, 0, bg, fg, codeBg, canvasTextWidth);
             else
                 ScrollDiag.Time("minimap-rebuild", () =>
-                    RebuildBitmap((int)w, cacheBitmapH, cacheFirstLine, cacheLineCount, 0, bg, fg, codeBg, canvasTextWidth));
+                    RebuildBitmap((int)w, cacheBitmapH, bandFirstLine, bandLineCount, 0, bg, fg, codeBg, canvasTextWidth));
             _cachedVersion = version;
-            _cachedBitmapFirstLine = cacheFirstLine;
-            _cachedBitmapLineCount = cacheLineCount;
-            _cachedBitmapStartY = cacheFirstLine > 0 ? _lineYPos![cacheFirstLine] : 0;
+            _cachedBitmapStartY = bandStartY;
             _cachedBg = bg;
             _cachedFg = fg;
             _cachedCodeBg = codeBg;

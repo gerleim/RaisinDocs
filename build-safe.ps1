@@ -8,12 +8,19 @@
     Prevents stray dotnet/MSBuild/VBCSCompiler processes from accumulating.
 #>
 
+# CmdletBinding so that a parameter name this script does not have is an error rather than
+# nothing. Without it PowerShell quietly drops unrecognised named arguments into $args, and
+# "-ExtraArgs '-c Release'" - the inner function's parameter name, not this one - built Debug and
+# reported success. That is the same silent-miss as the $Args bug the inner function documents.
+[CmdletBinding()]
 param(
     [ValidateSet('build', 'test', 'clean')]
     [string]$Command = 'build',
 
     [string]$Project = 'RaisinDocs.slnx',
 
+    # Passed straight through to dotnet, so give it one element per argument:
+    #   .\build-safe.ps1 -Command build -AdditionalArgs '-c','Release'
     [string[]]$AdditionalArgs = @()
 )
 
