@@ -489,6 +489,7 @@ internal class ScrollController
     private int _gc0, _gc1, _gc2;
 
     private string _gestureSource = "wheel";
+    private double _gestureQpcStart;
 
     /// <summary>
     /// Feeds the smoother's animation - scrollbar drags and minimap jumps - through the same
@@ -516,6 +517,21 @@ internal class ScrollController
         if (stopped) DiagGestureEnd();
     }
 
+    /// <summary>
+    /// The performance counter, in milliseconds - the clock PresentMon stamps frames with under
+    /// <c>--qpc_time_ms</c>.
+    /// </summary>
+    /// <remarks>
+    /// Logged at both ends of a gesture so an external capture can be sliced to exactly the
+    /// gesture that produced it. Wall-clock timestamps cannot do that: this log writes
+    /// HH:mm:ss.fff from DateTime.Now while PresentMon counts QPC ticks, and lining the two up
+    /// by eye across a file of thousands of frames is where a comparison quietly goes wrong.
+    ///
+    /// Stopwatch.Frequency is the QPC frequency on Windows, so this is the same number
+    /// PresentMon reports, in the same units.
+    /// </remarks>
+    private static double QpcMs => Stopwatch.GetTimestamp() * 1000.0 / Stopwatch.Frequency;
+
     private void DiagFrame(double dt, bool newFrame)
     {
         if (!Diagnostics) return;
@@ -531,8 +547,10 @@ internal class ScrollController
             // Written as the gesture begins, not only when it ends. A gesture that starts and
             // never finishes is the failure worth seeing, and until now it looked exactly like
             // a gesture that never happened: both left the file empty.
+            _gestureQpcStart = QpcMs;
             ScrollDiag.Log($"{_gestureSource} gesture started on " +
-                $"{(_gestureDevice.Length > 0 ? _gestureDevice : "unknown display")} {_gestureHz}Hz");
+                $"{(_gestureDevice.Length > 0 ? _gestureDevice : "unknown display")} {_gestureHz}Hz" +
+                $"  qpc {_gestureQpcStart:F3}");
             _gc0 = GC.CollectionCount(0);
             _gc1 = GC.CollectionCount(1);
             _gc2 = GC.CollectionCount(2);
@@ -586,6 +604,7 @@ internal class ScrollController
                       $"{_gestureHz}Hz  "
                     : string.Empty) +
                 $"{_frames} ticks, {_paints} paints" + Environment.NewLine +
+                    $"    qpc {_gestureQpcStart:F3}..{QpcMs:F3}" + Environment.NewLine +
                 $"    {frames}" + Environment.NewLine +
                 $"    {paints}" + Environment.NewLine +
                 $"    {tailText}" + Environment.NewLine +
