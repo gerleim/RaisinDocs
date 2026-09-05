@@ -344,6 +344,15 @@ free-ran at ~3.15 ms - faster than the display could show, at a phase that slid,
 unpaced presentation `design/Scroll Frame Pacing.md` diagnosed. Pacing off `RenderingTime`
 removed it.
 
+**Confirmed by eye, 2026-09-05.** The coast reads as good but not perfect: a little jaggedness
+remains, consistent with the 3.1% of intervals still landing over 1.5x the median rather than
+with anything periodic. Notch distance is unchanged, which is what the closed-form integral
+being untouched predicted - it was reasoned rather than measured, so it is worth having heard.
+
+The residual is the honest open question. Whether it is WPF missing composition deadlines, or
+something still ours, is not decidable from inside the process: the FrameView re-capture that
+`design/Scroll Frame Pacing.md` now asks for is what would tell them apart.
+
 ### The premise this started from was wrong
 
 The investigation began from an observation that a minimap drag is smooth at any speed while
