@@ -61,21 +61,75 @@ Since RaisinDocs treats each block independently (no cross-block list grouping),
 **Goal**: In visual mode, hide the raw markdown prefix and replace with a styled number.
 
 - Hide first N characters (the `\d+[.)]\s` prefix) as `HiddenRange(0, N)`
-- `ReplacementPrefix`: use the typed number with consistent formatting — e.g. `"  1. "` (two-space indent + number + dot + space) to align with the bullet list's `"  • "` indent. Keep the user's typed number and delimiter.
+- `ReplacementPrefix`: the typed number with consistent formatting — `"  1.  "` (two-space indent + number + delimiter + two spaces), keeping the user's typed number and delimiter. Built by `OrderedListPrefix`, which a continuation block also uses to measure the owner it aligns to; the two were separate builders that had drifted by a space, so a continuation under `10.` sat a space left of the text above it.
 - Cursor navigation skips the hidden prefix via existing `SkipCursorOverHiddenRanges()`
 
 **Files**: `BlockVisualMap.cs`
 **Tests**: prefix hidden for `1. `, `12. `, `1) `, RawToVisual/VisualToRaw across prefix boundary, variable-length prefix (single vs multi-digit)
 
-## Phase 4: Visual Mode Rendering
+## Phase 4: Visual Mode Rendering ✅ — revised 2026-09-05
 
 **Goal**: Render the number prefix with consistent styling.
 
-- The replacement prefix drawing path already handles `UnorderedListItem` (draws `•`). Add a parallel case for `OrderedListItem` that draws the number + delimiter right-aligned to a fixed indent width, matching bullet indent.
-- Number color: use `_palette.Foreground` (or a subtle accent — match whatever bullet uses)
-- Right-align numbers so single and multi-digit numbers line up: `1.`, `2.`, `10.` all have their `.` at the same X position
+The original plan for this phase asked for the number "right-aligned to a fixed indent width,
+matching bullet indent". That was right about the alignment and silent about what should happen
+when a number outgrows the column. What shipped keeps the first part and answers the second.
 
-**Files**: `DocsCanvas.VisualMode.cs`, `DocsCanvas.cs`
+### One shared marker column
+
+Bullets, checkboxes and ordered numbers share **one** column, so every list kind starts its text
+at the same X:
+
+```
+columnWidth   = max(width("☑"), width("99."))
+markerRightX  = max(padding + nesting + lead + columnWidth,   // nominal
+                    leftLimit + numberWidth)                  // ordered, when it will not fit
+contentStartX = markerRightX + gap
+```
+
+where `leftLimit = padding + nesting`, `lead` is two spaces, and `gap` is 10px (widened from 4,
+which was narrower than a space character and read as kerning rather than separation).
+
+- Numbers are **right-aligned** to `markerRightX`, so `1.`, `9.` and `10.` put their delimiter on
+  one X and the text after them does not move with the digit count.
+- Bullets and checkboxes stay **centred** in the column, drawn on `MarkerStartX`.
+- The checkbox glyph (21.970px) is wider than `99.` (20.723px), so it sets the column and sharing
+  it costs bullets and checkboxes nothing — they did not move. Ordered items moved *left* onto the
+  column bullets already used; their text used to start at 52.391 for `1.` and 61.016 for `12.`.
+
+### Overflow
+
+A number wider than the column would have to begin left of the margin. Instead its left edge
+clamps at `leftLimit`, and `markerRightX` — carrying the text with it — moves right by the excess,
+`gap` unchanged:
+
+```
+   9.       text column unmoved
+  99.       text column unmoved
+ 999.       text column unmoved     (a number may reach back over the lead: 30.74px of room)
+9999.       shifts right
+101010.     shifts right
+```
+
+Decided **per item**, never per list. No block needs its siblings' widths, which keeps this
+consistent with the single-block model described in Context above.
+
+### Why the column has to be fixed
+
+While it varied with the digit count, `WrapSegment` measured a list item's first line against the
+prefix width even though the line started at `ContentStartX`. The difference — 12.8px for a
+two-digit number — granted the line width it did not have, and anything past the 10px right
+padding was cut off mid-glyph by `DocsCanvas.ClipToBounds`, with no horizontal scrolling to
+recover it. A fixed column removes the discrepancy at its source.
+
+**Number colour**: `_palette.Syntax`, matching dimmed markdown syntax rather than the foreground
+the original plan suggested.
+
+**Files**: `LayoutEngine.cs` (`ComputeListItemSpacing` holds the whole rule), `RenderingContext.cs`
+and `DocsCanvas.VisualMode.cs` (`DrawOrderedListNumber`, one copy each — the print path keeps its
+own until its deferred rework), `BlockVisualMap.cs` (`OrderedListPrefix`)
+
+**Tests**: `Tests/RaisinDocs.Tests.UI/ListMarkerColumnTests.cs`
 
 ## Phase 5: Enter Key Continuation
 
