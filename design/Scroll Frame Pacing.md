@@ -617,7 +617,7 @@ as someone else's report of the same class of problem. What does not stand is th
 
 ## The baseline set: other refresh rates, other window sizes
 
-**Not yet run.** The harness supports it; the numbers below are blank on purpose.
+**One cell run, 2026-09-05, and it found something.** See below the table.
 
 Everything measured so far was taken in one configuration: whatever size the editor happened to
 open at, on the 280 Hz primary. Two reasons that is not enough.
@@ -681,7 +681,7 @@ taken days apart measures the days as much as the panels.
 
 | display | Hz | window | presented/s | displayed/s | dropped | 1-refresh | animation error p50 |
 |---|---|---|---|---|---|---|---|
-| DISPLAY8 | 60 | 1920x1032 | | | | | |
+| DISPLAY8 | 60 | 1920x1032 | 63-73 | 63-73 | **0.0%** | see below | **12.9 ms** |
 | DISPLAY7 | 100 | 1920x1032 | | | | | |
 | DISPLAY9 | 144 | 1920x1032 | | | | | |
 | DISPLAY6 | 280 | 1200x800 | | | | | |
@@ -694,5 +694,70 @@ means the pacing is locked to something other than the compositor; drops appeari
 refresh rates means the work is not the constraint, the wait is; a size that degrades at constant
 refresh rate means per-frame cost scales with visible lines more steeply than it should.
 
-**The likeliest outcome is that it all confirms what is already here** - and that is the result
-being paid for. The table is worth having whether or not it surprises anyone.
+~~**The likeliest outcome is that it all confirms what is already here**~~ - it did not. The first
+cell run found the fault below, which had been invisible on the primary.
+
+### Found on the first cell: the composition clock follows the primary, not the panel
+
+939 frames, quiet machine, Release, editor filling the working area of the 60 Hz panel.
+
+| | DISPLAY6, 280 Hz | DISPLAY8, 60 Hz |
+|---|---|---|
+| dropped | 0.0% | **0.0%** |
+| intervals over 1.5x median | 1.1-2.5% | **29-44%** |
+| animation error, median | 0.22-0.33 ms | **12.9 ms** |
+| animation error as a share of the frame budget | 8% | **77%** |
+
+Nothing is dropped at 60 Hz either, so that finding travels. Nothing else does.
+
+The app's own log says why:
+
+```
+wheel gesture 2.22s on \.\DISPLAY8 60Hz   263 ticks, 133 paints
+    composition frame median  7.13ms (140/s)
+    paint interval      median 17.85ms (56/s)
+```
+
+**`CompositionTarget.Rendering` fires at 140 Hz while the window is displayed at 60 Hz.** 140 is
+half of 280, the primary's rate - the composition clock is derived from the primary display and
+not from the panel the window is actually on. The editor correctly identifies the panel it is on;
+WPF does not pace to it.
+
+The consequence is a beat rather than a shortfall. 16.67 ms is not a multiple of 7.13 ms, so a
+paint that wants to land once per display refresh has to take either two compositor ticks
+(14.28 ms) or three (21.42 ms). It alternates between them: 133 paints in 2.22 s is 59.9/s, which
+is exactly the panel rate, while the *median* interval is 17.85 ms - about two and a half ticks.
+**The frame count is right and the frame times are wrong**, by roughly +-3.5 ms, systematically.
+
+That is the mechanism. The size of the resulting animation error - 12.9 ms, most of a frame - is
+larger than +-3.5 ms of jitter alone accounts for, so the beat is demonstrated and the full
+arithmetic of the magnitude is not yet.
+
+**What this does not overturn.** Zero dropped frames holds on both panels. The wall-clock pacing
+bug found on 2026-09-05 was real and its fix was real. What has to be narrowed is the headline:
+"98% of frames land on exactly one refresh" is a result *for a window on the primary display*,
+where the composition grid and the display period are the same 3.57 ms and everything therefore
+locks. It was never a claim about the app on any monitor, and it read like one.
+
+**Why this was invisible until now.** Every previous capture was taken on the primary. The one
+configuration where the composition clock happens to equal the display clock is the one that was
+always measured. This is the case reason 1 was written for.
+
+### What the remaining cells now test
+
+The sweep is no longer confirmation. If the composition clock is pinned near 140 Hz regardless of
+the panel, each remaining rate beats against it differently and predictably:
+
+| panel | display period | ticks per refresh at a ~7.13 ms grid | expected |
+|---|---|---|---|
+| 100 Hz | 10.00 ms | 1.40 | strong beat, worst of the three |
+| 144 Hz | 6.94 ms | 0.97 | nearly locked - should look like the primary |
+| 280 Hz | 3.57 ms | 0.50 | locked (measured) |
+
+If 144 Hz comes back clean and 100 Hz comes back bad, the grid explanation is confirmed and the
+fault is fully characterised as a mismatch between two clocks rather than a cost problem. If
+144 Hz is also bad, the explanation is wrong and the composition rate has to be read directly on
+each panel before anything else is concluded.
+
+The first thing to check on each remaining cell is the logged `composition frame median`, not the
+capture: it says what clock WPF chose, which is the independent variable this has turned into.
