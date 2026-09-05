@@ -591,9 +591,25 @@ roughly 276/s into a 280 Hz panel, and that shortfall alone accounts for most of
 not obviously anything left to chase.
 
 **Machine state has to be part of a capture's record.** The difference between a busy and a
-quiet machine here was larger than the difference any code change in this work made. PresentMon
-warns when it loses ETW events - the noisy run reported 661 lost - and that warning is the
-signal to throw a capture away rather than read it.
+quiet machine here was larger than the difference any code change in this work made. It happened
+three times: a video-heavy app once, and leftover build processes twice - twenty-eight of them
+holding 3.3 GB after an afternoon of builds, kept alive by MSBuild node reuse and surviving an
+attempt to clear them. `dotnet build-server shutdown` is what retires those.
+
+`capture-scroll.ps1` counts them before launching and says so now, and keeps PresentMon's own
+output beside the capture, because lost ETW events are reported there and nowhere else - the
+noisy run lost 661, a clean one loses single digits. `analyse-scroll.ps1` repeats the warning,
+scaled against the capture, since a capture is read weeks later by someone who no longer
+remembers what was running.
+
+**The final figures**, quiet machine, scripted sweep, 3114 frames: every wheel gesture presented
+and displayed 256-279/s at a 3.57 ms interval - exactly 1/280 - with 0.0% dropped and 1.1-2.5%
+of intervals running long during sustained scrolling. Animation error median 0.22-0.33 ms.
+
+The same run measured a minimap drag for the first time: 108-110/s, a 7.15 ms interval, and an
+animation error median of 3.73-7.12 ms. The drag is bound by the rate mouse messages arrive and
+carries about twenty times the wheel's error, which inverts the observation this whole
+investigation began from. See `design/Scroll Pre-Buffering.md`.
 
 What still stands from C1-C3: the prototype numbers, the ClearType finding that set off
 `design/Opaque Line Visuals.md`, and [dotnet/wpf#11607](https://github.com/dotnet/wpf/discussions/11607)
