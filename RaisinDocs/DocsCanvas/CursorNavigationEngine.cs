@@ -584,39 +584,66 @@ public partial class DocsCanvas
         if (!shift) _doc.Document.CollapseSelection();
     }
 
+    // --- Vertical goal column ---
+    //
+    // A run of Up/Down keeps aiming at the x the run started from, so passing through a short or
+    // empty line does not truncate the column: from "fir|st paragraph", Down lands on the empty
+    // line (x 0 is all it has), and the next Down still arrives at "sec|ond paragraph".
+    //
+    // The goal is tagged with the cursor position it was left at. Any other cursor movement or
+    // edit moves the cursor off that position, so the goal is discarded without every other code
+    // path having to know about it.
+    private double _goalX;
+    private int _goalBlock = -1;
+    private int _goalOffset = -1;
+
+    private double VerticalGoalX(int vli) =>
+        _goalBlock == _doc.Document.CursorBlock && _goalOffset == _doc.Document.CursorOffset
+            ? _goalX
+            : CursorXInVisualLine(vli);
+
+    private void RememberVerticalGoal(double x)
+    {
+        _goalX = x;
+        _goalBlock = _doc.Document.CursorBlock;
+        _goalOffset = _doc.Document.CursorOffset;
+    }
+
     internal void HandleUp(bool shift)
     {
         SealAndEnsureLayout();
         int vli = CursorToVisualLineIndex();
+        double x = VerticalGoalX(vli);
         if (vli > 0)
         {
-            double x = CursorXInVisualLine(vli);
             vli--;
             SetCursorFromVisualLine(vli, x);
         }
         if (_visual.IsVisual) VisualModeManager?.HandleUpVisual();
         if (!shift) _doc.Document.CollapseSelection();
+        RememberVerticalGoal(x);
     }
 
     internal void HandleDown(bool shift)
     {
         SealAndEnsureLayout();
         int vli = CursorToVisualLineIndex();
+        double x = VerticalGoalX(vli);
         if (vli < _layout.VisualLines.Count - 1)
         {
-            double x = CursorXInVisualLine(vli);
             vli++;
             SetCursorFromVisualLine(vli, x);
         }
         if (_visual.IsVisual) VisualModeManager?.HandleDownVisual();
         if (!shift) _doc.Document.CollapseSelection();
+        RememberVerticalGoal(x);
     }
 
     internal void HandlePageUp(bool shift)
     {
         SealAndEnsureLayout();
         int vli = CursorToVisualLineIndex();
-        double x = CursorXInVisualLine(vli);
+        double x = VerticalGoalX(vli);
         double cursorY = _layout.LineYPositions[vli];
         double relativeY = cursorY - _scroll.Scroll.Offset;
         double lineH = _layout.GetEffectiveLineHeight(_layout.VisualLines[vli]);
@@ -629,13 +656,14 @@ public partial class DocsCanvas
         SetCursorFromVisualLine(targetVli, x);
         if (_visual.IsVisual) VisualModeManager?.HandleUpVisual();
         if (!shift) _doc.Document.CollapseSelection();
+        RememberVerticalGoal(x);
     }
 
     internal void HandlePageDown(bool shift)
     {
         SealAndEnsureLayout();
         int vli = CursorToVisualLineIndex();
-        double x = CursorXInVisualLine(vli);
+        double x = VerticalGoalX(vli);
         double cursorY = _layout.LineYPositions[vli];
         double relativeY = cursorY - _scroll.Scroll.Offset;
         double lineH = _layout.GetEffectiveLineHeight(_layout.VisualLines[vli]);
@@ -648,6 +676,7 @@ public partial class DocsCanvas
         SetCursorFromVisualLine(targetVli, x);
         if (_visual.IsVisual) VisualModeManager?.HandleDownVisual();
         if (!shift) _doc.Document.CollapseSelection();
+        RememberVerticalGoal(x);
     }
 
     private void SetCursorFromVisualLine(int vli, double x)
