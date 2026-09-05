@@ -1,6 +1,6 @@
 # Scroll Pre-Buffering
 
-Status: **phases 1 and 2 done; phase 3 built on `scroll-subpixel-offset`, not yet measured.** Written 2026-09-01
+Status: **phases 1 to 3 done and measured** on `scroll-subpixel-offset`; phase 4 unblocked. Written 2026-09-01
 after the wheel-scrolling work (`78cea16`..`40db97a`); status revised 2026-09-05.
 
 Phase 1 was prototyped and thrown away as intended. Phase 2 landed in `337e009` and then took
@@ -296,7 +296,7 @@ and is built once, and in `CursorXInTableRow`, which measures rather than draws.
 
 ## Phase 3, as built
 
-Two commits on `scroll-subpixel-offset`, 2026-09-05:
+Four commits on `scroll-subpixel-offset`, 2026-09-05:
 
 - `ef121cc` - the renderer stops rounding. `ContentScroll.Y` and the overlay both take
   `EffectiveOffset` unrounded. A line visual still sits at its own `Round(lineY)`, so the whole
@@ -314,6 +314,65 @@ snapped - `PageBreakManager` draws at `Math.Round(y - effectiveScroll) + 0.5` - 
 whole pixel rather than re-hinting at a new sub-pixel phase. And the overlay does not shear
 against the cached lines: a caret at `lineY` and a line visual at `Round(lineY)` both shift by
 the same offset, so their difference is constant per line rather than drifting.
+
+- `cd7cf24` - the coast is paced by the compositor's clock. `OnWheelFrame` read a `Stopwatch`
+  restarted at the top of the handler, sixty lines before the duplicate-frame check. Repainting
+  from inside the handler makes `Rendering` free-run at several hundred a second, so that clock
+  timed the slivers between duplicate raises rather than the interval the panel shows. The
+  offset advanced by a different amount between one *displayed* frame and the next even when
+  composition was perfectly regular. `dt` now comes from the difference between frame stamps and
+  a duplicate raise returns before anything moves. The closed-form integral is untouched, so a
+  notch travels the same distance as before - only the clock measuring it changed.
+- `0090bd3` - a minimap drag is measured at last. It maps the mouse straight onto the offset
+  through `SetDirect`, so it opened no gesture and wrote no line; the `smooth` rows it was being
+  compared against came from click-to-jump and the scrollbar.
+
+### Measured
+
+Release against Release, so no build-configuration confound - the run at 02:42 before any of
+this, against 13:37 after:
+
+| wheel gesture | before | after |
+|---|---|---|
+| composition median | ~3.15 ms, wandering 3.01-3.32 | **3.57 ms, every gesture** |
+| composition jitter, over 1.5x median | 4.9-14.5%, avg **8.4%** | 1.2-5.9%, avg **3.1%** |
+| paint interval | 7.2-8.0 ms (~135/s) | **3.57 ms (280/s)** |
+| composed frames painted | 98 of 211 | **1992 of 1992** |
+
+3.57 ms is exactly 1/280, the panel's period, to two decimals on every gesture. Before, it
+free-ran at ~3.15 ms - faster than the display could show, at a phase that slid, which is the
+unpaced presentation `design/Scroll Frame Pacing.md` diagnosed. Pacing off `RenderingTime`
+removed it.
+
+### The premise this started from was wrong
+
+The investigation began from an observation that a minimap drag is smooth at any speed while
+the wheel is not, and the inference that the pipeline must therefore be able to keep up and the
+wheel must be doing something wrong. The conclusion was right. The inference was not.
+
+With all three gestures measured the same way:
+
+| gesture | composition | jitter | paints | composed frames painted |
+|---|---|---|---|---|
+| **wheel** | 3.57 ms | **3.1%** | 280/s | 100% |
+| smooth | 3.57 ms | 12.2% | 280/s | 100% |
+| **direct** (drag) | 5.29 ms | **20.6%** | 187/s | 40-78% |
+
+The drag measures **worst** of the three. It paints when a mouse message arrives, not when a
+frame is composed, and mouse reports are neither synchronised to vblank nor delivered at 280 Hz,
+so a fifth to three fifths of composed frames get no paint and the interval inherits the input
+sampling. It *looks* smooth because the content is slaved to the hand: position is a direct
+function of the mouse, so there is no cadence for the eye to catch, and any unevenness is the
+observer's own.
+
+What survives of the original argument is the weaker and more useful half: rendering cost is not
+the bottleneck. `canvas-onrender` averages about 0.05 ms throughout.
+
+Two caveats on those figures. The `smooth` gestures were all 0.26-0.51 s and `direct` has two
+samples, so a couple of late frames dominate their percentages; the wheel figures come from
+0.57-7.46 s runs. And one drag showed composition itself at 7.01 ms, so WPF appears to compose
+at half rate when paints are sparse - part of `direct`'s jitter is that rather than anything
+here.
 
 ### What this can and cannot fix
 
@@ -333,11 +392,8 @@ so `Math.Round(_offset)` changed every frame and the old gate already passed eve
 Removing it cannot change anything above about 60 px/s. **Phase 3 should not be credited with
 smoothing fast scrolling, and should not be blamed if fast scrolling stays uneven.**
 
-One thing to be careful of when judging it by hand: a minimap drag holds a roughly constant
-velocity while a wheel coast decays through the whole speed range, so a coast passes through the
-band where dropped presents show most. A smoothness difference between the two is therefore not
-by itself evidence about the animators - the `--scroll-diag` gesture log separates them, and now
-measures both paths the same way.
+A minimap drag is not the yardstick it looks like, for the reason above: it is not animated at
+all. Judge the wheel against the log, not against a drag.
 
 ## Alternatives rejected
 

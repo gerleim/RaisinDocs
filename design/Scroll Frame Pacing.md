@@ -1,8 +1,14 @@
 # Scroll Frame Pacing
 
-Status: **proposed**. Follows on from `Scroll Pre-Buffering.md`, which covers how lines came
-to be cached as visuals. This one is about the frames reaching the screen rather than the cost
-of drawing them.
+Status: **proposed, and the case for section C is materially weaker than when this was
+written.** Follows on from `Scroll Pre-Buffering.md`, which covers how lines came to be cached
+as visuals. This one is about the frames reaching the screen rather than the cost of drawing
+them.
+
+> **Read the 2026-09-05 update below before acting on this.** The unpaced presentation this
+> note is built around was measured while the wheel coast was pacing itself off a wall clock.
+> With that fixed, the same gesture runs locked to the panel period. The presenter in section C
+> is a large piece of work, and the measurement that motivated it no longer says what it did.
 
 ## Where things stand
 
@@ -18,11 +24,18 @@ rate and frame rate were conflated for a long time before that:
 | frames hitting every refresh | 16.9% | 33.3% |
 | frames at 93 fps or worse | 44.0% | 26.1% |
 
-Sub-pixel scrolling was then tried on top and **reverted**. Over live-rasterised text each
-line grid-fits independently and the spacing between them visibly wriggles; over cached
-bitmaps the fractional translate resamples, which softens the text and, as a coast decays and
-the fraction drifts slowly, beats into a visible interference pattern. Both were worse than
-the 1 px stepping they were meant to cure.
+Sub-pixel scrolling was tried twice on top of this and reverted both times. Over
+live-rasterised text each line grid-fits independently and the spacing between them visibly
+wriggles; over cached bitmaps the fractional translate resamples, which softens the text and, as
+a coast decays and the fraction drifts slowly, beats into a visible interference pattern. Both
+were worse than the 1 px stepping they were meant to cure.
+
+**It went in on the third attempt** (`ef121cc`, 2026-09-05), once every background, tint,
+selection and highlight had moved into the line and `BuildLineVisual` was the only route a line
+could take to the screen. Each visual sits at its own rounded position and the whole layer
+translates beneath it, so every line moves by the identical fraction and relative spacing is
+exactly constant - the property neither earlier attempt could hold. Reported as showing no
+artifact. See `design/Scroll Pre-Buffering.md`.
 
 ## What is left, and what it is not
 
@@ -479,3 +492,49 @@ against the seam, the ring buffer and the airspace before going further.
 1. **A**, then **B**. Small, correct, and they may make C unnecessary.
 2. Re-measure. If the residual no longer bothers a reader, stop.
 3. Only then the **C prototype**, and only build the real thing if the prototype holds cadence.
+
+## Update, 2026-09-05: the wheel was pacing itself off a wall clock
+
+The figures this note is built on - 228 presents a second into a sink changing 140 times a
+second, 13% dropped, late intervals at 2 and 5 refreshes - were all taken from wheel gestures.
+They were real. They were not only WPF's doing.
+
+`OnWheelFrame` read a `Stopwatch` and restarted it at the top of the handler, sixty lines
+before the duplicate-frame check. Repainting from inside that handler makes `Rendering`
+free-run at several hundred a second, so the clock was timing the slivers between duplicate
+raises rather than the interval the panel shows. The coast therefore advanced by a different
+amount between one displayed frame and the next **even when composition was perfectly
+regular**, and asked for repaints at a phase that slid against the compositor. Fixed in
+`cd7cf24` by taking `dt` from `RenderingTime` and returning early on duplicate raises.
+
+Release against Release, same document, same panel:
+
+| wheel gesture | before | after |
+|---|---|---|
+| composition median | ~3.15 ms, wandering | **3.57 ms = 1/280, every gesture** |
+| jitter, over 1.5x median | avg **8.4%** | avg **3.1%** |
+| paint interval | ~135/s | **280/s** |
+| composed frames painted | 98 of 211 | **1992 of 1992** |
+
+The cadence is now locked to the panel period rather than free-running past it, which is the
+symptom section C exists to cure. 3.1% is not 0%, so something is still being missed - but the
+gap between that and a presenter project spanning C1, C2 and C3 is very different from the gap
+that justified proposing one.
+
+### What this does not overturn
+
+- The prototype measurements in C1-C3 stand. A paced swapchain does present at 3.57 ms with 0%
+  over 1.5x median, and the ClearType and colour findings along the way were worth having -
+  `### ClearType is missing from the editor's own cache` is what set off
+  `design/Opaque Line Visuals.md`.
+- [dotnet/wpf#11607](https://github.com/dotnet/wpf/discussions/11607) is still a real report of
+  the same class of problem from someone else's codebase.
+- Nothing here has been re-measured with FrameView from outside the process, which is what
+  produced the 228-into-140 figure. The in-process log says the cadence is locked; confirming
+  that the panel agrees needs the external tool.
+
+### What to do before building the presenter
+
+Re-run the FrameView capture that produced the original figure, against the fixed coast. If
+presents now match the sink, section C is solving a problem that has largely gone. If they do
+not, the remaining gap is measured rather than assumed, and the case is a real one.
