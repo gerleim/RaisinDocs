@@ -63,11 +63,11 @@ public class ListMarkerColumnTests
     }
 
     [StaFact]
-    public void SharedColumn_MatchesTheBulletColumn_Unchanged()
+    public void SharedColumn_IsTheCheckboxWidthPlusTheGap()
     {
-        // The checkbox glyph is wider than "99.", so sharing the column costs bullets nothing:
-        // this is the same X bullets used before ordered items joined them.
-        ContentStarts("- bullet")[0].Should().Be(44.735625);
+        // padding 10 + two spaces 8.766 + column 21.970 (the checkbox, wider than "99.")
+        // + the 10px gap after the marker.
+        ContentStarts("- bullet")[0].Should().Be(50.735625);
     }
 
     // --- Numbers right-aligned ---

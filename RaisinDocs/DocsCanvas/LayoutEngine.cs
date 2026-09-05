@@ -910,7 +910,9 @@ public partial class DocsCanvas
                 _rendering.Measure.MeasureReplacementPrefix("☑", kind),
                 _rendering.Measure.MeasureReplacementPrefix("99.", kind));
 
-            const double spacingAfterMarker = 4.0;
+            // Wide enough to read as a gap rather than a kerning accident. Blockquotes
+            // use ContentBlockAligner's own 8; the two settings have never agreed.
+            const double spacingAfterMarker = 10.0;
 
             double leftLimit = DocsCanvas._padding + nestingIndentWidth;
             double nominalRightX = leftLimit + spaceBeforeMarkerWidth + columnWidth;
