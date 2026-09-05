@@ -111,10 +111,48 @@ public static class Wheel
 
     [DllImport("user32.dll", SetLastError = true)]
     static extern uint SendInput(uint n, INPUT[] inputs, int size);
-    [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
+    [DllImport("user32.dll")] static extern bool SetForegroundWindow(IntPtr h);
+    [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
+    [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr h, IntPtr pid);
+    [DllImport("user32.dll")] static extern bool AttachThreadInput(uint idAttach, uint idAttachTo, bool fAttach);
+    [DllImport("kernel32.dll")] static extern uint GetCurrentThreadId();
     [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
     [DllImport("user32.dll")] public static extern bool GetCursorPos(out POINT p);
     [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h, out RECT r);
+
+    /// <summary>Brings a window to the front, and says so if it could not.</summary>
+    /// <remarks>
+    /// SetForegroundWindow is refused unless the calling process is already in the foreground, and it
+    /// fails by returning false rather than by throwing - so a caller that does not check sends its
+    /// input to whatever was in front instead. Attaching to the foreground thread's input queue lifts
+    /// the restriction for as long as the attachment lasts.
+    ///
+    /// Verified against GetForegroundWindow afterwards rather than trusted: the call can succeed and
+    /// the window still not be foreground.
+    ///
+    /// Lifted from StockRaisin2's ChartPanDriver, which learned all of this the hard way.
+    /// </remarks>
+    public static bool EnsureForeground(IntPtr hwnd, int timeoutMs)
+    {
+        var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMs);
+        while (DateTime.UtcNow < deadline)
+        {
+            if (GetForegroundWindow() == hwnd) return true;
+
+            if (!SetForegroundWindow(hwnd))
+            {
+                uint us = GetCurrentThreadId();
+                uint them = GetWindowThreadProcessId(GetForegroundWindow(), IntPtr.Zero);
+                if (them != 0 && them != us && AttachThreadInput(us, them, true))
+                {
+                    SetForegroundWindow(hwnd);
+                    AttachThreadInput(us, them, false);
+                }
+            }
+            System.Threading.Thread.Sleep(120);
+        }
+        return GetForegroundWindow() == hwnd;
+    }
 
     [StructLayout(LayoutKind.Sequential)] public struct POINT { public int X, Y; }
     [StructLayout(LayoutKind.Sequential)] public struct RECT { public int Left, Top, Right, Bottom; }
@@ -155,9 +193,14 @@ function Invoke-ScrollSweep {
         @{ Name = 'sustained'; Notches = 30; GapMs = 60; SettleMs = 1800 }
     )
 
+    # Refuse rather than scroll something else. A sweep sent to whatever window happened to be in
+    # front still produces a capture, still looks successful, and measures nothing - which is the
+    # failure mode StockRaisin2 hit when a pan driver passed while panning nothing.
+    if (-not [Wheel]::EnsureForeground($Window, 3000)) {
+        throw "could not bring the editor to the foreground - aborting rather than scrolling another window"
+    }
+
     try {
-        [void][Wheel]::SetForegroundWindow($Window)
-        Start-Sleep -Milliseconds 400
         [void][Wheel]::SetCursorPos($cx, $cy)
         Start-Sleep -Milliseconds 200
 
