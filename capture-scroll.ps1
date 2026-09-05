@@ -303,9 +303,17 @@ if ((Test-Path $csv) -and (Get-Item $csv).Length -gt 0) {
     $pmText = @()
     foreach ($f in @($pmOut, $pmErr)) { if (Test-Path $f) { $pmText += Get-Content $f -Raw } }
     $joined = ($pmText -join "`n") -replace "`0", ''
+    # Scaled against the capture. A handful of lost events in three thousand frames is noise; the
+    # noisy run earlier lost 661. Warning identically for both would teach everyone to ignore it.
     if ($joined -match '(\d+)\s+ETW\s+events\s+were\s+lost') {
-        Write-Warning "$($Matches[1]) ETW events were lost - this capture has gaps in it."
-        Write-Warning "Treat it as indicative at best, and re-take it on a quiet machine."
+        $lost = [int]$Matches[1]
+        $share = 100.0 * $lost / [Math]::Max(1, $rows)
+        if ($share -ge 1.0) {
+            Write-Warning ("{0} ETW events lost, about {1:N1}% of this capture - it has real gaps." -f $lost, $share)
+            Write-Warning "Re-take it on a quiet machine before reading anything into it."
+        } else {
+            Write-Host ("note: {0} ETW events lost ({1:N2}% of frames) - small enough to ignore." -f $lost, $share)
+        }
     }
     if (-not $quiet) {
         Write-Warning "Build processes were running throughout - do not compare this capture with another."

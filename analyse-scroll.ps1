@@ -54,11 +54,19 @@ if (-not $cPresent) { throw "no present-interval column found; is this a Present
 
 # A capture with lost ETW events has gaps that nothing in the CSV admits to, so the warning has to
 # survive to whoever reads it later rather than scrolling past at capture time.
+$lostEvents = 0
 foreach ($side in @("$Csv.pmlog", "$Csv.pmerr")) {
     if (-not (Test-Path $side)) { continue }
     $text = (Get-Content $side -Raw) -replace "`0", ''
-    if ($text -match '(\d+)\s+ETW\s+events\s+were\s+lost') {
-        Write-Warning "This capture lost $($Matches[1]) ETW events - it has gaps. Read it as indicative, not as a measurement."
+    if ($text -match '(\d+)\s+ETW\s+events\s+were\s+lost') { $lostEvents = [int]$Matches[1] }
+}
+if ($lostEvents -gt 0) {
+    # Scaled, so a handful of lost events does not carry the same warning as hundreds.
+    $share = 100.0 * $lostEvents / [Math]::Max(1, $rows.Count)
+    if ($share -ge 1.0) {
+        Write-Warning ("This capture lost {0} ETW events, about {1:N1}% of it - read it as indicative, not as a measurement." -f $lostEvents, $share)
+    } else {
+        Write-Host ("note: {0} ETW events lost ({1:N2}% of frames)" -f $lostEvents, $share)
     }
 }
 
