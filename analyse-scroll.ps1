@@ -73,8 +73,19 @@ if ($lostEvents -gt 0) {
 # The conditions the capture was taken under, if recorded. Comparing two captures without them is
 # how a refresh-rate difference gets read as a code difference.
 if (Test-Path "$Csv.meta") {
-    Get-Content "$Csv.meta" | ForEach-Object { Write-Host "  $_" }
+    $metaLines = Get-Content "$Csv.meta"
+    $metaLines | ForEach-Object { Write-Host "  $_" }
     Write-Host ""
+
+    # Interference is not a footnote. A capture taken while someone was using the machine is a
+    # measurement of the harness mixed with a person, and it is indistinguishable from a good one
+    # by the time anybody reads it back.
+    $bad = $metaLines | Where-Object { $_ -match '^interfered:' -and $_ -notmatch 'none detected|not watched' }
+    if ($bad) {
+        Write-Warning "THIS CAPTURE WAS INTERFERED WITH - do not quote these numbers."
+        $bad | ForEach-Object { Write-Warning "  $_" }
+        Write-Host ""
+    }
 }
 
 Write-Host ("capture : {0}" -f (Split-Path $Csv -Leaf))

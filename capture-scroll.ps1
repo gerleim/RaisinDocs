@@ -19,6 +19,16 @@
     How long to capture. The editor is closed when PresentMon stops. Extended automatically
     when -Automated would otherwise outlast it.
 
+.NOTES
+    While an automated sweep runs it owns the pointer. Hold ESC to cancel: the gesture is
+    abandoned, the mouse button is released if a drag was in flight, the cursor goes back where it
+    was, and the part-finished capture is deleted rather than left to be read later as a short run.
+
+    If anything else takes the machine during a sweep - a click elsewhere, a nudge of the mouse, a
+    window stealing focus - the capture records it and analyse-scroll.ps1 refuses to let it pass as
+    a clean one. Those numbers are the harness mixed with a person and cannot be separated after
+    the fact.
+
 .PARAMETER Automated
     Drive the wheel from the script instead of by hand: four gesture shapes, repeated, with
     the coast allowed to settle between them. Repeatable in a way a hand is not, which is what
@@ -244,8 +254,11 @@ function Invoke-ScrollSweep {
     # front still produces a capture, still looks successful, and measures nothing.
     $target.Focus([TimeSpan]::FromSeconds(3), "the editor")
 
+    # Watches for the machine being taken back, and arms Escape as a way to ask for it back.
+    $guard = [Raisin.WPF.Automation.RunGuard]::new($target)
+
     [Raisin.WPF.Automation.SyntheticInput]::PreservingCursor({
-        Start-Sleep -Milliseconds 200
+        Wait-Cancellable 200
 
         for ($r = 1; $r -le $Repeats; $r++) {
             foreach ($g in $gestures) {
@@ -254,7 +267,8 @@ function Invoke-ScrollSweep {
                 $dir = if ((($r + $gestures.IndexOf($g)) % 2) -eq 0) { -1 } else { 1 }
                 Write-Host ("  pass {0}/{1}  {2,-10} {3,2} notches {4}" -f $r, $Repeats, $g.Name, $g.Notches, $(if ($dir -lt 0) { 'down' } else { 'up' }))
                 [Raisin.WPF.Automation.SyntheticInput]::WheelAt($at, $dir * $g.Notches, $g.GapMs)
-                Start-Sleep -Milliseconds $g.SettleMs
+                Wait-Cancellable $g.SettleMs
+                $guard.Check("$($g.Name) pass $r")
             }
 
             if ($minimap) {
@@ -272,10 +286,33 @@ function Invoke-ScrollSweep {
                     [Raisin.WPF.Automation.SyntheticInput]::Drag(
                         [System.Drawing.Point]::new($x, $y2), [System.Drawing.Point]::new($x, $y1), 40, 12)
                 }
-                Start-Sleep -Milliseconds 1200
+                Wait-Cancellable 1200
+                $guard.Check("minimap drag pass $r")
             }
         }
     })
+
+    return $guard
+}
+
+<##
+ # Sleeps, but stays interruptible.
+ #
+ # The settle after a gesture is where most of a sweep's wall-clock time goes - up to 2.5s at a
+ # stretch - so a cancel key polled only between gestures would feel unresponsive exactly when the
+ # script appears to be doing nothing. Sliced, Escape is picked up within a tenth of a second
+ # wherever it is pressed.
+ #>
+function Wait-Cancellable {
+    param([int] $Milliseconds)
+
+    $end = (Get-Date).AddMilliseconds($Milliseconds)
+    while ((Get-Date) -lt $end) {
+        if ([Raisin.WPF.Automation.RunGuard]::CancelKeyDown) {
+            throw [OperationCanceledException]::new("Escape held - run cancelled, the machine is yours.")
+        }
+        Start-Sleep -Milliseconds 50
+    }
 }
 
 <##
@@ -339,14 +376,23 @@ Write-Host ""
 $editorArgs = @('--scroll-diag')
 if ($File) { $editorArgs += '"{0}"' -f (Resolve-Path $File).Path }
 $app = Start-Process -FilePath (Resolve-Path $editor).Path -ArgumentList $editorArgs -PassThru
-Start-Sleep -Milliseconds 1500   # let the window come up before tracing starts
+
+# Wait for the window rather than sleeping a guessed interval. A fixed 1.5s was enough most of
+# the time and once was not, and the run that lost the race placed nothing, measured the primary,
+# and labelled itself "unknown" - a capture that looks like every other one.
+$deadline = (Get-Date).AddSeconds(20)
+while ((Get-Date) -lt $deadline) {
+    $app.Refresh()
+    if ($app.HasExited) { throw "the editor exited before showing a window (exit code $($app.ExitCode))" }
+    if ($app.MainWindowHandle -ne [IntPtr]::Zero) { break }
+    Start-Sleep -Milliseconds 100
+}
+if ($app.MainWindowHandle -eq [IntPtr]::Zero) { throw "the editor never showed a window within 20s" }
+Start-Sleep -Milliseconds 400   # first layout, before anything is asked of the window
 
 # Placed before tracing begins, so the resize is not part of what is captured.
 $screen = Resolve-Screen $Monitor
-$app.Refresh()
-if ($app.MainWindowHandle -eq [IntPtr]::Zero) {
-    Write-Warning "no window handle yet - measuring wherever the editor opened, unplaced"
-} elseif ($screen -or $Maximise -or $Size) {
+if ($screen -or $Maximise -or $Size) {
     [void] (Set-WindowPlacement -Window $app.MainWindowHandle -Screen $screen -Max:$Maximise -WxH $Size)
 }
 
@@ -354,11 +400,15 @@ if ($app.MainWindowHandle -eq [IntPtr]::Zero) {
 # that was never placed is labelled just as fully as one that was, and a placement that did not
 # take is visible in the capture instead of silently mislabelling it.
 Import-Automation
-$windowRect = $null
-$panel      = $null
-if ($app.MainWindowHandle -ne [IntPtr]::Zero) {
-    $windowRect = [Raisin.WPF.Automation.TargetWindow]::new($app.MainWindowHandle).Bounds
-    $panel      = [Raisin.WPF.Automation.Displays]::For($windowRect)
+$windowRect = [Raisin.WPF.Automation.TargetWindow]::new($app.MainWindowHandle).Bounds
+$panel      = [Raisin.WPF.Automation.Displays]::For($windowRect)
+
+# A placement that was asked for and did not happen is fatal, not a warning. The capture would
+# still be taken, still be full of frames, and describe a different panel than the one named in
+# the command - which is worse than no capture, because it reads as data weeks later.
+if ($screen -and $panel -and $panel.DeviceName -ne $screen.DeviceName) {
+    $app.CloseMainWindow() | Out-Null
+    throw "asked for $($screen.DeviceName) but the window is on $($panel.DeviceName). Refusing to capture."
 }
 Write-Host ("window  : {0}" -f $(if ($windowRect) { "$($windowRect.Width)x$($windowRect.Height) at $($windowRect.X),$($windowRect.Y)" } else { 'unknown' }))
 Write-Host ("display : {0}" -f $(if ($panel) { "$panel  budget $('{0:F2}' -f $panel.FramePeriodMs)ms" } else { 'unknown' }))
@@ -379,6 +429,7 @@ $pmErr = "$csv.pmerr"
 $proc = Start-Process -FilePath $pm -ArgumentList $pmArgs -PassThru -NoNewWindow `
     -RedirectStandardOutput $pmOut -RedirectStandardError $pmErr
 
+$interference = 'not watched - manual run'
 if ($Automated) {
     Start-Sleep -Milliseconds 800   # let tracing settle before the first notch
     $app.Refresh()
@@ -386,8 +437,31 @@ if ($Automated) {
         Write-Warning "no editor window yet - skipping the sweep, capture will be idle"
     } else {
         Write-Host "sweep running - the wheel belongs to the script until it finishes"
-        Invoke-ScrollSweep -Window $app.MainWindowHandle -Repeats $Repeats
-        Write-Host "sweep done"
+        Write-Host "hold ESC to cancel and get the machine back" -ForegroundColor Yellow
+        try {
+            $guard = Invoke-ScrollSweep -Window $app.MainWindowHandle -Repeats $Repeats
+            Write-Host "sweep done"
+            $interference = $guard.Summary()
+            if (-not $guard.Clean) {
+                Write-Warning "interference during the run: $interference"
+                Write-Warning "the numbers describe the harness mixed with someone using the machine."
+            }
+        }
+        catch [OperationCanceledException] {
+            # Stop the trace and take the capture with it. A cancelled sweep has a partial set of
+            # gestures and no record of which ones completed, so keeping the CSV only invites it to
+            # be read later as a short run rather than an abandoned one.
+            Write-Host ""
+            Write-Host "cancelled - stopping the capture and discarding it" -ForegroundColor Yellow
+            if ($proc -and -not $proc.HasExited) { $proc.Kill() }
+            if ($app -and -not $app.HasExited) { $app.CloseMainWindow() | Out-Null }
+            Remove-Item "$csv*" -Force -ErrorAction SilentlyContinue
+            Write-Host "the machine is yours. Nothing was written."
+            return
+        }
+        finally {
+            if ($guard) { $guard.Dispose() }
+        }
     }
 }
 
@@ -433,6 +507,7 @@ if ((Test-Path $csv) -and (Get-Item $csv).Length -gt 0) {
     $meta += "display   : $(if ($panel) { $panel.DeviceName } else { 'unknown' })"
     $meta += "refresh   : $(if ($panel) { "$($panel.RefreshHz) Hz - $('{0:F2}' -f $panel.FramePeriodMs)ms budget" } else { 'unknown' })"
     $meta += "quiet     : $(if ($quiet) { 'yes' } else { 'no - build processes were running' })"
+    $meta += "interfered: $interference"
     $meta += "frames    : $rows"
     $meta | Set-Content -Path "$csv.meta" -Encoding utf8
 
