@@ -380,6 +380,25 @@ sampling. It *looks* smooth because the content is slaved to the hand: position 
 function of the mouse, so there is no cadence for the eye to catch, and any unevenness is the
 observer's own.
 
+**Confirmed externally on 2026-09-05**, with both gestures captured in the same run on a quiet
+machine, driven by a scripted sweep so the two are comparable:
+
+| | wheel (10 gestures) | minimap drag (3) |
+|---|---|---|
+| presented, and displayed | 256-279/s | **108-110/s** |
+| display interval | **3.57 ms** - exactly 1/280, on every gesture | **7.15 ms** - two refreshes |
+| intervals over 1.5x median | 1.1-9.0%, and 1.1-2.5% on the long scrolls | 24-38% |
+| animation error, median | **0.22-0.33 ms** | **3.73-7.12 ms** |
+| dropped | 0.0% | 0.0% |
+
+The drag carries roughly **twenty times** the wheel's animation error and holds every frame for
+two refreshes. Nothing is dropped in either, so this is pacing rather than loss: the drag is
+bound by the rate mouse messages arrive, which is about 110/s and unrelated to the panel.
+
+So the observation this investigation started from - a drag is smooth at any speed and the wheel
+is not - is exactly inverted by measurement. The wheel is now the best-paced input in the editor
+and the drag the worst.
+
 What survives of the original argument is the weaker and more useful half: rendering cost is not
 the bottleneck. `canvas-onrender` averages about 0.05 ms throughout.
 
