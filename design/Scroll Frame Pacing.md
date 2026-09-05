@@ -617,7 +617,7 @@ as someone else's report of the same class of problem. What does not stand is th
 
 ## The baseline set: other refresh rates, other window sizes
 
-**One cell run, 2026-09-05, and it found something.** See below the table.
+**Refresh sweep run, 2026-09-05, and it found a fault.** See below the table.
 
 Everything measured so far was taken in one configuration: whatever size the editor happened to
 open at, on the 280 Hz primary. Two reasons that is not enough.
@@ -681,9 +681,9 @@ taken days apart measures the days as much as the panels.
 
 | display | Hz | window | presented/s | displayed/s | dropped | 1-refresh | animation error p50 |
 |---|---|---|---|---|---|---|---|
-| DISPLAY8 | 60 | 1920x1032 | 63-73 | 63-73 | **0.0%** | see below | **12.9 ms** |
-| DISPLAY7 | 100 | 1920x1032 | | | | | |
-| DISPLAY9 | 144 | 1920x1032 | | | | | |
+| DISPLAY8 | 60 | 1920x1032 | 63-73 | 63-73 | **0.0%** | 16.67 / 33.32 ms | **12.9 ms** |
+| DISPLAY7 | 100 | 1920x1032 | 91-101 | 91-101 | **0.0%** | 12.2-20.1 ms | **11.8 ms** |
+| DISPLAY9 | 144 | 1920x1032 | 132-141 | 132-141 | **0.0%** | 6.95 ms | **4.0 ms** |
 | DISPLAY6 | 280 | 1200x800 | | | | | |
 | DISPLAY6 | 280 | 1920x1032 | | | | | |
 | DISPLAY6 | 280 | 2560x1392 | | | | | |
@@ -743,7 +743,70 @@ locks. It was never a claim about the app on any monitor, and it read like one.
 configuration where the composition clock happens to equal the display clock is the one that was
 always measured. This is the case reason 1 was written for.
 
-### What the remaining cells now test
+### The sweep, completed: severity tracks how badly the two clocks fit
+
+All three 1920x1080 panels, quiet machine, Release, window filling the working area. Nothing
+dropped anywhere.
+
+| panel | display period | composition grid the app saw | display interval, median | animation error p50 | as a share of budget |
+|---|---|---|---|---|---|
+| DISPLAY6, 280 Hz (primary) | 3.57 ms | 3.57 ms | 3.57 ms | 0.22-0.33 ms | **8%** |
+| DISPLAY9, 144 Hz | 6.94 ms | 3.57 ms | **6.95 ms** | ~4.0 ms | **58%** |
+| DISPLAY8, 60 Hz | 16.67 ms | 7.13 ms | 16.67 / 33.32 ms | 12.9 ms | **77%** |
+| DISPLAY7, 100 Hz | 10.00 ms | 7.13 ms | 12.2-20.1 ms | 11.8 ms | **117%** |
+
+**The composition grid is the primary's, on every panel.** 3.57 ms is DISPLAY6's period and
+7.13 ms is exactly two of them; the app never once saw a tick at 10.00 ms or 16.67 ms, the periods
+of the panels it was actually being displayed on. It identifies the panel correctly in its own log
+and paces to a clock belonging to a different one.
+
+**How badly that hurts depends on arithmetic, and the ordering confirms the mechanism.** Painting
+on a grid of 3.57 ms into a panel of period P, the mismatch is how far P sits from a whole number
+of ticks:
+
+| panel | P / 3.57 ms | distance from a whole tick | measured error / budget |
+|---|---|---|---|
+| 280 Hz | 1.00 | 0% | 8% |
+| 144 Hz | 1.94 | 6% | 58% |
+| 60 Hz | 4.67 | 33% | 77% |
+| 100 Hz | 2.80 | 20%, and the grid halves to 7.13 ms here - 1.40 ticks, 40% out | 117% |
+
+The measured severity orders exactly as the fit does. That is the mechanism confirmed, on three
+panels, rather than a coincidence read off one.
+
+**At 100 Hz the animation error exceeds a whole frame period.** It is the worst fit of the four
+and the only rate where the median display interval never once equals the panel's period.
+
+### Where the prediction was wrong, and what that adds
+
+144 Hz was predicted to "look like the primary". It does not. It locks its *display interval* -
+6.95 ms on all nine gestures, against a wandering 12-20 ms at 100 Hz - and still carries 4.0 ms of
+animation error, twelve times the primary's.
+
+Both are explained by the same number. The app paints every second composition tick, 7.14 ms, into
+a panel whose period is 6.94 ms. Each paint is 0.2 ms late, which is far too little to change
+which refresh a frame lands on - so intervals look perfectly locked - but it accumulates, slipping
+a whole frame roughly every 35, and animation error measures exactly that drift. **A locked
+interval is not the same as correct timing**, and 144 Hz is the case that separates the two.
+
+That reading of the 144 Hz residual follows from the mechanism rather than being separately
+measured; the ordering across four panels is the part that is established.
+
+### What this does and does not change
+
+**Zero dropped frames survives everywhere** - four panels, four refresh rates, 0.0% throughout.
+The wall-clock pacing bug found earlier was real and its fix was real.
+
+**The headline was too broad.** "98% of frames land on exactly one refresh" is a result for a
+window on the primary, where the grid and the panel are the same 3.57 ms and everything therefore
+locks. Every capture before today was taken in that one configuration, which is the only one where
+the fault is invisible.
+
+**What would fix it** is pacing to the panel the window is on rather than to whatever clock
+`CompositionTarget.Rendering` offers. Whether WPF exposes that at all is an open question and no
+work has been done on it. Nothing here is a proposal yet.
+
+### Superseded: what the remaining cells were expected to test
 
 The sweep is no longer confirmation. If the composition clock is pinned near 140 Hz regardless of
 the panel, each remaining rate beats against it differently and predictably:
