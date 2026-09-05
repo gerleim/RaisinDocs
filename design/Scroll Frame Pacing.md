@@ -835,10 +835,29 @@ metric reaches 117% of budget. **Size is a minor effect and refresh rate is a ma
 is the ranking worth taking away, and the opposite of what a per-frame cost model would predict.
 
 One app-side cost was large enough to name: `minimap-rebuild` ran 2-13 ms, and 13.3 ms is nearly
-four frames at 280 Hz. **Investigated and fixed** - the minimap's bitmap cache was invalidating
-itself on a single line of movement, so it rebuilt about fifty times per drag instead of once. The
-same sweep now records 4 rebuilds where it recorded 73, and none at all during a drag. The
-per-rebuild cost is unchanged; it is simply no longer paid every frame.
+four frames at 280 Hz. **Investigated and fixed** - the minimap's bitmap cache invalidated itself
+on a single line of movement, so it rebuilt about fifty times per drag instead of once. The same
+sweep records 3 rebuilds where it recorded 73, and none during a drag.
+
+**It changed nothing that can be seen, and that is the honest result.** Re-measured on the same
+window and panel:
+
+| maximised, 280 Hz | before | after |
+|---|---|---|
+| rebuilds across the sweep | 73 | **3** |
+| wheel animation error p50 | 0.69-0.89 ms | 0.70-1.00 ms |
+| sustained intervals over 1.5x | 2.9-9.4% | 3.3-4.6% |
+| minimap drag animation error p50 | 7.88-10.55 ms | 8.46-11.23 ms |
+
+About 160 ms of glyph rasterisation per drag is genuinely gone and the drag paces identically.
+That follows from what the sweep already established: the drag runs at 108-110/s because that is
+how fast mouse messages arrive, not because rendering cannot keep up, so the rebuilds were being
+absorbed in slack that existed anyway. Calling 13.3 ms "nearly four frames" implied it was causing
+stutter. It was not.
+
+The value is headroom rather than smoothness - on a slower machine, a longer document, or a
+frame with more to do, that work stops being free. Worth having, and not worth crediting with
+anything visible.
 
 ### Superseded: what the remaining cells were expected to test
 
