@@ -45,7 +45,8 @@
 .EXAMPLE
     .\capture-scroll.ps1 -File "design\Scroll Frame Pacing.md" -Seconds 30
 
-    Manual - scroll by hand for 30s, including minimap drags, which the sweep does not do.
+    Manual - scroll by hand for 30s. The sweep covers wheel and minimap drags; the scrollbar
+    thumb and keyboard navigation are still only reachable by hand.
 #>
 [CmdletBinding()]
 param(
@@ -131,6 +132,12 @@ function Invoke-ScrollSweep {
         @{ Name = 'sustained'; Notches = 30; GapMs = 60; SettleMs = 1800 }
     )
 
+    # Where the minimap is, from the app rather than from a proportion of the window. It sits in an
+    # Auto-width column between the canvas and the scrollbar, so a guess that is slightly wrong
+    # lands on the canvas - where a left-drag selects text rather than scrolling, and the run
+    # completes looking exactly like a successful one.
+    $minimap = Get-MinimapRect
+
     # Refuse rather than scroll something else. A sweep sent to whatever window happened to be in
     # front still produces a capture, still looks successful, and measures nothing.
     $target.Focus([TimeSpan]::FromSeconds(3), "the editor")
@@ -147,8 +154,51 @@ function Invoke-ScrollSweep {
                 [Raisin.WPF.Automation.SyntheticInput]::WheelAt($at, $dir * $g.Notches, $g.GapMs)
                 Start-Sleep -Milliseconds $g.SettleMs
             }
+
+            if ($minimap) {
+                # Down the minimap and back. Alternating keeps the view off the ends of the
+                # document, where a drag clamps and reveals nothing.
+                $x  = $minimap.X + [int]($minimap.Width / 2)
+                $y1 = $minimap.Y + [int]($minimap.Height * 0.20)
+                $y2 = $minimap.Y + [int]($minimap.Height * 0.80)
+                $down = ($r % 2) -eq 1
+                Write-Host ("  pass {0}/{1}  {2,-10}    drag {3}" -f $r, $Repeats, 'minimap', $(if ($down) { 'down' } else { 'up' }))
+                if ($down) {
+                    [Raisin.WPF.Automation.SyntheticInput]::Drag(
+                        [System.Drawing.Point]::new($x, $y1), [System.Drawing.Point]::new($x, $y2), 40, 12)
+                } else {
+                    [Raisin.WPF.Automation.SyntheticInput]::Drag(
+                        [System.Drawing.Point]::new($x, $y2), [System.Drawing.Point]::new($x, $y1), 40, 12)
+                }
+                Start-Sleep -Milliseconds 1200
+            }
         }
     })
+}
+
+<##
+ # The minimap's screen rectangle, as the editor last reported it.
+ #
+ # DocsEditor writes "minimap rect X,Y WxH" to the scroll log whenever it lays out, but only while
+ # scroll diagnostics are on. Taking the last line means the rect matches the current window size
+ # rather than some earlier run's.
+ #>
+function Get-MinimapRect {
+    $log = "$env:LOCALAPPDATA\RaisinDocs\scroll.log"
+    if (-not (Test-Path $log)) { return $null }
+
+    $line = Get-Content $log | Select-String -Pattern 'minimap rect (-?\d+),(-?\d+) (\d+)x(\d+)' | Select-Object -Last 1
+    if (-not $line) {
+        Write-Warning "no minimap rect in the log - skipping the drag rather than guessing where it is"
+        return $null
+    }
+    $m = [regex]::Match($line.Line, 'minimap rect (-?\d+),(-?\d+) (\d+)x(\d+)')
+    [pscustomobject]@{
+        X      = [int]$m.Groups[1].Value
+        Y      = [int]$m.Groups[2].Value
+        Width  = [int]$m.Groups[3].Value
+        Height = [int]$m.Groups[4].Value
+    }
 }
 
 $pm = Resolve-PresentMon $PresentMon
@@ -156,10 +206,11 @@ if (-not (Test-CanCapture)) {
     Write-Warning "Not elevated and not in 'Performance Log Users' - the capture will probably be empty."
 }
 
-# One pass is about 10.2s of gestures; a capture shorter than the sweep would stop partway
-# through and the last gestures would be missing rather than obviously absent.
+# One pass is about 12s of gestures - four wheel shapes and a minimap drag. A capture shorter
+# than the sweep stops partway through, and the last gestures go missing rather than being
+# obviously absent.
 if ($Automated) {
-    $needed = [int]([Math]::Ceiling($Repeats * 10.2)) + 3
+    $needed = [int]([Math]::Ceiling($Repeats * 12.0)) + 3
     if ($Seconds -lt $needed) {
         Write-Host "extending capture from ${Seconds}s to ${needed}s to cover $Repeats passes"
         $Seconds = $needed
