@@ -682,7 +682,13 @@ public partial class DocsCanvas
     private void SetCursorFromVisualLine(int vli, double x)
     {
         var vl = _layout.VisualLines[vli];
-        int rawOffset = HitTestInVisualLine(vli, x);
+        // x came from CursorXInVisualLine, which measures from the line's text column. Only the
+        // Proper hit test reads that same column back; the plain one starts at the replacement
+        // prefix's width instead, and the two disagree by however far the marker column sits
+        // from the prefix - enough to drop the cursor a character or two off the goal.
+        int rawOffset = _visual.IsVisual
+            ? HitTestInVisualLineProper(vli, x)
+            : HitTestInVisualLine(vli, x);
         if (vl.Group != null)
         {
             var (bi, bo) = vl.Group.JoinedToSource(rawOffset);

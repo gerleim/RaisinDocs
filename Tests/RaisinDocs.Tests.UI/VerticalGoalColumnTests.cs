@@ -94,4 +94,37 @@ public class VerticalGoalColumnTests
         canvas.TestCursorBlock.Should().Be(0);
         canvas.TestCursorOffset.Should().Be(0);
     }
+
+    // --- List items: the column has to be read from where the text actually starts ---
+
+    [StaTheory]
+    [InlineData(Key.Down, 0, 1)]
+    [InlineData(Key.Up, 1, 0)]
+    public void VerticalMove_BetweenIdenticalListItems_KeepsColumn(Key key, int from, int to)
+    {
+        // Identical lines: the offset has to survive the round trip exactly. It did not while
+        // the goal column was measured from the text and read back from the prefix width.
+        foreach (int offset in new[] { 2, 5, 8, 11 })
+        {
+            var canvas = MakeCanvas("- abcdefghij\n- abcdefghij", DocsCanvas.EditMode.Visual);
+            canvas.TestSetCursor(from, offset);
+
+            canvas.TestNavigate(key);
+
+            canvas.TestCursorBlock.Should().Be(to);
+            canvas.TestCursorOffset.Should().Be(offset, $"column {offset} must survive {key}");
+        }
+    }
+
+    [StaFact]
+    public void Down_BetweenIdenticalOrderedItems_KeepsColumn()
+    {
+        var canvas = MakeCanvas("1. abcdefghij\n2. abcdefghij", DocsCanvas.EditMode.Visual);
+        canvas.TestSetCursor(0, 6);
+
+        canvas.TestNavigate(Key.Down);
+
+        canvas.TestCursorBlock.Should().Be(1);
+        canvas.TestCursorOffset.Should().Be(6);
+    }
 }
