@@ -280,6 +280,11 @@ is now rejected on an integer compare, and a joined line rejects out-of-group ma
 
 **Done 2026-09-04.** `OpaqueLineVisuals` defaults to true, so ClearType is back for everyone.
 
+**Confirmed 2026-09-05, with no switches and no toggles**, in both the editor and the viewer -
+the configuration everyone actually gets, and the one combination every earlier check had a
+flag involved in. Printing verified too, which the before/after render comparison could not
+cover.
+
 The toggles stayed, and stopped needing a switch: F8 and F9 work in every host, the viewer
 included, which is where a reader is most likely to be looking at text closely enough to care.
 The badge follows the state instead - it appears when the path is not the one that ships and
