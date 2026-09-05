@@ -1,6 +1,6 @@
 # Scroll Pre-Buffering
 
-Status: **phases 1 and 2 done; phase 3 is unblocked and not started.** Written 2026-09-01
+Status: **phases 1 and 2 done; phase 3 built on `scroll-subpixel-offset`, not yet measured.** Written 2026-09-01
 after the wheel-scrolling work (`78cea16`..`40db97a`); status revised 2026-09-05.
 
 Phase 1 was prototyped and thrown away as intended. Phase 2 landed in `337e009` and then took
@@ -293,6 +293,51 @@ and is built once, and in `CursorXInTableRow`, which measures rather than draws.
   pairing did not exist when this was written - table borders moved into the overlay during
   the opaque-line work, precisely because they never cross a glyph. Either snap the overlay to
   the same grid, or accept a sub-pixel shear on table borders alone.
+
+## Phase 3, as built
+
+Two commits on `scroll-subpixel-offset`, 2026-09-05:
+
+- `ef121cc` - the renderer stops rounding. `ContentScroll.Y` and the overlay both take
+  `EffectiveOffset` unrounded. A line visual still sits at its own `Round(lineY)`, so the whole
+  layer translating by a fraction moves every line by the identical amount and relative spacing
+  stays exactly constant. That is the property the two earlier attempts could not hold, and it
+  is what phase 2 bought.
+- `92816fb` - the wheel coast stops gating on whole pixels. `OnWheelFrame` repainted only when
+  `Math.Round(_offset)` changed, on the premise that the renderer rounded; the commit above made
+  that premise false, so the first commit alone did nothing for wheel scrolling. The gate is now
+  any movement past a hundredth of a pixel, and `_paintedOffset` holds the exact position so the
+  log's paint-step figures measure the same thing on both gesture paths.
+
+Two obstacles recorded above turned out not to need work. The page-break label was already
+snapped - `PageBreakManager` draws at `Math.Round(y - effectiveScroll) + 0.5` - so it steps by a
+whole pixel rather than re-hinting at a new sub-pixel phase. And the overlay does not shear
+against the cached lines: a caret at `lineY` and a line visual at `Round(lineY)` both shift by
+the same offset, so their difference is constant per line rather than drifting.
+
+### What this can and cannot fix
+
+**It addresses the slow tail only** - the 20-60 px/s band in the table above, where the view
+could previously move only in whole-pixel hops.
+
+**It does nothing for uneven scrolling at speed.** That is a different fault with a different
+cause, measured in `design/Scroll Frame Pacing.md`: WPF presents unpaced, 228 presents a second
+into a sink changing 140 times a second, 13% dropped, with late intervals landing at 2 and 5
+refreshes instead of 1. It is a known WPF issue rather than anything in this codebase
+([dotnet/wpf#11607](https://github.com/dotnet/wpf/discussions/11607) reports the same signature,
+and finds `BitmapCache` and `UseLayoutRounding` equally ineffective against it). The fix
+explored for it is the paced presenter in section C of that note.
+
+The arithmetic makes the separation plain: at speed the view moves more than a pixel per frame,
+so `Math.Round(_offset)` changed every frame and the old gate already passed every frame.
+Removing it cannot change anything above about 60 px/s. **Phase 3 should not be credited with
+smoothing fast scrolling, and should not be blamed if fast scrolling stays uneven.**
+
+One thing to be careful of when judging it by hand: a minimap drag holds a roughly constant
+velocity while a wheel coast decays through the whole speed range, so a coast passes through the
+band where dropped presents show most. A smoothness difference between the two is therefore not
+by itself evidence about the animators - the `--scroll-diag` gesture log separates them, and now
+measures both paths the same way.
 
 ## Alternatives rejected
 

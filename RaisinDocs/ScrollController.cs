@@ -13,7 +13,6 @@ internal class ScrollController
     private double _offset;
     private double _wheelVelocity;
     private bool _wheelCoasting;
-    private readonly Stopwatch _wheelClock = new();
     private const double WheelDamping = 10.0;
 
     /// <summary>
@@ -186,7 +185,6 @@ internal class ScrollController
         if (!_wheelCoasting) return;
         _wheelVelocity = 0;
         _wheelCoasting = false;
-        _wheelClock.Reset();
         CompositionTarget.Rendering -= OnWheelFrame;
     }
 
@@ -206,7 +204,7 @@ internal class ScrollController
         if (!_wheelCoasting)
         {
             _wheelCoasting = true;
-            _wheelClock.Restart();
+            _lastRenderingTime = TimeSpan.MinValue;   // no previous frame to measure against
             _paintedOffset = _offset;
             _gestureSource = "wheel";
 
@@ -261,8 +259,29 @@ internal class ScrollController
 
     private void OnWheelFrame(object? sender, EventArgs e)
     {
-        double dt = _wheelClock.Elapsed.TotalSeconds;
-        _wheelClock.Restart();
+        // Paced by the compositor's frame stamp, not by a wall clock.
+        //
+        // Repainting from inside this handler makes Rendering free-run at several hundred a
+        // second, so a Stopwatch restarted on every raise measured the slivers between those
+        // duplicates rather than the interval the panel shows. The offset then advanced by a
+        // different amount between one displayed frame and the next even when composition was
+        // perfectly regular, which is uneven motion however even the frames are. It is the one
+        // thing the wheel did differently from the smoother, which has always advanced once per
+        // composed frame - and a minimap drag moving 594px a paint holds a rock-steady cadence
+        // where a wheel coast moving 110px does not.
+        //
+        // A duplicate raise returns before anything moves: nothing has been shown, so there is
+        // no interval to integrate over. Settling is therefore evaluated on the next real frame,
+        // a fraction of a millisecond later.
+        var stamp = (e as RenderingEventArgs)?.RenderingTime ?? TimeSpan.MinValue;
+        bool haveStamp = stamp != TimeSpan.MinValue;
+        if (haveStamp && stamp == _lastRenderingTime) return;
+
+        double dt = haveStamp && _lastRenderingTime != TimeSpan.MinValue
+            ? (stamp - _lastRenderingTime).TotalSeconds
+            : (_displayPeriod > 0 ? _displayPeriod : 1.0 / 60);
+        _lastRenderingTime = stamp;
+
         if (dt <= 0) dt = 1.0 / 60;
         else if (dt > MaxFrameDelta) dt = MaxFrameDelta;
 
@@ -299,7 +318,6 @@ internal class ScrollController
         {
             _wheelVelocity = 0;
             _wheelCoasting = false;
-            _wheelClock.Reset();
             CompositionTarget.Rendering -= OnWheelFrame;
         }
 
@@ -314,14 +332,10 @@ internal class ScrollController
         // different phase every frame. Each repaint then independently catches or misses a
         // composition deadline, which is the jagged scroll.
         //
-        // RenderingTime is the composition engine's frame stamp. It repeats when Rendering
-        // fires more than once for the same frame, which is exactly what identifies the
-        // free-run duplicates. Painting only when it advances gives one repaint per frame WPF
-        // actually composes, and the invalidate then drives the next one - a loop that runs at
-        // the compositor's cadence instead of sliding against it.
-        var stamp = (e as RenderingEventArgs)?.RenderingTime ?? TimeSpan.MinValue;
-        bool newFrame = stamp == TimeSpan.MinValue || stamp != _lastRenderingTime;
-        _lastRenderingTime = stamp;
+        // Every raise that reaches here is a frame WPF actually composed - the duplicates
+        // returned at the top - so painting drives the next one, a loop running at the
+        // compositor's cadence instead of sliding against it.
+        const bool newFrame = true;
         DiagFrame(dt, newFrame);
 
         // Only when the drawn image would differ. That used to mean a whole pixel, because the
