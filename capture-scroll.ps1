@@ -91,96 +91,34 @@ function Test-CanCapture {
     return $false
 }
 
-# --- synthetic wheel input ------------------------------------------------------------------
-# Real WM_MOUSEWHEEL, not the Test* hooks. Notch merging and the message pump are part of what
-# is being measured, and driving the canvas directly would step over exactly that.
-#
-# Windows delivers wheel messages to the window under the cursor, so the cursor is parked over
-# the editor and put back afterwards. While a sweep runs the wheel belongs to the script.
-$script:InputSender = @'
-using System;
-using System.Runtime.InteropServices;
-public static class Wheel
-{
-    [StructLayout(LayoutKind.Sequential)]
-    struct MOUSEINPUT { public int dx, dy; public uint mouseData, dwFlags, time; public IntPtr dwExtraInfo; }
-    [StructLayout(LayoutKind.Sequential)]
-    struct INPUT { public uint type; public MOUSEINPUT mi; }
+# --- synthetic input, from the shared library --------------------------------------------------
+# Raisin.WPF.Automation carries the primitives both this and StockRaisin2 need: foreground
+# handling that reports its own failure, wheel notches over a moved cursor, and a stepped drag.
+# The traps they exist to avoid are in that project's README rather than repeated here.
+function Import-Automation {
+    if ("Raisin.WPF.Automation.SyntheticInput" -as [type]) { return }
 
-    const uint INPUT_MOUSE = 0, MOUSEEVENTF_WHEEL = 0x0800;
-
-    [DllImport("user32.dll", SetLastError = true)]
-    static extern uint SendInput(uint n, INPUT[] inputs, int size);
-    [DllImport("user32.dll")] static extern bool SetForegroundWindow(IntPtr h);
-    [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
-    [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr h, IntPtr pid);
-    [DllImport("user32.dll")] static extern bool AttachThreadInput(uint idAttach, uint idAttachTo, bool fAttach);
-    [DllImport("kernel32.dll")] static extern uint GetCurrentThreadId();
-    [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
-    [DllImport("user32.dll")] public static extern bool GetCursorPos(out POINT p);
-    [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h, out RECT r);
-
-    /// <summary>Brings a window to the front, and says so if it could not.</summary>
-    /// <remarks>
-    /// SetForegroundWindow is refused unless the calling process is already in the foreground, and it
-    /// fails by returning false rather than by throwing - so a caller that does not check sends its
-    /// input to whatever was in front instead. Attaching to the foreground thread's input queue lifts
-    /// the restriction for as long as the attachment lasts.
-    ///
-    /// Verified against GetForegroundWindow afterwards rather than trusted: the call can succeed and
-    /// the window still not be foreground.
-    ///
-    /// Lifted from StockRaisin2's ChartPanDriver, which learned all of this the hard way.
-    /// </remarks>
-    public static bool EnsureForeground(IntPtr hwnd, int timeoutMs)
-    {
-        var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMs);
-        while (DateTime.UtcNow < deadline)
-        {
-            if (GetForegroundWindow() == hwnd) return true;
-
-            if (!SetForegroundWindow(hwnd))
-            {
-                uint us = GetCurrentThreadId();
-                uint them = GetWindowThreadProcessId(GetForegroundWindow(), IntPtr.Zero);
-                if (them != 0 && them != us && AttachThreadInput(us, them, true))
-                {
-                    SetForegroundWindow(hwnd);
-                    AttachThreadInput(us, them, false);
-                }
-            }
-            System.Threading.Thread.Sleep(120);
-        }
-        return GetForegroundWindow() == hwnd;
+    $roots = @(
+        "..\RaisinLibraries\Raisin.WPF.Automation\bin\Debug\net8.0-windows",
+        "..\RaisinLibraries\Raisin.WPF.Automation\bin\Release\net8.0-windows"
+    )
+    foreach ($r in $roots) {
+        $dll = Join-Path $r "Raisin.WPF.Automation.dll"
+        if (Test-Path $dll) { Add-Type -Path (Resolve-Path $dll).Path; return }
     }
-
-    [StructLayout(LayoutKind.Sequential)] public struct POINT { public int X, Y; }
-    [StructLayout(LayoutKind.Sequential)] public struct RECT { public int Left, Top, Right, Bottom; }
-
-    /// <summary>One wheel notch. Negative scrolls down, which is how a reader moves forward.</summary>
-    public static void Notch(int count)
-    {
-        var input = new INPUT[1];
-        input[0].type = INPUT_MOUSE;
-        input[0].mi.mouseData = unchecked((uint)(count * 120));
-        input[0].mi.dwFlags = MOUSEEVENTF_WHEEL;
-        SendInput(1, input, Marshal.SizeOf(typeof(INPUT)));
-    }
+    throw "Raisin.WPF.Automation is not built. Run: dotnet build ..\RaisinLibraries\Raisin.WPF.Automation\Raisin.WPF.Automation.csproj"
 }
-'@
 
 function Invoke-ScrollSweep {
     param([IntPtr] $Window, [int] $Repeats)
 
-    if (-not ("Wheel" -as [type])) { Add-Type -TypeDefinition $script:InputSender }
+    Import-Automation
+    $target = [Raisin.WPF.Automation.TargetWindow]::new($Window)
+    if ($target.Bounds.IsEmpty) { throw "could not locate the editor window" }
 
-    $rect = New-Object Wheel+RECT
-    if (-not [Wheel]::GetWindowRect($Window, [ref] $rect)) { throw "could not locate the editor window" }
-    $cx = [int](($rect.Left + $rect.Right) / 2)
-    $cy = [int](($rect.Top + $rect.Bottom) / 2)
-
-    $saved = New-Object Wheel+POINT
-    [void][Wheel]::GetCursorPos([ref] $saved)
+    # Left of centre horizontally, to stay clear of the minimap and scrollbar on the right edge -
+    # the canvas is what should receive the wheel.
+    $at = $target.PointAt(0.35, 0.5)
 
     # Each entry is a gesture: how many notches, how far apart, and how long to let the coast
     # settle before the next. A single flick spends most of its life in the slow tail; a long
@@ -194,14 +132,10 @@ function Invoke-ScrollSweep {
     )
 
     # Refuse rather than scroll something else. A sweep sent to whatever window happened to be in
-    # front still produces a capture, still looks successful, and measures nothing - which is the
-    # failure mode StockRaisin2 hit when a pan driver passed while panning nothing.
-    if (-not [Wheel]::EnsureForeground($Window, 3000)) {
-        throw "could not bring the editor to the foreground - aborting rather than scrolling another window"
-    }
+    # front still produces a capture, still looks successful, and measures nothing.
+    $target.Focus([TimeSpan]::FromSeconds(3), "the editor")
 
-    try {
-        [void][Wheel]::SetCursorPos($cx, $cy)
+    [Raisin.WPF.Automation.SyntheticInput]::PreservingCursor({
         Start-Sleep -Milliseconds 200
 
         for ($r = 1; $r -le $Repeats; $r++) {
@@ -210,17 +144,11 @@ function Invoke-ScrollSweep {
                 # document, where a clamped coast stops early and measures nothing.
                 $dir = if ((($r + $gestures.IndexOf($g)) % 2) -eq 0) { -1 } else { 1 }
                 Write-Host ("  pass {0}/{1}  {2,-10} {3,2} notches {4}" -f $r, $Repeats, $g.Name, $g.Notches, $(if ($dir -lt 0) { 'down' } else { 'up' }))
-                for ($i = 0; $i -lt $g.Notches; $i++) {
-                    [Wheel]::Notch($dir)
-                    if ($g.GapMs -gt 0) { Start-Sleep -Milliseconds $g.GapMs }
-                }
+                [Raisin.WPF.Automation.SyntheticInput]::WheelAt($at, $dir * $g.Notches, $g.GapMs)
                 Start-Sleep -Milliseconds $g.SettleMs
             }
         }
-    }
-    finally {
-        [void][Wheel]::SetCursorPos($saved.X, $saved.Y)
-    }
+    })
 }
 
 $pm = Resolve-PresentMon $PresentMon
