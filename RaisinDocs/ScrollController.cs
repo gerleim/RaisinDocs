@@ -106,7 +106,17 @@ internal class ScrollController
     /// <summary>Never stretch further than this, however heavy a frame is.</summary>
     private const double MaxIntervalStretch = 4.0;
 
-    private double _paintedPixel;
+    /// <summary>Where the view was when it was last painted. Exact, not rounded.</summary>
+    /// <remarks>
+    /// Held unrounded since the renderer started drawing at a fractional offset. Gating a
+    /// repaint on a whole pixel changing was the stepping that phase 3 of
+    /// design/Scroll Pre-Buffering.md exists to remove, and it is also what the paint-step
+    /// figures in the log measure, so both want the exact position.
+    /// </remarks>
+    private double _paintedOffset;
+
+    /// <summary>Movement below this cannot change the composited image, so it is not worth a paint.</summary>
+    private const double PaintEpsilon = 0.01;
 
     /// <summary>
     /// Seconds per refresh of the display this gesture is on; zero if it could not be read.
@@ -197,7 +207,7 @@ internal class ScrollController
         {
             _wheelCoasting = true;
             _wheelClock.Restart();
-            _paintedPixel = Math.Round(_offset);
+            _paintedOffset = _offset;
             _gestureSource = "wheel";
 
             _sinceDisplayFrame = _displayPeriod;   // let the first frame paint at once
@@ -229,7 +239,7 @@ internal class ScrollController
         // so the measured gesture spans the whole drag and its settle.
         if (!_smoother.IsAnimating)
         {
-            _paintedPixel = Math.Round(EffectiveOffset);
+            _paintedOffset = EffectiveOffset;
             _gestureSource = "smooth";
         }
 
@@ -314,9 +324,10 @@ internal class ScrollController
         _lastRenderingTime = stamp;
         DiagFrame(dt, newFrame);
 
-        // Only when the drawn image would differ, since the renderer rounds to whole pixels.
-        // This does limit the decaying tail to one paint per pixel - about 38 a second at
-        // 40px/s - which is the 1px stepping that sub-pixel scrolling was meant to cure.
+        // Only when the drawn image would differ. That used to mean a whole pixel, because the
+        // renderer rounded the offset, and it limited the decaying tail to one paint per pixel -
+        // about 38 a second at 40px/s, which is exactly the stepping phase 3 exists to cure.
+        // The renderer draws at a fractional offset now, so any movement changes the image.
         //
         // Capped at the panel's own rate as well. This is a wall-clock interval, which was
         // wrong when it was the only gate - a repaint landed on whichever free-running tick
@@ -328,8 +339,8 @@ internal class ScrollController
         _sinceDisplayFrame += dt;
         bool due = _displayPeriod <= 0 || _sinceDisplayFrame >= _displayPeriod;
 
-        double pixel = Math.Round(_offset);
-        if (pixel != _paintedPixel && (stop || (newFrame && due)))
+        double moved = _offset - _paintedOffset;
+        if (Math.Abs(moved) > PaintEpsilon && (stop || (newFrame && due)))
         {
             if (_displayPeriod > 0)
             {
@@ -337,8 +348,8 @@ internal class ScrollController
                 if (_sinceDisplayFrame > _displayPeriod) _sinceDisplayFrame = _displayPeriod;
             }
 
-            DiagPaint(pixel - _paintedPixel);
-            _paintedPixel = pixel;
+            DiagPaint(moved);
+            _paintedOffset = _offset;
             _invalidateVisual();
         }
 
@@ -400,11 +411,11 @@ internal class ScrollController
         // dt is 0 on the priming frame: counted as a tick, never as a gap.
         DiagFrame(dt, dt > 0);
 
-        double pixel = Math.Round(EffectiveOffset);
-        if (pixel != _paintedPixel)
+        double moved = EffectiveOffset - _paintedOffset;
+        if (Math.Abs(moved) > PaintEpsilon)
         {
-            DiagPaint(pixel - _paintedPixel);
-            _paintedPixel = pixel;
+            DiagPaint(moved);
+            _paintedOffset = EffectiveOffset;
         }
 
         if (stopped) DiagGestureEnd();
