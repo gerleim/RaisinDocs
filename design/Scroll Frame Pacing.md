@@ -1,14 +1,14 @@
 # Scroll Frame Pacing
 
-Status: **proposed, and the case for section C is materially weaker than when this was
-written.** Follows on from `Scroll Pre-Buffering.md`, which covers how lines came to be cached
+Status: **section C is not needed for wheel scrolling. Measured, not argued.** Follows on from `Scroll Pre-Buffering.md`, which covers how lines came to be cached
 as visuals. This one is about the frames reaching the screen rather than the cost of drawing
 them.
 
-> **Read the 2026-09-05 update below before acting on this.** The unpaced presentation this
-> note is built around was measured while the wheel coast was pacing itself off a wall clock.
-> With that fixed, the same gesture runs locked to the panel period. The presenter in section C
-> is a large piece of work, and the measurement that motivated it no longer says what it did.
+> **Do not build the presenter in section C without re-reading the bottom of this note.** The
+> unpaced presentation it exists to fix was measured while the wheel coast paced itself off a
+> wall clock. With that fixed and re-captured with PresentMon: **0 dropped frames of 2982, and
+> 92.9% of frames displayed for exactly one refresh.** The 13% drop rate this note is built on
+> is gone.
 
 ## Where things stand
 
@@ -538,3 +538,52 @@ that justified proposing one.
 Re-run the FrameView capture that produced the original figure, against the fixed coast. If
 presents now match the sink, section C is solving a problem that has largely gone. If they do
 not, the remaining gap is measured rather than assumed, and the case is a real one.
+
+## Re-captured, 2026-09-05: the drops are gone
+
+The re-capture this note asked for, done. `capture-scroll.ps1` drives a repeatable wheel sweep
+and runs PresentMon against the editor; `analyse-scroll.ps1` slices the result per gesture by
+QPC. Release build, 2982 frames, ten gestures, 280Hz panel.
+
+| | this note, before | re-captured |
+|---|---|---|
+| presented | 228/s | **273/s** |
+| displayed | 140/s | **273/s** |
+| dropped | **13%** | **0.0%** - 0 of 2982 |
+
+Not an artefact of reading the wrong column: `DisplayedTime` is populated on all 2982 rows and
+never `NA`, and `PresentMode` is `Composed: Copy with GPU GDI`, the expected WPF path.
+
+**What is left**, as display intervals against the 3.571 ms refresh:
+
+| held for | frames | share |
+|---|---|---|
+| 1 refresh | 2650 | **92.9%** |
+| 2 refreshes | 117 | 4.1% |
+| 3 refreshes | 10 | 0.4% |
+| 4-5 refreshes | 10 | 0.3% |
+
+About 93% of frames land on exactly one refresh. The 5-refresh tail is the same 17.8 ms late
+interval described at the top of this note - it still happens, at 0.2% of frames rather than as
+the dominant behaviour.
+
+Animation error agrees: median 0.21-0.49 ms per gesture, p95 1.5-4.4 ms. The motion matches the
+time each frame was actually on screen. The large maxima in the per-gesture output are at
+gesture boundaries, where the previous-frame delta spans an idle gap; they are an artefact of
+slicing rather than stutter.
+
+### What this means for section C
+
+The presenter was proposed because WPF presented 228 times a second into a sink that changed
+140 times, discarding 13%. That is no longer what happens. **Do not build it to fix a drop rate
+of zero.**
+
+The remaining ~5% of frames held for two or more refreshes is a real but much smaller thing,
+and it is not yet attributed. We present at about 273/s into a 280 Hz panel, so a shortfall of
+roughly 7 frames a second would account for about half of it on its own. Whether the rest is
+WPF composing slightly under vsync or something still ours is the next question, and it is
+worth answering before assuming either.
+
+What still stands from C1-C3: the prototype numbers, the ClearType finding that set off
+`design/Opaque Line Visuals.md`, and [dotnet/wpf#11607](https://github.com/dotnet/wpf/discussions/11607)
+as someone else's report of the same class of problem. What does not stand is the motivation.

@@ -345,13 +345,19 @@ unpaced presentation `design/Scroll Frame Pacing.md` diagnosed. Pacing off `Rend
 removed it.
 
 **Confirmed by eye, 2026-09-05.** The coast reads as good but not perfect: a little jaggedness
-remains, consistent with the 3.1% of intervals still landing over 1.5x the median rather than
-with anything periodic. Notch distance is unchanged, which is what the closed-form integral
-being untouched predicted - it was reasoned rather than measured, so it is worth having heard.
+remains. Notch distance is unchanged, which is what the closed-form integral being untouched
+predicted - it was reasoned rather than measured, so it is worth having heard.
 
-The residual is the honest open question. Whether it is WPF missing composition deadlines, or
-something still ours, is not decidable from inside the process: the FrameView re-capture that
-`design/Scroll Frame Pacing.md` now asks for is what would tell them apart.
+**Then confirmed from outside the process**, with `capture-scroll.ps1` and PresentMon - 2982
+frames over ten scripted gestures. **Nothing is being dropped: 0 frames of 2982**, against the
+13% that `design/Scroll Frame Pacing.md` was built on. Presented and displayed are both 273/s
+into a 280 Hz panel.
+
+The jaggedness is frames held longer than one refresh: 92.9% land on exactly one, 4.1% on two,
+and a 0.3% tail at four or five. Animation error - the difference between a frame's CPU delta
+and its display delta, which is the metric that describes what the eye sees - has a median of
+0.21-0.49 ms per gesture. Roughly half the shortfall is explained by presenting at 273/s into a
+280 Hz panel; the rest is unattributed and is the next question, if it is worth one.
 
 ### The premise this started from was wrong
 
