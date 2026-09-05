@@ -1,7 +1,13 @@
 # Scroll Pre-Buffering
 
-Status: **proposed**, not started. Written 2026-09-01 after the wheel-scrolling work
-(`78cea16`..`40db97a`).
+Status: **phases 1 and 2 done; phase 3 is unblocked and not started.** Written 2026-09-01
+after the wheel-scrolling work (`78cea16`..`40db97a`); status revised 2026-09-05.
+
+Phase 1 was prototyped and thrown away as intended. Phase 2 landed in `337e009` and then took
+a long detour: caching the lines cost ClearType, and getting it back needed everything the
+canvas painted beneath the text moved into the line - see `design/Opaque Line Visuals.md`.
+That work finished the coverage this design's phase 3 was gated on. See *Coverage, rechecked*
+below before starting it.
 
 ## The problem this solves
 
@@ -173,9 +179,10 @@ highlights → cached content → caret and squiggles.
   re-rasterised at a new sub-pixel phase every frame, which is precisely the wobble this
   design exists to avoid — so an uncached table row would visibly breathe against its cached
   neighbours. Partial coverage looks *worse* than the integer-offset status quo, not better.
-  Today 18 of 47 drawn lines bypass the `FormattedText` cache entirely — joined lines
+  When this was written, 18 of 47 drawn lines bypassed the cache entirely — joined lines
   (`DrawJoinedLine`), table rows and image lines — and joined lines are the common case in
-  prose, so that is most of the screen. This is a gate on phase 3, not a follow-up to it.
+  prose, so that was most of the screen. This is a gate on phase 3, not a follow-up to it.
+  **It has since been met** - see *Coverage, rechecked*.
 
 ## Phased plan
 
@@ -244,6 +251,48 @@ Two ways to draw it, once there is a cached surface:
 
 Whichever, the blur must fall to zero as velocity does, or text at rest would be soft — and
 that is also what stops it from being tried as a fix for the slow tail.
+
+## Coverage, rechecked
+
+Checked 2026-09-05, after `design/Opaque Line Visuals.md` finished moving everything into the
+line. The phase 3 gate is met for body text, structurally rather than by a count.
+
+**No line can bypass the cache.** `DrawLineContent` has exactly one call site, inside
+`BuildLineVisual`. Joined lines, table rows, image lines, list markers and rules all reach the
+screen through a `BitmapCache`'d visual because there is no other route. The 18-of-47 figure
+cannot recur unless someone adds a second call site - which is the thing to watch for, rather
+than the count.
+
+**Nothing visible is deferred.** `SyncLineVisuals` builds `firstVisible..lastVisible`
+unconditionally; `PreRenderBudget` throttles only the look-ahead margin.
+
+**What still rasterises per frame**, which is the other half of the gate:
+
+| where | what | text? |
+|---|---|---|
+| `OnRender` | one full-canvas background rect | no |
+| overlay - `DrawTableLines` | border and separator strokes | no |
+| overlay - `DrawSpellingErrors` | squiggles | no |
+| overlay - caret | one `DrawLine` | no |
+| overlay - hover image preview | an image, source mode only | no |
+| overlay - **`DrawPageBreaks`** | **a `FormattedText` label** | **yes** |
+
+`TableRenderer`'s `DrawText` calls are inside `DrawTableRow`, which runs within the line visual
+and is built once, and in `CursorXInTableRow`, which measures rather than draws.
+
+### Two things to settle before phase 3
+
+- **The page-break label re-rasterises every frame** (`PageBreakManager`). At a fractional
+  offset it grid-fits at a new sub-pixel phase each frame, which is exactly the wobble this
+  design exists to avoid. It is a small label rather than body text, and only when
+  `ShowPageBreaks` is on, but it is the one remaining thing that would breathe. Cache it or
+  snap it.
+- **Overlay content and cached lines will round differently.** The overlay draws in live
+  coordinates each frame while the lines composite as bitmaps, so at a fractional offset a
+  table border can drift a fraction against the row shading it is supposed to bound. That
+  pairing did not exist when this was written - table borders moved into the overlay during
+  the opaque-line work, precisely because they never cross a glyph. Either snap the overlay to
+  the same grid, or accept a sub-pixel shear on table borders alone.
 
 ## Alternatives rejected
 

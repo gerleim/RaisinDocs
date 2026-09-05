@@ -345,9 +345,13 @@ Unlike the phases above, this section is meant to be true now.
 
 ## What this does not do
 
-Nothing for scroll smoothness. The fractional-offset ambition in
-`design/Scroll Pre-Buffering.md` phase 3 is a separate question, blocked on its own grounds,
-and neither helped nor hurt by this.
+Nothing for scroll smoothness directly - no gesture is paced differently because of it.
+
+It did, however, **finish the coverage that `design/Scroll Pre-Buffering.md` phase 3 was gated
+on**, which was not the point of this work but is its most useful side effect. That gate asked
+for zero lines bypassing the cache; moving every background, tint, selection and highlight into
+`DrawLineContent` left `BuildLineVisual` as the only route a line can take to the screen.
+Rechecked 2026-09-05, with the two remaining caveats recorded there.
 
 ## How it ended
 
