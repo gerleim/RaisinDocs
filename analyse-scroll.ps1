@@ -39,7 +39,10 @@ function Find-Col { param([string[]] $Names)
     foreach ($n in $Names) { $hit = $cols | Where-Object { $_ -ieq $n }; if ($hit) { return $hit } }
     return $null
 }
-$cTime    = Find-Col @('CPUStartTimeInMs','CPUStartTime','QPCTime','TimeInSeconds')
+# CPUStartQPCTimeInMs is what 2.x emits under --qpc_time_ms, and it is the column the editor's
+# "qpc a..b" stamps are in. TimeInSeconds is last and a poor substitute: it is a capture-relative
+# clock the gesture log knows nothing about, and despite the name this build reports it in ms.
+$cTime    = Find-Col @('CPUStartQPCTimeInMs','CPUStartTimeInMs','CPUStartTime','QPCTime','TimeInSeconds')
 $cPresent = Find-Col @('MsBetweenPresents','msBetweenPresents')
 $cDisplay = Find-Col @('MsBetweenDisplayChange','msBetweenDisplayChange')
 $cAnim    = Find-Col @('MsAnimationError')

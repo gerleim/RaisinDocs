@@ -209,8 +209,10 @@ Write-Host "capture    : $csv"
 Write-Host ""
 
 # --scroll-diag so the gesture log and the capture describe the same run.
+# Quoted: Start-Process joins an ArgumentList with spaces and quotes nothing, so a path with
+# a space in it arrives as several arguments and the editor opens the first word.
 $editorArgs = @('--scroll-diag')
-if ($File) { $editorArgs += (Resolve-Path $File).Path }
+if ($File) { $editorArgs += '"{0}"' -f (Resolve-Path $File).Path }
 $app = Start-Process -FilePath (Resolve-Path $editor).Path -ArgumentList $editorArgs -PassThru
 Start-Sleep -Milliseconds 1500   # let the window come up before tracing starts
 
