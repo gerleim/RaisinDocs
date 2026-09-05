@@ -192,6 +192,8 @@ internal class ScrollController
 
     internal void HandleWheel(double delta)
     {
+        EndDirect();
+
         if (_smoother.IsAnimating)
         {
             _offset += _smoother.Offset;
@@ -220,11 +222,90 @@ internal class ScrollController
         StopWheelCoast();
         _offset = Math.Clamp(offset, 0, _getMaxScroll());
         _smoother.Offset = 0;
+        NoteDirectMove();
         _invalidateVisual();
+    }
+
+    // --- direct-drag diagnostics ------------------------------------------------------------
+
+    /// <summary>Whether a run of SetDirect calls is currently being measured.</summary>
+    /// <remarks>
+    /// A minimap drag maps the mouse straight onto the offset - no clock, no integration, one
+    /// paint per mouse message - so it never opened a gesture and was invisible in the log. It
+    /// is also the gesture the others get compared against, which made the comparison rest on
+    /// an impression. Measured here on the same terms as the rest: composition intervals from
+    /// the frame stamp, paints from the moves themselves.
+    ///
+    /// Costs nothing when diagnostics are off, which is the whole of the entry condition.
+    /// </remarks>
+    private bool _directActive;
+    private bool _directMoved;
+    private double _directLastOffset;
+    private int _directIdleFrames;
+    private TimeSpan _directLastStamp = TimeSpan.MinValue;
+
+    /// <summary>Composed frames without a move before a drag is considered finished.</summary>
+    /// <remarks>
+    /// A drag has no end event here - it is a run of mouse messages - so it is bounded by going
+    /// quiet. About 0.1s at 280Hz, long enough to ride out a pause mid-drag and short enough
+    /// that the settle is not counted as part of the gesture.
+    /// </remarks>
+    private const int DirectIdleFrames = 30;
+
+    private void NoteDirectMove()
+    {
+        if (!Diagnostics) return;
+
+        if (!_directActive)
+        {
+            _directActive = true;
+            _directIdleFrames = 0;
+            _directLastStamp = TimeSpan.MinValue;
+            _directLastOffset = _offset;
+            _gestureSource = "direct";
+            CompositionTarget.Rendering += OnDirectFrame;
+        }
+        _directMoved = true;
+    }
+
+    private void OnDirectFrame(object? sender, EventArgs e)
+    {
+        var stamp = (e as RenderingEventArgs)?.RenderingTime ?? TimeSpan.MinValue;
+        bool haveStamp = stamp != TimeSpan.MinValue;
+        if (haveStamp && stamp == _directLastStamp) return;
+
+        double dt = haveStamp && _directLastStamp != TimeSpan.MinValue
+            ? (stamp - _directLastStamp).TotalSeconds
+            : (_displayPeriod > 0 ? _displayPeriod : 1.0 / 60);
+        _directLastStamp = stamp;
+
+        DiagFrame(dt, true);
+
+        if (_directMoved)
+        {
+            _directMoved = false;
+            _directIdleFrames = 0;
+            DiagPaint(_offset - _directLastOffset);
+            _directLastOffset = _offset;
+        }
+        else if (++_directIdleFrames > DirectIdleFrames)
+        {
+            EndDirect();
+        }
+    }
+
+    /// <summary>Closes an open drag, so a following gesture is not folded into it.</summary>
+    private void EndDirect()
+    {
+        if (!_directActive) return;
+        _directActive = false;
+        CompositionTarget.Rendering -= OnDirectFrame;
+        DiagGestureEnd();
     }
 
     internal void SmoothScrollTo(double targetOffset)
     {
+        EndDirect();
         StopWheelCoast();
         double oldScroll = _offset;
         _offset = Math.Clamp(targetOffset, 0, _getMaxScroll());
