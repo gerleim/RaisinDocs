@@ -87,12 +87,53 @@ public partial class DocsEditor : UserControl
         PART_Canvas.FindBar = findBar;
 
         SizeChanged += (_, _) => UpdateMinimapWidth();
+        Loaded += (_, _) => LogMinimapRect();
     }
 
     private void UpdateMinimapWidth()
     {
         double w = Math.Clamp(ActualWidth * 0.10, 60, 200);
         PART_Minimap.Width = w;
+        LogMinimapRect();
+    }
+
+    /// <summary>
+    /// Writes the minimap's screen rectangle to the scroll log, for a harness driving the app from
+    /// outside.
+    /// </summary>
+    /// <remarks>
+    /// Nothing outside the process can work out where the minimap is. It sits in an Auto-width
+    /// column between the canvas and the scrollbar, and its width is a clamped fraction of the
+    /// editor's, so a driver aiming by proportion is guessing - and a guess that lands on the canvas
+    /// puts a left-drag into text selection. The gesture would run, the capture would fill, and it
+    /// would measure something else entirely.
+    ///
+    /// Reported rather than exposed as a query because the harness is a script and this is one line.
+    /// It is the same shape as StockRaisin2 writing chart rectangles into its render log, and
+    /// carries the same caveat: a diagnostic being read as an API, which is fine until the two
+    /// disagree.
+    ///
+    /// Costs nothing when diagnostics are off, which is the first thing it checks.
+    /// </remarks>
+    private void LogMinimapRect()
+    {
+        if (!DocsCanvas.ScrollDiagnostics) return;
+        if (PART_Minimap.Visibility != Visibility.Visible) return;
+        if (!PART_Minimap.IsLoaded || PART_Minimap.ActualWidth <= 0 || PART_Minimap.ActualHeight <= 0) return;
+
+        try
+        {
+            var topLeft = PART_Minimap.PointToScreen(new Point(0, 0));
+            var bottomRight = PART_Minimap.PointToScreen(
+                new Point(PART_Minimap.ActualWidth, PART_Minimap.ActualHeight));
+
+            ScrollDiag.Log($"minimap rect {topLeft.X:F0},{topLeft.Y:F0} " +
+                $"{bottomRight.X - topLeft.X:F0}x{bottomRight.Y - topLeft.Y:F0}");
+        }
+        catch (InvalidOperationException)
+        {
+            // Not connected to a presentation source yet. Loaded fires again when it is.
+        }
     }
 
     private void UpdateScrollBar()

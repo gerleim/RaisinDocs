@@ -1,8 +1,14 @@
 # Scroll Frame Pacing
 
-Status: **proposed**. Follows on from `Scroll Pre-Buffering.md`, which covers how lines came
-to be cached as visuals. This one is about the frames reaching the screen rather than the cost
-of drawing them.
+Status: **section C is not needed for wheel scrolling. Measured, not argued.** Follows on from `Scroll Pre-Buffering.md`, which covers how lines came to be cached
+as visuals. This one is about the frames reaching the screen rather than the cost of drawing
+them.
+
+> **Do not build the presenter in section C without re-reading the bottom of this note.** The
+> unpaced presentation it exists to fix was measured while the wheel coast paced itself off a
+> wall clock. With that fixed and re-captured with PresentMon: **0 dropped frames of 2982, and
+> 92.9% of frames displayed for exactly one refresh.** The 13% drop rate this note is built on
+> is gone.
 
 ## Where things stand
 
@@ -18,11 +24,18 @@ rate and frame rate were conflated for a long time before that:
 | frames hitting every refresh | 16.9% | 33.3% |
 | frames at 93 fps or worse | 44.0% | 26.1% |
 
-Sub-pixel scrolling was then tried on top and **reverted**. Over live-rasterised text each
-line grid-fits independently and the spacing between them visibly wriggles; over cached
-bitmaps the fractional translate resamples, which softens the text and, as a coast decays and
-the fraction drifts slowly, beats into a visible interference pattern. Both were worse than
-the 1 px stepping they were meant to cure.
+Sub-pixel scrolling was tried twice on top of this and reverted both times. Over
+live-rasterised text each line grid-fits independently and the spacing between them visibly
+wriggles; over cached bitmaps the fractional translate resamples, which softens the text and, as
+a coast decays and the fraction drifts slowly, beats into a visible interference pattern. Both
+were worse than the 1 px stepping they were meant to cure.
+
+**It went in on the third attempt** (`ef121cc`, 2026-09-05), once every background, tint,
+selection and highlight had moved into the line and `BuildLineVisual` was the only route a line
+could take to the screen. Each visual sits at its own rounded position and the whole layer
+translates beneath it, so every line moves by the identical fraction and relative spacing is
+exactly constant - the property neither earlier attempt could hold. Reported as showing no
+artifact. See `design/Scroll Pre-Buffering.md`.
 
 ## What is left, and what it is not
 
@@ -479,3 +492,125 @@ against the seam, the ring buffer and the airspace before going further.
 1. **A**, then **B**. Small, correct, and they may make C unnecessary.
 2. Re-measure. If the residual no longer bothers a reader, stop.
 3. Only then the **C prototype**, and only build the real thing if the prototype holds cadence.
+
+## Update, 2026-09-05: the wheel was pacing itself off a wall clock
+
+The figures this note is built on - 228 presents a second into a sink changing 140 times a
+second, 13% dropped, late intervals at 2 and 5 refreshes - were all taken from wheel gestures.
+They were real. They were not only WPF's doing.
+
+`OnWheelFrame` read a `Stopwatch` and restarted it at the top of the handler, sixty lines
+before the duplicate-frame check. Repainting from inside that handler makes `Rendering`
+free-run at several hundred a second, so the clock was timing the slivers between duplicate
+raises rather than the interval the panel shows. The coast therefore advanced by a different
+amount between one displayed frame and the next **even when composition was perfectly
+regular**, and asked for repaints at a phase that slid against the compositor. Fixed in
+`cd7cf24` by taking `dt` from `RenderingTime` and returning early on duplicate raises.
+
+Release against Release, same document, same panel:
+
+| wheel gesture | before | after |
+|---|---|---|
+| composition median | ~3.15 ms, wandering | **3.57 ms = 1/280, every gesture** |
+| jitter, over 1.5x median | avg **8.4%** | avg **3.1%** |
+| paint interval | ~135/s | **280/s** |
+| composed frames painted | 98 of 211 | **1992 of 1992** |
+
+The cadence is now locked to the panel period rather than free-running past it, which is the
+symptom section C exists to cure. 3.1% is not 0%, so something is still being missed - but the
+gap between that and a presenter project spanning C1, C2 and C3 is very different from the gap
+that justified proposing one.
+
+### What this does not overturn
+
+- The prototype measurements in C1-C3 stand. A paced swapchain does present at 3.57 ms with 0%
+  over 1.5x median, and the ClearType and colour findings along the way were worth having -
+  `### ClearType is missing from the editor's own cache` is what set off
+  `design/Opaque Line Visuals.md`.
+- [dotnet/wpf#11607](https://github.com/dotnet/wpf/discussions/11607) is still a real report of
+  the same class of problem from someone else's codebase.
+- Nothing here has been re-measured with FrameView from outside the process, which is what
+  produced the 228-into-140 figure. The in-process log says the cadence is locked; confirming
+  that the panel agrees needs the external tool.
+
+### What to do before building the presenter
+
+Re-run the FrameView capture that produced the original figure, against the fixed coast. If
+presents now match the sink, section C is solving a problem that has largely gone. If they do
+not, the remaining gap is measured rather than assumed, and the case is a real one.
+
+## Re-captured, 2026-09-05: the drops are gone
+
+The re-capture this note asked for, done. `capture-scroll.ps1` drives a repeatable wheel sweep
+and runs PresentMon against the editor; `analyse-scroll.ps1` slices the result per gesture by
+QPC. Release build, 2982 frames, ten gestures, 280Hz panel.
+
+| | this note, before | re-captured |
+|---|---|---|
+| presented | 228/s | **273/s** |
+| displayed | 140/s | **273/s** |
+| dropped | **13%** | **0.0%** - 0 of 2982 |
+
+Not an artefact of reading the wrong column: `DisplayedTime` is populated on all 2982 rows and
+never `NA`, and `PresentMode` is `Composed: Copy with GPU GDI`, the expected WPF path.
+
+**What is left**, as display intervals against the 3.571 ms refresh, counting only frames inside
+a gesture - idle settle time between gestures otherwise inflates the long tail:
+
+| held for | with a video app running | machine quiet |
+|---|---|---|
+| 1 refresh | 94.8% | **98.0%** |
+| 2 refreshes | 4.1% | **1.3%** |
+| 3 refreshes | 0.4% | 0.2% |
+| 4+ refreshes | 0.7% | 0.5% |
+
+**Two thirds of the double-holds were another application.** The first capture was taken with a
+video-heavy app in the background; closing it took two-refresh holds from 4.1% to 1.3% and
+tightened animation error's p95 from 1.5-4.4 ms to 1.07-1.88 ms. Per-gesture jitter fell from
+1.8-11.9% to 1.0-6.9%, and on the 2.24 s sustained scrolls it is 1.0-1.8%.
+
+Nothing was dropped in either run, so that finding did not depend on machine state. The
+histogram did, which is worth remembering before quoting one.
+
+**On a quiet machine 98% of frames land on exactly one refresh at 280 Hz.** What remains is
+about 2% held an extra refresh, with zero dropped.
+
+Animation error agrees: median 0.21-0.49 ms per gesture, p95 1.5-4.4 ms. The motion matches the
+time each frame was actually on screen. The large maxima in the per-gesture output are at
+gesture boundaries, where the previous-frame delta spans an idle gap; they are an artefact of
+slicing rather than stutter.
+
+### What this means for section C
+
+The presenter was proposed because WPF presented 228 times a second into a sink that changed
+140 times, discarding 13%. That is no longer what happens. **Do not build it to fix a drop rate
+of zero.**
+
+What remains on a quiet machine is about 2% of frames held an extra refresh. We present at
+roughly 276/s into a 280 Hz panel, and that shortfall alone accounts for most of it. There is
+not obviously anything left to chase.
+
+**Machine state has to be part of a capture's record.** The difference between a busy and a
+quiet machine here was larger than the difference any code change in this work made. It happened
+three times: a video-heavy app once, and leftover build processes twice - twenty-eight of them
+holding 3.3 GB after an afternoon of builds, kept alive by MSBuild node reuse and surviving an
+attempt to clear them. `dotnet build-server shutdown` is what retires those.
+
+`capture-scroll.ps1` counts them before launching and says so now, and keeps PresentMon's own
+output beside the capture, because lost ETW events are reported there and nowhere else - the
+noisy run lost 661, a clean one loses single digits. `analyse-scroll.ps1` repeats the warning,
+scaled against the capture, since a capture is read weeks later by someone who no longer
+remembers what was running.
+
+**The final figures**, quiet machine, scripted sweep, 3114 frames: every wheel gesture presented
+and displayed 256-279/s at a 3.57 ms interval - exactly 1/280 - with 0.0% dropped and 1.1-2.5%
+of intervals running long during sustained scrolling. Animation error median 0.22-0.33 ms.
+
+The same run measured a minimap drag for the first time: 108-110/s, a 7.15 ms interval, and an
+animation error median of 3.73-7.12 ms. The drag is bound by the rate mouse messages arrive and
+carries about twenty times the wheel's error, which inverts the observation this whole
+investigation began from. See `design/Scroll Pre-Buffering.md`.
+
+What still stands from C1-C3: the prototype numbers, the ClearType finding that set off
+`design/Opaque Line Visuals.md`, and [dotnet/wpf#11607](https://github.com/dotnet/wpf/discussions/11607)
+as someone else's report of the same class of problem. What does not stand is the motivation.

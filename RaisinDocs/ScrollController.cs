@@ -13,7 +13,6 @@ internal class ScrollController
     private double _offset;
     private double _wheelVelocity;
     private bool _wheelCoasting;
-    private readonly Stopwatch _wheelClock = new();
     private const double WheelDamping = 10.0;
 
     /// <summary>
@@ -106,7 +105,17 @@ internal class ScrollController
     /// <summary>Never stretch further than this, however heavy a frame is.</summary>
     private const double MaxIntervalStretch = 4.0;
 
-    private double _paintedPixel;
+    /// <summary>Where the view was when it was last painted. Exact, not rounded.</summary>
+    /// <remarks>
+    /// Held unrounded since the renderer started drawing at a fractional offset. Gating a
+    /// repaint on a whole pixel changing was the stepping that phase 3 of
+    /// design/Scroll Pre-Buffering.md exists to remove, and it is also what the paint-step
+    /// figures in the log measure, so both want the exact position.
+    /// </remarks>
+    private double _paintedOffset;
+
+    /// <summary>Movement below this cannot change the composited image, so it is not worth a paint.</summary>
+    private const double PaintEpsilon = 0.01;
 
     /// <summary>
     /// Seconds per refresh of the display this gesture is on; zero if it could not be read.
@@ -176,7 +185,6 @@ internal class ScrollController
         if (!_wheelCoasting) return;
         _wheelVelocity = 0;
         _wheelCoasting = false;
-        _wheelClock.Reset();
         CompositionTarget.Rendering -= OnWheelFrame;
     }
 
@@ -184,6 +192,8 @@ internal class ScrollController
 
     internal void HandleWheel(double delta)
     {
+        EndDirect();
+
         if (_smoother.IsAnimating)
         {
             _offset += _smoother.Offset;
@@ -196,8 +206,8 @@ internal class ScrollController
         if (!_wheelCoasting)
         {
             _wheelCoasting = true;
-            _wheelClock.Restart();
-            _paintedPixel = Math.Round(_offset);
+            _lastRenderingTime = TimeSpan.MinValue;   // no previous frame to measure against
+            _paintedOffset = _offset;
             _gestureSource = "wheel";
 
             _sinceDisplayFrame = _displayPeriod;   // let the first frame paint at once
@@ -212,11 +222,90 @@ internal class ScrollController
         StopWheelCoast();
         _offset = Math.Clamp(offset, 0, _getMaxScroll());
         _smoother.Offset = 0;
+        NoteDirectMove();
         _invalidateVisual();
+    }
+
+    // --- direct-drag diagnostics ------------------------------------------------------------
+
+    /// <summary>Whether a run of SetDirect calls is currently being measured.</summary>
+    /// <remarks>
+    /// A minimap drag maps the mouse straight onto the offset - no clock, no integration, one
+    /// paint per mouse message - so it never opened a gesture and was invisible in the log. It
+    /// is also the gesture the others get compared against, which made the comparison rest on
+    /// an impression. Measured here on the same terms as the rest: composition intervals from
+    /// the frame stamp, paints from the moves themselves.
+    ///
+    /// Costs nothing when diagnostics are off, which is the whole of the entry condition.
+    /// </remarks>
+    private bool _directActive;
+    private bool _directMoved;
+    private double _directLastOffset;
+    private int _directIdleFrames;
+    private TimeSpan _directLastStamp = TimeSpan.MinValue;
+
+    /// <summary>Composed frames without a move before a drag is considered finished.</summary>
+    /// <remarks>
+    /// A drag has no end event here - it is a run of mouse messages - so it is bounded by going
+    /// quiet. About 0.1s at 280Hz, long enough to ride out a pause mid-drag and short enough
+    /// that the settle is not counted as part of the gesture.
+    /// </remarks>
+    private const int DirectIdleFrames = 30;
+
+    private void NoteDirectMove()
+    {
+        if (!Diagnostics) return;
+
+        if (!_directActive)
+        {
+            _directActive = true;
+            _directIdleFrames = 0;
+            _directLastStamp = TimeSpan.MinValue;
+            _directLastOffset = _offset;
+            _gestureSource = "direct";
+            CompositionTarget.Rendering += OnDirectFrame;
+        }
+        _directMoved = true;
+    }
+
+    private void OnDirectFrame(object? sender, EventArgs e)
+    {
+        var stamp = (e as RenderingEventArgs)?.RenderingTime ?? TimeSpan.MinValue;
+        bool haveStamp = stamp != TimeSpan.MinValue;
+        if (haveStamp && stamp == _directLastStamp) return;
+
+        double dt = haveStamp && _directLastStamp != TimeSpan.MinValue
+            ? (stamp - _directLastStamp).TotalSeconds
+            : (_displayPeriod > 0 ? _displayPeriod : 1.0 / 60);
+        _directLastStamp = stamp;
+
+        DiagFrame(dt, true);
+
+        if (_directMoved)
+        {
+            _directMoved = false;
+            _directIdleFrames = 0;
+            DiagPaint(_offset - _directLastOffset);
+            _directLastOffset = _offset;
+        }
+        else if (++_directIdleFrames > DirectIdleFrames)
+        {
+            EndDirect();
+        }
+    }
+
+    /// <summary>Closes an open drag, so a following gesture is not folded into it.</summary>
+    private void EndDirect()
+    {
+        if (!_directActive) return;
+        _directActive = false;
+        CompositionTarget.Rendering -= OnDirectFrame;
+        DiagGestureEnd();
     }
 
     internal void SmoothScrollTo(double targetOffset)
     {
+        EndDirect();
         StopWheelCoast();
         double oldScroll = _offset;
         _offset = Math.Clamp(targetOffset, 0, _getMaxScroll());
@@ -229,7 +318,7 @@ internal class ScrollController
         // so the measured gesture spans the whole drag and its settle.
         if (!_smoother.IsAnimating)
         {
-            _paintedPixel = Math.Round(EffectiveOffset);
+            _paintedOffset = EffectiveOffset;
             _gestureSource = "smooth";
         }
 
@@ -251,8 +340,29 @@ internal class ScrollController
 
     private void OnWheelFrame(object? sender, EventArgs e)
     {
-        double dt = _wheelClock.Elapsed.TotalSeconds;
-        _wheelClock.Restart();
+        // Paced by the compositor's frame stamp, not by a wall clock.
+        //
+        // Repainting from inside this handler makes Rendering free-run at several hundred a
+        // second, so a Stopwatch restarted on every raise measured the slivers between those
+        // duplicates rather than the interval the panel shows. The offset then advanced by a
+        // different amount between one displayed frame and the next even when composition was
+        // perfectly regular, which is uneven motion however even the frames are. It is the one
+        // thing the wheel did differently from the smoother, which has always advanced once per
+        // composed frame - and a minimap drag moving 594px a paint holds a rock-steady cadence
+        // where a wheel coast moving 110px does not.
+        //
+        // A duplicate raise returns before anything moves: nothing has been shown, so there is
+        // no interval to integrate over. Settling is therefore evaluated on the next real frame,
+        // a fraction of a millisecond later.
+        var stamp = (e as RenderingEventArgs)?.RenderingTime ?? TimeSpan.MinValue;
+        bool haveStamp = stamp != TimeSpan.MinValue;
+        if (haveStamp && stamp == _lastRenderingTime) return;
+
+        double dt = haveStamp && _lastRenderingTime != TimeSpan.MinValue
+            ? (stamp - _lastRenderingTime).TotalSeconds
+            : (_displayPeriod > 0 ? _displayPeriod : 1.0 / 60);
+        _lastRenderingTime = stamp;
+
         if (dt <= 0) dt = 1.0 / 60;
         else if (dt > MaxFrameDelta) dt = MaxFrameDelta;
 
@@ -289,7 +399,6 @@ internal class ScrollController
         {
             _wheelVelocity = 0;
             _wheelCoasting = false;
-            _wheelClock.Reset();
             CompositionTarget.Rendering -= OnWheelFrame;
         }
 
@@ -304,19 +413,16 @@ internal class ScrollController
         // different phase every frame. Each repaint then independently catches or misses a
         // composition deadline, which is the jagged scroll.
         //
-        // RenderingTime is the composition engine's frame stamp. It repeats when Rendering
-        // fires more than once for the same frame, which is exactly what identifies the
-        // free-run duplicates. Painting only when it advances gives one repaint per frame WPF
-        // actually composes, and the invalidate then drives the next one - a loop that runs at
-        // the compositor's cadence instead of sliding against it.
-        var stamp = (e as RenderingEventArgs)?.RenderingTime ?? TimeSpan.MinValue;
-        bool newFrame = stamp == TimeSpan.MinValue || stamp != _lastRenderingTime;
-        _lastRenderingTime = stamp;
+        // Every raise that reaches here is a frame WPF actually composed - the duplicates
+        // returned at the top - so painting drives the next one, a loop running at the
+        // compositor's cadence instead of sliding against it.
+        const bool newFrame = true;
         DiagFrame(dt, newFrame);
 
-        // Only when the drawn image would differ, since the renderer rounds to whole pixels.
-        // This does limit the decaying tail to one paint per pixel - about 38 a second at
-        // 40px/s - which is the 1px stepping that sub-pixel scrolling was meant to cure.
+        // Only when the drawn image would differ. That used to mean a whole pixel, because the
+        // renderer rounded the offset, and it limited the decaying tail to one paint per pixel -
+        // about 38 a second at 40px/s, which is exactly the stepping phase 3 exists to cure.
+        // The renderer draws at a fractional offset now, so any movement changes the image.
         //
         // Capped at the panel's own rate as well. This is a wall-clock interval, which was
         // wrong when it was the only gate - a repaint landed on whichever free-running tick
@@ -328,8 +434,8 @@ internal class ScrollController
         _sinceDisplayFrame += dt;
         bool due = _displayPeriod <= 0 || _sinceDisplayFrame >= _displayPeriod;
 
-        double pixel = Math.Round(_offset);
-        if (pixel != _paintedPixel && (stop || (newFrame && due)))
+        double moved = _offset - _paintedOffset;
+        if (Math.Abs(moved) > PaintEpsilon && (stop || (newFrame && due)))
         {
             if (_displayPeriod > 0)
             {
@@ -337,8 +443,8 @@ internal class ScrollController
                 if (_sinceDisplayFrame > _displayPeriod) _sinceDisplayFrame = _displayPeriod;
             }
 
-            DiagPaint(pixel - _paintedPixel);
-            _paintedPixel = pixel;
+            DiagPaint(moved);
+            _paintedOffset = _offset;
             _invalidateVisual();
         }
 
@@ -383,6 +489,7 @@ internal class ScrollController
     private int _gc0, _gc1, _gc2;
 
     private string _gestureSource = "wheel";
+    private double _gestureQpcStart;
 
     /// <summary>
     /// Feeds the smoother's animation - scrollbar drags and minimap jumps - through the same
@@ -400,15 +507,30 @@ internal class ScrollController
         // dt is 0 on the priming frame: counted as a tick, never as a gap.
         DiagFrame(dt, dt > 0);
 
-        double pixel = Math.Round(EffectiveOffset);
-        if (pixel != _paintedPixel)
+        double moved = EffectiveOffset - _paintedOffset;
+        if (Math.Abs(moved) > PaintEpsilon)
         {
-            DiagPaint(pixel - _paintedPixel);
-            _paintedPixel = pixel;
+            DiagPaint(moved);
+            _paintedOffset = EffectiveOffset;
         }
 
         if (stopped) DiagGestureEnd();
     }
+
+    /// <summary>
+    /// The performance counter, in milliseconds - the clock PresentMon stamps frames with under
+    /// <c>--qpc_time_ms</c>.
+    /// </summary>
+    /// <remarks>
+    /// Logged at both ends of a gesture so an external capture can be sliced to exactly the
+    /// gesture that produced it. Wall-clock timestamps cannot do that: this log writes
+    /// HH:mm:ss.fff from DateTime.Now while PresentMon counts QPC ticks, and lining the two up
+    /// by eye across a file of thousands of frames is where a comparison quietly goes wrong.
+    ///
+    /// Stopwatch.Frequency is the QPC frequency on Windows, so this is the same number
+    /// PresentMon reports, in the same units.
+    /// </remarks>
+    private static double QpcMs => Stopwatch.GetTimestamp() * 1000.0 / Stopwatch.Frequency;
 
     private void DiagFrame(double dt, bool newFrame)
     {
@@ -425,8 +547,10 @@ internal class ScrollController
             // Written as the gesture begins, not only when it ends. A gesture that starts and
             // never finishes is the failure worth seeing, and until now it looked exactly like
             // a gesture that never happened: both left the file empty.
+            _gestureQpcStart = QpcMs;
             ScrollDiag.Log($"{_gestureSource} gesture started on " +
-                $"{(_gestureDevice.Length > 0 ? _gestureDevice : "unknown display")} {_gestureHz}Hz");
+                $"{(_gestureDevice.Length > 0 ? _gestureDevice : "unknown display")} {_gestureHz}Hz" +
+                $"  qpc {_gestureQpcStart:F3}");
             _gc0 = GC.CollectionCount(0);
             _gc1 = GC.CollectionCount(1);
             _gc2 = GC.CollectionCount(2);
@@ -480,6 +604,7 @@ internal class ScrollController
                       $"{_gestureHz}Hz  "
                     : string.Empty) +
                 $"{_frames} ticks, {_paints} paints" + Environment.NewLine +
+                    $"    qpc {_gestureQpcStart:F3}..{QpcMs:F3}" + Environment.NewLine +
                 $"    {frames}" + Environment.NewLine +
                 $"    {paints}" + Environment.NewLine +
                 $"    {tailText}" + Environment.NewLine +

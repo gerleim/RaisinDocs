@@ -159,7 +159,12 @@ public partial class DocsCanvas
             if (_content.ParsedBlocks == null) return;
             if (_layout.VisualLines.Count == 0 || viewportHeight <= 0) return;
 
-            double effectiveScroll = Math.Round(_scroll.Scroll.EffectiveOffset);
+            // Fractional, deliberately - phase 3 of design/Scroll Pre-Buffering.md. Every line
+            // visual sits at a rounded position of its own (BuildLineVisual), so translating the
+            // whole layer by a fraction moves them all by the same amount: relative spacing is
+            // exactly constant, which is the property the two earlier attempts could not hold.
+            // What moves sub-pixel here is already-rasterised pixels, not live text.
+            double effectiveScroll = _scroll.Scroll.EffectiveOffset;
             double viewTop = effectiveScroll;
             double viewBottom = effectiveScroll + viewportHeight;
 
@@ -515,12 +520,11 @@ public partial class DocsCanvas
             if (_content.ParsedBlocks == null)
                 return;
 
-            // Whole pixels. Sub-pixel scrolling was tried over cached lines (phase 3) and
-            // backed out: translating a bitmap by a fraction resamples it, which softens the
-            // text and, as a coast decays and the fraction drifts slowly, beats into a visible
-            // interference pattern. Over live-rasterised text it is worse still - each line
-            // grid-fits on its own and the spacing between them wriggles.
-            double effectiveScroll = Math.Round(_scroll.Scroll.EffectiveOffset);
+            // The same fractional offset the content layer uses, so the overlay tracks the text
+            // rather than stepping against it. Both shift by the identical amount, so the
+            // per-line difference between a caret at lineY and a line visual at Round(lineY)
+            // stays constant instead of shearing as the offset drifts.
+            double effectiveScroll = _scroll.Scroll.EffectiveOffset;
             double viewTop = effectiveScroll;
             double viewBottom = effectiveScroll + _rendering.ActualHeight;
 
