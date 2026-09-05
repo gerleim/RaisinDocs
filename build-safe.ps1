@@ -23,10 +23,15 @@ function Invoke-SafeBuild {
     param(
         [string]$Command,
         [string]$Project,
-        [string[]]$Args
+        # Not $Args. That is an automatic variable, and PowerShell binds nothing to a parameter
+        # of that name without saying so - -Args @('-c','Release') arrived as an empty array, so
+        # every "Release" build through this wrapper silently built Debug.
+        [string[]]$ExtraArgs
     )
 
-    Write-Host "Starting build: dotnet $Command $Project" -ForegroundColor Cyan
+    # The full command, so a switch that failed to arrive is visible rather than assumed. That is
+    # how the bug above went unnoticed: the banner said what it was asked to do, not what it ran.
+    Write-Host "Starting build: dotnet $Command $Project $($ExtraArgs -join ' ')" -ForegroundColor Cyan
 
     # Get current dotnet processes before build
     $beforeCount = @(Get-Process dotnet -ErrorAction SilentlyContinue).Count
@@ -34,8 +39,8 @@ function Invoke-SafeBuild {
     try {
         # Build argument list
         $argumentList = @($Command, $Project)
-        if ($Args.Count -gt 0) {
-            $argumentList += $Args
+        if ($ExtraArgs.Count -gt 0) {
+            $argumentList += $ExtraArgs
         }
 
         # Start dotnet in a job so we can monitor it
@@ -113,7 +118,7 @@ try {
             ForEach-Object { Remove-Item -Path $_ -Recurse -Force -ErrorAction SilentlyContinue }
         Write-Host "✓ Clean complete" -ForegroundColor Green
     } else {
-        $exitCode = Invoke-SafeBuild -Command $Command -Project $Project -Args $AdditionalArgs
+        $exitCode = Invoke-SafeBuild -Command $Command -Project $Project -ExtraArgs $AdditionalArgs
 
         if ($exitCode -eq 0) {
             Write-Host ""
