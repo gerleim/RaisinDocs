@@ -962,6 +962,10 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider, IDocsC
         _doc.Undo();
         _lastAction = LastActionKind.None;
         InvalidateLayout();
+        // Hosts route Ctrl+Z here from a tunnelling handler, so OnKeyDown - and the
+        // EnsureCursorVisible at the end of it - never runs. Scroll to the restored
+        // cursor ourselves, or an undo off-screen leaves the viewport where it was.
+        EnsureCursorVisible();
     }
 
     public void PerformRedo()
@@ -971,6 +975,7 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider, IDocsC
         _doc.Redo();
         _lastAction = LastActionKind.None;
         InvalidateLayout();
+        EnsureCursorVisible();
     }
 
     /// <summary>
@@ -1034,6 +1039,7 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider, IDocsC
             _doc.DeleteSelection();
         _doc.SealUndoGroup();
         InvalidateLayout();
+        EnsureCursorVisible();
     }
 
     public void PerformPaste()
@@ -1071,6 +1077,7 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider, IDocsC
                 _doc.Paste(pasteText);
             _doc.SealUndoGroup();
             InvalidateLayout();
+            EnsureCursorVisible();
         }
     }
 
