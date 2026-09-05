@@ -52,6 +52,16 @@ $cDropped = Find-Col @('Dropped')            # 1.x: 1 when never displayed
 if (-not $cTime)    { throw "no timestamp column found. Capture with --qpc_time_ms." }
 if (-not $cPresent) { throw "no present-interval column found; is this a PresentMon CSV?" }
 
+# A capture with lost ETW events has gaps that nothing in the CSV admits to, so the warning has to
+# survive to whoever reads it later rather than scrolling past at capture time.
+foreach ($side in @("$Csv.pmlog", "$Csv.pmerr")) {
+    if (-not (Test-Path $side)) { continue }
+    $text = (Get-Content $side -Raw) -replace "`0", ''
+    if ($text -match '(\d+)\s+ETW\s+events\s+were\s+lost') {
+        Write-Warning "This capture lost $($Matches[1]) ETW events - it has gaps. Read it as indicative, not as a measurement."
+    }
+}
+
 Write-Host ("capture : {0}" -f (Split-Path $Csv -Leaf))
 Write-Host ("frames  : {0:N0}   columns: {1}" -f $rows.Count, ($(if ($cAnim) { "2.x (has MsAnimationError)" } else { "1.x (no MsAnimationError)" })))
 

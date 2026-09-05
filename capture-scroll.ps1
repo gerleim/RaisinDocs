@@ -92,6 +92,28 @@ function Test-CanCapture {
     return $false
 }
 
+<##
+ # Leftover build processes, which are the commonest reason a capture on this machine is not
+ # comparable with the last one.
+ #
+ # The .NET SDK leaves VBCSCompiler and MSBuild node processes behind, and they accumulate over a
+ # session: twenty-eight of them were running after an afternoon of builds, one holding 442MB. That
+ # is not idle, and a capture taken beside it measures the contention as much as the app.
+ #
+ # This is the same lesson a video-heavy app taught earlier the same day - two-refresh holds went
+ # from 4.1% to 1.3% when it was closed, a bigger difference than any code change being measured.
+ # Machine state is part of a capture, so it is reported rather than left to be remembered.
+ #>
+function Test-MachineQuiet {
+    $noisy = @(Get-Process -Name 'VBCSCompiler','MSBuild','dotnet' -ErrorAction SilentlyContinue)
+    if ($noisy.Count -eq 0) { return $true }
+
+    $mb = [math]::Round(($noisy | Measure-Object WorkingSet64 -Sum).Sum / 1MB)
+    Write-Warning ("{0} build processes are still running ({1} MB). Run .\build-safe.ps1 -Command clean, " -f $noisy.Count, $mb)
+    Write-Warning "or close them, before treating this capture as comparable with another."
+    return $false
+}
+
 # --- synthetic input, from the shared library --------------------------------------------------
 # Raisin.WPF.Automation carries the primitives both this and StockRaisin2 need: foreground
 # handling that reports its own failure, wheel notches over a moved cursor, and a stepped drag.
@@ -202,6 +224,7 @@ function Get-MinimapRect {
 }
 
 $pm = Resolve-PresentMon $PresentMon
+$quiet = Test-MachineQuiet
 if (-not (Test-CanCapture)) {
     Write-Warning "Not elevated and not in 'Performance Log Users' - the capture will probably be empty."
 }
@@ -247,7 +270,12 @@ $pmArgs = @(
     '--no_console_stats',
     '--stop_existing_session'   # a stale ETW session from a killed run blocks a new one
 )
-$proc = Start-Process -FilePath $pm -ArgumentList $pmArgs -PassThru -NoNewWindow
+# PresentMon's own output is kept beside the capture. It reports lost ETW events there and
+# nowhere else, and a capture with losses has holes that nothing in the CSV admits to.
+$pmOut = "$csv.pmlog"
+$pmErr = "$csv.pmerr"
+$proc = Start-Process -FilePath $pm -ArgumentList $pmArgs -PassThru -NoNewWindow `
+    -RedirectStandardOutput $pmOut -RedirectStandardError $pmErr
 
 if ($Automated) {
     Start-Sleep -Milliseconds 800   # let tracing settle before the first notch
@@ -269,6 +297,20 @@ Write-Host ""
 if ((Test-Path $csv) -and (Get-Item $csv).Length -gt 0) {
     $rows = (Get-Content $csv | Measure-Object -Line).Lines - 1
     Write-Host "captured $rows frames -> $csv"
+
+    # Lost events mean the trace could not keep up, so the capture has gaps the CSV does not
+    # mention. Said plainly here, and left in the .pmlog for whoever reads the capture later.
+    $pmText = @()
+    foreach ($f in @($pmOut, $pmErr)) { if (Test-Path $f) { $pmText += Get-Content $f -Raw } }
+    $joined = ($pmText -join "`n") -replace "`0", ''
+    if ($joined -match '(\d+)\s+ETW\s+events\s+were\s+lost') {
+        Write-Warning "$($Matches[1]) ETW events were lost - this capture has gaps in it."
+        Write-Warning "Treat it as indicative at best, and re-take it on a quiet machine."
+    }
+    if (-not $quiet) {
+        Write-Warning "Build processes were running throughout - do not compare this capture with another."
+    }
+
     Write-Host "now: .\analyse-scroll.ps1 -Csv `"$csv`""
 } else {
     Write-Warning "capture is empty (PresentMon exit $($proc.ExitCode)). Usually ETW permissions, or a stale session."
