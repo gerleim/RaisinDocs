@@ -617,7 +617,7 @@ as someone else's report of the same class of problem. What does not stand is th
 
 ## The baseline set: other refresh rates, other window sizes
 
-**Refresh sweep run, 2026-09-05, and it found a fault.** See below the table.
+**Run in full, 2026-09-05.** The refresh axis found a fault; the size axis is clean. Both below.
 
 Everything measured so far was taken in one configuration: whatever size the editor happened to
 open at, on the 280 Hz primary. Two reasons that is not enough.
@@ -684,9 +684,9 @@ taken days apart measures the days as much as the panels.
 | DISPLAY8 | 60 | 1920x1032 | 63-73 | 63-73 | **0.0%** | 16.67 / 33.32 ms | **12.9 ms** |
 | DISPLAY7 | 100 | 1920x1032 | 91-101 | 91-101 | **0.0%** | 12.2-20.1 ms | **11.8 ms** |
 | DISPLAY9 | 144 | 1920x1032 | 132-141 | 132-141 | **0.0%** | 6.95 ms | **4.0 ms** |
-| DISPLAY6 | 280 | 1200x800 | | | | | |
-| DISPLAY6 | 280 | 1920x1032 | | | | | |
-| DISPLAY6 | 280 | 2560x1392 | | | | | |
+| DISPLAY6 | 280 | 1200x800 | 263-276 | 263-276 | **0.0%** | 3.57 ms | **0.26 ms** |
+| DISPLAY6 | 280 | 1920x1032 | 239-277 | 239-277 | **0.0%** | 3.57 ms | **0.28 ms** |
+| DISPLAY6 | 280 | 2560x1392 | 236-273 | 236-273 | **0.0%** | 3.57 ms | **0.78 ms** |
 
 **What would be interesting.** Presented per second tracking the refresh rate on each panel, and
 dropped staying at zero. Anything else is the finding: presented rate *not* following the panel
@@ -805,6 +805,38 @@ the fault is invisible.
 **What would fix it** is pacing to the panel the window is on rather than to whatever clock
 `CompositionTarget.Rendering` offers. Whether WPF exposes that at all is an open question and no
 work has been done on it. Nothing here is a proposal yet.
+
+### The size axis: flat, then a step at full screen
+
+Three window sizes on the primary, refresh held at 280 Hz. Wheel gestures only - the minimap drag
+is a different path and is discussed separately above.
+
+| window | pixels | animation error p50 | intervals over 1.5x, sustained scrolls | presented/s |
+|---|---|---|---|---|
+| 1200x800 | 0.96 M | 0.26 ms | 1.6-3.6% | 263-276 |
+| 1920x1032 | 1.98 M | 0.28 ms | 1.1-3.2% | 239-277 |
+| 2560x1392 | 3.56 M | **0.78 ms** | 2.9-9.4% | 236-273 |
+
+Nothing dropped at any size, and the display interval is 3.57 ms throughout.
+
+**Doubling the window costs nothing; the third step costs 3x.** 1200x800 to 1920x1032 more than
+doubles the pixels and moves animation error by 0.02 ms, which is noise. Going to the full working
+area triples it. Whatever this scales with, it is not pixel area over this range - three points do
+not determine the curve, and no attempt is made here to fit one.
+
+**It is not our rendering.** `canvas-onrender` averages 0.00-0.01 ms per pass at every size, the
+same as it does in the small window. The extra cost is below us: more and larger cached line
+visuals for WPF to rasterise and composite. That is worth knowing before anyone optimises the
+render callback in response to these numbers.
+
+**In absolute terms this axis is fine.** 0.78 ms against a 3.57 ms budget is 22%, at the largest
+window the machine has, on the fastest panel. Compare the refresh axis above, where the same
+metric reaches 117% of budget. **Size is a minor effect and refresh rate is a major one** - which
+is the ranking worth taking away, and the opposite of what a per-frame cost model would predict.
+
+One app-side cost is large enough to name: `minimap-rebuild` runs 2-13 ms, and 13.3 ms is nearly
+four frames at 280 Hz. It appears on the drag path rather than the wheel path and had not been
+looked at before. Not investigated here.
 
 ### Superseded: what the remaining cells were expected to test
 
