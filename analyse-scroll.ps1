@@ -70,6 +70,13 @@ if ($lostEvents -gt 0) {
     }
 }
 
+# The conditions the capture was taken under, if recorded. Comparing two captures without them is
+# how a refresh-rate difference gets read as a code difference.
+if (Test-Path "$Csv.meta") {
+    Get-Content "$Csv.meta" | ForEach-Object { Write-Host "  $_" }
+    Write-Host ""
+}
+
 Write-Host ("capture : {0}" -f (Split-Path $Csv -Leaf))
 Write-Host ("frames  : {0:N0}   columns: {1}" -f $rows.Count, ($(if ($cAnim) { "2.x (has MsAnimationError)" } else { "1.x (no MsAnimationError)" })))
 

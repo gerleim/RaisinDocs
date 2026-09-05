@@ -614,3 +614,85 @@ investigation began from. See `design/Scroll Pre-Buffering.md`.
 What still stands from C1-C3: the prototype numbers, the ClearType finding that set off
 `design/Opaque Line Visuals.md`, and [dotnet/wpf#11607](https://github.com/dotnet/wpf/discussions/11607)
 as someone else's report of the same class of problem. What does not stand is the motivation.
+
+## The baseline set: other refresh rates, other window sizes
+
+**Not yet run.** The harness supports it; the numbers below are blank on purpose.
+
+Everything measured so far was taken in one configuration: whatever size the editor happened to
+open at, on the 280 Hz primary. Two reasons that is not enough.
+
+**Proof across refresh rates.** WPF has behaved oddly at different rates before, and every
+conclusion in this note rests on captures from a single panel. "0.0% dropped" and "98% on one
+refresh" are claims about this machine at 280 Hz until they have been seen somewhere else. A
+280 Hz panel is also the *easy* case in one specific way and the hard case in another: the budget
+is only 3.57 ms, but the cost of missing it is one cheap refresh. At 60 Hz the budget is 16.67 ms
+- nearly five times as forgiving - but a miss costs 16.67 ms, which is visible.
+
+**A baseline to compare against later.** This is the reason that does not need the first one to
+find anything. A future change to the render path is judged against numbers taken before it, and
+those numbers have to exist across the range the app will actually run on, recorded well enough
+to be trusted weeks later. A baseline's value is precisely that it changes nothing now.
+
+### Two axes, varied one at a time
+
+The three 1920x1080 panels differ only in refresh rate, so they are the refresh sweep at a
+constant window size. Size varies on the primary alone, at a constant refresh rate. Nothing
+moves both at once - a capture that changed size and rate together could not be attributed to
+either.
+
+| | `\.\DISPLAY8` | `\.\DISPLAY7` | `\.\DISPLAY9` | `\.\DISPLAY6` |
+|---|---|---|---|---|
+| resolution | 1920x1080 | 1920x1080 | 1920x1080 | 2560x1440 |
+| refresh | 60 Hz | 100 Hz | 144 Hz | 280 Hz |
+| frame budget | 16.67 ms | 10.00 ms | 6.94 ms | 3.57 ms |
+
+Window height is the multiplier on per-frame work, because it sets how many lines have to be
+produced. 1920x1032 is the full working area of a 1920x1080 panel under Windows 11 with the
+taskbar in place, and it is the widest and tallest window the refresh sweep can hold constant
+across all three.
+
+### Running it
+
+```powershell
+# Refresh sweep - size held at the working area of each 1920x1080 panel
+.\capture-scroll.ps1 -Automated -Release -File "design\Scroll Frame Pacing.md" -Monitor DISPLAY8 -Maximise
+.\capture-scroll.ps1 -Automated -Release -File "design\Scroll Frame Pacing.md" -Monitor DISPLAY7 -Maximise
+.\capture-scroll.ps1 -Automated -Release -File "design\Scroll Frame Pacing.md" -Monitor DISPLAY9 -Maximise
+
+# Size comparison - one panel, one refresh rate, three heights
+.\capture-scroll.ps1 -Automated -Release -File "design\Scroll Frame Pacing.md" -Monitor DISPLAY6 -Size 1200x800
+.\capture-scroll.ps1 -Automated -Release -File "design\Scroll Frame Pacing.md" -Monitor DISPLAY6 -Size 1920x1032
+.\capture-scroll.ps1 -Automated -Release -File "design\Scroll Frame Pacing.md" -Monitor DISPLAY6 -Maximise
+```
+
+Each capture writes a `.meta` file beside the CSV recording the display, its refresh rate, the
+window rectangle, the document *and its length*, and whether the machine was quiet. The document
+is part of the configuration - it sets how many lines exist to scroll through - and this note is
+one that grows, so the line count is recorded rather than the name alone. `analyse-scroll.ps1` prints it
+back before the numbers. That is not bookkeeping for its own sake: the difference between a busy
+and a quiet machine was larger than the difference any code change in this work made, so a
+capture without its conditions cannot be compared with anything.
+
+**Take them in one sitting on a quiet machine**, for the same reason. A sweep assembled from runs
+taken days apart measures the days as much as the panels.
+
+### What to record
+
+| display | Hz | window | presented/s | displayed/s | dropped | 1-refresh | animation error p50 |
+|---|---|---|---|---|---|---|---|
+| DISPLAY8 | 60 | 1920x1032 | | | | | |
+| DISPLAY7 | 100 | 1920x1032 | | | | | |
+| DISPLAY9 | 144 | 1920x1032 | | | | | |
+| DISPLAY6 | 280 | 1200x800 | | | | | |
+| DISPLAY6 | 280 | 1920x1032 | | | | | |
+| DISPLAY6 | 280 | 2560x1392 | | | | | |
+
+**What would be interesting.** Presented per second tracking the refresh rate on each panel, and
+dropped staying at zero. Anything else is the finding: presented rate *not* following the panel
+means the pacing is locked to something other than the compositor; drops appearing only at low
+refresh rates means the work is not the constraint, the wait is; a size that degrades at constant
+refresh rate means per-frame cost scales with visible lines more steeply than it should.
+
+**The likeliest outcome is that it all confirms what is already here** - and that is the result
+being paid for. The table is worth having whether or not it surprises anyone.

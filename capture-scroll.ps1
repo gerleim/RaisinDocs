@@ -37,10 +37,34 @@
     falling back to the 1.9 build bundled with NVIDIA FrameView - which works, but has no
     MsAnimationError, the metric most directly about animation smoothness.
 
+.PARAMETER Monitor
+    Which display to measure on, matched loosely against the device name - "DISPLAY8" is enough.
+    The frame budget *is* the refresh period, and it ranges from 3.57ms to 16.67ms across the
+    panels here, so this is the single setting that most changes what a capture says.
+
+.PARAMETER Maximise
+    Fill the chosen display's working area - the screen less the taskbar. The largest window the
+    panel can hold, and the repeatable way to ask for it.
+
+.PARAMETER Size
+    An explicit window size as WxH, for example 1920x1032, placed at the top-left of the chosen
+    display's working area. Window height multiplies the per-frame work, because it sets how many
+    lines have to be produced.
+
+    Vary size or refresh rate, not both at once: a capture that changed each cannot be attributed
+    to either. The 1920x1080 panels are the refresh sweep at constant size; size comparisons stay
+    on one panel. See design\Scroll Frame Pacing.md.
+
 .EXAMPLE
     .\capture-scroll.ps1 -File "design\Scroll Frame Pacing.md" -Automated -Release
 
     Unattended. Runs the gesture sweep, captures it, and prints the analyse command.
+
+.EXAMPLE
+    .\capture-scroll.ps1 -Automated -Release -File "design\Scroll Frame Pacing.md" -Monitor DISPLAY8 -Maximise
+
+    One cell of the baseline set: the 60Hz panel, filling its working area. The capture records
+    the display, its refresh rate and the window rectangle beside the CSV, so it stays comparable.
 
 .EXAMPLE
     .\capture-scroll.ps1 -File "design\Scroll Frame Pacing.md" -Seconds 30
@@ -56,7 +80,10 @@ param(
     [string] $OutDir = "$env:LOCALAPPDATA\RaisinDocs\captures",
     [switch] $Release,
     [switch] $Automated,
-    [int]    $Repeats = 3
+    [int]    $Repeats = 3,
+    [string] $Monitor,
+    [switch] $Maximise,
+    [string] $Size
 )
 
 $ErrorActionPreference = 'Stop'
@@ -118,6 +145,59 @@ function Test-MachineQuiet {
 # Raisin.WPF.Automation carries the primitives both this and StockRaisin2 need: foreground
 # handling that reports its own failure, wheel notches over a moved cursor, and a stepped drag.
 # The traps they exist to avoid are in that project's README rather than repeated here.
+<##
+ # Places the editor on a chosen display, at a chosen size, before anything is measured.
+ #
+ # Both change the numbers, and for different reasons. Window height multiplies whatever the
+ # per-frame work scales with - here, how many lines have to be produced. Refresh rate *is* the
+ # frame budget: 16.67ms at 60Hz against 3.57ms at 280, a factor of nearly five, so a result that
+ # holds on one panel and not another says the work is near the limit rather than broken.
+ #
+ # Vary one at a time. Moving to a slower panel that is also smaller changes both and neither
+ # number can then be attributed - which is why the 1920x1080 displays here are the refresh sweep
+ # and the size comparison stays on one panel.
+ #>
+function Resolve-Screen {
+    param([string] $Wanted)
+    Add-Type -AssemblyName System.Windows.Forms
+    $screens = [System.Windows.Forms.Screen]::AllScreens
+    if (-not $Wanted) { return $null }
+
+    $hit = $screens | Where-Object { $_.DeviceName -like "*$Wanted*" } | Select-Object -First 1
+    if (-not $hit) {
+        $names = ($screens | ForEach-Object { $_.DeviceName }) -join ', '
+        throw "no display matching '$Wanted'. Available: $names"
+    }
+    return $hit
+}
+
+function Set-WindowPlacement {
+    param([IntPtr] $Window, $Screen, [switch] $Max, [string] $WxH)
+
+    Import-Automation
+    $t = [Raisin.WPF.Automation.TargetWindow]::new($Window)
+
+    if ($Max -and $Screen) {
+        $wa = $Screen.WorkingArea
+        $t.FillWorkingArea([System.Drawing.Rectangle]::new($wa.X, $wa.Y, $wa.Width, $wa.Height))
+    }
+    elseif ($WxH) {
+        if ($WxH -notmatch '^(\d+)x(\d+)$') { throw "-Size wants WxH, for example 1920x1032" }
+        $w = [int]$Matches[1]; $h = [int]$Matches[2]
+        # Top-left of the chosen screen's working area, so the window lands wholly on it.
+        $o = if ($Screen) { $Screen.WorkingArea } else { [System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea }
+        $t.PlaceAt([System.Drawing.Rectangle]::new($o.X, $o.Y, $w, $h))
+    }
+    elseif ($Screen) {
+        $wa = $Screen.WorkingArea
+        $t.FillWorkingArea([System.Drawing.Rectangle]::new($wa.X, $wa.Y, $wa.Width, $wa.Height))
+    }
+    else { return $null }
+
+    Start-Sleep -Milliseconds 700   # let the resize settle and the minimap re-report its rect
+    return $t.Bounds
+}
+
 function Import-Automation {
     if ("Raisin.WPF.Automation.SyntheticInput" -as [type]) { return }
 
@@ -261,6 +341,28 @@ if ($File) { $editorArgs += '"{0}"' -f (Resolve-Path $File).Path }
 $app = Start-Process -FilePath (Resolve-Path $editor).Path -ArgumentList $editorArgs -PassThru
 Start-Sleep -Milliseconds 1500   # let the window come up before tracing starts
 
+# Placed before tracing begins, so the resize is not part of what is captured.
+$screen = Resolve-Screen $Monitor
+$app.Refresh()
+if ($app.MainWindowHandle -eq [IntPtr]::Zero) {
+    Write-Warning "no window handle yet - measuring wherever the editor opened, unplaced"
+} elseif ($screen -or $Maximise -or $Size) {
+    [void] (Set-WindowPlacement -Window $app.MainWindowHandle -Screen $screen -Max:$Maximise -WxH $Size)
+}
+
+# Where it ended up, asked of the window rather than assumed from what was requested - so a run
+# that was never placed is labelled just as fully as one that was, and a placement that did not
+# take is visible in the capture instead of silently mislabelling it.
+Import-Automation
+$windowRect = $null
+$panel      = $null
+if ($app.MainWindowHandle -ne [IntPtr]::Zero) {
+    $windowRect = [Raisin.WPF.Automation.TargetWindow]::new($app.MainWindowHandle).Bounds
+    $panel      = [Raisin.WPF.Automation.Displays]::For($windowRect)
+}
+Write-Host ("window  : {0}" -f $(if ($windowRect) { "$($windowRect.Width)x$($windowRect.Height) at $($windowRect.X),$($windowRect.Y)" } else { 'unknown' }))
+Write-Host ("display : {0}" -f $(if ($panel) { "$panel  budget $('{0:F2}' -f $panel.FramePeriodMs)ms" } else { 'unknown' }))
+
 $pmArgs = @(
     '--process_id', $app.Id,
     '--output_file', $csv,
@@ -295,7 +397,7 @@ if ($app -and -not $app.HasExited) { $app.CloseMainWindow() | Out-Null }
 
 Write-Host ""
 if ((Test-Path $csv) -and (Get-Item $csv).Length -gt 0) {
-    $rows = (Get-Content $csv | Measure-Object -Line).Lines - 1
+    $rows = @(Get-Content $csv).Count - 1
     Write-Host "captured $rows frames -> $csv"
 
     # Lost events mean the trace could not keep up, so the capture has gaps the CSV does not
@@ -318,6 +420,21 @@ if ((Test-Path $csv) -and (Get-Item $csv).Length -gt 0) {
     if (-not $quiet) {
         Write-Warning "Build processes were running throughout - do not compare this capture with another."
     }
+
+    # What this capture was taken under. Refresh rate and window size both change the numbers, so a
+    # capture that does not carry them cannot be compared with another - which is the whole point
+    # of taking a set across displays.
+    $meta = @()
+    $meta += "capture   : $(Split-Path $csv -Leaf)"
+    $meta += "taken     : $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
+    $meta += "editor    : $config"
+    $meta += "document  : $(if ($File) { "$(Split-Path $File -Leaf), $(@(Get-Content $File).Count) lines" } else { '(none)' })"
+    $meta += "window    : $(if ($windowRect) { "$($windowRect.Width)x$($windowRect.Height) at $($windowRect.X),$($windowRect.Y)" } else { 'unknown' })"
+    $meta += "display   : $(if ($panel) { $panel.DeviceName } else { 'unknown' })"
+    $meta += "refresh   : $(if ($panel) { "$($panel.RefreshHz) Hz - $('{0:F2}' -f $panel.FramePeriodMs)ms budget" } else { 'unknown' })"
+    $meta += "quiet     : $(if ($quiet) { 'yes' } else { 'no - build processes were running' })"
+    $meta += "frames    : $rows"
+    $meta | Set-Content -Path "$csv.meta" -Encoding utf8
 
     Write-Host "now: .\analyse-scroll.ps1 -Csv `"$csv`""
 } else {
