@@ -554,18 +554,26 @@ QPC. Release build, 2982 frames, ten gestures, 280Hz panel.
 Not an artefact of reading the wrong column: `DisplayedTime` is populated on all 2982 rows and
 never `NA`, and `PresentMode` is `Composed: Copy with GPU GDI`, the expected WPF path.
 
-**What is left**, as display intervals against the 3.571 ms refresh:
+**What is left**, as display intervals against the 3.571 ms refresh, counting only frames inside
+a gesture - idle settle time between gestures otherwise inflates the long tail:
 
-| held for | frames | share |
+| held for | with a video app running | machine quiet |
 |---|---|---|
-| 1 refresh | 2650 | **92.9%** |
-| 2 refreshes | 117 | 4.1% |
-| 3 refreshes | 10 | 0.4% |
-| 4-5 refreshes | 10 | 0.3% |
+| 1 refresh | 94.8% | **98.0%** |
+| 2 refreshes | 4.1% | **1.3%** |
+| 3 refreshes | 0.4% | 0.2% |
+| 4+ refreshes | 0.7% | 0.5% |
 
-About 93% of frames land on exactly one refresh. The 5-refresh tail is the same 17.8 ms late
-interval described at the top of this note - it still happens, at 0.2% of frames rather than as
-the dominant behaviour.
+**Two thirds of the double-holds were another application.** The first capture was taken with a
+video-heavy app in the background; closing it took two-refresh holds from 4.1% to 1.3% and
+tightened animation error's p95 from 1.5-4.4 ms to 1.07-1.88 ms. Per-gesture jitter fell from
+1.8-11.9% to 1.0-6.9%, and on the 2.24 s sustained scrolls it is 1.0-1.8%.
+
+Nothing was dropped in either run, so that finding did not depend on machine state. The
+histogram did, which is worth remembering before quoting one.
+
+**On a quiet machine 98% of frames land on exactly one refresh at 280 Hz.** What remains is
+about 2% held an extra refresh, with zero dropped.
 
 Animation error agrees: median 0.21-0.49 ms per gesture, p95 1.5-4.4 ms. The motion matches the
 time each frame was actually on screen. The large maxima in the per-gesture output are at
@@ -578,11 +586,14 @@ The presenter was proposed because WPF presented 228 times a second into a sink 
 140 times, discarding 13%. That is no longer what happens. **Do not build it to fix a drop rate
 of zero.**
 
-The remaining ~5% of frames held for two or more refreshes is a real but much smaller thing,
-and it is not yet attributed. We present at about 273/s into a 280 Hz panel, so a shortfall of
-roughly 7 frames a second would account for about half of it on its own. Whether the rest is
-WPF composing slightly under vsync or something still ours is the next question, and it is
-worth answering before assuming either.
+What remains on a quiet machine is about 2% of frames held an extra refresh. We present at
+roughly 276/s into a 280 Hz panel, and that shortfall alone accounts for most of it. There is
+not obviously anything left to chase.
+
+**Machine state has to be part of a capture's record.** The difference between a busy and a
+quiet machine here was larger than the difference any code change in this work made. PresentMon
+warns when it loses ETW events - the noisy run reported 661 lost - and that warning is the
+signal to throw a capture away rather than read it.
 
 What still stands from C1-C3: the prototype numbers, the ClearType finding that set off
 `design/Opaque Line Visuals.md`, and [dotnet/wpf#11607](https://github.com/dotnet/wpf/discussions/11607)
