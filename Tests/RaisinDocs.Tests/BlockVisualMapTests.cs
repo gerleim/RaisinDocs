@@ -874,7 +874,9 @@ public class BlockVisualMapTests
     public void LazyContinuation_MultiDigitOrderedList_UsesOwnerPrefix()
     {
         var map = ComputeMapMultiBlock(["10. item", "continuation"], 1);
-        map.ReplacementPrefix.Should().Be(" 10.  ");
+        // Identical to the prefix the owner itself displays - a continuation that measured a
+        // shorter prefix would sit one space left of the text it is meant to align under.
+        map.ReplacementPrefix.Should().Be("  10.  ");
     }
 
     [Fact]

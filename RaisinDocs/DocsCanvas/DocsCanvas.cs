@@ -743,6 +743,34 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider, IDocsC
     };
 
     internal int TestGetVisualLineBlockIndex(int vi) => _visualLines[vi].BlockIndex;
+    internal double TestGetVisualLineContentStartX(int vi) =>
+        _layoutEngine.GetTextStartXForVisualLine(_visualLines[vi], vi);
+    internal double TestGetVisualLineMarkerRightX(int vi) =>
+        _visualLineSpacings![vi]!.MarkerRightX;
+
+    /// <summary>
+    /// Width of the visible ink on a line, trailing whitespace excluded - a trailing space is
+    /// allowed to hang past the right edge because it draws nothing.
+    /// </summary>
+    internal double TestVisualLineInkWidth(int vi)
+    {
+        var vl = _visualLines[vi];
+        var parsed = _parsedBlocks![vl.BlockIndex];
+        var map = IsVisual ? _visualMaps?[vl.BlockIndex] : null;
+        string blockText = _doc.GetBlockText(vl.BlockIndex);
+
+        double width = 0, trailingSpace = 0;
+        int runIdx = 0;
+        for (int i = vl.StartOffset; i < vl.StartOffset + vl.Length; i++)
+        {
+            if (map != null && map.IsHidden(i)) continue;
+            var style = TextMeasurer.GetStyleAtOffset(parsed.Runs, i, ref runIdx);
+            double w = _measure.MeasureCharWidth(blockText[i], parsed.Kind, style);
+            width += w;
+            trailingSpace = blockText[i] == ' ' ? trailingSpace + w : 0;
+        }
+        return width - trailingSpace;
+    }
     internal BlockKind TestGetVisualLineBlockKind(int vi) => _visualLines[vi].BlockKind;
     internal double TestGetLineYPosition(int vi) => _lineYPositions[vi];
     internal void TestUndo() { _doc.Undo(); InvalidateLayout(); }

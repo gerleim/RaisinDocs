@@ -6,8 +6,15 @@ public readonly record struct HiddenRange(int Start, int Length);
 
 public class BlockVisualSpacing
 {
+    /// <summary>Centre of the marker column - bullets and checkboxes are centred on it.</summary>
     public double MarkerStartX { get; set; }
     public double MarkerWidth { get; set; }
+    /// <summary>
+    /// Right edge of the marker column. Ordered list numbers are right-aligned to it, so a
+    /// list's delimiters share one X whatever the numbers are, and the text column that
+    /// follows does not move with the digit count.
+    /// </summary>
+    public double MarkerRightX { get; set; }
     public double SpacingAfterMarker { get; set; }
     public double ContentStartX { get; set; }
 }
@@ -155,10 +162,15 @@ public class BlockVisualMap
         if (prefixLen <= 0) return null;
         string number = text.Substring(0, prefixLen - 2);
         char delim = text[prefixLen - 2];
-        // Pad single-digit numbers with leading space for consistent alignment with multi-digit numbers
-        string paddedNumber = number.Length == 1 ? " " + number : number;
-        return NestingIndentString(nestingLevel) + " " + paddedNumber + delim + "  ";
+        return OrderedListPrefix(number, delim, nestingLevel);
     }
+
+    /// <summary>
+    /// The visual prefix an ordered list marker is displayed as. A list item and any continuation
+    /// that aligns to it are measured from this same string, so it is built in one place.
+    /// </summary>
+    private static string OrderedListPrefix(string number, char delim, int nestingLevel) =>
+        NestingIndentString(nestingLevel) + "  " + number + delim + "  ";
 
     public static BlockVisualMap Compute(ParsedBlock parsed, string blockText,
         IReadOnlyList<ParsedBlock>? allBlocks = null, Func<int, string>? getBlockText = null,
@@ -269,10 +281,9 @@ public class BlockVisualMap
             {
                 // Hide the marker and all spacing (1-4 spaces) up to content column
                 ranges.Add(new HiddenRange(0, parsed.ContentColumn));
-                string nestIndent = NestingIndentString(parsed.ListNestingLevel);
                 string number = stripped.Substring(0, prefixLen - 2);
                 char delim = stripped[prefixLen - 2];
-                replacementPrefix = nestIndent + "  " + number + delim + "  ";
+                replacementPrefix = OrderedListPrefix(number, delim, parsed.ListNestingLevel);
             }
         }
 

@@ -451,7 +451,7 @@ partial class DocsCanvas
                                 var spacing = _canvas.GetVisualLineSpacing(vl);
                                 if (spacing != null)
                                 {
-                                    _canvas.DrawOrderedListNumber(dc, new AbsoluteX(spacing.MarkerStartX),
+                                    _canvas.DrawOrderedListNumber(dc, new AbsoluteX(spacing.MarkerRightX),
                                         new AbsoluteY(lineY - effectiveScroll),
                                         map.ReplacementPrefix, fontSize, parsed.ListNestingLevel);
                                     textX += spacing.MarkerWidth + spacing.SpacingAfterMarker;

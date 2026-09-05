@@ -482,7 +482,7 @@ public partial class DocsCanvas
                 var spacing = GetVisualLineSpacing(vl);
                 if (spacing != null)
                 {
-                    DrawOrderedListNumber(dc, new AbsoluteX(spacing.MarkerStartX), new AbsoluteY(screenY),
+                    DrawOrderedListNumber(dc, new AbsoluteX(spacing.MarkerRightX), new AbsoluteY(screenY),
                         map.ReplacementPrefix, fontSize, parsed.ListNestingLevel);
                 }
                 x += _measure.MeasureReplacementPrefix(map.ReplacementPrefix, map.PrefixMeasureKind);
@@ -625,29 +625,21 @@ public partial class DocsCanvas
         }
     }
 
-    private void DrawOrderedListNumber(DrawingContext dc, AbsoluteX markerCenterX, AbsoluteY screenY,
+    /// <summary>
+    /// Draws the number and its delimiter right-aligned to the marker column's right edge, so
+    /// that 9. and 10. share a delimiter position and the text after them shares a column.
+    /// </summary>
+    private void DrawOrderedListNumber(DrawingContext dc, AbsoluteX markerRightX, AbsoluteY screenY,
         string replacementPrefix, double fontSize, int nestingLevel)
     {
-        string trimmed = replacementPrefix.TrimStart();
-        string numberText = trimmed.TrimEnd();
+        string numberText = LayoutEngine.OrderedMarkerText(replacementPrefix);
 
-        int delimiterPos = numberText.IndexOfAny(new[] { '.', ')' });
-        string numberOnly = delimiterPos > 0 ? numberText.Substring(0, delimiterPos) : numberText;
-
-        var ftNumberOnly = new FormattedText(numberOnly, CultureInfo.InvariantCulture,
+        var ft = new FormattedText(numberText, CultureInfo.InvariantCulture,
             FlowDirection.LeftToRight, TextMeasurer.NormalTypeface, fontSize,
             _palette.Syntax, _measure.DpiScale);
 
-        // Center number at marker center position (adjusted for width)
-        double numberX = markerCenterX.Value - ftNumberOnly.WidthIncludingTrailingWhitespace / 2;
-        dc.DrawText(ftNumberOnly, new Point(numberX, screenY.Value));
-
-        // Draw delimiter after number
-        double delimiterX = numberX + ftNumberOnly.WidthIncludingTrailingWhitespace;
-        var ftDelimiter = new FormattedText(numberText.Substring(numberOnly.Length), CultureInfo.InvariantCulture,
-            FlowDirection.LeftToRight, TextMeasurer.NormalTypeface, fontSize,
-            _palette.Syntax, _measure.DpiScale);
-        dc.DrawText(ftDelimiter, new Point(delimiterX, screenY.Value));
+        dc.DrawText(ft, new Point(markerRightX.Value - ft.WidthIncludingTrailingWhitespace,
+            screenY.Value));
     }
 
     private double DrawTextSegment(DrawingContext dc, string blockText,

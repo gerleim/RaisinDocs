@@ -628,14 +628,21 @@ public partial class DocsCanvas
                 return;
             }
 
-            double prefixWidth = 0;
-            if (map?.ReplacementPrefix != null)
-                prefixWidth = _rendering.Measure.MeasureReplacementPrefix(map.ReplacementPrefix, map.PrefixMeasureKind);
+            // Every line of the block starts at its text column, the first one included, so they
+            // all reach the right margin that much sooner than the width alone suggests. Measuring
+            // the first line against the prefix width instead used to over-grant it space, and a
+            // marker wider than the right padding had its last glyph clipped away.
+            double contentIndent = 0;
+            if (_visual.IsVisual && map != null)
+            {
+                double blockTextX = ComputeBlockTextX(parsed, map, nestingDepth, parentContentCol);
+                contentIndent = ComputeBlockSpacing(parsed, map, blockTextX).ContentStartX - DocsCanvas._padding;
+            }
+            double lineMax = maxWidth - contentIndent;
 
             int pos = 0;
             while (pos < segment.Length)
             {
-                double lineMax = pos == 0 ? maxWidth - prefixWidth : maxWidth;
                 int lineLen = FitLine(segment, pos, lineMax, parsed, map, startOffset);
                 var vl = new DocsCanvas.VisualLine(blockIndex, startOffset + pos, lineLen, parsed.Kind)
                 {
@@ -754,145 +761,185 @@ public partial class DocsCanvas
             var parsed = _content.ParsedBlocks[vl.BlockIndex];
             var map = _content.VisualMaps[vl.BlockIndex];
 
-            var spacing = new BlockVisualSpacing();
-            double textX = DocsCanvas._padding;
+            double textX = ComputeBlockTextX(parsed, map, vl.NestingDepth, vl.ParentContentColumn);
+            var spacing = ComputeBlockSpacing(parsed, map, textX);
 
-            // Add nesting indentation (block hierarchy)
-            // For continuation blocks, skip this because the prefix width will serve as the indentation
-            if (vl.NestingDepth > 0 && !map.IsContinuationIndent)
-            {
-                double charWidth = _rendering.Measure.MeasureCharWidth(' ', parsed.Kind, InlineStyle.Normal);
-                textX += vl.ParentContentColumn * charWidth;
-            }
-
-
-            // Handle markers and content positioning
             if (vl.StartOffset == 0)
+                return spacing;
+
+            // A wrapped line draws no marker of its own; it only sits on the text column, which
+            // is a property of the block and the same for every line the block produces.
+            return new BlockVisualSpacing
             {
-                if (parsed.Kind == BlockKind.Blockquote)
-                {
-                    // Blockquote bar positioning
-                    var aligner = new ContentBlockAligner(textX, _rendering.Measure.ListIndent);
-                    spacing.MarkerStartX = aligner.GetBlockquoteBarX();
-                    spacing.MarkerWidth = 3;
-                    spacing.SpacingAfterMarker = aligner.GetSpacingAfterMarker();
-                    spacing.ContentStartX = aligner.GetBlockquoteContentIndentX();
-                }
-                else if (map.ReplacementPrefix != null)
-                {
-                    double prefixWidth = _rendering.Measure.MeasureReplacementPrefix(map.ReplacementPrefix, map.PrefixMeasureKind);
-
-                    if (!map.IsContinuationIndent)
-                    {
-                        // List marker spacing structure:
-                        // 1. Nesting indentation (from ListNestingLevel)
-                        // 2. Fixed space before marker (2 spaces)
-                        // 3. Marker (centered at MarkerStartX)
-                        // 4. Fixed space after marker (SpacingAfterMarker)
-                        // 5. Text content (at ContentStartX)
-
-                        bool isListItem = parsed.Kind is BlockKind.UnorderedListItem or BlockKind.OrderedListItem or
-                            BlockKind.TaskListItemUnchecked or BlockKind.TaskListItemChecked;
-
-                        if (isListItem)
-                        {
-                            double spaceCharWidth = _rendering.Measure.MeasureCharWidth(' ', parsed.Kind, InlineStyle.Normal);
-
-                            // 1. Nesting indentation (from ListNestingLevel)
-                            double nestingIndentWidth = parsed.ListNestingLevel > 0
-                                ? parsed.ListNestingLevel * BlockVisualMap.SpacesPerNestingLevel * spaceCharWidth
-                                : 0;
-
-                            // 2. Fixed space before marker (2 spaces)
-                            const double spacesBeforeMarker = 2;
-                            double spaceBeforeMarkerWidth = spacesBeforeMarker * spaceCharWidth;
-
-                            // Use standard marker width (checked checkbox) for all types to align centers
-                            double standardMarkerWidth = _rendering.Measure.MeasureReplacementPrefix("☑", parsed.Kind);
-
-                            // 3. Marker center position
-                            double markerCenterX = DocsCanvas._padding + nestingIndentWidth + spaceBeforeMarkerWidth + (standardMarkerWidth / 2);
-                            spacing.MarkerStartX = markerCenterX;
-
-                            // 4. Fixed space after marker
-                            const double spacingAfterMarker = 4.0;
-                            spacing.SpacingAfterMarker = spacingAfterMarker;
-
-                            // For ordered items, use actual marker width for proper content positioning
-                            double actualMarkerWidth = prefixWidth;
-                            if (parsed.Kind != BlockKind.OrderedListItem)
-                            {
-                                // For bullets and checkboxes, use standard width
-                                actualMarkerWidth = standardMarkerWidth;
-                            }
-
-                            // 5. Text content start position
-                            spacing.ContentStartX = DocsCanvas._padding + nestingIndentWidth + spaceBeforeMarkerWidth + actualMarkerWidth + spacingAfterMarker;
-
-                            spacing.MarkerWidth = standardMarkerWidth;
-                        }
-                        else
-                        {
-                            // Non-list markers (blockquotes, etc.)
-                            double baseX = textX;
-                            var aligner = new ContentBlockAligner(baseX, _rendering.Measure.ListIndent);
-
-                            if (parsed.Kind == BlockKind.Blockquote)
-                            {
-                                spacing.MarkerStartX = aligner.GetBlockquoteBarX();
-                                spacing.MarkerWidth = 3;
-                                spacing.SpacingAfterMarker = aligner.GetSpacingAfterMarker();
-                                spacing.ContentStartX = aligner.GetBlockquoteContentIndentX();
-                            }
-                            else
-                            {
-                                spacing.MarkerStartX = textX;
-                                spacing.MarkerWidth = prefixWidth;
-                                spacing.SpacingAfterMarker = 0;
-                                spacing.ContentStartX = textX + prefixWidth;
-                            }
-                        }
-                    }
-                    else
-                    {
-                        // Continuation block: indent to match parent's content by using prefix width
-                        // (nesting indentation is skipped for continuation blocks)
-                        spacing.ContentStartX = textX + prefixWidth;
-                        spacing.MarkerStartX = textX;
-                        spacing.MarkerWidth = 0;
-                        spacing.SpacingAfterMarker = 0;
-                    }
-
-                }
-                else
-                {
-                    spacing.MarkerStartX = textX;
-                    spacing.MarkerWidth = 0;
-                    spacing.SpacingAfterMarker = 0;
-                    spacing.ContentStartX = textX;
-                }
-            }
-            else
-            {
-                // Continuation lines - align with first line's content position
-                spacing.MarkerStartX = textX;
-                spacing.MarkerWidth = 0;
-                spacing.SpacingAfterMarker = 0;
-
-                if (map.ReplacementPrefix != null)
-                {
-                    // Continuation line of a list/blockquote - indent to match first line content
-                    double prefixWidth = _rendering.Measure.MeasureReplacementPrefix(map.ReplacementPrefix, map.PrefixMeasureKind);
-                    spacing.ContentStartX = textX + prefixWidth;
-                }
-                else
-                {
-                    spacing.ContentStartX = textX;
-                }
-            }
-
-            return spacing;
+                MarkerStartX = textX,
+                MarkerWidth = 0,
+                SpacingAfterMarker = 0,
+                ContentStartX = spacing.ContentStartX,
+            };
         }
+
+        /// <summary>
+        /// Where the block's indentation starts, before any marker: the nesting indentation of the
+        /// block hierarchy. Continuation blocks skip it, because they take their whole indentation
+        /// from the owner they align to.
+        /// </summary>
+        private double ComputeBlockTextX(ParsedBlock parsed, BlockVisualMap map, int nestingDepth, int parentContentColumn)
+        {
+            if (nestingDepth <= 0 || map.IsContinuationIndent)
+                return DocsCanvas._padding;
+
+            double charWidth = _rendering.Measure.MeasureCharWidth(' ', parsed.Kind, InlineStyle.Normal);
+            return DocsCanvas._padding + parentContentColumn * charWidth;
+        }
+
+        /// <summary>
+        /// The block's marker position and text column. Every visual line of the block reads this:
+        /// the first line draws its marker here and starts its text at <see
+        /// cref="BlockVisualSpacing.ContentStartX"/>, and the wrapped lines hang on that same X.
+        /// </summary>
+        private BlockVisualSpacing ComputeBlockSpacing(ParsedBlock parsed, BlockVisualMap map, double textX)
+        {
+            if (parsed.Kind == BlockKind.Blockquote && map.ReplacementPrefix == null)
+            {
+                // Blockquote bar positioning
+                var quoteAligner = new ContentBlockAligner(textX, _rendering.Measure.ListIndent);
+                return new BlockVisualSpacing
+                {
+                    MarkerStartX = quoteAligner.GetBlockquoteBarX(),
+                    MarkerWidth = 3,
+                    SpacingAfterMarker = quoteAligner.GetSpacingAfterMarker(),
+                    ContentStartX = quoteAligner.GetBlockquoteContentIndentX(),
+                };
+            }
+
+            if (map.ReplacementPrefix == null)
+            {
+                return new BlockVisualSpacing
+                {
+                    MarkerStartX = textX,
+                    MarkerWidth = 0,
+                    SpacingAfterMarker = 0,
+                    ContentStartX = textX,
+                };
+            }
+
+            double prefixWidth = _rendering.Measure.MeasureReplacementPrefix(map.ReplacementPrefix, map.PrefixMeasureKind);
+
+            // A continuation block carries its owner's prefix, so running the owner's geometry over
+            // it puts the continuation on the owner's text column. It draws no marker itself.
+            if (map.IsContinuationIndent)
+            {
+                if (!IsListItem(map.PrefixMeasureKind))
+                    return new BlockVisualSpacing
+                    {
+                        MarkerStartX = textX,
+                        MarkerWidth = 0,
+                        SpacingAfterMarker = 0,
+                        ContentStartX = textX + prefixWidth,
+                    };
+
+                var owner = ComputeListItemSpacing(map.PrefixMeasureKind, map.ReplacementPrefix,
+                    TextMeasurer.GetNestingLevelFromPrefix(map.ReplacementPrefix));
+                return new BlockVisualSpacing
+                {
+                    MarkerStartX = textX,
+                    MarkerWidth = 0,
+                    SpacingAfterMarker = 0,
+                    ContentStartX = owner.ContentStartX,
+                };
+            }
+
+            if (IsListItem(parsed.Kind))
+                return ComputeListItemSpacing(parsed.Kind, map.ReplacementPrefix, parsed.ListNestingLevel);
+
+            // Non-list markers (blockquotes, etc.)
+            var aligner = new ContentBlockAligner(textX, _rendering.Measure.ListIndent);
+            if (parsed.Kind == BlockKind.Blockquote)
+                return new BlockVisualSpacing
+                {
+                    MarkerStartX = aligner.GetBlockquoteBarX(),
+                    MarkerWidth = 3,
+                    SpacingAfterMarker = aligner.GetSpacingAfterMarker(),
+                    ContentStartX = aligner.GetBlockquoteContentIndentX(),
+                };
+
+            return new BlockVisualSpacing
+            {
+                MarkerStartX = textX,
+                MarkerWidth = prefixWidth,
+                SpacingAfterMarker = 0,
+                ContentStartX = textX + prefixWidth,
+            };
+        }
+
+        private static bool IsListItem(BlockKind kind) =>
+            kind is BlockKind.UnorderedListItem or BlockKind.OrderedListItem or
+                BlockKind.TaskListItemUnchecked or BlockKind.TaskListItemChecked;
+
+        /// <summary>
+        /// The list marker column. Bullets, checkboxes and ordered numbers all share one
+        /// column, so every list kind starts its text at the same X:
+        /// <list type="number">
+        /// <item>Nesting indentation (from the nesting level)</item>
+        /// <item>Fixed space before the marker (2 spaces)</item>
+        /// <item>The column: bullets and checkboxes centred in it, numbers right-aligned to
+        /// its right edge so a list's delimiters line up</item>
+        /// <item>Fixed space after the marker</item>
+        /// <item>Text content, at <see cref="BlockVisualSpacing.ContentStartX"/></item>
+        /// </list>
+        /// A number too wide for the column would have to start left of the margin, so instead
+        /// it clamps there and pushes the column's right edge - and the text with it - to the
+        /// right, keeping the gap after the marker constant. Each item does this on its own
+        /// widest number; no block needs to know its siblings.
+        /// </summary>
+        private BlockVisualSpacing ComputeListItemSpacing(BlockKind kind, string prefix, int nestingLevel)
+        {
+            double spaceCharWidth = _rendering.Measure.MeasureCharWidth(' ', kind, InlineStyle.Normal);
+
+            double nestingIndentWidth = nestingLevel > 0
+                ? nestingLevel * BlockVisualMap.SpacesPerNestingLevel * spaceCharWidth
+                : 0;
+
+            const double spacesBeforeMarker = 2;
+            double spaceBeforeMarkerWidth = spacesBeforeMarker * spaceCharWidth;
+
+            // Wide enough for the checked checkbox and for a two-digit number, whichever asks
+            // for more. The checkbox wins at present, which is why sharing the column costs
+            // bullets and checkboxes nothing.
+            double columnWidth = Math.Max(
+                _rendering.Measure.MeasureReplacementPrefix("☑", kind),
+                _rendering.Measure.MeasureReplacementPrefix("99.", kind));
+
+            const double spacingAfterMarker = 4.0;
+
+            double leftLimit = DocsCanvas._padding + nestingIndentWidth;
+            double nominalRightX = leftLimit + spaceBeforeMarkerWidth + columnWidth;
+
+            // A number may reach back over the space before the marker; past that it would
+            // cross the margin, so the column grows to the right instead.
+            double markerRightX = nominalRightX;
+            if (kind == BlockKind.OrderedListItem)
+            {
+                double numberWidth = _rendering.Measure.MeasureReplacementPrefix(
+                    OrderedMarkerText(prefix), kind);
+                markerRightX = Math.Max(nominalRightX, leftLimit + numberWidth);
+            }
+
+            return new BlockVisualSpacing
+            {
+                MarkerStartX = markerRightX - (columnWidth / 2),
+                MarkerWidth = columnWidth,
+                MarkerRightX = markerRightX,
+                SpacingAfterMarker = spacingAfterMarker,
+                ContentStartX = markerRightX + spacingAfterMarker,
+            };
+        }
+
+        /// <summary>
+        /// The ink of an ordered marker - digits and delimiter, without the spaces the prefix
+        /// carries for layout. That is what has to fit the column and what gets right-aligned.
+        /// </summary>
+        internal static string OrderedMarkerText(string prefix) => prefix.Trim();
 
         internal double GetTextStartXForVisualLine(DocsCanvas.VisualLine vl)
         {

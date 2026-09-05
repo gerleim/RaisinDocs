@@ -176,6 +176,78 @@ public class ContinuationIndentTests
         contX.Should().Be(ownerX);
     }
 
+    // --- Wrapped lines: one block, word-wrapped over several visual lines ---
+
+    private static DocsCanvas CreateWrapped(string text, double wrapWidth)
+    {
+        // CreateCanvas lays out once at the canvas width, which builds the visual maps;
+        // re-wrapping narrow then reuses them.
+        var canvas = CreateCanvas(text, DocsCanvas.EditMode.Visual);
+        canvas.TestComputeLayoutAtWidth(wrapWidth);
+        return canvas;
+    }
+
+    private static List<int> VisualLinesOfBlock(DocsCanvas canvas, int block)
+    {
+        var indices = new List<int>();
+        for (int i = 0; i < canvas.TestVisualLineCount; i++)
+        {
+            if (canvas.TestGetVisualLineBlockIndex(i) == block)
+                indices.Add(i);
+        }
+        return indices;
+    }
+
+    private static void AssertWrappedLinesAlignWithFirst(string text)
+    {
+        var canvas = CreateWrapped(text, 200);
+
+        var lines = VisualLinesOfBlock(canvas, 0);
+        lines.Count.Should().BeGreaterThan(1, "the item has to wrap for this to test anything");
+
+        double firstX = canvas.TestGetVisualLineContentStartX(lines[0]);
+        firstX.Should().BeGreaterThan(DocsCanvas._padding, "the first line starts after the marker");
+
+        foreach (int vi in lines.Skip(1))
+            canvas.TestGetVisualLineContentStartX(vi).Should().Be(firstX);
+    }
+
+    [StaFact]
+    public void WrappedLine_UnorderedList_AlignsWithFirstLineContent()
+    {
+        AssertWrappedLinesAlignWithFirst("- How chart profitability is measured, and the note below it");
+    }
+
+    [StaFact]
+    public void WrappedLine_OrderedList_AlignsWithFirstLineContent()
+    {
+        AssertWrappedLinesAlignWithFirst("1. How chart profitability is measured, and the note below it");
+    }
+
+    [StaFact]
+    public void WrappedLine_OrderedListTwoDigit_AlignsWithFirstLineContent()
+    {
+        AssertWrappedLinesAlignWithFirst("10. How chart profitability is measured, and the note below it");
+    }
+
+    [StaFact]
+    public void WrappedLine_TaskList_AlignsWithFirstLineContent()
+    {
+        AssertWrappedLinesAlignWithFirst("- [ ] How chart profitability is measured, and the note below it");
+    }
+
+    [StaFact]
+    public void WrappedLine_Paragraph_StaysAtTheMargin()
+    {
+        var canvas = CreateWrapped("How chart profitability is measured, and the note below it", 200);
+
+        var lines = VisualLinesOfBlock(canvas, 0);
+        lines.Count.Should().BeGreaterThan(1);
+
+        foreach (int vi in lines)
+            canvas.TestGetVisualLineContentStartX(vi).Should().Be(DocsCanvas._padding);
+    }
+
     // --- Non-continuation: no alignment ---
 
     [StaFact]
