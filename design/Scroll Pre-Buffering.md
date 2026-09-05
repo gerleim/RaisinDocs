@@ -1,6 +1,6 @@
 # Scroll Pre-Buffering
 
-Status: **phases 1 to 3 done and measured** on `scroll-subpixel-offset`; phase 4 unblocked. Written 2026-09-01
+Status: **phases 1 to 3 done and measured** on `scroll-subpixel-offset`; **phase 4 written off**, see below. Written 2026-09-01
 after the wheel-scrolling work (`78cea16`..`40db97a`); status revised 2026-09-05.
 
 Phase 1 was prototyped and thrown away as intended. Phase 2 landed in `337e009` and then took
@@ -202,9 +202,10 @@ separately revertible.
 3. **Enable the fractional offset.** The payoff step, gated on phase 2 reaching full coverage.
    Measure the same speed-band table as above: the slow tail should look like every other
    band, and spacing must stay constant.
-4. **Revisit extrapolation.** Projecting the offset to the predicted presentation time was
+4. ~~**Revisit extrapolation.** Projecting the offset to the predicted presentation time was
    written and discarded along with the sub-pixel work; it only makes sense once motion is
-   genuinely sub-pixel. See below.
+   genuinely sub-pixel.~~ **Not doing this.** Phase 3 unblocked it, and then the measurement
+   removed the reason for it - see below.
 
 ## Related, not required
 
@@ -428,6 +429,26 @@ smoothing fast scrolling, and should not be blamed if fast scrolling stays uneve
 
 A minimap drag is not the yardstick it looks like, for the reason above: it is not animated at
 all. Judge the wheel against the log, not against a drag.
+
+### Phase 4 is unblocked and should not be built
+
+Extrapolation predicts where the view will be at the moment a frame is presented, instead of
+drawing where it is now. It is worth something only in proportion to the error between those two
+positions, and that error is now measured: `MsAnimationError` runs at a **median of 0.22-0.33 ms**
+per gesture on a quiet machine, against a 3.57 ms refresh period. Under a tenth of a frame.
+
+There is nothing there to recover. Extrapolation would replace a measured position with a
+predicted one, and a prediction that is wrong - at a direction change, at the start or end of a
+gesture, whenever a frame runs long - overshoots and then corrects, which is visible in a way
+that a tenth of a frame of lag is not. It would trade a real error of 0.3 ms for an occasional
+larger one.
+
+The condition in the original phase list ("only makes sense once motion is genuinely sub-pixel")
+was met. It was necessary and not sufficient: the other condition is that the residual error be
+large enough to be worth predicting, and it is not. **Unblocked here means available, not
+pending.** If a future capture on other hardware shows animation error at a substantial fraction
+of a frame, this is the note to come back to - and `design/Scroll Frame Pacing.md` describes the
+baseline set that would show it.
 
 ## Alternatives rejected
 
