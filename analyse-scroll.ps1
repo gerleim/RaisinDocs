@@ -96,10 +96,24 @@ function Get-Num { param($v)
     $d = 0.0; if ([double]::TryParse($v, [ref] $d)) { return $d } else { return $null }
 }
 
+<##
+ # Was this present ever put on the panel?
+ #
+ # Three column sets, because PresentMon renames these between builds and the 2.5.1 binary this
+ # harness pins emits none of the two that were originally coded for. It has
+ # MsBetweenDisplayChange, which is NA exactly when a present was never displayed.
+ #
+ # The old fallback returned true - "nothing to go on, assume it was shown" - which meant every
+ # capture taken with 2.5.1 reported 0.0% dropped unconditionally. That is not a conservative
+ # default, it is a fabricated one: it reports the good answer when it knows nothing. Several
+ # conclusions were drawn from it before anyone noticed, so it now refuses instead.
+ #>
 function Test-Shown { param($row)
-    if ($cShown)   { return (Get-Num $row.$cShown) -ne $null }
-    if ($cDropped) { return (Get-Num $row.$cDropped) -eq 0 }
-    return $true   # nothing to go on; treat every present as shown
+    if ($cShown)     { return (Get-Num $row.$cShown) -ne $null }
+    if ($cDropped)   { return (Get-Num $row.$cDropped) -eq 0 }
+    if ($cDisplay)   { return (Get-Num $row.$cDisplay) -ne $null }
+    throw "This capture has no column saying whether a present was displayed - looked for " +
+          "DisplayedTime, Dropped and MsBetweenDisplayChange. Refusing to report a dropped share."
 }
 
 function Show-Stats {
@@ -125,7 +139,7 @@ function Show-Stats {
     # refreshes instead of one is a hitch however even the presents were.
     $late = if ($disp.Count -and $dispMed -gt 0) { 100.0 * (@($disp | Where-Object { $_ -gt $dispMed * 1.5 }).Count) / $disp.Count } else { 0 }
 
-    Write-Host ("  {0,-9} {1,6:N2}s  presented {2,6:N0}/s  displayed {3,6:N0}/s  dropped {4,5:N1}%  displayInterval {5,5:N2}ms  over1.5x {6,5:N1}%" -f `
+    Write-Host ("  {0,-9} {1,6:N2}s  presented {2,6:N0}/s  displayed {3,6:N0}/s  unshown {4,5:N1}%  displayInterval {5,5:N2}ms  over1.5x {6,5:N1}%" -f `
         $Label, $span,
         $(if ($span -gt 0) { $n / $span } else { 0 }),
         $(if ($span -gt 0) { $shown / $span } else { 0 }),

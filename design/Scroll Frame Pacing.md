@@ -679,17 +679,18 @@ taken days apart measures the days as much as the panels.
 
 ### What to record
 
-| display | Hz | window | presented/s | displayed/s | dropped | 1-refresh | animation error p50 |
-|---|---|---|---|---|---|---|---|
-| DISPLAY8 | 60 | 1920x1032 | 63-73 | 63-73 | **0.0%** | 16.67 / 33.32 ms | **12.9 ms** |
-| DISPLAY7 | 100 | 1920x1032 | 91-101 | 91-101 | **0.0%** | 12.2-20.1 ms | **11.8 ms** |
-| DISPLAY9 | 144 | 1920x1032 | 132-141 | 132-141 | **0.0%** | 6.95 ms | **4.0 ms** |
-| DISPLAY6 | 280 | 1200x800 | 263-276 | 263-276 | **0.0%** | 3.57 ms | **0.26 ms** |
-| DISPLAY6 | 280 | 1920x1032 | 239-277 | 239-277 | **0.0%** | 3.57 ms | **0.28 ms** |
-| DISPLAY6 | 280 | 2560x1392 | 236-273 | 236-273 | **0.0%** | 3.57 ms | **0.78 ms** |
+| display | Hz | window | presented/s | never shown | 1-refresh | animation error p50 |
+|---|---|---|---|---|---|---|
+| DISPLAY8 | 60 | 1920x1032 | 63-73 | **34.9%** | 16.67 / 33.32 ms | **12.9 ms** |
+| DISPLAY7 | 100 | 1920x1032 | 91-101 | not recomputed | 12.2-20.1 ms | **11.8 ms** |
+| DISPLAY9 | 144 | 1920x1032 | 132-141 | **35.4%** | 6.95 ms | **4.0 ms** |
+| DISPLAY6 | 280 | 2560x1392 | 236-273 | **2.6%** | 3.57 ms | **0.78 ms** |
+
+The "never shown" column replaces a "dropped" one that read 0.0% everywhere. It was not measured -
+see the correction below.
 
 **What would be interesting.** Presented per second tracking the refresh rate on each panel, and
-dropped staying at zero. Anything else is the finding: presented rate *not* following the panel
+the unshown share staying low. Anything else is the finding: presented rate *not* following the panel
 means the pacing is locked to something other than the compositor; drops appearing only at low
 refresh rates means the work is not the constraint, the wait is; a size that degrades at constant
 refresh rate means per-frame cost scales with visible lines more steeply than it should.
@@ -967,3 +968,77 @@ each panel before anything else is concluded.
 
 The first thing to check on each remaining cell is the logged `composition frame median`, not the
 capture: it says what clock WPF chose, which is the independent variable this has turned into.
+
+## Correction, 2026-09-06: every "0.0% dropped" in this note was fabricated
+
+`analyse-scroll.ps1` decided whether a present had been displayed by looking for a `DisplayedTime`
+column (PresentMon 2.x) or a `Dropped` one (1.x). **The 2.5.1 binary this harness pins emits
+neither.** It has `MsBetweenDisplayChange`, which is `NA` exactly when a present was never shown.
+With no column matched, the function returned `true` - "nothing to go on, assume it was shown" -
+so every capture taken with the pinned tool reported a dropped share of 0.0% unconditionally.
+
+That is not a conservative default. It reports the good answer when it knows nothing, and it did
+so in every capture in this note taken after the move to 2.5.1. The function now throws instead.
+
+**What the figure actually is**, recomputed from `MsBetweenDisplayChange`:
+
+| capture | reported | actual, never shown |
+|---|---|---|
+| 280 Hz primary, full screen | 0.0% | **2.6%** |
+| 144 Hz | 0.0% | **35.4%** |
+| 60 Hz | 0.0% | **34.9%** |
+
+**What survives.** The claim that matters for the primary - that the 13% drop rate this note was
+built on is gone - survives: 13% to 2.6% is still the finding, and every other primary-panel
+metric was measured correctly. The claim that "nothing is dropped on any panel", used to argue the
+composition-clock fault was bounded, does not: **a third of our presents on a secondary panel were
+never shown.**
+
+The irony is that `get-presentmon.ps1` pins the tool version with a comment explaining that
+PresentMon renames columns between majors and an unpinned tool would silently change what a
+harness reads. The tool was pinned. The reader was not updated to match it, and the mismatch
+failed silently in the one direction nobody checks.
+
+## The throttle was the fault, not WPF
+
+`ScrollController` capped repaints at the panel's refresh rate - `_sinceDisplayFrame >=
+_displayPeriod` - on the reasoning that the panel cannot show more, so composing more is waste.
+That reasoning is wrong whenever WPF's composition clock is faster than the panel, which is every
+non-primary display here.
+
+WPF presents on its own clock whether or not we invalidated. Throttling content updates to 60/s
+while presents happen at 280/s means the panel picks up, at each vblank, a present carrying
+content of an age set by our accumulator's phase rather than by the vblank - stale by up to a full
+16.67 ms period. Not throttling means every present carries fresh content, and whatever the panel
+samples is at most one composition tick old.
+
+Measured on DISPLAY8, quiet machine, same window and document:
+
+| 60 Hz panel | throttle on | throttle off |
+|---|---|---|
+| animation error p50 | 12.87 ms | **1.27 ms** |
+| as a share of budget | 77% | **8%** |
+| intervals over 1.5x, sustained | 41-45% | **0.7-1.5%** |
+| display interval | 16.67 / 33.32 ms | **16.67 ms** |
+| presented | 63-73/s | 268-279/s |
+| never shown | 34.9% | 74.6% |
+
+**A tenth of the animation error, and it now matches the primary's 8% of budget.** The unshown
+share triples, which is the mechanism rather than a cost: presenting far more often than the panel
+refreshes is what guarantees a fresh frame at every vblank.
+
+**The throttle's original justification no longer holds.** It was added because painting at 320-357
+a second "collected 46 gen0, 20 gen1 and 17 gen2 collections" in 9.55 seconds. Re-measured now:
+**zero collections of any generation, with or without the throttle**, and `canvas-onrender` costs
+0.01 ms across 137 passes instead of 30. That justification was measured before per-line cached
+visuals, when every frame re-rasterised the world.
+
+**This also settles the presenter question.** The paced-presenter prototype was measured on the
+same panel for comparison: animation error median 1.20 ms, display interval 16.67 ms, 77.2% never
+shown - the same result the editor now reaches by deleting three lines. The presenter is not
+needed for this fault, and section C stays retired.
+
+**The one open cost is power.** Compositing 280 times a second to feed a 60 Hz panel is wasted
+work, which matters on a laptop even when it costs 0.01 ms a pass. A rate limit tied to something
+other than the display period - or applied only on battery - would be the place to look, and
+nothing here has measured it.
