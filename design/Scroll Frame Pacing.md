@@ -839,25 +839,35 @@ four frames at 280 Hz. **Investigated and fixed** - the minimap's bitmap cache i
 on a single line of movement, so it rebuilt about fifty times per drag instead of once. The same
 sweep records 3 rebuilds where it recorded 73, and none during a drag.
 
-**It changed nothing that can be seen, and that is the honest result.** Re-measured on the same
-window and panel:
+Re-measured on the same window and panel. The middle column is a capture taken with build
+processes running and is kept only to show why it is not quoted:
 
-| maximised, 280 Hz | before | after |
-|---|---|---|
-| rebuilds across the sweep | 73 | **3** |
-| wheel animation error p50 | 0.69-0.89 ms | 0.70-1.00 ms |
-| sustained intervals over 1.5x | 2.9-9.4% | 3.3-4.6% |
-| minimap drag animation error p50 | 7.88-10.55 ms | 8.46-11.23 ms |
+| maximised, 280 Hz | before (quiet) | after (contaminated) | after (quiet) |
+|---|---|---|---|
+| rebuilds across the sweep | 73 | 3 | **8** |
+| wheel animation error p50 | 0.69-0.89 ms | 0.70-1.00 ms | **0.60-0.67 ms** |
+| sustained intervals over 1.5x | 2.9-9.4% | 3.3-4.6% | **1.0-1.6%** |
+| minimap drag animation error p50 | 7.88-10.55 ms | 8.46-11.23 ms | 9.19-10.58 ms |
+| dropped | 0.0% | 0.0% | 0.0% |
 
-About 160 ms of glyph rasterisation per drag is genuinely gone and the drag paces identically.
-That follows from what the sweep already established: the drag runs at 108-110/s because that is
-how fast mouse messages arrive, not because rendering cannot keep up, so the rebuilds were being
-absorbed in slack that existed anyway. Calling 13.3 ms "nearly four frames" implied it was causing
-stutter. It was not.
+**The drag is unchanged and the sustained wheel scroll is about three times cleaner.**
 
-The value is headroom rather than smoothness - on a slower machine, a longer document, or a
-frame with more to do, that work stops being free. Worth having, and not worth crediting with
-anything visible.
+The drag result is the expected one: it runs at 108-110/s because that is how fast mouse messages
+arrive, not because rendering cannot keep up, so rebuilds during it were absorbed in slack that
+existed anyway.
+
+The wheel result was not expected, and is mechanically coherent. The 2.2 s sustained gestures were
+precisely the ones carrying `minimap-rebuild x50` before - roughly 150 ms of glyph rasterisation
+inside a 2200 ms gesture, on the same thread, now one or two rebuilds. Their share of long
+intervals falls from 2.9-9.4% to 1.0-1.6%.
+
+**How firmly to hold that.** One clean capture against one clean pre-fix capture, with a
+contaminated run in between sitting at 3.3-4.6% - so the direction is consistent and the size is
+not pinned down. The mechanism explains it and the numbers agree with the mechanism; a second
+clean pair would settle the magnitude.
+
+An earlier version of this note said the fix "changed nothing that can be seen". That was written
+from the contaminated capture and was too strong.
 
 ### Superseded: what the remaining cells were expected to test
 
