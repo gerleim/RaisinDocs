@@ -121,15 +121,34 @@ internal class ScrollController
     /// Seconds per refresh of the display this gesture is on; zero if it could not be read.
     /// </summary>
     /// <remarks>
-    /// WPF does not pace a window to the panel it occupies. Measured with the window on a
-    /// 60Hz display while the app had started on a 280Hz one: composition frames arrived at
-    /// 320 to 357 a second and we painted 279 of them, so four in five were composed and
-    /// discarded before the panel could show them - 9.55 seconds of scrolling that collected
-    /// 46 gen0, 20 gen1 and 17 gen2 collections.
+    /// Used to seed the frame delta and to tell the smoother what a frame is worth. It is
+    /// deliberately <b>not</b> used to throttle repaints, and that is worth explaining because it
+    /// used to be.
     ///
-    /// So the frame stamp does not carry the display's rate, and pacing to it alone is not
-    /// enough. Painting no more than once per refresh period costs nothing visible - the panel
-    /// cannot show more - and removes the rest.
+    /// The argument for throttling was that the panel cannot show more than one frame per refresh,
+    /// so composing more is waste. That is wrong whenever WPF composes faster than the panel
+    /// refreshes, which is every display here except the primary: WPF's composition clock is
+    /// derived from the primary, so a window on a 60Hz panel still gets ticks at 140-280 a second.
+    ///
+    /// WPF presents on that clock whether or not we invalidated. Updating content only every
+    /// 16.67ms while presents happen every 3.57ms means each vblank picks up a present whose
+    /// content age is set by the throttle's phase rather than by the vblank - stale by up to a
+    /// whole display period. Painting on every tick means every present carries fresh content, and
+    /// whatever the panel samples is at most one tick old.
+    ///
+    /// Measured on a 60Hz panel, same window and document: animation error median 12.87ms with the
+    /// throttle, 1.27ms without - 77% of the frame budget against 8%, which is what the primary
+    /// achieves. Intervals running long over sustained scrolls fell from 41-45% to 0.7-1.5%.
+    ///
+    /// The throttle's original justification was garbage collection: 320-357 paints a second once
+    /// cost 46 gen0, 20 gen1 and 17 gen2 collections in 9.55 seconds. That was measured before
+    /// lines were cached as visuals, when every frame re-rasterised the document. Re-measured now
+    /// it is zero collections of any generation either way, with OnRender at 0.01ms a pass.
+    ///
+    /// What it does cost is work: compositing 280 times a second to feed a 60Hz panel means about
+    /// three quarters of presents are never shown. That is the mechanism rather than a defect - it
+    /// is what guarantees a fresh frame at each vblank - but it is real power on a laptop, and
+    /// nobody has measured that.
     ///
     /// Read once per gesture, which is cheap and picks up the window having been dragged to
     /// another monitor since the last one.
@@ -151,9 +170,6 @@ internal class ScrollController
 
     private string _displayDevices = string.Empty;
     private int _displayHz;
-
-    /// <summary>Time since the last painted frame, against <see cref="_displayPeriod"/>.</summary>
-    private double _sinceDisplayFrame;
 
     internal double Offset
     {
@@ -210,7 +226,6 @@ internal class ScrollController
             _paintedOffset = _offset;
             _gestureSource = "wheel";
 
-            _sinceDisplayFrame = _displayPeriod;   // let the first frame paint at once
 
             CompositionTarget.Rendering += OnWheelFrame;
             _invalidateVisual();
@@ -424,25 +439,12 @@ internal class ScrollController
         // about 38 a second at 40px/s, which is exactly the stepping phase 3 exists to cure.
         // The renderer draws at a fractional offset now, so any movement changes the image.
         //
-        // Capped at the panel's own rate as well. This is a wall-clock interval, which was
-        // wrong when it was the only gate - a repaint landed on whichever free-running tick
-        // first crossed the threshold, at a different phase every time. Here it only decides
-        // which composed frames to skip, and the frame stamp still decides when to paint, so
-        // the phase comes from the compositor rather than from the accumulator. The period is
-        // subtracted rather than zeroed to keep the average exact, and never banks arrears,
-        // so a slow patch cannot be followed by a burst.
-        _sinceDisplayFrame += dt;
-        bool due = _displayPeriod <= 0 || _sinceDisplayFrame >= _displayPeriod;
-
+        // Every composition frame that moved gets a repaint. There is no second gate at the
+        // panel's refresh rate: one used to be here, and it was the cause of the animation error
+        // on every display except the primary. See the remarks on _displayPeriod.
         double moved = _offset - _paintedOffset;
-        if (Math.Abs(moved) > PaintEpsilon && (stop || (newFrame && due)))
+        if (Math.Abs(moved) > PaintEpsilon && (stop || newFrame))
         {
-            if (_displayPeriod > 0)
-            {
-                _sinceDisplayFrame -= _displayPeriod;
-                if (_sinceDisplayFrame > _displayPeriod) _sinceDisplayFrame = _displayPeriod;
-            }
-
             DiagPaint(moved);
             _paintedOffset = _offset;
             _invalidateVisual();
