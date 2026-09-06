@@ -803,8 +803,63 @@ locks. Every capture before today was taken in that one configuration, which is 
 the fault is invisible.
 
 **What would fix it** is pacing to the panel the window is on rather than to whatever clock
-`CompositionTarget.Rendering` offers. Whether WPF exposes that at all is an open question and no
-work has been done on it. Nothing here is a proposal yet.
+`CompositionTarget.Rendering` offers. That was investigated on 2026-09-06 and the answer is that
+the application cannot do it. See below.
+
+### Investigated: the app cannot fix this from the paint side
+
+The obvious suspicion was our own paint scheduling, and the raw capture seemed to support it. On
+the 60 Hz panel, presents are bimodal - p10 3.07 ms, median 10.55, p90 42.57, against a locked
+3.57 ms on the primary - and **438 of 939 presents are under 6 ms, 63% of them immediately after
+one over 20 ms**. A 16.67 ms paint gate cannot emit a 3 ms present, so the gate looked like the
+culprit: it took the first composition tick at or after the ideal time and carried the remainder,
+and a long tick - p99 on a secondary panel is 21-28 ms - leaves most of a period banked, making
+the next tick 7 ms later immediately due.
+
+That reasoning was wrong, and the experiment is what showed it. The gate was changed to paint on
+the tick *nearest* the ideal time, bounding the carry at half a tick so arrears cannot build.
+Re-measured on the same panel:
+
+| 60 Hz panel | before | nearest-tick gate |
+|---|---|---|
+| animation error p50 | 12.62 ms | 12.87 ms |
+| intervals over 1.5x | 38.3% | 45.0% |
+| presents under 6 ms | 47% | **50%** |
+
+Nothing moved, and the burst pattern the change was designed to remove got marginally worse. The
+primary was unaffected either way (0.60-0.69 ms error, 0.8-2.0% long), which is the expected
+no-op there since its tick period and display period are the same.
+
+**Why it could not have worked.** Our own paint log for the same run says the paints were regular
+all along:
+
+```
+wheel gesture 0.51s on \.\DISPLAY8 60Hz   65 ticks, 30 paints
+    composition frame median  7.14ms (140/s)  over 1.5x median 32.3%
+    paint interval      median 17.85ms  (56/s)  over 1.5x median  6.7%
+```
+
+We paint every 17.85 ms with 6.7% of intervals running long, while the compositor ticks at 32%
+irregularity and half the presents are under 6 ms. **Presents are not our paints.** WPF's render
+thread presents the swapchain on its own clock whether or not the content changed, so the paint
+gate decides when the *content* updates and has no influence on when a frame is presented. There
+was never a lever here.
+
+That is why the two clocks cannot be reconciled from inside the application: the content changes
+at the panel's rate, the presents happen at the primary's, and the panel displays whichever
+present is latest at each vblank - carrying content that is up to a full content-period stale. The
+mismatch is structural.
+
+**What is left, none of it cheap.** Presenting through a path we control rather than WPF's - which
+is section C of this note, retired on measurement for the primary and never evaluated for this
+case. Or waiting on the target output's vblank via DXGI and driving composition from that, which
+WPF gives no way to do. Both are large, and the fault only appears on a secondary monitor whose
+refresh rate is not a divisor of the primary's.
+
+**Recommendation: leave it.** It is measured, understood, attributable to WPF rather than to this
+code, and bounded - nothing is dropped on any panel, and the effect is invisible on the primary,
+where the application spends nearly all its time. The value of the investigation is knowing which
+of the three candidate causes it was, and that the paint gate is not it.
 
 ### The size axis: flat, then a step at full screen
 
