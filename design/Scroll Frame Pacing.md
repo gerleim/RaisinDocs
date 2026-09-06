@@ -1087,3 +1087,32 @@ vblank, at one paint per refresh instead of one per tick. Content stays at most 
 a quarter of the work. Unproven: that cross-thread signalling does not add jitter of its own, and
 that the phase stays stable enough to aim at over a long gesture. Neither is measured, and the
 current brute-force version is correct meanwhile.
+
+### Confirmed on every panel
+
+The throttle removal was measured on the 60Hz panel only. Repeated on the other two, maximised,
+quiet machine, same document:
+
+| panel | frame budget | animation error before | after | after, share of budget |
+|---|---|---|---|---|
+| DISPLAY8, 60 Hz | 16.67 ms | 12.87 ms | **1.27 ms** | 8% |
+| DISPLAY7, 100 Hz | 10.00 ms | 11.80 ms | **0.70 ms** | 7% |
+| DISPLAY9, 144 Hz | 6.94 ms | 4.00 ms | **0.40 ms** | 6% |
+| DISPLAY6, 280 Hz | 3.57 ms | 0.78 ms | 0.78 ms | 22% |
+
+**The fault is gone on all three non-primary panels**, by factors of ten to seventeen. Absolute
+animation error is now 0.4-1.3 ms everywhere. The three secondary panels come out *better* than
+the primary as a share of budget, for the unremarkable reason that the primary's budget is the
+smallest - the same absolute error against 3.57 ms is a larger fraction.
+
+Correcting a figure quoted earlier in this note: the primary was described as sitting at 8% of
+budget. That was from the 1200x800 runs, where animation error is 0.26 ms. Like for like at full
+screen it is 0.78 ms, which is 22%.
+
+**A caveat about `displayInterval` in this regime.** Once presents outnumber refreshes, the
+capture contains sub-refresh display-change events - pairs that sum to one period, 3.8+6.2 on the
+100Hz panel and 3.5+3.4 on the 144Hz one - and they drag the median below the panel period. The
+100Hz capture reports a 7.15 ms median where the panel is plainly 10.00 ms, and the largest single
+bucket is 10 ms at 34.1% of rows. The median displayInterval, and the over-1.5x share computed
+against it, are not trustworthy when the present rate is well above the refresh rate. Animation
+error is unaffected and is the metric to read here.
