@@ -1042,3 +1042,48 @@ needed for this fault, and section C stays retired.
 work, which matters on a laptop even when it costs 0.01 ms a pass. A rate limit tied to something
 other than the display period - or applied only on battery - would be the place to look, and
 nothing here has measured it.
+
+### The vblank phase is obtainable, so the wasteful version is not the end of it
+
+Removing the throttle buys correct output by brute force: paint on every composition tick so the
+content is never more than one tick old whenever the panel samples it. It costs about four times
+the presents - 65 a second against 275 during gestures on a 60Hz panel - of which roughly three
+quarters are never shown.
+
+The cheaper version needs to know when the panel's vblanks are, so one paint per refresh can be
+aimed at the tick just before one. Probed on 2026-09-06:
+
+| display | VidPnSourceId | measured interval | actual | spread |
+|---|---|---|---|---|
+| DISPLAY7 | 1 | 10.000 ms = 100.0 Hz | 100 Hz | 9.883-10.119 |
+| DISPLAY8 | 2 | 16.665 ms = 60.0 Hz | 60 Hz | 16.524-16.823 |
+| DISPLAY9 | 3 | 6.944 ms = 144.0 Hz | 144 Hz | 6.858-7.021 |
+| DISPLAY6 | 0 | 12.607 ms = 79.3 Hz | **280 Hz** | 9.930-16.732 |
+
+`D3DKMTOpenAdapterFromHdc` on a DC for the display name, then `D3DKMTCreateDevice`, then
+`D3DKMTWaitForVerticalBlankEvent` on the returned adapter, device and source. **Exact on the three
+panels that need it**, with min and max inside 1% of the median - so the phase is predictable, not
+merely the rate.
+
+DISPLAY6 reports nonsense, and the shape of the nonsense explains itself: 12.6 ms is about 3.5
+refreshes of 3.57 ms, ranging over roughly 2.8 to 4.7 of them. The waiting thread cannot be
+rescheduled every 3.57 ms, so it misses vblanks and times multiples. That is a thread-wakeup
+limit rather than an API one, and it falls on the one panel where the phase is not needed: on the
+primary the composition clock already equals the refresh, so every tick is the right tick.
+
+`DwmGetCompositionTimingInfo` is not a route. It fails with `0x88980090` even given a real window
+handle.
+
+**Two mistakes worth recording, because both produced confident wrong numbers rather than errors.**
+`LUID` is two 4-byte fields and aligns to 4; declaring it as a single `long` forced 8-byte
+alignment and pushed `VidPnSourceId` past the end of the struct, so every display reported source
+0. And `D3DKMTWaitForVerticalBlankEvent` needs a real device handle from `D3DKMTCreateDevice` -
+passing 0 returns success and waits on nothing in particular. Together they reported a plausible
+79 Hz for all four displays.
+
+**What this makes possible, and what is still unproven.** A thread waiting on the target panel's
+vblank gives the phase; the paint then goes on the composition tick immediately before the next
+vblank, at one paint per refresh instead of one per tick. Content stays at most one tick stale for
+a quarter of the work. Unproven: that cross-thread signalling does not add jitter of its own, and
+that the phase stays stable enough to aim at over a long gesture. Neither is measured, and the
+current brute-force version is correct meanwhile.

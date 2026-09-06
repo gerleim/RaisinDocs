@@ -130,11 +130,21 @@ internal class ScrollController
     /// refreshes, which is every display here except the primary: WPF's composition clock is
     /// derived from the primary, so a window on a 60Hz panel still gets ticks at 140-280 a second.
     ///
-    /// WPF presents on that clock whether or not we invalidated. Updating content only every
-    /// 16.67ms while presents happen every 3.57ms means each vblank picks up a present whose
-    /// content age is set by the throttle's phase rather than by the vblank - stale by up to a
-    /// whole display period. Painting on every tick means every present carries fresh content, and
-    /// whatever the panel samples is at most one tick old.
+    /// The panel samples whatever the newest present is at each vblank, and we do not know when its
+    /// vblanks are. Throttling to one paint per display period therefore aims blind: the paint
+    /// lands at whatever phase the accumulator happens to be in, so the content the panel picks up
+    /// is stale by anything from nothing to a whole 16.67ms period. Painting on every composition
+    /// tick removes the phase question by brute force - the newest content is then never more than
+    /// one tick old, whenever the panel looks.
+    ///
+    /// This is not free and is not the best available answer. Presents follow our invalidations
+    /// rather than arriving on a clock of WPF's own - measured, in a capture with 59 gaps longer
+    /// than 100ms and one of 540ms, which could not happen if WPF presented regardless - so paying
+    /// for freshness this way really does cost about four times the presents: 65 a second against
+    /// 275 during gestures, of which roughly three quarters are never shown.
+    ///
+    /// One paint per refresh aimed at the right phase would buy the same picture for a quarter of
+    /// the work. That needs the panel's vblank phase, which is why it was not built here.
     ///
     /// Measured on a 60Hz panel, same window and document: animation error median 12.87ms with the
     /// throttle, 1.27ms without - 77% of the frame budget against 8%, which is what the primary
@@ -145,10 +155,10 @@ internal class ScrollController
     /// lines were cached as visuals, when every frame re-rasterised the document. Re-measured now
     /// it is zero collections of any generation either way, with OnRender at 0.01ms a pass.
     ///
-    /// What it does cost is work: compositing 280 times a second to feed a 60Hz panel means about
-    /// three quarters of presents are never shown. That is the mechanism rather than a defect - it
-    /// is what guarantees a fresh frame at each vblank - but it is real power on a laptop, and
-    /// nobody has measured that.
+    /// What it costs is work. Our own OnRender is 0.01ms a pass, so about 0.3% of a core at this
+    /// rate - nothing. Unmeasured are WPF's render thread, the GPU work per frame, and DWM handling
+    /// 280 presents a second in order to discard 210 of them. On a laptop the battery is the part
+    /// that would bite.
     ///
     /// Read once per gesture, which is cheap and picks up the window having been dragged to
     /// another monitor since the last one.
