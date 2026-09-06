@@ -1152,3 +1152,43 @@ was moved to the panel after the swapchain had been created on the primary.
 **And the scale of what is left.** At 1000 px/s, 1.27 ms of animation error is about 1.3 pixels of
 positional wobble. The primary sits at 0.78 ms and always has. Closing the remaining gap means a
 second text renderer, for roughly a pixel.
+
+### Decided: the vblank-aligned throttle is not worth building here
+
+The brute-force version repaints on every composition tick and lets the panel take what it wants.
+That leaves about three quarters of presents unshown on a 60 Hz panel, and the obvious follow-up is
+to align a rate limit to the panel's vblank so the wasted three quarters are never drawn. The output
+would be identical - the frame shown is the one from the last tick before the vblank either way - so
+the whole case for it is the saving.
+
+**The saving was measured before building anything**, which is the discipline the original throttle
+did not get: it was added for GC pressure that later stopped being true, and removing it fixed a bug.
+
+`MsGPUBusy` summed over a capture on the 60 Hz panel, same window and document:
+
+| | frames | GPU busy |
+|---|---|---|
+| throttled to 60/s | 904 | **1.39%** |
+| every composition tick, 280/s | 3095 | **4.90%** |
+
+**About three and a half percent of one GPU.** It scales with frame count, as expected.
+
+Two columns that look like they answer the CPU side do not. `MsCPUBusy` sums to roughly 38,000 ms
+across a 38 s capture in *both* cases - exactly one core - because it partitions wall-clock time
+between frames rather than measuring work. `MsGPUTime` overlaps between frames and is not additive
+either. Only `MsGPUBusy` is summable here.
+
+**And on the primary there is no waste to recover.** The composition tick and the refresh period are
+both 3.57 ms, so painting every tick already *is* painting once per refresh - 2.6% unshown. The
+waste exists only while the window sits on a secondary display.
+
+So the trade is: a thread tracking vblank phase per display, re-acquired whenever the window changes
+monitor or a mode changes, surviving sleep and resume, and degrading under CPU load exactly when it
+is needed - to recover 3.5% of a GPU in a minority configuration. **Not worth it here.**
+
+**This is not a judgement on the mechanism.** In an application whose frames are expensive enough
+that painting every composition tick is not an option, the choice is not "brute force or aligned",
+it is "drifting gate or aligned" - and then alignment is the only correct arrangement available and
+the saving is beside the point. That case is `StockRaisin2/design/Composition Pacing Findings.md`.
+The mechanism is proven and documented in `RaisinLibraries/design/WPF Presentation Timing.md`;
+what is decided here is only that this application does not need it.

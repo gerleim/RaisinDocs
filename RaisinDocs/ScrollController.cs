@@ -165,10 +165,17 @@ internal class ScrollController
     /// lines were cached as visuals, when every frame re-rasterised the document. Re-measured now
     /// it is zero collections of any generation either way, with OnRender at 0.01ms a pass.
     ///
-    /// What it costs is work. Our own OnRender is 0.01ms a pass, so about 0.3% of a core at this
-    /// rate - nothing. Unmeasured are WPF's render thread, the GPU work per frame, and DWM handling
-    /// 280 presents a second in order to discard 210 of them. On a laptop the battery is the part
-    /// that would bite.
+    /// What it costs is work, and that has now been measured rather than guessed. On a 60Hz panel,
+    /// GPU busy time over a capture goes from 1.39% throttled to 4.90% painting every tick - about
+    /// three and a half percent of one GPU, scaling with frame count as expected. (PresentMon's
+    /// MsCPUBusy cannot answer the CPU side here: it sums to the wall clock in both cases, because
+    /// it partitions time between frames rather than measuring busy-ness.)
+    ///
+    /// That is not worth a vblank-tracking subsystem to recover, and there is a stronger reason
+    /// than the number. <b>On the primary there is no waste at all</b> - the composition tick and
+    /// the refresh period are both 3.57ms, so painting every tick already is painting once per
+    /// refresh. The waste exists only while the window is on a secondary display, which for a
+    /// desktop editor is the minority case. See design/Scroll Frame Pacing.md.
     ///
     /// Read once per gesture, which is cheap and picks up the window having been dragged to
     /// another monitor since the last one.
