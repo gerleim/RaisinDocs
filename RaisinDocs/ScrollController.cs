@@ -177,6 +177,11 @@ internal class ScrollController
     /// refresh. The waste exists only while the window is on a secondary display, which for a
     /// desktop editor is the minority case. See design/Scroll Frame Pacing.md.
     ///
+    /// The same cap used to be applied a second time, inside the shared SmoothScroller, which
+    /// drives keyboard and cursor-driven scrolling. Removing it here left that path still capped
+    /// and still carrying the fault, unmeasured because only the wheel was ever captured. It has
+    /// gone from there too, and SmoothScroller no longer has a DisplayPeriod to set.
+    ///
     /// Read once per gesture, which is cheap and picks up the window having been dragged to
     /// another monitor since the last one.
     /// </remarks>
@@ -192,7 +197,6 @@ internal class ScrollController
         _displayDevices = devices;
         _displayHz = refreshRate;
         _displayPeriod = refreshRate > 0 ? 1.0 / refreshRate : 0;
-        _smoother.DisplayPeriod = _displayPeriod;
     }
 
     private string _displayDevices = string.Empty;
