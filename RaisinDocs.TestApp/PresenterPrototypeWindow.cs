@@ -1,3 +1,5 @@
+using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
@@ -46,11 +48,31 @@ public sealed class PresenterPrototypeWindow : Window
 
     private readonly SwapChainHost _host = new();
 
-    public PresenterPrototypeWindow()
+    /// <summary>
+    /// Opens the prototype, optionally on a named display.
+    /// </summary>
+    /// <param name="device">
+    /// A display device name such as <c>\.\DISPLAY8</c>, matched loosely. The window is positioned
+    /// before it is shown, so the child HWND - and therefore the swapchain - is created on that
+    /// panel rather than moved onto it afterwards.
+    ///
+    /// That distinction is the whole point of this parameter. A swapchain created on the primary
+    /// and dragged to another panel may keep pacing to the one it was born on, which would make a
+    /// capture taken that way say nothing about whether a swapchain can track a panel of its own.
+    /// </param>
+    public PresenterPrototypeWindow(string? device = null)
     {
         Title = "Paced presenter prototype (throwaway)";
         Width = 1200;
         Height = 800;
+
+        if (!string.IsNullOrEmpty(device) && FindDisplay(device) is { } found)
+        {
+            WindowStartupLocation = WindowStartupLocation.Manual;
+            Left = found.X + 40;
+            Top = found.Y + 40;
+            _host.TargetDevice = found.Name;
+        }
         Background = new SolidColorBrush(Color.FromRgb(0x1E, 0x1E, 0x1E));
 
         var grid = new Grid();
@@ -70,6 +92,60 @@ public sealed class PresenterPrototypeWindow : Window
 
         _host.Stats += s => Dispatcher.BeginInvoke(() => _readout.Text = s);
         Closed += (_, _) => _host.Stop();
+    }
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    private struct DISPLAY_DEVICE
+    {
+        public int cb;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)] public string DeviceName;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)] public string DeviceString;
+        public uint StateFlags;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)] public string DeviceID;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)] public string DeviceKey;
+    }
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    private struct DEVMODE
+    {
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)] public string dmDeviceName;
+        public ushort dmSpecVersion, dmDriverVersion, dmSize, dmDriverExtra;
+        public uint dmFields;
+        public int dmPositionX, dmPositionY;
+        public uint dmDisplayOrientation, dmDisplayFixedOutput;
+        public short dmColor, dmDuplex, dmYResolution, dmTTOption, dmCollate;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)] public string dmFormName;
+        public ushort dmLogPixels;
+        public uint dmBitsPerPel, dmPelsWidth, dmPelsHeight, dmDisplayFlags, dmDisplayFrequency;
+        public uint dmICMMethod, dmICMIntent, dmMediaType, dmDitherType;
+        public uint dmReserved1, dmReserved2, dmPanningWidth, dmPanningHeight;
+    }
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern bool EnumDisplayDevices(string? device, uint index, ref DISPLAY_DEVICE info, uint flags);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern bool EnumDisplaySettings(string device, int mode, ref DEVMODE dm);
+
+    /// <summary>Top-left of a display whose device name contains <paramref name="fragment"/>.</summary>
+    /// <remarks>
+    /// Done here with two user32 calls rather than through WinForms, because switching this project
+    /// to <c>UseWindowsForms</c> makes Application, Brush and several other types ambiguous across
+    /// files that have nothing to do with this test.
+    /// </remarks>
+    private static (string Name, int X, int Y)? FindDisplay(string fragment)
+    {
+        for (uint i = 0; ; i++)
+        {
+            var dd = new DISPLAY_DEVICE { cb = Marshal.SizeOf<DISPLAY_DEVICE>() };
+            if (!EnumDisplayDevices(null, i, ref dd, 0)) break;
+            if ((dd.StateFlags & 0x1) == 0) continue;   // not attached to the desktop
+            if (!dd.DeviceName.Contains(fragment, StringComparison.OrdinalIgnoreCase)) continue;
+
+            var dm = new DEVMODE { dmSize = (ushort)Marshal.SizeOf<DEVMODE>() };
+            if (!EnumDisplaySettings(dd.DeviceName, -1, ref dm)) continue;
+            return (dd.DeviceName, dm.dmPositionX, dm.dmPositionY);
+        }
+        return null;
     }
 
     /// <summary>Hosts a child HWND that we present to ourselves, outside WPF's compositor.</summary>
@@ -96,6 +172,29 @@ public sealed class PresenterPrototypeWindow : Window
         private double _nudge;
 
         public event Action<string>? Stats;
+
+        /// <summary>Display the window was asked to open on, for the record beside the result.</summary>
+        public string TargetDevice { get; set; } = string.Empty;
+
+        private string _boundTo = string.Empty;
+
+        private static readonly string LogPath = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "RaisinDocs", "presenter-binding.log");
+
+        /// <summary>
+        /// Writes to a file as well as the on-screen readout, because the readout can only be read
+        /// by looking at it and a measurement run is not watched.
+        /// </summary>
+        private static void Log(string line)
+        {
+            try
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(LogPath)!);
+                File.AppendAllText(LogPath, $"{DateTime.Now:HH:mm:ss.fff}  {line}{Environment.NewLine}");
+            }
+            catch { /* a diagnostic that throws is worse than one that is missing */ }
+        }
 
         protected override HandleRef BuildWindowCore(HandleRef parent)
         {
@@ -168,7 +267,9 @@ public sealed class PresenterPrototypeWindow : Window
                 if (report >= 0.5 && gaps.Count > 20)
                 {
                     report = 0;
-                    Stats?.Invoke(Summarise(gaps));
+                    var summary = Summarise(gaps);
+                    Stats?.Invoke(summary);
+                    Log(summary.Split('\n')[0] + $"   bound to {_boundTo}");
                     gaps.Clear();
                 }
             }
@@ -221,6 +322,21 @@ public sealed class PresenterPrototypeWindow : Window
             _swapChain = sc1.QueryInterface<IDXGISwapChain2>();
             // One frame in flight, so we render against the freshest possible state.
             _swapChain.MaximumFrameLatency = 1;
+
+            // Which output does DXGI think this swapchain belongs to? This is the question the whole
+            // binding test exists to answer, and it can be asked directly rather than inferred from
+            // a present rate. Present(1, ...) syncs to this output's vblank, so if it names the
+            // primary while the window sits on another panel, the swapchain is pacing to the wrong
+            // display and no amount of measurement downstream will say why.
+            try
+            {
+                using var output = _swapChain.GetContainingOutput();
+                _boundTo = output.Description.DeviceName;
+            }
+            catch (Exception ex) { _boundTo = $"(GetContainingOutput failed: {ex.GetType().Name})"; }
+
+            Log($"asked for : {(TargetDevice.Length > 0 ? TargetDevice : "(no monitor requested)")}");
+            Log($"bound to  : {_boundTo}");
 
             CreateTarget();
         }

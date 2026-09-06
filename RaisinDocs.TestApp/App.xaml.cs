@@ -17,9 +17,21 @@ public partial class App : Application
         // left in the scratch pad is worth the one argument.
         string? file = e.Args.FirstOrDefault(a => !a.StartsWith("--"));
 
+        // Not a WPF window at all: a bare Win32 popup owning the swapchain, which is the
+        // arrangement with the best chance of independent flip. Runs, then shuts the app down.
+        if (e.Args.Contains("--flipfs"))
+        {
+            int secs = 30;
+            var sArg = e.Args.FirstOrDefault(a => a.StartsWith("--seconds="));
+            if (sArg != null) int.TryParse(sArg.AsSpan("--seconds=".Length), out secs);
+            FullscreenFlipWindow.Run(MonitorArg(e.Args), secs);
+            Shutdown();
+            return;
+        }
+
         Window window =
             e.Args.Contains("--scrollproto") ? new ScrollPrototypeWindow() :
-            e.Args.Contains("--presenter") ? new PresenterPrototypeWindow() :
+            e.Args.Contains("--presenter") ? new PresenterPrototypeWindow(MonitorArg(e.Args)) :
             e.Args.Contains("--textpresenter") ? TextPresenterWindow.Open(file, AutoSpeed(e.Args)) :
             e.Args.Contains("--seam") ? SeamComparisonWindow.Open(file) :
             e.Args.Contains("--replay") ? ReplayWindow.Open(file) :
@@ -45,6 +57,10 @@ public partial class App : Application
         MainWindow = window;
         window.Show();
     }
+
+    /// <summary>--monitor=NAME, as a display device name fragment such as DISPLAY8.</summary>
+    private static string? MonitorArg(string[] args)
+        => args.FirstOrDefault(a => a.StartsWith("--monitor="))?["--monitor=".Length..];
 
     /// <summary>--speed=N sets the text presenter sweep speed in pixels a second.</summary>
     private static double AutoSpeed(string[] args)
