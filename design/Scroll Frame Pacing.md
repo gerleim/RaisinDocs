@@ -861,13 +861,38 @@ precisely the ones carrying `minimap-rebuild x50` before - roughly 150 ms of gly
 inside a 2200 ms gesture, on the same thread, now one or two rebuilds. Their share of long
 intervals falls from 2.9-9.4% to 1.0-1.6%.
 
-**How firmly to hold that.** One clean capture against one clean pre-fix capture, with a
-contaminated run in between sitting at 3.3-4.6% - so the direction is consistent and the size is
-not pinned down. The mechanism explains it and the numbers agree with the mechanism; a second
-clean pair would settle the magnitude.
+### Pinned down: two clean pairs
 
-An earlier version of this note said the fix "changed nothing that can be seen". That was written
-from the contaminated capture and was too strong.
+The pre-fix binary was rebuilt from the parent of the fix commit and re-measured, so both sides
+have two clean captures on the same window, panel and document. Sustained 2.2 s wheel gestures -
+the ones that carried 50 rebuilds each - three per run:
+
+| | intervals over 1.5x | animation error p50 |
+|---|---|---|
+| pre-fix, run A | 9.4 / 2.9 / 4.6% | 0.80 / 0.72 / 0.75 ms |
+| pre-fix, run B | 9.7 / 1.2 / 1.3% | 0.73 / 0.64 / 0.64 ms |
+| post-fix, run A | 1.5 / 1.1 / 1.0% | 0.62 / 0.61 / 0.62 ms |
+| post-fix, run B | 1.8 / 2.2 / 1.2% | 0.64 / 0.65 / 0.63 ms |
+
+**What the fix removes is the tail, not the median.** Pre-fix, one gesture per run ran at 9.4-9.7%
+while the others sat between 1.2% and 4.6%. Post-fix, no gesture in either run exceeds 2.2%. The
+pre-fix best case and the post-fix typical case are the same thing - the difference is entirely
+that the bad gesture stops happening.
+
+Both bad gestures were the **first** sustained scroll of their run, which is where the minimap has
+furthest to travel from a cold cache. That is where fifty rebuilds hurt and where one does not.
+
+Medians across the six samples each way: 3.75% to 1.35% of intervals running long, and 0.73 ms to
+0.63 ms of animation error. The animation-error ranges barely overlap (0.64-0.80 against
+0.61-0.65), so that 0.1 ms is consistent - and it is 3% of a 3.57 ms budget, which is small.
+
+**So: "about three times cleaner" holds for the median and understates what actually changed.**
+The honest claim is that the worst gesture in a session went from ~9.5% to ~2%, and that an
+already-good typical gesture improved slightly.
+
+Two earlier versions of this passage were wrong in opposite directions - "changed nothing that can
+be seen", written from a capture with build processes running, and then a 3x claim from a single
+pair. Four clean captures is what it took.
 
 ### Superseded: what the remaining cells were expected to test
 
