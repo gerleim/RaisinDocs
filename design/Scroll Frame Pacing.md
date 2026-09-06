@@ -1043,7 +1043,7 @@ work, which matters on a laptop even when it costs 0.01 ms a pass. A rate limit 
 other than the display period - or applied only on battery - would be the place to look, and
 nothing here has measured it.
 
-### The vblank phase is obtainable, so the wasteful version is not the end of it
+### The vblank phase is obtainable, which would make the same result cheaper
 
 Removing the throttle buys correct output by brute force: paint on every composition tick so the
 content is never more than one tick old whenever the panel samples it. It costs about four times
@@ -1081,12 +1081,12 @@ alignment and pushed `VidPnSourceId` past the end of the struct, so every displa
 passing 0 returns success and waits on nothing in particular. Together they reported a plausible
 79 Hz for all four displays.
 
-**What this makes possible, and what is still unproven.** A thread waiting on the target panel's
-vblank gives the phase; the paint then goes on the composition tick immediately before the next
-vblank, at one paint per refresh instead of one per tick. Content stays at most one tick stale for
-a quarter of the work. Unproven: that cross-thread signalling does not add jitter of its own, and
-that the phase stays stable enough to aim at over a long gesture. Neither is measured, and the
-current brute-force version is correct meanwhile.
+**What this makes possible.** A thread waiting on the target panel's vblank gives the phase; the
+paint then goes on the composition tick immediately before the next vblank, at one paint per
+refresh instead of one per tick - **the same displayed frames for a quarter of the work.** Not a
+smoothness improvement: see "The floor" below for why it cannot be one. Unproven: that
+cross-thread signalling adds no jitter of its own, and that the phase stays stable enough to aim
+at over a long gesture. Neither is measured, and the current version is correct meanwhile.
 
 ### Confirmed on every panel
 
@@ -1116,3 +1116,39 @@ capture contains sub-refresh display-change events - pairs that sum to one perio
 bucket is 10 ms at 34.1% of rows. The median displayInterval, and the over-1.5x share computed
 against it, are not trustworthy when the present rate is well above the refresh rate. Animation
 error is unaffected and is the metric to read here.
+
+### The floor, and what the vblank phase is actually worth
+
+Two things this note has implied and should state outright.
+
+**WPF will never present on a non-primary monitor's schedule, and knowing its vblank time does not
+change that.** WPF puts pixels on screen only on its composition ticks - 3.57 ms apart here, taken
+from the primary. A 60 Hz panel refreshes every 16.67 ms, which is 4.67 ticks, not a whole number
+of them. So the last tick before any given vblank falls somewhere between 0 and 3.57 ms before it,
+and where it falls drifts every frame. Learning the exact vblank time does not let us move a tick.
+The best any scheme can do inside WPF is "the tick just before the vblank", and the content shown
+is therefore 0-3.57 ms stale, varying.
+
+That is the floor, and the measurements sit on it: 1.27 ms median error at 60 Hz is what a uniform
+0-3.57 ms spread produces.
+
+**So the phase-aligned throttle buys no accuracy at all.** The frame the panel displays is the one
+from the last tick before its vblank - and that is the same frame whether we painted only on that
+tick or on all four leading up to it. Aiming with the vblank phase does not change a single
+displayed pixel. It stops us painting the three frames that were never going to be shown.
+
+It is worth doing for work and battery, on a laptop especially. It is not worth doing for
+smoothness, and an earlier passage in this note describing the brute-force version as "not the end
+of it" implied otherwise.
+
+**Below the floor is outside WPF, and the prototype did not demonstrate getting there.** Presenting
+through our own swapchain, timed to the target output's vblank, is the only way to place a frame
+closer to the refresh than one composition tick. The paced presenter is the candidate - but
+measured on the 60 Hz panel it presented at 280/s, the primary's rate rather than the panel's, and
+landed at 1.20 ms against our 1.27 ms. **It hit the same floor.** Whether a swapchain properly
+bound to that output would beat it is unknown; that capture carried the confound that the window
+was moved to the panel after the swapchain had been created on the primary.
+
+**And the scale of what is left.** At 1000 px/s, 1.27 ms of animation error is about 1.3 pixels of
+positional wobble. The primary sits at 0.78 ms and always has. Closing the remaining gap means a
+second text renderer, for roughly a pixel.

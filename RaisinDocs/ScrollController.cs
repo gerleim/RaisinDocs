@@ -137,14 +137,24 @@ internal class ScrollController
     /// tick removes the phase question by brute force - the newest content is then never more than
     /// one tick old, whenever the panel looks.
     ///
-    /// This is not free and is not the best available answer. Presents follow our invalidations
+    /// This is not free, though it is as accurate as anything can be here. Presents follow our
+    /// invalidations
     /// rather than arriving on a clock of WPF's own - measured, in a capture with 59 gaps longer
     /// than 100ms and one of 540ms, which could not happen if WPF presented regardless - so paying
     /// for freshness this way really does cost about four times the presents: 65 a second against
     /// 275 during gestures, of which roughly three quarters are never shown.
     ///
-    /// One paint per refresh aimed at the right phase would buy the same picture for a quarter of
-    /// the work. That needs the panel's vblank phase, which is why it was not built here.
+    /// One paint per refresh aimed at the right phase would buy <b>the same picture</b> for a
+    /// quarter of the work - a saving in work and battery, and nothing else. The frame the panel
+    /// displays is the one from the last composition tick before its vblank, and that is the same
+    /// frame whether we painted only on that tick or on all four. The vblank phase is obtainable
+    /// (see design/Scroll Frame Pacing.md) but it buys no accuracy, so it was not built here.
+    ///
+    /// The accuracy floor is the tick grid itself, and it cannot be improved from inside WPF.
+    /// 16.67ms is 4.67 ticks of 3.57ms, not a whole number, so the last tick before a vblank falls
+    /// anywhere from 0 to 3.57ms before it and drifts every frame. The 1.27ms median error
+    /// measured on that panel is what a spread of that width produces. Going below it means
+    /// presenting outside WPF entirely, at the panel's own vblank.
     ///
     /// Measured on a 60Hz panel, same window and document: animation error median 12.87ms with the
     /// throttle, 1.27ms without - 77% of the frame budget against 8%, which is what the primary
