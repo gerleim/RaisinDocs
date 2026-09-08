@@ -84,199 +84,27 @@ public partial class DocsCanvas
 
     // --- Visual mode: rectangular table selection ---
 
+    // Bodies live in TableSelectionManager; these forward so the call sites in
+    // DocsCanvas, Input, RenderingContext and IEditingServices stay put.
+
     private string GetTableRectSelectedText(
         (int StartCol, int EndCol, int StartBlock, int EndBlock, TableInfo Table) rect)
-    {
-        var lines = new List<string>();
-        for (int b = rect.StartBlock; b <= rect.EndBlock; b++)
-        {
-            var parsed = _parsedBlocks![b];
-            if (parsed.IsTableSeparator || parsed.TableRow == null) continue;
-
-            string blockText = _doc.GetBlockText(b);
-            var cells = parsed.TableRow.Cells;
-            var cellTexts = new List<string>();
-            for (int c = rect.StartCol; c <= rect.EndCol && c < cells.Count; c++)
-            {
-                var cell = cells[c];
-                cellTexts.Add(blockText.Substring(cell.Start, cell.Length).Trim());
-            }
-            lines.Add("| " + string.Join(" | ", cellTexts) + " |");
-        }
-        return string.Join("\r\n", lines);
-    }
+        => _tableSelection.GetTableRectSelectedText(rect);
 
     private void ClearTableRectCells(
         (int StartCol, int EndCol, int StartBlock, int EndBlock, TableInfo Table) rect)
-    {
-        for (int b = rect.StartBlock; b <= rect.EndBlock; b++)
-        {
-            var parsed = _parsedBlocks![b];
-            if (parsed.IsTableSeparator || parsed.TableRow == null) continue;
-
-            var cells = parsed.TableRow.Cells;
-            for (int c = Math.Min(rect.EndCol, cells.Count - 1); c >= rect.StartCol; c--)
-            {
-                var cell = cells[c];
-                _doc.RemoveTextAt(b, cell.Start, cell.Length);
-                _doc.InsertTextAt(b, cell.Start, "  ");
-            }
-        }
-        _doc.CollapseSelection();
-    }
+        => _tableSelection.ClearTableRectCells(rect);
 
     private void MoveCursorToRectStart(
         (int StartCol, int EndCol, int StartBlock, int EndBlock, TableInfo Table) rect)
-    {
-        for (int b = rect.StartBlock; b <= rect.EndBlock; b++)
-        {
-            var parsed = _parsedBlocks![b];
-            if (parsed.IsTableSeparator || parsed.TableRow == null) continue;
-            if (rect.StartCol < parsed.TableRow.Cells.Count)
-            {
-                var cell = parsed.TableRow.Cells[rect.StartCol];
-                string blockText = _doc.GetBlockText(b);
-                var (trimStart, _) = cell.TrimContent(blockText);
-                _doc.CursorBlock = b;
-                _doc.CursorOffset = trimStart;
-                _doc.CollapseSelection();
-                return;
-            }
-        }
-    }
+        => _tableSelection.MoveCursorToRectStart(rect);
 
     private bool TryPasteIntoTableCells(string pasteText)
-    {
-        if (!IsVisual || _parsedBlocks == null) return false;
-
-        var cursorParsed = _parsedBlocks[_doc.CursorBlock];
-        if (cursorParsed.Table == null || cursorParsed.TableRow == null) return false;
-
-        var pasteLines = pasteText.Replace("\r\n", "\n").Replace("\r", "\n")
-            .Split('\n', StringSplitOptions.RemoveEmptyEntries);
-        if (pasteLines.Length == 0) return false;
-
-        foreach (var line in pasteLines)
-        {
-            var trimmed = line.Trim();
-            if (!trimmed.StartsWith('|') || !trimmed.EndsWith('|'))
-                return false;
-        }
-
-        // A pasted markdown table (e.g. converted from an Excel copy) carries an alignment
-        // separator that is syntax, not data — it must not land in a destination cell.
-        pasteLines = [.. pasteLines.Where(l => !MarkdownParser.IsSeparatorRow(l.Trim(), out _))];
-        if (pasteLines.Length == 0) return false;
-
-        int startCol = FindCellIndexAtOffset(cursorParsed.TableRow.Cells, _doc.CursorOffset);
-        int destBlock = _doc.CursorBlock;
-        int lastBlock = destBlock;
-        int lastOffset = _doc.CursorOffset;
-
-        foreach (var line in pasteLines)
-        {
-            while (destBlock < _doc.BlockCount)
-            {
-                var dp = _parsedBlocks[destBlock];
-                if (dp.Table == cursorParsed.Table && dp.TableRow != null && !dp.IsTableSeparator)
-                    break;
-                destBlock++;
-            }
-            if (destBlock >= _doc.BlockCount) break;
-
-            var destParsed = _parsedBlocks[destBlock];
-            if (destParsed.Table != cursorParsed.Table || destParsed.TableRow == null) break;
-
-            var srcCells = ParseTableLineCells(line);
-            var destCells = destParsed.TableRow.Cells;
-
-            int lastColThisRow = -1;
-            for (int i = srcCells.Count - 1; i >= 0; i--)
-            {
-                int destCol = startCol + i;
-                if (destCol >= destCells.Count) continue;
-
-                var dc = destCells[destCol];
-                string replacement = " " + srcCells[i] + " ";
-                _doc.RemoveTextAt(destBlock, dc.Start, dc.Length);
-                _doc.InsertTextAt(destBlock, dc.Start, replacement);
-
-                if (lastColThisRow < 0)
-                {
-                    lastColThisRow = destCol;
-                    lastBlock = destBlock;
-                }
-            }
-            if (lastColThisRow >= 0)
-            {
-                string updated = _doc.GetBlockText(destBlock);
-                int pipe = 0;
-                int pos = 0;
-                while (pos < updated.Length && pipe <= lastColThisRow)
-                {
-                    if (updated[pos] == '|') pipe++;
-                    pos++;
-                }
-                int cellEnd = updated.IndexOf('|', pos);
-                lastOffset = cellEnd >= 0 ? cellEnd : updated.Length;
-            }
-
-            destBlock++;
-        }
-
-        _doc.CursorBlock = lastBlock;
-        _doc.CursorOffset = lastOffset;
-        _doc.CollapseSelection();
-        return true;
-    }
-
-    private static List<string> ParseTableLineCells(string line)
-    {
-        var cells = new List<string>();
-        var trimmed = line.Trim();
-        if (trimmed.StartsWith('|')) trimmed = trimmed[1..];
-        if (trimmed.EndsWith('|')) trimmed = trimmed[..^1];
-        foreach (var part in trimmed.Split('|'))
-            cells.Add(part.Trim());
-        return cells;
-    }
-
-    private static int FindCellIndexAtOffset(IReadOnlyList<TableCellInfo> cells, int offset)
-    {
-        for (int c = 0; c < cells.Count; c++)
-        {
-            if (offset <= cells[c].Start + cells[c].Length)
-                return c;
-        }
-        return cells.Count - 1;
-    }
+        => _tableSelection.TryPasteIntoTableCells(pasteText);
 
     internal (int StartCol, int EndCol, int StartBlock, int EndBlock, TableInfo Table)?
         TryGetTableRectSelection()
-    {
-        if (!IsVisual || _parsedBlocks == null || !_doc.HasSelection) return null;
-
-        var anchorParsed = _parsedBlocks[_doc.AnchorBlock];
-        var cursorParsed = _parsedBlocks[_doc.CursorBlock];
-
-        if (anchorParsed.Table == null || cursorParsed.Table == null) return null;
-        if (anchorParsed.Table != cursorParsed.Table) return null;
-        if (anchorParsed.TableRow == null || cursorParsed.TableRow == null) return null;
-
-        int anchorCol = FindCellIndexAtOffset(anchorParsed.TableRow.Cells, _doc.AnchorOffset);
-        int cursorCol = FindCellIndexAtOffset(cursorParsed.TableRow.Cells, _doc.CursorOffset);
-
-        if (_doc.AnchorBlock == _doc.CursorBlock && anchorCol == cursorCol)
-            return null;
-
-        return (
-            Math.Min(anchorCol, cursorCol),
-            Math.Max(anchorCol, cursorCol),
-            Math.Min(_doc.AnchorBlock, _doc.CursorBlock),
-            Math.Max(_doc.AnchorBlock, _doc.CursorBlock),
-            anchorParsed.Table
-        );
-    }
+        => _tableSelection.TryGetTableRectSelection();
 
     internal double CursorXInTableRow(int blockIndex, ParsedBlock parsed, double[] colWidths, int cursorOffset)
         => _tableRenderer.CursorXInTableRow(blockIndex, parsed, colWidths, cursorOffset);
