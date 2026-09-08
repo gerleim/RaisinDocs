@@ -80,11 +80,23 @@ public class FormattingToggleTests
 
     // --- Block prefix toggle: selection should include added prefixes ---
 
+    // These verify that toggling a block prefix across a selection prefixes every block in it and
+    // grows the selection to cover the prefix it just added.
+    //
+    // Each needs a selection genuinely spanning two blocks, which constrains the setup. Two plain
+    // adjacent lines will not do: they are lazy continuations of a single paragraph and merge into
+    // one block, which is what these tests used to assume and no longer holds. Separating them
+    // with a blank line does keep them apart, but the blank block sits inside the selection and is
+    // prefixed along with the rest - "- ", or "2. " renumbering the line after it - which is not
+    // the behaviour under test. So each starts from blocks that are not paragraphs at all, and
+    // therefore never merge: headings, or list items when the toggle under test is the heading.
+
     [StaFact]
     public void ToggleBulletList_MultiBlock_SelectionIncludesFirstPrefix()
     {
-        var canvas = CreateCanvas("one\ntwo");
-        canvas.TestSetSelection(0, 0, 1, 3);
+        var canvas = CreateCanvas("# one\n# two");
+        canvas.TestBlockCount.Should().Be(2);
+        canvas.TestSetSelection(0, 0, 1, 5);
 
         canvas.ToggleBulletList();
 
@@ -99,8 +111,9 @@ public class FormattingToggleTests
     [StaFact]
     public void ToggleTaskList_MultiBlock_SelectionIncludesFirstPrefix()
     {
-        var canvas = CreateCanvas("one\ntwo");
-        canvas.TestSetSelection(0, 0, 1, 3);
+        var canvas = CreateCanvas("# one\n# two");
+        canvas.TestBlockCount.Should().Be(2);
+        canvas.TestSetSelection(0, 0, 1, 5);
 
         canvas.ToggleTaskList();
 
@@ -115,8 +128,9 @@ public class FormattingToggleTests
     [StaFact]
     public void ToggleOrderedList_MultiBlock_SelectionIncludesFirstPrefix()
     {
-        var canvas = CreateCanvas("one\ntwo");
-        canvas.TestSetSelection(0, 0, 1, 3);
+        var canvas = CreateCanvas("# one\n# two");
+        canvas.TestBlockCount.Should().Be(2);
+        canvas.TestSetSelection(0, 0, 1, 5);
 
         canvas.ToggleOrderedList();
 
@@ -131,8 +145,10 @@ public class FormattingToggleTests
     [StaFact]
     public void ToggleHeading_MultiBlock_SelectionIncludesFirstPrefix()
     {
-        var canvas = CreateCanvas("one\ntwo");
-        canvas.TestSetSelection(0, 0, 1, 3);
+        // Bullets rather than headings here, since toggling a heading onto headings removes them.
+        var canvas = CreateCanvas("- one\n- two");
+        canvas.TestBlockCount.Should().Be(2);
+        canvas.TestSetSelection(0, 0, 1, 5);
 
         canvas.ToggleHeading(2);
 
@@ -164,17 +180,21 @@ public class FormattingToggleTests
     [StaFact]
     public void ToggleBulletList_RemovePrefix_SelectionCoversFullLines()
     {
+        // Taking the bullets off leaves two plain adjacent lines, which are one paragraph - so the
+        // two list items legitimately become a single block here. The selection still has to cover
+        // all of what was selected, which now means spanning that whole merged block.
         var canvas = CreateCanvas("- one\n- two");
+        canvas.TestBlockCount.Should().Be(2);
         canvas.TestSetSelection(0, 0, 1, 5);
 
         canvas.ToggleBulletList();
 
-        canvas.TestGetBlockText(0).Should().Be("one");
-        canvas.TestGetBlockText(1).Should().Be("two");
+        canvas.TestBlockCount.Should().Be(1);
+        canvas.TestGetBlockText(0).Should().Be("one\ntwo");
         canvas.TestAnchorBlock.Should().Be(0);
         canvas.TestAnchorOffset.Should().Be(0);
-        canvas.TestCursorBlock.Should().Be(1);
-        canvas.TestCursorOffset.Should().Be(3);
+        canvas.TestCursorBlock.Should().Be(0);
+        canvas.TestCursorOffset.Should().Be(7);
     }
 
     // --- Pending style-off toggle (no selection, cursor inside styled run) ---
