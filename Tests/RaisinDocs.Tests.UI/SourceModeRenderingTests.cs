@@ -117,12 +117,18 @@ public class SourceModeRenderingTests
     }
 
     [StaFact]
-    public void SourceMode_ListItemWithHardBreak_CursorSkipsVisualSpace()
+    public void SourceMode_ListItemWithHardBreak_CursorMovesToContinuationLine()
     {
-        // BUG #2: Cursor should NEVER be in visual-only indentation
-        // Visual display shows: "- foo\\\n  bar" (visual indent for alignment)
-        // But source has: "- foo\\\nbar" (no leading spaces)
-        // Cursor should skip visual space and land on 'b'
+        // Source mode draws every line flush at the text column - "bar" is not indented under
+        // "foo" the way visual mode indents a continuation. That indentation was removed
+        // deliberately (7a88ae9): the source has no leading spaces on "bar", so showing any
+        // would be visual-only space the cursor could fall into.
+        //
+        // With no indent there is nothing to skip, and the two keys answer different questions.
+        // Right moves one position, so it lands on the first character of the next line. Down
+        // keeps the caret's horizontal pixel position and finds whichever character sits at that
+        // x, which in a proportional font is not the same character index: the width of "- " is
+        // just past "b", so it lands on "a".
         var markdown = "- foo\\\nbar";
         var canvas = new DocsCanvas();
         canvas.SetText(markdown);
@@ -131,33 +137,32 @@ public class SourceModeRenderingTests
         canvas.Arrange(new Rect(0, 0, CanvasWidth, CanvasHeight));
         canvas.TestComputeLayout();
 
-        // Block 0: "- foo\\"
-        // Block 1: "bar" (visually indented but no leading spaces in source)
+        // Block 0: "- foo\\"   Block 1: "bar", drawn flush, no leading spaces in source
+        canvas.TestBlockCount.Should().Be(2);
 
         // Position cursor at end of first line
         canvas.TestSetCursor(0, 7); // After the "\\"
 
-        // Move right - should go to block 1, offset 0 (the 'b')
         canvas.TestNavigate(Key.Right);
 
         var blockAfterRight = canvas.TestCursorBlock;
         var offsetAfterRight = canvas.TestCursorOffset;
         _output.WriteLine($"After Right from end of line 1: block={blockAfterRight}, offset={offsetAfterRight}");
 
-        // Cursor should be at start of "bar" (block 1, offset 0)
         blockAfterRight.Should().Be(1, "Right should move to next line");
-        offsetAfterRight.Should().Be(0, "Cursor should be at 'b', not in visual space");
+        offsetAfterRight.Should().Be(0, "Right lands on the first character, 'b'");
 
         // Also test moving down from first line
-        canvas.TestSetCursor(0, 2); // On the dash "-"
+        canvas.TestSetCursor(0, 2); // 'f' of "foo"
         canvas.TestNavigate(Key.Down);
 
         var blockAfterDown = canvas.TestCursorBlock;
         var offsetAfterDown = canvas.TestCursorOffset;
         _output.WriteLine($"After Down from line 1: block={blockAfterDown}, offset={offsetAfterDown}");
 
-        // Cursor should land on 'b', not in visual space
         blockAfterDown.Should().Be(1);
-        offsetAfterDown.Should().Be(0, "Down should land on 'b', not visual space");
+        offsetAfterDown.Should().Be(1,
+            "Down keeps the caret's x, and the width of \"- \" falls inside 'a', not on 'b' - "
+            + "landing on 'r' instead would mean matching character index rather than x");
     }
 }
