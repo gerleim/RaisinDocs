@@ -315,7 +315,7 @@ internal class VisualModeManager
             }
             if (_content.ParsedBlocks != null && _doc.Document.CursorBlock < _content.ParsedBlocks.Count && IsTableRow(_content.ParsedBlocks[_doc.Document.CursorBlock]))
                 ClampCursorToTableCell();
-            else
+            else if (!CrossToPreviousBlockFromHiddenStart())
             {
                 SkipCursorOverHiddenRanges(forward: false);
                 CrossToPreviousBlockIfHiddenStart();
@@ -515,6 +515,37 @@ internal class VisualModeManager
             }
         }
         return false;
+    }
+
+    /// <summary>
+    /// Moving left into a block whose leading characters are hidden - a heading's <c>#</c>, a list
+    /// marker, an opening <c>**</c> - lands the cursor inside that hidden run. There is nowhere
+    /// visible to its left in this block, so it belongs at the end of the previous one.
+    /// </summary>
+    /// <remarks>
+    /// This has to run before <see cref="SkipCursorOverHiddenRanges"/>, which resolves the same
+    /// position by bouncing the cursor *forward* to the first visible offset. That bounce is the
+    /// right answer only when there is no previous block to cross into; when there is one it
+    /// returns the cursor to where it started and Left appears to do nothing.
+    /// </remarks>
+    /// <returns>True if the cursor crossed, meaning the caller should not skip or cross again.</returns>
+    private bool CrossToPreviousBlockFromHiddenStart()
+    {
+        if (_doc.Document.CursorBlock == 0) return false;
+        if (_visual.VisualMaps == null || _doc.Document.CursorBlock >= _visual.VisualMaps.Count) return false;
+        if (_content.ParsedBlocks != null && IsTableRow(_content.ParsedBlocks[_doc.Document.CursorBlock])) return false;
+
+        // Every offset from the block start through the cursor must be hidden, so that there is
+        // genuinely no visible position to the cursor's left within this block.
+        var map = _visual.VisualMaps[_doc.Document.CursorBlock];
+        for (int i = 0; i <= _doc.Document.CursorOffset; i++)
+            if (!map.IsHidden(i)) return false;
+
+        _doc.Document.CursorBlock--;
+        _doc.Document.CursorOffset = _doc.Document.GetBlockLength(_doc.Document.CursorBlock);
+        EnsureCursorOnVisibleBlock(preferForward: false);
+        SkipCursorOverHiddenRanges(forward: false);
+        return true;
     }
 
     private void CrossToPreviousBlockIfHiddenStart()

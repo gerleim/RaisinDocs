@@ -61,6 +61,40 @@ public class VisualModeNavigationTests
         canvas.TestCursorOffset.Should().Be(5); // end of "plain"
     }
 
+    // The stuck-cursor bug behind Left_SkipsHeadingPrefix was not specific to headings: any block
+    // whose leading characters are hidden trapped the cursor at its first visible offset, because
+    // the backward hidden-range skip bounced it forward again instead of crossing blocks.
+
+    [StaFact]
+    public void Left_SkipsBulletPrefix()
+    {
+        var canvas = CreateCanvas("plain\n- item");
+        canvas.TestSetCursor(1, 2); // 'i' of item
+        canvas.TestNavigate(Key.Left);
+        canvas.TestCursorBlock.Should().Be(0);
+        canvas.TestCursorOffset.Should().Be(5); // end of "plain"
+    }
+
+    [StaFact]
+    public void Left_SkipsBlockquotePrefix()
+    {
+        var canvas = CreateCanvas("plain\n> quoted");
+        canvas.TestSetCursor(1, 2); // 'q' of quoted
+        canvas.TestNavigate(Key.Left);
+        canvas.TestCursorBlock.Should().Be(0);
+        canvas.TestCursorOffset.Should().Be(5); // end of "plain"
+    }
+
+    [StaFact]
+    public void Left_AtStartOfFirstBlock_StaysPutRatherThanEnteringHiddenPrefix()
+    {
+        var canvas = CreateCanvas("# Heading");
+        canvas.TestSetCursor(0, 2); // 'H', the leftmost visible position in the document
+        canvas.TestNavigate(Key.Left);
+        canvas.TestCursorBlock.Should().Be(0);
+        canvas.TestCursorOffset.Should().Be(2); // no previous block, so no crossing
+    }
+
     // --- Right arrow skips hidden ranges ---
 
     [StaFact]
