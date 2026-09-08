@@ -1582,6 +1582,47 @@ public class DocumentTests
     }
 
     [Fact]
+    public void ToggleBlockPrefix_BlockquoteWrapsHeadingRatherThanReplacingIt()
+    {
+        var doc = CreateDoc("# heading");
+        doc.CursorBlock = 0;
+        doc.CursorOffset = 4;
+        doc.CollapseSelection();
+
+        doc.ToggleBlockPrefix(0, "> ");
+
+        doc.GetBlockText(0).Should().Be("> # heading");
+        doc.CursorOffset.Should().Be(6);
+    }
+
+    [Fact]
+    public void ToggleBlockPrefix_BlockquoteWrapsBulletRatherThanReplacingIt()
+    {
+        var doc = CreateDoc("- item");
+        doc.CursorBlock = 0;
+        doc.CursorOffset = 2;
+        doc.CollapseSelection();
+
+        doc.ToggleBlockPrefix(0, "> ");
+
+        doc.GetBlockText(0).Should().Be("> - item");
+    }
+
+    [Fact]
+    public void ToggleBlockPrefix_BlockquoteOffAHeadingLeavesTheHeading()
+    {
+        var doc = CreateDoc("> # heading");
+        doc.CursorBlock = 0;
+        doc.CursorOffset = 6;
+        doc.CollapseSelection();
+
+        doc.ToggleBlockPrefix(0, "> ");
+
+        doc.GetBlockText(0).Should().Be("# heading");
+        doc.CursorOffset.Should().Be(4);
+    }
+
+    [Fact]
     public void ToggleBlockPrefix_ReplacesHeadingWithBullet()
     {
         var doc = CreateDoc("# heading");

@@ -328,6 +328,8 @@ public class Document
         }
     }
 
+    internal const string BlockquotePrefix = "> ";
+
     public void ToggleBlockPrefix(int blockIndex, string prefix)
     {
         var text = _blocks[blockIndex].ToString();
@@ -338,11 +340,17 @@ public class Document
         }
         else
         {
-            var existingPrefix = GetBlockPrefix(text);
-            if (existingPrefix != null)
+            // Leaf prefixes (heading, bullet, ordered, task) are mutually exclusive, so applying
+            // one replaces whatever is there. A blockquote is a container instead - it wraps the
+            // block it is applied to, so `> # Heading` keeps the heading rather than demoting it.
+            if (prefix != BlockquotePrefix)
             {
-                _blocks[blockIndex].Remove(0, existingPrefix.Length);
-                AdjustPositionsAfterPrefixChange(blockIndex, -existingPrefix.Length);
+                var existingPrefix = GetBlockPrefix(text);
+                if (existingPrefix != null)
+                {
+                    _blocks[blockIndex].Remove(0, existingPrefix.Length);
+                    AdjustPositionsAfterPrefixChange(blockIndex, -existingPrefix.Length);
+                }
             }
             _blocks[blockIndex].Insert(0, prefix);
             AdjustPositionsAfterPrefixChange(blockIndex, prefix.Length);
