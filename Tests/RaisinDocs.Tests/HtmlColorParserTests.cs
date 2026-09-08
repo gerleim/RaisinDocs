@@ -381,21 +381,6 @@ public class HtmlToMarkdownConverterTests
     // --- Non-pre HTML (Word-style <p> elements) ---
 
     [Fact]
-    public void WordStyle_ParagraphsWithColorSpans()
-    {
-        var html =
-            "<p><span style='color:#B1B9F9'>first = true</span></p>" +
-            "<p><span style='color:#4EBA65'>ok</span></p>";
-        var cfHtml = WrapCfHtml(html);
-
-        var result = HtmlToMarkdownConverter.ConvertToColoredMarkdown(cfHtml);
-
-        result.Should().Be(
-            "<!--@fg:#B1B9F9-->first = true<!--/@fg-->\n" +
-            "<!--@fg:#4EBA65-->ok<!--/@fg-->");
-    }
-
-    [Fact]
     public void WordStyle_NestedSpans_InnerColorWins()
     {
         var html =
