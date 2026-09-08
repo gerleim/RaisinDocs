@@ -19,6 +19,18 @@ public class RemoveBackgroundTests
         return canvas;
     }
 
+    /// <summary>
+    /// The markdown the canvas would save, with line endings normalised.
+    /// </summary>
+    /// <remarks>
+    /// Tests that remove a background spanning several source lines assert on this rather than on
+    /// TestGetBlockText. Removing the tags can leave adjacent paragraph lines behind, and those are
+    /// folded into a single block by lazy continuation merging, so which block a line ends up in is
+    /// not stable. The emitted markdown is what these tests actually care about. Blocks join with
+    /// CRLF while merged continuations keep an LF, hence the normalisation.
+    /// </remarks>
+    private static string Markdown(DocsCanvas canvas) => canvas.GetText().Replace("\r\n", "\n");
+
     [StaFact]
     public void SelectionHasBackground_ReturnsFalse_WhenNoSelection()
     {
@@ -350,8 +362,7 @@ public class RemoveBackgroundTests
         var canvas = CreateCanvas("<!--@div bg:green-->\naaa\n<!--/@div-->\n<!--@bg:red-->bbb<!--/@bg-->");
         canvas.TestSetSelection(1, 0, 3, 28);
         canvas.RemoveBackgroundFromSelection();
-        canvas.TestGetBlockText(0).Should().Be("aaa");
-        canvas.TestGetBlockText(1).Should().Be("bbb");
+        Markdown(canvas).Should().Be("aaa\nbbb");
     }
 
     [StaFact]
@@ -364,8 +375,7 @@ public class RemoveBackgroundTests
         canvas.TestSetSelection(1, 4, 3, 3);
         canvas.RemoveBackgroundFromSelection();
         // "aaa " keeps green bg, "bbb" cleared. "ccc ddd" had no bg.
-        canvas.TestGetBlockText(0).Should().Be("<!--@bg:green-->aaa <!--/@bg-->bbb");
-        canvas.TestGetBlockText(1).Should().Be("ccc ddd");
+        Markdown(canvas).Should().Be("<!--@bg:green-->aaa <!--/@bg-->bbb\nccc ddd");
     }
 
     // --- Edge case: nested bg spans ---
@@ -406,8 +416,7 @@ public class RemoveBackgroundTests
         var canvas = CreateCanvas("<!--@div bg:green-->\naaa\n<!--/@div-->\n<!--@bg:red-->bbb<!--/@bg-->");
         canvas.TestSetSelection(1, 0, 3, 28);
         canvas.RemoveBackgroundFromSelection();
-        canvas.TestGetBlockText(0).Should().Be("aaa");
-        canvas.TestGetBlockText(1).Should().Be("bbb");
+        Markdown(canvas).Should().Be("aaa\nbbb");
     }
 
     [StaFact]
@@ -417,9 +426,7 @@ public class RemoveBackgroundTests
         var canvas = CreateCanvas("<!--@div bg:red-->\naaa\n<!--/@div-->\ntext\n<!--@div bg:blue-->\nbbb\n<!--/@div-->");
         canvas.TestSetSelection(1, 0, 5, 3);
         canvas.RemoveBackgroundFromSelection();
-        canvas.TestGetBlockText(0).Should().Be("aaa");
-        canvas.TestGetBlockText(1).Should().Be("text");
-        canvas.TestGetBlockText(2).Should().Be("bbb");
+        Markdown(canvas).Should().Be("aaa\ntext\nbbb");
     }
 
     [StaFact]
@@ -433,7 +440,7 @@ public class RemoveBackgroundTests
         canvas.TestSetSelection(1, 4, 3, 17);
         canvas.RemoveBackgroundFromSelection();
         // "aaa " keeps green, "bbb" cleared, "ccc" cleared, " ddd" keeps red
-        canvas.TestGetBlockText(0).Should().Be("<!--@bg:green-->aaa <!--/@bg-->bbb");
-        canvas.TestGetBlockText(1).Should().Be("ccc<!--@bg:red--> ddd<!--/@bg-->");
+        Markdown(canvas).Should()
+            .Be("<!--@bg:green-->aaa <!--/@bg-->bbb\nccc<!--@bg:red--> ddd<!--/@bg-->");
     }
 }
