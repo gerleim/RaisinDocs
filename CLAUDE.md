@@ -160,6 +160,26 @@ splitting them across services broke `PendingBoldOff_InsideBold_TypingSplitsRun`
 multi-block task-list toggle. Extracting formatting means first giving that state an owner;
 it is not a mechanical move.
 
+`DocsCanvas.VisualMode.cs` went from 702 to 477 lines in the same pass. **TableSelectionManager**
+(236 lines) took the rectangular table selection — deriving the rect, reading it, clearing it,
+and pasting table-shaped text into it. That split cleanly because the rectangle is never stored:
+`TryGetTableRectSelection` recomputes it from anchor and cursor on every call, which is why
+rendering, input and editing can each ask for it without coordinating. Thin forwarders stay on
+DocsCanvas so its ~25 call sites and the four `Test*` hooks are untouched.
+
+The rest of the reduction was deletion. `DrawSelection` had lost its last caller when the content
+layer took over rendering, which made `DrawJoinedSelection` and `DrawTableRectSelection` dead by
+reachability; `DrawBlockquoteBar` and three `VisualModeManager` forwarders were already shadowed
+by copies that callers reach instead.
+
+**What remains in VisualMode.cs is a fork, not a leftover.** `RenderingContext` holds its own
+private copy of every drawing method still in the file — `DrawTaskListCheckbox`, `DrawListBullet`,
+`DrawOrderedListNumber`, `ApplyInlineStylesVisual` and the rest — and `OnRenderCore` is just
+`_renderingContext.OnRender(dc)`, so the screen never executes VisualMode.cs's versions. Their only
+live consumer is the print path, and the copies have already drifted (RenderingContext's take a
+`softBreaks` parameter these do not). Reconciling them is the print rework, not a decomposition;
+see the note that print is deferred.
+
 ### Data flow and rendering pipeline
 
 The render pipeline is: **Document → MarkdownParser → BlockVisualMap → cached line visuals**.
