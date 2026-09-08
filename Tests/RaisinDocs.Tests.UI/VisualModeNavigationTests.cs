@@ -44,11 +44,14 @@ public class VisualModeNavigationTests
     [StaFact]
     public void Left_CrossesBlockWhenStartIsHidden()
     {
-        var canvas = CreateCanvas("alma\n**345**");
-        canvas.TestSetCursor(1, 2); // '3' in block 1
+        // A heading rather than a plain line, so the two stay separate blocks: adjacent plain
+        // lines are one paragraph and merge, leaving no boundary for this test to cross.
+        var canvas = CreateCanvas("# alma\n**345**");
+        canvas.TestBlockCount.Should().Be(2);
+        canvas.TestSetCursor(1, 2); // '3' in block 1, after the hidden **
         canvas.TestNavigate(Key.Left);
         canvas.TestCursorBlock.Should().Be(0);
-        canvas.TestCursorOffset.Should().Be(4); // end of "alma"
+        canvas.TestCursorOffset.Should().Be(6); // end of "# alma"
     }
 
     [StaFact]
@@ -118,11 +121,16 @@ public class VisualModeNavigationTests
     [StaFact]
     public void Right_CrossesBlockWhenEndIsHidden()
     {
-        var canvas = CreateCanvas("**345**\nalma");
+        // A heading rather than a plain line, so the two stay separate blocks: adjacent plain
+        // lines are one paragraph and merge, leaving no boundary for this test to cross. Landing
+        // on offset 2 also shows the crossing skips the hidden "# " at the start of the block
+        // arrived in, rather than parking the cursor inside it.
+        var canvas = CreateCanvas("**345**\n# alma");
+        canvas.TestBlockCount.Should().Be(2);
         canvas.TestSetCursor(0, 4); // '5' in block 0
         canvas.TestNavigate(Key.Right);
         canvas.TestCursorBlock.Should().Be(1);
-        canvas.TestCursorOffset.Should().Be(0); // start of "alma"
+        canvas.TestCursorOffset.Should().Be(2); // 'a' of "alma", past the hidden "# "
     }
 
     // --- End key lands on visible position ---

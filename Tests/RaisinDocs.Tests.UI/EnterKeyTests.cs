@@ -99,15 +99,19 @@ public class EnterKeyTests
     [StaFact]
     public void Enter_AtEndOfLine_WithNextLine_InsertsNewParagraph()
     {
+        // "asd" and "123" are one paragraph in one block, so this presses Enter at the end of the
+        // paragraph's first line rather than between two blocks. The markdown that comes out is
+        // unchanged from when they were separate blocks - "asd", a blank line, the empty line the
+        // cursor is left on, then "123" - but how it is packed into blocks is not, so assert on
+        // the text. The trailing blank line and "123" stay in one block, the cursor at its start.
         var canvas = CreateCanvas("asd\n123");
+        canvas.TestBlockCount.Should().Be(1);
         canvas.TestSetCursor(0, 3); // end of "asd"
         canvas.TestHandleEnter();
 
-        canvas.TestGetBlockText(0).Should().Be("asd");
-        canvas.TestGetBlockText(1).Should().Be("");
-        canvas.TestGetBlockText(2).Should().Be(""); // cursor here
-        canvas.TestGetBlockText(3).Should().Be("123");
+        canvas.GetText().Replace("\r\n", "\n").Should().Be("asd\n\n\n123");
         canvas.TestCursorBlock.Should().Be(2);
+        canvas.TestCursorOffset.Should().Be(0);
     }
 
     // --- Ctrl+Enter (soft break) ---
