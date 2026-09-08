@@ -53,12 +53,6 @@ public partial class DocsCanvas
     private void ClampCursorBeforeTrailingHidden()
         => _visualModeManager.ClampCursorBeforeTrailingHidden();
 
-    private void SkipBackspacePastHiddenVisual()
-        => _visualModeManager.SkipBackspacePastHiddenVisual();
-
-    private void SkipDeletePastHiddenVisual()
-        => _visualModeManager.SkipDeletePastHiddenVisual();
-
     private void EnsureCursorOnVisibleBlock(bool? preferForward = null)
         => _visualModeManager.EnsureCursorOnVisibleBlock(preferForward);
 
@@ -76,9 +70,6 @@ public partial class DocsCanvas
     private void HandleRightVisual(bool shift)
         => _visualModeManager.HandleRightVisual(shift);
 
-    private bool HandleTableArrow(ParsedBlock parsed, bool forward)
-        => _visualModeManager.HandleTableArrow(parsed, forward);
-
     private void HandleHomeVisual()
         => _visualModeManager.HandleHomeVisual();
 
@@ -92,38 +83,6 @@ public partial class DocsCanvas
         => _visualModeManager.HandleDownVisual();
 
     // --- Visual mode: rectangular table selection ---
-
-    private void DrawTableRectSelection(DrawingContext dc, double effectiveScroll,
-        int startCol, int endCol, int startBlock, int endBlock, TableInfo table)
-    {
-        if (!_tableColumnWidths.TryGetValue(table, out var colWidths)) return;
-
-        double xStart = 0;
-        for (int c = 0; c < startCol && c < colWidths.Length; c++)
-            xStart += colWidths[c];
-        double xEnd = xStart;
-        for (int c = startCol; c <= endCol && c < colWidths.Length; c++)
-            xEnd += colWidths[c];
-
-        double viewTop = effectiveScroll;
-        double viewBottom = effectiveScroll + ActualHeight;
-
-        for (int i = 0; i < _visualLines.Count; i++)
-        {
-            var vl = _visualLines[i];
-            if (vl.BlockIndex < startBlock || vl.BlockIndex > endBlock) continue;
-            var parsed = _parsedBlocks![vl.BlockIndex];
-            if (parsed.IsTableSeparator) continue;
-
-            double lineY = _lineYPositions[i];
-            double lineH = GetEffectiveLineHeight(vl);
-            if (lineY + lineH < viewTop) continue;
-            if (lineY > viewBottom) break;
-
-            dc.DrawRectangle(_palette.Selection, null,
-                new Rect(_padding + xStart, lineY - effectiveScroll, xEnd - xStart, lineH));
-        }
-    }
 
     private string GetTableRectSelectedText(
         (int StartCol, int EndCol, int StartBlock, int EndBlock, TableInfo Table) rect)
@@ -686,17 +645,5 @@ public partial class DocsCanvas
 
         dc.DrawText(ft, new Point(x, screenY));
         return x + ft.WidthIncludingTrailingWhitespace;
-    }
-
-    private void DrawBlockquoteBar(DrawingContext dc, double lineY, double effectiveScroll)
-    {
-        var aligner = new ContentBlockAligner(_padding, _measure.ListIndent);
-        double barX = aligner.GetBlockquoteBarX();
-        double barWidth = 3;
-        double barY = lineY - effectiveScroll;
-        double barHeight = _measure.GetLineHeight(BlockKind.Blockquote);
-        var barBrush = new SolidColorBrush(Color.FromArgb(80, 150, 150, 150));
-        barBrush.Freeze();
-        dc.DrawRectangle(barBrush, null, new Rect(barX, barY, barWidth, barHeight));
     }
 }
