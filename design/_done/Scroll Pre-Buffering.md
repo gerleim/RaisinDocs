@@ -5,7 +5,7 @@ after the wheel-scrolling work (`78cea16`..`40db97a`); status revised 2026-09-05
 
 Phase 1 was prototyped and thrown away as intended. Phase 2 landed in `337e009` and then took
 a long detour: caching the lines cost ClearType, and getting it back needed everything the
-canvas painted beneath the text moved into the line - see `design/Opaque Line Visuals.md`.
+canvas painted beneath the text moved into the line - see `design/_done/Opaque Line Visuals.md`.
 That work finished the coverage this design's phase 3 was gated on. See *Coverage, rechecked*
 below before starting it.
 
@@ -255,7 +255,7 @@ that is also what stops it from being tried as a fix for the slow tail.
 
 ## Coverage, rechecked
 
-Checked 2026-09-05, after `design/Opaque Line Visuals.md` finished moving everything into the
+Checked 2026-09-05, after `design/_done/Opaque Line Visuals.md` finished moving everything into the
 line. The phase 3 gate is met for body text, structurally rather than by a count.
 
 **No line can bypass the cache.** `DrawLineContent` has exactly one call site, inside

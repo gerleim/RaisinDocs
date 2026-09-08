@@ -1162,7 +1162,7 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider, IDocsC
         InvalidateVisual();
     }
 
-    // --- Hosted visual layers (see design/done/Scroll Pre-Buffering.md) ---
+    // --- Hosted visual layers (see design/_done/Scroll Pre-Buffering.md) ---
 
     /// <summary>
     /// Line content, rendered once per line into cached child visuals and moved as a whole by
@@ -1184,7 +1184,7 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider, IDocsC
     /// </summary>
     /// <remarks>
     /// Both were toggles once - F9 switched to drawing straight into OnRender, F8 turned the
-    /// fill off - kept while design/done/Opaque Line Visuals.md moved the backgrounds, selection and
+    /// fill off - kept while design/_done/Opaque Line Visuals.md moved the backgrounds, selection and
     /// search highlights into the line one phase at a time. With that done there is one path
     /// and one appearance, and a key that quietly makes the editor slower and softer is a
     /// hazard rather than a diagnostic. The notes record what the comparison measured.

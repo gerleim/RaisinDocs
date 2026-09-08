@@ -19,7 +19,7 @@ That design is defensible for a theme switch or a zoom. It is not for a keystrok
 Reasoning about it produced the wrong answer twice, and both times measurement corrected it.
 
 **First wrong turn: the visual cache.** The opaque line visuals work
-(`design/Opaque Line Visuals.md`) had just made cached line bitmaps wider, and the obvious
+(`design/_done/Opaque Line Visuals.md`) had just made cached line bitmaps wider, and the obvious
 story was that typing re-rasterises every visible line. It does - `EnsureLineVisualCache`
 drops the lot on any `RenderVersion` bump - but that is microseconds against what layout was
 costing, and fixing it would have shaved nothing off a 78 ms keystroke.

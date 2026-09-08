@@ -111,7 +111,7 @@ public partial class DocsCanvas
         /// geometry: a column separator crosses every row, and decomposing it per row would be
         /// all of the seam risk and none of the benefit. The lines never cross a glyph - a
         /// column is the widest cell plus twice the 8 DIP cell padding - so drawing them over
-        /// the text is not drawing them over anything. See design/done/Opaque Line Visuals.md.
+        /// the text is not drawing them over anything. See design/_done/Opaque Line Visuals.md.
         ///
         /// Positions are snapped to the same whole-pixel grid the row tints now use, or the
         /// borders drift up to a pixel from the fills they are supposed to bound. The half

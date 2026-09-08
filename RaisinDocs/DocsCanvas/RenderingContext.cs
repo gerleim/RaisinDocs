@@ -159,7 +159,7 @@ public partial class DocsCanvas
             if (_content.ParsedBlocks == null) return;
             if (_layout.VisualLines.Count == 0 || viewportHeight <= 0) return;
 
-            // Fractional, deliberately - phase 3 of design/done/Scroll Pre-Buffering.md. Every line
+            // Fractional, deliberately - phase 3 of design/_done/Scroll Pre-Buffering.md. Every line
             // visual sits at a rounded position of its own (BuildLineVisual), so translating the
             // whole layer by a fraction moves them all by the same amount: relative spacing is
             // exactly constant, which is the property the two earlier attempts could not hold.
@@ -531,13 +531,13 @@ public partial class DocsCanvas
             // The code, colour block, inline colour and table tints used to be four passes
             // here. They draw from DrawLineContent now, under the opaque fill rather than
             // beneath it. A table's borders are not a fill and stay whole-table geometry, in
-            // the overlay below. See design/done/Opaque Line Visuals.md phases 2 and 3.
+            // the overlay below. See design/_done/Opaque Line Visuals.md phases 2 and 3.
 
             // Selection and the search highlights both draw from DrawLineContent now, inside
             // the line rather than beneath it, and in that order - navigating to a match also
             // selects it, and painted the other way round the selection would cover the
             // current match and make it indistinguishable from the rest. Nothing the canvas
-            // paints is under the content layer any more; see design/done/Opaque Line Visuals.md.
+            // paints is under the content layer any more; see design/_done/Opaque Line Visuals.md.
             _search.EnsureSearchMatchesCurrent();
 
             EnsureLineFtCache(_layout.VisualLines.Count, _docsCanvas.RenderVersion);

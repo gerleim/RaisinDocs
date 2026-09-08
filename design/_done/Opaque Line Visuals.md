@@ -31,7 +31,7 @@ This is not confined to scrolling. `CachedLineVisuals` defaults to true
 enabled, so **all text has been greyscale since 2026-09-01**, stationary included. It reads
 as thinner and softer than it did.
 
-It was predicted before the work started - `design/Scroll Pre-Buffering.md:158` lists it as
+It was predicted before the work started - `design/_done/Scroll Pre-Buffering.md:158` lists it as
 "the single most likely reason to abandon the approach" - and then confirmed after, at
 `design/Scroll Frame Pacing.md:443`, by filling each line visual with the theme background
 and watching the text sharpen.
@@ -269,7 +269,7 @@ on every frame of a drag and could not be treated this way.
 Both signatures are **derived from the state rather than maintained beside it**. A dozen sites
 in `FindAndReplaceController` add to, clear or reindex the match list, and a version counter
 bumped at each would leave a stale highlight baked into a cached line the first time one was
-missed. Same reasoning as the syntax token cache key in `design/Typing Performance.md`.
+missed. Same reasoning as the syntax token cache key in `design/_done/Typing Performance.md`.
 
 Inverting the highlight loop - from a pass per match walking every line, to a line asking
 which matches fall on it - was also less work than what it replaced: a match in another block
@@ -352,7 +352,7 @@ Unlike the phases above, this section is meant to be true now.
 
 Nothing for scroll smoothness directly - no gesture is paced differently because of it.
 
-It did, however, **finish the coverage that `design/Scroll Pre-Buffering.md` phase 3 was gated
+It did, however, **finish the coverage that `design/_done/Scroll Pre-Buffering.md` phase 3 was gated
 on**, which was not the point of this work but is its most useful side effect. That gate asked
 for zero lines bypassing the cache; moving every background, tint, selection and highlight into
 `DrawLineContent` left `BuildLineVisual` as the only route a line can take to the screen.

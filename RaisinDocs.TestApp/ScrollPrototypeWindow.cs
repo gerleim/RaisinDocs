@@ -6,7 +6,7 @@ using System.Windows.Media;
 namespace RaisinDocs.TestApp;
 
 /// <summary>
-/// THROWAWAY prototype for phase 1 of design/done/Scroll Pre-Buffering.md. Delete once it has
+/// THROWAWAY prototype for phase 1 of design/_done/Scroll Pre-Buffering.md. Delete once it has
 /// answered its question.
 /// </summary>
 /// <remarks>
