@@ -26,13 +26,13 @@ internal static class HtmlTableParser
         block = null!;
         endPos = startPos;
 
-        if (!IsOpenTag(html, startPos, "table")) return false;
+        if (!HtmlTagScanner.IsOpenTag(html, startPos, "table")) return false;
 
         int contentStart = html.IndexOf('>', startPos);
         if (contentStart < 0) return false;
         contentStart++;
 
-        int closeStart = FindMatchingClose(html, contentStart, "table");
+        int closeStart = HtmlTagScanner.FindMatchingClose(html, contentStart, "table");
         int contentEnd = closeStart >= 0 ? closeStart : html.Length;
 
         var table = ParseRows(html[contentStart..contentEnd], styles, settings);
@@ -57,16 +57,16 @@ internal static class HtmlTableParser
         block = null!;
         endPos = startPos;
 
-        if (!IsOpenTag(html, startPos, "tr")) return false;
+        if (!HtmlTagScanner.IsOpenTag(html, startPos, "tr")) return false;
 
         // Consume every consecutive row (and the whitespace/<col> noise between them).
         int scan = startPos;
         int lastRowEnd = startPos;
         while (scan < html.Length)
         {
-            if (!IsOpenTag(html, scan, "tr")) break;
+            if (!HtmlTagScanner.IsOpenTag(html, scan, "tr")) break;
 
-            int rowClose = FindMatchingClose(html, html.IndexOf('>', scan) + 1, "tr");
+            int rowClose = HtmlTagScanner.FindMatchingClose(html, html.IndexOf('>', scan) + 1, "tr");
             if (rowClose < 0) { lastRowEnd = html.Length; break; }
 
             int afterRow = html.IndexOf('>', rowClose);
@@ -91,11 +91,11 @@ internal static class HtmlTableParser
             if (char.IsWhiteSpace(html[pos])) { pos++; continue; }
 
             if (html[pos] == '<'
-                && (IsOpenTag(html, pos, "col") || IsOpenTag(html, pos, "colgroup")
-                    || IsCloseTag(html, pos, "colgroup") || IsCloseTag(html, pos, "thead")
-                    || IsOpenTag(html, pos, "thead") || IsOpenTag(html, pos, "tbody")
-                    || IsCloseTag(html, pos, "tbody") || IsOpenTag(html, pos, "tfoot")
-                    || IsCloseTag(html, pos, "tfoot")
+                && (HtmlTagScanner.IsOpenTag(html, pos, "col") || HtmlTagScanner.IsOpenTag(html, pos, "colgroup")
+                    || HtmlTagScanner.IsCloseTag(html, pos, "colgroup") || HtmlTagScanner.IsCloseTag(html, pos, "thead")
+                    || HtmlTagScanner.IsOpenTag(html, pos, "thead") || HtmlTagScanner.IsOpenTag(html, pos, "tbody")
+                    || HtmlTagScanner.IsCloseTag(html, pos, "tbody") || HtmlTagScanner.IsOpenTag(html, pos, "tfoot")
+                    || HtmlTagScanner.IsCloseTag(html, pos, "tfoot")
                     || html.AsSpan(pos).StartsWith("<!--", StringComparison.Ordinal)))
             {
                 int close = html.IndexOf('>', pos);
@@ -118,14 +118,14 @@ internal static class HtmlTableParser
 
         while (pos < content.Length)
         {
-            int rowStart = IndexOfOpenTag(content, pos, "tr");
+            int rowStart = HtmlTagScanner.IndexOfOpenTag(content, pos, "tr");
             if (rowStart < 0) break;
 
             int rowContentStart = content.IndexOf('>', rowStart);
             if (rowContentStart < 0) break;
             rowContentStart++;
 
-            int rowClose = FindMatchingClose(content, rowContentStart, "tr");
+            int rowClose = HtmlTagScanner.FindMatchingClose(content, rowContentStart, "tr");
             int rowContentEnd = rowClose >= 0 ? rowClose : content.Length;
 
             var row = ParseCells(content[rowContentStart..rowContentEnd], styles, settings, out bool rowHasTh);
@@ -170,8 +170,8 @@ internal static class HtmlTableParser
 
         while (pos < rowContent.Length)
         {
-            int tdStart = IndexOfOpenTag(rowContent, pos, "td");
-            int thStart = IndexOfOpenTag(rowContent, pos, "th");
+            int tdStart = HtmlTagScanner.IndexOfOpenTag(rowContent, pos, "td");
+            int thStart = HtmlTagScanner.IndexOfOpenTag(rowContent, pos, "th");
 
             bool isHeaderCell = thStart >= 0 && (tdStart < 0 || thStart < tdStart);
             int cellStart = isHeaderCell ? thStart : tdStart;
@@ -182,7 +182,7 @@ internal static class HtmlTableParser
             if (tagEnd < 0) break;
 
             string tag = rowContent[cellStart..(tagEnd + 1)];
-            int cellClose = FindMatchingClose(rowContent, tagEnd + 1, name);
+            int cellClose = HtmlTagScanner.FindMatchingClose(rowContent, tagEnd + 1, name);
             int cellEnd = cellClose >= 0 ? cellClose : rowContent.Length;
 
             row.Cells.Add(BuildCell(tag, rowContent[(tagEnd + 1)..cellEnd], styles, settings));
@@ -316,63 +316,4 @@ internal static class HtmlTableParser
         return result;
     }
 
-    // --- Tag scanning helpers (tolerant of unquoted attributes and multi-line tags) ---
-
-    private static bool IsOpenTag(string html, int pos, string name)
-    {
-        if (pos >= html.Length || html[pos] != '<') return false;
-        int after = pos + 1;
-        if (after + name.Length > html.Length) return false;
-        if (!html.AsSpan(after, name.Length).Equals(name.AsSpan(), StringComparison.OrdinalIgnoreCase))
-            return false;
-
-        int next = after + name.Length;
-        return next >= html.Length || html[next] == '>' || html[next] == '/' || char.IsWhiteSpace(html[next]);
-    }
-
-    private static bool IsCloseTag(string html, int pos, string name)
-    {
-        if (pos + 1 >= html.Length || html[pos] != '<' || html[pos + 1] != '/') return false;
-        int after = pos + 2;
-        if (after + name.Length > html.Length) return false;
-        if (!html.AsSpan(after, name.Length).Equals(name.AsSpan(), StringComparison.OrdinalIgnoreCase))
-            return false;
-
-        int next = after + name.Length;
-        return next >= html.Length || html[next] == '>' || char.IsWhiteSpace(html[next]);
-    }
-
-    private static int IndexOfOpenTag(string html, int start, string name)
-    {
-        for (int i = start; i < html.Length; i++)
-        {
-            if (html[i] == '<' && IsOpenTag(html, i, name)) return i;
-        }
-        return -1;
-    }
-
-    /// <summary>
-    /// Finds the closing tag for an element already opened, honoring nesting.
-    /// Returns the index of the '&lt;' of the closing tag, or -1 when unclosed.
-    /// </summary>
-    private static int FindMatchingClose(string html, int start, string name)
-    {
-        int depth = 1;
-        for (int i = start; i < html.Length; i++)
-        {
-            if (html[i] != '<') continue;
-
-            if (IsCloseTag(html, i, name))
-            {
-                if (--depth == 0) return i;
-            }
-            else if (IsOpenTag(html, i, name))
-            {
-                // A self-closed or void occurrence never nests.
-                int close = html.IndexOf('>', i);
-                if (close > i && html[close - 1] != '/') depth++;
-            }
-        }
-        return -1;
-    }
 }

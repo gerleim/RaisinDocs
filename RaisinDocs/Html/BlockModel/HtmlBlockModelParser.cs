@@ -255,14 +255,13 @@ internal static class HtmlBlockModelParser
         if (!html.AsSpan(startPos).StartsWith("<ul", StringComparison.OrdinalIgnoreCase))
             return false;
 
-        // Find closing tag
-        int closeStart = html.IndexOf("</ul>", startPos, StringComparison.OrdinalIgnoreCase);
-        if (closeStart < 0)
-            return false;
-
-        // Extract content between tags
         int tagEnd = html.IndexOf('>', startPos);
         if (tagEnd < 0)
+            return false;
+
+        // Depth-aware: the first </ul> after this point may close a nested list, not this one.
+        int closeStart = HtmlTagScanner.FindMatchingClose(html, tagEnd + 1, "ul");
+        if (closeStart < 0)
             return false;
 
         string listContent = html[(tagEnd + 1)..closeStart];
@@ -277,7 +276,7 @@ internal static class HtmlBlockModelParser
             NestedBlocks = items,
         };
 
-        endPos = closeStart + 5; // "</ul>" is 5 characters
+        endPos = HtmlTagScanner.EndOfTag(html, closeStart);
         return true;
     }
 
@@ -292,14 +291,13 @@ internal static class HtmlBlockModelParser
         if (!html.AsSpan(startPos).StartsWith("<ol", StringComparison.OrdinalIgnoreCase))
             return false;
 
-        // Find closing tag
-        int closeStart = html.IndexOf("</ol>", startPos, StringComparison.OrdinalIgnoreCase);
-        if (closeStart < 0)
-            return false;
-
-        // Extract content between tags
         int tagEnd = html.IndexOf('>', startPos);
         if (tagEnd < 0)
+            return false;
+
+        // Depth-aware: the first </ol> after this point may close a nested list, not this one.
+        int closeStart = HtmlTagScanner.FindMatchingClose(html, tagEnd + 1, "ol");
+        if (closeStart < 0)
             return false;
 
         string listContent = html[(tagEnd + 1)..closeStart];
@@ -314,7 +312,7 @@ internal static class HtmlBlockModelParser
             NestedBlocks = items,
         };
 
-        endPos = closeStart + 5; // "</ol>" is 5 characters
+        endPos = HtmlTagScanner.EndOfTag(html, closeStart);
         return true;
     }
 
@@ -330,13 +328,8 @@ internal static class HtmlBlockModelParser
         while (pos < listContent.Length)
         {
             // Find next <li> tag
-            int liStart = listContent.IndexOf("<li", pos, StringComparison.OrdinalIgnoreCase);
+            int liStart = HtmlTagScanner.IndexOfOpenTag(listContent, pos, "li");
             if (liStart < 0)
-                break;
-
-            // Find closing </li>
-            int liCloseStart = listContent.IndexOf("</li>", liStart, StringComparison.OrdinalIgnoreCase);
-            if (liCloseStart < 0)
                 break;
 
             // Extract content between tags
@@ -344,21 +337,71 @@ internal static class HtmlBlockModelParser
             if (tagEnd < 0)
                 break;
 
-            string itemContent = listContent[(tagEnd + 1)..liCloseStart];
+            // Depth-aware: an item holding a nested list contains further </li> tags of its own.
+            int liCloseStart = HtmlTagScanner.FindMatchingClose(listContent, tagEnd + 1, "li");
+            int contentEnd = liCloseStart < 0 ? listContent.Length : liCloseStart;
 
-            // Parse inline content of list item
-            var inline = ParseInlineContent(itemContent, BlockKind.UnorderedListItem, settings);
+            string itemContent = listContent[(tagEnd + 1)..contentEnd];
+
+            // A list nested inside the item is a child block, not part of the item's text. Left
+            // in the inline content its text would be flattened into this item's own line.
+            var (inlineHtml, nestedLists) = SplitListItemContent(itemContent, settings);
 
             items.Add(new BlockElement
             {
                 Kind = BlockKind.UnorderedListItem,
-                Content = inline,
+                Content = ParseInlineContent(inlineHtml, BlockKind.UnorderedListItem, settings),
+                NestedBlocks = nestedLists.Count > 0 ? nestedLists : null,
             });
 
-            pos = liCloseStart + 5; // "</li>" is 5 characters
+            pos = liCloseStart < 0 ? listContent.Length : HtmlTagScanner.EndOfTag(listContent, liCloseStart);
         }
 
         return items;
+    }
+
+    /// <summary>
+    /// Splits a list item's inner HTML into the text belonging to the item itself and any lists
+    /// nested inside it.
+    /// </summary>
+    private static (string Inline, List<BlockElement> Nested) SplitListItemContent(
+        string itemContent, MarkdownOutputSettings settings)
+    {
+        int listStart = -1;
+        for (int i = 0; i < itemContent.Length; i++)
+        {
+            if (itemContent[i] != '<') continue;
+            if (HtmlTagScanner.IsOpenTag(itemContent, i, "ul") || HtmlTagScanner.IsOpenTag(itemContent, i, "ol"))
+            {
+                listStart = i;
+                break;
+            }
+        }
+
+        var nested = new List<BlockElement>();
+        if (listStart < 0)
+            return (itemContent, nested);
+
+        int pos = listStart;
+        while (pos < itemContent.Length)
+        {
+            if (TryParseUnorderedList(itemContent, pos, out var ul, out int ulEnd, settings))
+            {
+                nested.Add(ul);
+                pos = ulEnd;
+            }
+            else if (TryParseOrderedList(itemContent, pos, out var ol, out int olEnd, settings))
+            {
+                nested.Add(ol);
+                pos = olEnd;
+            }
+            else
+            {
+                pos++;
+            }
+        }
+
+        return (itemContent[..listStart], nested);
     }
 
     /// <summary>
@@ -616,32 +659,12 @@ internal static class HtmlBlockModelParser
                     }
 
                 case BlockKind.UnorderedListItem:
-                    {
-                        if (block.NestedBlocks != null)
-                        {
-                            foreach (var item in block.NestedBlocks)
-                            {
-                                string itemText = FormatInlineSegments(item.Content, settings);
-                                output.Add($"- {itemText}");
-                            }
-                        }
-                        break;
-                    }
+                    RenderList(block, ordered: false, depth: 0, output, settings);
+                    break;
 
                 case BlockKind.OrderedListItem:
-                    {
-                        if (block.NestedBlocks != null)
-                        {
-                            int itemNum = 1;
-                            foreach (var item in block.NestedBlocks)
-                            {
-                                string itemText = FormatInlineSegments(item.Content, settings);
-                                output.Add($"{itemNum}. {itemText}");
-                                itemNum++;
-                            }
-                        }
-                        break;
-                    }
+                    RenderList(block, ordered: true, depth: 0, output, settings);
+                    break;
 
                 case BlockKind.Blockquote:
                     {
@@ -802,6 +825,33 @@ internal static class HtmlBlockModelParser
             lines.Add(currentLine.ToString().Trim());
 
         return lines;
+    }
+
+    /// <summary>
+    /// Emits one line per item, then recurses into any list nested inside an item, indenting each
+    /// level by two spaces so the nesting survives as markdown.
+    /// </summary>
+    private static void RenderList(
+        BlockElement list, bool ordered, int depth, List<string> output, MarkdownOutputSettings settings)
+    {
+        if (list.NestedBlocks == null) return;
+
+        string indent = new string(' ', depth * 2);
+        int itemNum = 1;
+
+        foreach (var item in list.NestedBlocks)
+        {
+            string marker = ordered ? $"{itemNum++}. " : "- ";
+            // Whitespace sits between an item's text and a list nested after it; without trimming
+            // it would be emitted as a trailing space on the item's line.
+            string itemText = FormatInlineSegments(item.Content, settings).Trim();
+            output.Add($"{indent}{marker}{itemText}");
+
+            if (item.NestedBlocks == null) continue;
+
+            foreach (var child in item.NestedBlocks)
+                RenderList(child, child.Kind == BlockKind.OrderedListItem, depth + 1, output, settings);
+        }
     }
 
     /// <summary>

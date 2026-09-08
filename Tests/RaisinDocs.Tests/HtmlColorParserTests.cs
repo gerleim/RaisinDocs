@@ -995,19 +995,6 @@ public class HtmlToMarkdownConverterTests
     }
 
     [Fact]
-    public void DeepNesting_ThreeLevels_ProducesCorrectIndentation()
-    {
-        var html = "<ul><li>Level 1<ul><li>Level 2<ul><li>Level 3</li></ul></li></ul></li></ul>";
-        var cfHtml = WrapCfHtml(html);
-
-        var result = HtmlToMarkdownConverter.ConvertToColoredMarkdown(cfHtml);
-
-        result.Should().Contain("Level 1");
-        result.Should().Contain("Level 2");
-        result.Should().Contain("Level 3");
-    }
-
-    [Fact]
     public void Header_FollowedByParagraph_KeepsSeparate()
     {
         // Test that headers and paragraphs remain separate (CommonMark compliance)

@@ -583,6 +583,49 @@ public class HtmlBlockModelParserTests
     }
 
     [Fact]
+    public void FullPipeline_NestedList_ThreeLevels_IndentsEachLevel()
+    {
+        // A list nested inside an <li> used to be flattened into that item's own inline text,
+        // so all three levels came out concatenated on one line as "- Level 1Level 2Level 3".
+        var html = "<ul><li>Level 1<ul><li>Level 2<ul><li>Level 3</li></ul></li></ul></li></ul>";
+        var blocks = HtmlBlockModelParser.ParseBlockStructure(html);
+        var markdown = HtmlBlockModelParser.ConvertToMarkdown(blocks);
+
+        markdown.Should().Be("- Level 1\n  - Level 2\n    - Level 3");
+    }
+
+    [Fact]
+    public void FullPipeline_NestedList_SiblingsResumeAtOuterLevel()
+    {
+        var html = "<ul><li>A<ul><li>A1</li><li>A2</li></ul></li><li>B</li></ul>";
+        var blocks = HtmlBlockModelParser.ParseBlockStructure(html);
+        var markdown = HtmlBlockModelParser.ConvertToMarkdown(blocks);
+
+        markdown.Should().Be("- A\n  - A1\n  - A2\n- B");
+    }
+
+    [Fact]
+    public void FullPipeline_NestedOrderedList_NumbersEachLevelIndependently()
+    {
+        // The outer list resumes at 2 after the nested one, rather than counting its lines.
+        var html = "<ol><li>One<ol><li>One.a</li></ol></li><li>Two</li></ol>";
+        var blocks = HtmlBlockModelParser.ParseBlockStructure(html);
+        var markdown = HtmlBlockModelParser.ConvertToMarkdown(blocks);
+
+        markdown.Should().Be("1. One\n  1. One.a\n2. Two");
+    }
+
+    [Fact]
+    public void FullPipeline_NestedList_OrderedInsideUnordered_KeepsEachMarker()
+    {
+        var html = "<ul><li>Bullet<ol><li>Num</li></ol></li></ul>";
+        var blocks = HtmlBlockModelParser.ParseBlockStructure(html);
+        var markdown = HtmlBlockModelParser.ConvertToMarkdown(blocks);
+
+        markdown.Should().Be("- Bullet\n  1. Num");
+    }
+
+    [Fact]
     public void FullPipeline_ListFollowedByParagraph_SeparatesBlocks()
     {
         var html = "<ul><li>Item</li></ul><p>After list</p>";
