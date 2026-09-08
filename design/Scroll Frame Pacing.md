@@ -1,6 +1,6 @@
 # Scroll Frame Pacing
 
-Status: **section C is not needed for wheel scrolling. Measured, not argued.** Follows on from `Scroll Pre-Buffering.md`, which covers how lines came to be cached
+Status: **section C is not needed for wheel scrolling. Measured, not argued.** Follows on from `design/done/Scroll Pre-Buffering.md`, which covers how lines came to be cached
 as visuals. This one is about the frames reaching the screen rather than the cost of drawing
 them.
 
@@ -35,7 +35,7 @@ selection and highlight had moved into the line and `BuildLineVisual` was the on
 could take to the screen. Each visual sits at its own rounded position and the whole layer
 translates beneath it, so every line moves by the identical fraction and relative spacing is
 exactly constant - the property neither earlier attempt could hold. Reported as showing no
-artifact. See `design/Scroll Pre-Buffering.md`.
+artifact. See `design/done/Scroll Pre-Buffering.md`.
 
 ## What is left, and what it is not
 
@@ -526,7 +526,7 @@ that justified proposing one.
 - The prototype measurements in C1-C3 stand. A paced swapchain does present at 3.57 ms with 0%
   over 1.5x median, and the ClearType and colour findings along the way were worth having -
   `### ClearType is missing from the editor's own cache` is what set off
-  `design/Opaque Line Visuals.md`.
+  `design/done/Opaque Line Visuals.md`.
 - [dotnet/wpf#11607](https://github.com/dotnet/wpf/discussions/11607) is still a real report of
   the same class of problem from someone else's codebase.
 - Nothing here has been re-measured with FrameView from outside the process, which is what
@@ -609,10 +609,10 @@ of intervals running long during sustained scrolling. Animation error median 0.2
 The same run measured a minimap drag for the first time: 108-110/s, a 7.15 ms interval, and an
 animation error median of 3.73-7.12 ms. The drag is bound by the rate mouse messages arrive and
 carries about twenty times the wheel's error, which inverts the observation this whole
-investigation began from. See `design/Scroll Pre-Buffering.md`.
+investigation began from. See `design/done/Scroll Pre-Buffering.md`.
 
 What still stands from C1-C3: the prototype numbers, the ClearType finding that set off
-`design/Opaque Line Visuals.md`, and [dotnet/wpf#11607](https://github.com/dotnet/wpf/discussions/11607)
+`design/done/Opaque Line Visuals.md`, and [dotnet/wpf#11607](https://github.com/dotnet/wpf/discussions/11607)
 as someone else's report of the same class of problem. What does not stand is the motivation.
 
 ## The baseline set: other refresh rates, other window sizes

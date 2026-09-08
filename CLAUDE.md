@@ -142,7 +142,7 @@ The render pipeline is: **Document → MarkdownParser → BlockVisualMap → cac
 
    This happens in `ArrangeOverride` (via `UpdateContentLayer`), **not** in `OnRender` — adding children to a visual mid-render is illegal, and arrange runs before every render pass. `OnRender` itself now paints only the full-canvas background that shows through paragraph gaps; everything above the text (caret, spelling squiggles, page breaks, table borders) goes in `OverlayLayer`.
 
-   The fill is what makes ClearType work: a `BitmapCache` is a transparent surface, and ClearType cannot filter against a background it does not know. That is why nothing may be drawn beneath the content layer — an opaque line covers it. See `design/Opaque Line Visuals.md`.
+   The fill is what makes ClearType work: a `BitmapCache` is a transparent surface, and ClearType cannot filter against a background it does not know. That is why nothing may be drawn beneath the content layer — an opaque line covers it. See `design/done/Opaque Line Visuals.md`.
 
 Key invariant: `Document` never depends on `MarkdownParser` or `BlockVisualMap`. All markdown awareness flows one way — from parser output into the rendering/navigation layer.
 

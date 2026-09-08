@@ -109,7 +109,7 @@ internal class ScrollController
     /// <remarks>
     /// Held unrounded since the renderer started drawing at a fractional offset. Gating a
     /// repaint on a whole pixel changing was the stepping that phase 3 of
-    /// design/Scroll Pre-Buffering.md exists to remove, and it is also what the paint-step
+    /// design/done/Scroll Pre-Buffering.md exists to remove, and it is also what the paint-step
     /// figures in the log measure, so both want the exact position.
     /// </remarks>
     private double _paintedOffset;

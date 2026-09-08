@@ -236,7 +236,7 @@ function Invoke-ScrollSweep {
     # Each entry is a gesture: how many notches, how far apart, and how long to let the coast
     # settle before the next. A single flick spends most of its life in the slow tail; a long
     # sustained scroll never gets there. Between them they cover the range the speed-band table
-    # in design/Scroll Pre-Buffering.md describes, repeatably - which a hand cannot do.
+    # in design/done/Scroll Pre-Buffering.md describes, repeatably - which a hand cannot do.
     $gestures = @(
         @{ Name = 'flick-1';   Notches = 1;  GapMs = 0;  SettleMs = 1800 },
         @{ Name = 'flick-3';   Notches = 3;  GapMs = 30; SettleMs = 2000 },
