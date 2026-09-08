@@ -354,18 +354,6 @@ public class RemoveBackgroundTests
     // --- Edge case: selection spanning div boundary ---
 
     [StaFact]
-    public void RemoveBackground_SelectionSpansDivAndInline_ClearsBoth()
-    {
-        // block0: <!--@div bg:green-->  block1: aaa  block2: <!--/@div-->
-        // block3: <!--@bg:red-->bbb<!--/@bg-->
-        // Select all of block1 and block3 → both bg cleared
-        var canvas = CreateCanvas("<!--@div bg:green-->\naaa\n<!--/@div-->\n<!--@bg:red-->bbb<!--/@bg-->");
-        canvas.TestSetSelection(1, 0, 3, 28);
-        canvas.RemoveBackgroundFromSelection();
-        Markdown(canvas).Should().Be("aaa\nbbb");
-    }
-
-    [StaFact]
     public void RemoveBackground_PartialSpanningDivBoundary_SplitsCorrectly()
     {
         // block0: <!--@div bg:green-->  block1: aaa bbb  block2: <!--/@div-->
@@ -412,7 +400,8 @@ public class RemoveBackgroundTests
     {
         // block0: <!--@div bg:green-->  block1: aaa  block2: <!--/@div-->
         // block3: <!--@bg:red-->bbb<!--/@bg-->
-        // Full selection of both
+        // Select all of block1 and block3, spanning the div boundary → both bg cleared.
+        // The partial-selection counterpart is RemoveBackground_DivPartialAndInlinePartial.
         var canvas = CreateCanvas("<!--@div bg:green-->\naaa\n<!--/@div-->\n<!--@bg:red-->bbb<!--/@bg-->");
         canvas.TestSetSelection(1, 0, 3, 28);
         canvas.RemoveBackgroundFromSelection();
