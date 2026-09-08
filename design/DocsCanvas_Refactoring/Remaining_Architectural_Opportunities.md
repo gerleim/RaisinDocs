@@ -1,8 +1,14 @@
 # DocsCanvas Architecture: Phase 3 & Beyond Roadmap
 
-**Date:** 2026-08-05  
-**Status:** Post Phase 2 - Architecture Foundation Established  
+**Date:** 2026-08-05, revised 2026-09-08  
+**Status:** Phase 3 input/visual-mode work complete — see *Phase 3 outcome* below  
 **Scope:** Identify and prioritize remaining architectural improvements
+
+> **Read this first (2026-09-08).** Most of what this document proposed has been done.
+> The three Input.cs handlers it lists as "not yet pursued" all shipped, along with four
+> more. Sections below are annotated with what actually happened; the line counts in the
+> original text were produced with `Get-Content | Measure-Object -Line`, which drops blank
+> lines and undercounts — figures marked **(corrected)** are true `wc -l` counts.
 
 ---
 
@@ -40,6 +46,27 @@ After completing Phase 2 (interface refactoring), the DocsCanvas architecture is
 - **TDD test failures:** Intentional - part of markdown conformance testing
 - **Other projects review:** DocsEditor, Viewer, TestApp - could be assessed later
 
+### Phase 3 outcome (2026-09-08)
+
+**Input.cs: 1098 → 658 lines (corrected).** Seven handlers extracted, not the two or three
+this document anticipated: ListFormattingHandler (247), ContextMenuHandler (168),
+EditingKeysHandler (156), FormattingKeysHandler (102), HoverImageHandler (100),
+IndentationHandler (98), NavigationKeysHandler (84). Eight one-line navigation wrappers
+deleted. Two interfaces added — `IEditingServices` and `ISpellCheckAccess`.
+
+**VisualMode.cs: 702 → 477 lines (corrected).** TableSelectionManager (236 lines) took the
+rectangular table selection; the dead selection renderer (`DrawSelection` and everything
+only it reached) was deleted.
+
+**Formatting.cs: extraction attempted and reverted.** See the revised entry under
+*Detailed Analysis* — this is now a known blocker, not an open opportunity.
+
+**What this changed about planning.** The predictor of whether a group extracts cleanly was
+not size or risk-rating but **shared mutable state**. Input.cs handlers and the table
+rectangle read state and return; they moved without incident. The formatting toggles share
+`_pendingStyleOff` across calls, and splitting them broke tests. Rank future candidates by
+what they write, not by how many lines they are.
+
 ---
 
 ## Remaining Opportunities
@@ -70,35 +97,33 @@ After completing Phase 2 (interface refactoring), the DocsCanvas architecture is
 **Objective:** Assess if Input.cs, Formatting.cs, VisualMode.cs, SourceMode.cs need improvements  
 **Scope:**
 
-#### Input.cs (989 lines)
-- **Current state:** Still substantial, handles keyboard/mouse/text input
-- **Analysis needed:**
-  - Are keyboard handlers well-organized?
-  - Could FormattingKeysHandler be extracted (Ctrl+B, Ctrl+I, etc.)?
-  - Could NavigationKeysHandler be extracted (Ctrl+Home, etc.)?
-  - Could EditingKeysHandler be extracted (Undo/Redo)?
-  - Is text input handling focused or scattered?
-- **Extraction candidates:** 2-3 handlers (~200-300 lines each)
-- **Risk:** Medium (input handling is critical path)
+#### Input.cs — ✅ **DONE.** 1098 → 658 lines (corrected)
+All three proposed handlers were extracted, plus four more the original review missed
+(ListFormatting, ContextMenu, Indentation, HoverImage). The risk rating "Medium (input
+handling is critical path)" proved too cautious: the handlers were discrete — read the
+document, do work, return — so they moved without a single regression.
 
-#### Formatting.cs (555 lines)
-- **Current state:** Well-organized formatting API
-- **Analysis needed:**
-  - Is code quality high or are there improvements?
-  - Could specific formatters be extracted further?
-  - Are method names clear?
-  - Is dependency structure clean?
-- **Extraction candidates:** Unlikely (already extracted ColorFormattingManager)
-- **Risk:** Low (mostly API surface)
+#### Formatting.cs — ❌ **BLOCKED.** 634 lines (corrected, not 555)
+"Extraction candidates: Unlikely" was right, but for the wrong reason. It is not that the
+API surface is thin; it is that the toggles share `_pendingStyleOff`, a field remembering
+that a style marker was typed and must toggle off on the next input. An extraction was
+attempted and reverted after it broke `PendingBoldOff_InsideBold_TypingSplitsRun` and the
+multi-block task-list toggle. **Extracting formatting requires first giving that state an
+owner.** Until then this is not a mechanical move, and "Risk: Low" is wrong.
 
-#### VisualMode.cs (597 lines)
-- **Current state:** Good, mostly delegates to extracted managers
-- **Analysis needed:**
-  - Verify it's primarily a coordinator
-  - Check for any business logic that should be extracted
-  - Confirm image rendering is properly separated
-- **Extraction candidates:** Unlikely (already extracted VisualModeManager)
-- **Risk:** Low (mostly delegation)
+#### VisualMode.cs — ✅ **PARTLY DONE.** 702 → 477 lines (corrected, not 597)
+"Mostly delegation" was not accurate. Three findings:
+1. **TableSelectionManager (236 lines) extracted** — the rectangle is derived from anchor and
+   cursor on every call, never stored, so it split with no state to hand over.
+2. **~172 lines were dead.** `DrawSelection` lost its last caller when the content layer took
+   over rendering, which made `DrawJoinedSelection` and `DrawTableRectSelection` unreachable.
+   Three `VisualModeManager` forwarders were dead too — the manager calls its own internals.
+3. **What remains is a fork, not delegation.** RenderingContext holds its own private copy of
+   every drawing method still in the file, and `OnRenderCore` is just
+   `_renderingContext.OnRender(dc)` — the screen never runs VisualMode.cs's versions. Print is
+   their only live consumer, and the copies have drifted (RenderingContext's take a
+   `softBreaks` parameter these do not). **Screen and print render inline styles through
+   different code.** Reconciling them belongs to the deferred print rework.
 
 #### SourceMode.cs (100 lines)
 - **Current state:** Minimal, focused
@@ -246,7 +271,8 @@ Beyond the main improvement options, these specific classes/handlers are candida
 ---
 
 ### FormattingKeysHandler (from Input.cs - ~150 lines)
-**Status:** Identified, not yet pursued  
+**Status:** ✅ **Done (2026-09).** Shipped as `FormattingKeysHandler.cs`, 102 lines. Ctrl+B/I/K;
+the code-span and strikethrough shortcuts listed below were not part of it.  
 **Current Location:** DocsCanvas.Input.cs, OnKeyDown() method  
 **Responsibility:** Keyboard shortcuts for formatting
 
@@ -269,7 +295,9 @@ Beyond the main improvement options, these specific classes/handlers are candida
 ---
 
 ### NavigationKeysHandler (from Input.cs - ~100 lines)
-**Status:** Identified, not yet pursued  
+**Status:** ✅ **Done (2026-09).** Shipped as `NavigationKeysHandler.cs`, 84 lines, covering the
+Ctrl-modified keys. The eight unmodified wrappers (`HandleLeft`, `HandleUp`, …) were deleted
+rather than moved — `OnKeyDown` calls `_navigationEngine` directly.  
 **Current Location:** DocsCanvas.Input.cs, OnKeyDown() method  
 **Responsibility:** Advanced cursor navigation shortcuts
 
@@ -291,7 +319,11 @@ Beyond the main improvement options, these specific classes/handlers are candida
 ---
 
 ### EditingKeysHandler (from Input.cs - ~150 lines)
-**Status:** Identified, not yet pursued  
+**Status:** ✅ **Done (2026-09).** Shipped as `EditingKeysHandler.cs`, 156 lines. The "Risk: High"
+rating did not materialise — no regressions — but the first attempt did fail to build: the class
+was written as top-level while `LastActionKind` was a private enum inside DocsCanvas and
+`CursorNavigationEngine` was a nested type. Fixed by moving `LastActionKind` to its own file and
+routing the rest through the new `IEditingServices` interface.  
 **Current Location:** DocsCanvas.Input.cs, OnKeyDown() method  
 **Responsibility:** Core editing operations via keyboard
 
@@ -316,17 +348,28 @@ Beyond the main improvement options, these specific classes/handlers are candida
 
 ## Extraction Candidate Summary
 
-| Candidate | Lines | Location | Risk | Effort | Priority | Status |
-|-----------|-------|----------|------|--------|----------|--------|
-| PrintService | 512 | Print.cs | Medium | 3-4 hrs | HIGH | Deferred (design needed) |
-| FormattingKeysHandler | 150 | Input.cs | Low | 1-2 hrs | MEDIUM | Not pursued |
-| NavigationKeysHandler | 100 | Input.cs | Low | 1-2 hrs | LOW | Not pursued |
-| EditingKeysHandler | 150 | Input.cs | High | 2-3 hrs | LOW | Not pursued |
+| Candidate | Shipped lines | Location | Status |
+|-----------|--------------|----------|--------|
+| ListFormattingHandler | 247 | Input.cs | ✅ Done 2026-09 (not in original list) |
+| TableSelectionManager | 236 | VisualMode.cs | ✅ Done 2026-09 (not in original list) |
+| ContextMenuHandler | 168 | Input.cs | ✅ Done 2026-09 (not in original list) |
+| EditingKeysHandler | 156 | Input.cs | ✅ Done 2026-09 |
+| FormattingKeysHandler | 102 | Input.cs | ✅ Done 2026-09 |
+| HoverImageHandler | 100 | Input.cs | ✅ Done 2026-09 (not in original list) |
+| IndentationHandler | 98 | Input.cs | ✅ Done 2026-09 (not in original list) |
+| NavigationKeysHandler | 84 | Input.cs | ✅ Done 2026-09 |
+| PrintService | 512 | Print.cs | ⏸ Deferred — design needed, and print is deferred wholesale |
+| Formatting services | — | Formatting.cs | ❌ Blocked on `_pendingStyleOff` ownership |
 
-**Recommendation:** 
-- Pursue PrintService after design work completed (Phase 3)
-- Consider FormattingKeysHandler if Input.cs size becomes problematic
-- Defer NavigationKeysHandler and EditingKeysHandler (low ROI, higher risk)
+**Recommendation (revised 2026-09-08):**
+- **Input.cs is finished.** What remains there is event plumbing; further splitting buys nothing.
+- **Do not attempt Formatting.cs** as an extraction. The next step there is deciding who owns
+  `_pendingStyleOff`, which is a design question, not a refactor.
+- **PrintService stays deferred**, and note it has grown a second reason: VisualMode.cs and
+  RenderingContext now hold diverged copies of the same drawing methods, with print reading the
+  stale ones. Whoever does the print rework inherits that reconciliation.
+- **Rank future candidates by what state they write**, not by line count or a risk hunch. That
+  metric predicted all four outcomes above; the original risk ratings predicted none of them.
 
 ---
 

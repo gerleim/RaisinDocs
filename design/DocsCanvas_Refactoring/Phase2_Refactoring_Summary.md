@@ -327,9 +327,13 @@ public class MyController
 
 Potential follow-up improvements:
 
-### Phase 3: Further Componentization
-- Extract more focused controllers from remaining DocsCanvas methods
-- Create dedicated classes for specific responsibilities
+### Phase 3: Further Componentization — ✅ done 2026-09
+Eight more classes came out of `Input.cs` (1098 → 658 lines) and `VisualMode.cs` (702 → 477).
+`Formatting.cs` was attempted and reverted; its toggles share `_pendingStyleOff`, which needs an
+owner first. See *Remaining_Architectural_Opportunities.md* → **Phase 3 outcome**, and the
+*Input decomposition* section of CLAUDE.md.
+
+*(This document is a record of Phase 2 and is otherwise left as written.)*
 
 ### Phase 4: Performance Analysis
 - Measure keyboard responsiveness before/after

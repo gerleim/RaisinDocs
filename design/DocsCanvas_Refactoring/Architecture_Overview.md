@@ -1,7 +1,7 @@
 # DocsCanvas Architecture Overview
 
-**Version:** 2.0 (Post Phase 2 Refactoring)  
-**Last Updated:** 2026-08-05  
+**Version:** 2.1 (Post Phase 3 input/visual-mode decomposition)  
+**Last Updated:** 2026-09-08  
 **Status:** Current - Clean Architecture Established
 
 ---
@@ -9,11 +9,15 @@
 ## Executive Summary
 
 DocsCanvas has evolved from a monolithic 8,721-line god class into a well-architected system with:
-- ✅ **12 focused interfaces** defining clear contracts
-- ✅ **11 extracted classes** each with single responsibility
+- ✅ **14 focused interfaces** defining clear contracts (12 from Phase 2, plus `IEditingServices` and `ISpellCheckAccess`)
+- ✅ **19 extracted classes** each with single responsibility (11 from Phase 2, 8 from Phase 3)
 - ✅ **Zero internal casts** (eliminated 804)
 - ✅ **Clean dependency injection** throughout
 - ✅ **Loose coupling** enabling testability and maintenance
+
+**Phase 3 (2026-09)** decomposed the two remaining large partials: `Input.cs` 1098 → 658 lines
+and `VisualMode.cs` 702 → 477. `Formatting.cs` was attempted and reverted — its toggles share
+`_pendingStyleOff` across calls, and that state needs an owner before it can be split.
 
 ---
 
@@ -128,6 +132,20 @@ DocsCanvas implements a composite interface `IDocsCanvasServices` which combines
 12. **ILoggingServices** - Diagnostic logging
     - `Logger` - IDocsLogger instance
 
+#### Added in Phase 3 (2026-09)
+13. **IEditingServices** - Editing operations and undo grouping state
+    - `IsVisual`, `LastAction` (the `LastActionKind` that groups consecutive deletes)
+    - `TryGetTableRectSelection()`, `ClearTableRectCells()`
+    - `HandleBackVisual()` / `HandleBackSource()` / `HandleDeleteVisual()` / `HandleDeleteSource()`
+    - `ResetUndoSealTimer()`, `StopUndoSealTimer()`
+
+14. **ISpellCheckAccess** - The slice of spell check the context menu needs
+    - `SpellCheckEnabled` property
+    - `AddSpellCheckMenuItems()` method
+
+`IDocumentServices` also grew `Undo()`, `Redo()`, `BeginUndoGroup()` and `SealUndoGroup()`, and
+`IParsedContentServices` grew `IsVisual`.
+
 ---
 
 ## Extracted Classes & Responsibilities
@@ -227,6 +245,58 @@ DocsCanvas implements a composite interface `IDocsCanvasServices` which combines
 - `GetLinkAtPosition()` - Find link under cursor
 - `TryOpenLinkAtClick()` - Handle Ctrl+Click
 - `UpdateLinkTooltip()` - Show link preview
+
+---
+
+### Input handlers (Phase 3, 2026-09)
+
+`OnKeyDown` and the mouse handlers stay in `DocsCanvas.Input.cs`; each key's actual work lives
+in one of these. All take their dependencies through the service interfaces.
+
+#### ListFormattingHandler (247 lines)
+**Responsibility:** Smart Enter — list auto-continuation, ordered-list renumbering, hard breaks  
+**Dependencies:** IDocumentServices, IParsedContentServices, HardBreakStyleProvider  
+**Key Methods:** `HandleEnter()`, and the private `StripTrailingHardBreak()`,
+`StripExistingListPrefix()`, `RenumberOrderedList()`
+
+#### ContextMenuHandler (168 lines)
+**Responsibility:** Build and show the right-click menu  
+**Dependencies:** DocsCanvas, IDocumentServices, ISpellCheckAccess  
+**Key Methods:** `ShowContextMenu()`
+
+#### EditingKeysHandler (156 lines)
+**Responsibility:** Backspace, Delete, Undo, Redo, and the undo grouping around them  
+**Dependencies:** IDocumentServices, IEditingServices  
+**Key Methods:** `TryHandleEditingKey()`
+
+#### FormattingKeysHandler (102 lines)
+**Responsibility:** Ctrl+B / Ctrl+I / Ctrl+K  
+**Dependencies:** DocsCanvas, ICanvasOperations, IDocumentServices  
+**Key Methods:** `TryHandleFormattingKey()`
+
+#### HoverImageHandler (100 lines)
+**Responsibility:** Image hover preview  
+**Dependencies:** IParsedContentServices, IImageServices, INavigationServices, ILayoutDataServices, IScrollServices, IRenderingServices, IDocumentServices, DocsCanvas  
+**Key Methods:** `UpdateHoverImage()`, `Clear()`
+
+#### IndentationHandler (98 lines)
+**Responsibility:** Tab / Shift+Tab, with the indent step chosen per block kind  
+**Dependencies:** IDocumentServices, IParsedContentServices  
+**Key Methods:** `HandleTabIndent()`
+
+#### NavigationKeysHandler (84 lines)
+**Responsibility:** Ctrl+Home / End / Left / Right  
+**Dependencies:** CursorNavigationEngine, IDocumentServices  
+**Key Methods:** `TryHandleNavigationKey()`
+
+#### TableSelectionManager (236 lines)
+**Responsibility:** Rectangular selection inside a table — deriving, reading, clearing, and
+pasting table-shaped text into it  
+**Dependencies:** IDocumentServices, IParsedContentServices  
+**Key Methods:** `TryGetTableRectSelection()`, `GetTableRectSelectedText()`,
+`ClearTableRectCells()`, `MoveCursorToRectStart()`, `TryPasteIntoTableCells()`  
+**Note:** Holds no state — the rectangle is recomputed from anchor and cursor on every call,
+which is why rendering, input and editing can each ask for it independently.
 
 ---
 
