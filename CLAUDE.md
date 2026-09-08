@@ -133,17 +133,17 @@ Each extracted class depends on specific interfaces, not on DocsCanvas directly:
 
 ### Input decomposition (Phase 3 — 2026-09)
 
-`DocsCanvas.Input.cs` went from 972 to 576 lines. Seven handlers now own what the
+`DocsCanvas.Input.cs` went from 1098 to 658 lines. Seven handlers now own what the
 `OnKeyDown` switch used to inline, each taking its dependencies through the service
 interfaces rather than reaching into DocsCanvas fields:
 
-- **ListFormattingHandler** (235 lines) — smart Enter: list auto-continuation, ordered-list renumbering, hard-break stripping
-- **ContextMenuHandler** (144 lines) — right-click menu construction, incl. spell-check items
-- **EditingKeysHandler** (137 lines) — Backspace, Delete, Undo, Redo, and the undo grouping around them
-- **IndentationHandler** (93 lines) — Tab/Shift+Tab, with the indent step chosen per block kind
-- **FormattingKeysHandler** (89 lines) — Ctrl+B/I/K
-- **HoverImageHandler** (89 lines) — hover image preview
-- **NavigationKeysHandler** (74 lines) — Ctrl+Home/End/Left/Right
+- **ListFormattingHandler** (247 lines) — smart Enter: list auto-continuation, ordered-list renumbering, hard-break stripping
+- **ContextMenuHandler** (168 lines) — right-click menu construction, incl. spell-check items
+- **EditingKeysHandler** (156 lines) — Backspace, Delete, Undo, Redo, and the undo grouping around them
+- **FormattingKeysHandler** (102 lines) — Ctrl+B/I/K
+- **HoverImageHandler** (100 lines) — hover image preview
+- **IndentationHandler** (98 lines) — Tab/Shift+Tab, with the indent step chosen per block kind
+- **NavigationKeysHandler** (84 lines) — Ctrl+Home/End/Left/Right
 
 Eight one-line navigation wrappers (`HandleLeft`, `HandleUp`, `HandlePageDown`, …) were
 deleted; `OnKeyDown` calls `_navigationEngine` directly.
@@ -153,7 +153,7 @@ undo-grouping state) and `ISpellCheckAccess` (the slice of spell check the conte
 needs). `LastActionKind` moved out of DocsCanvas to its own file so extracted classes can
 see it.
 
-**`DocsCanvas.Formatting.cs` (555 lines) was deliberately left alone.** Extraction was
+**`DocsCanvas.Formatting.cs` (634 lines) was deliberately left alone.** Extraction was
 attempted and reverted: the toggles share mutable canvas state — chiefly `_pendingStyleOff`,
 which remembers that a style marker was typed and must toggle off on the next input — and
 splitting them across services broke `PendingBoldOff_InsideBold_TypingSplitsRun` and the
