@@ -131,6 +131,35 @@ Each extracted class depends on specific interfaces, not on DocsCanvas directly:
 - Completion summary: `design/DocsCanvas_Refactoring/Phase2_Refactoring_Summary.md`
 - Future opportunities: `design/DocsCanvas_Refactoring/Remaining_Architectural_Opportunities.md`
 
+### Input decomposition (Phase 3 — 2026-09)
+
+`DocsCanvas.Input.cs` went from 972 to 576 lines. Seven handlers now own what the
+`OnKeyDown` switch used to inline, each taking its dependencies through the service
+interfaces rather than reaching into DocsCanvas fields:
+
+- **ListFormattingHandler** (235 lines) — smart Enter: list auto-continuation, ordered-list renumbering, hard-break stripping
+- **ContextMenuHandler** (144 lines) — right-click menu construction, incl. spell-check items
+- **EditingKeysHandler** (137 lines) — Backspace, Delete, Undo, Redo, and the undo grouping around them
+- **IndentationHandler** (93 lines) — Tab/Shift+Tab, with the indent step chosen per block kind
+- **FormattingKeysHandler** (89 lines) — Ctrl+B/I/K
+- **HoverImageHandler** (89 lines) — hover image preview
+- **NavigationKeysHandler** (74 lines) — Ctrl+Home/End/Left/Right
+
+Eight one-line navigation wrappers (`HandleLeft`, `HandleUp`, `HandlePageDown`, …) were
+deleted; `OnKeyDown` calls `_navigationEngine` directly.
+
+Two interfaces were added: `IEditingServices` (editing operations plus the `LastAction`
+undo-grouping state) and `ISpellCheckAccess` (the slice of spell check the context menu
+needs). `LastActionKind` moved out of DocsCanvas to its own file so extracted classes can
+see it.
+
+**`DocsCanvas.Formatting.cs` (555 lines) was deliberately left alone.** Extraction was
+attempted and reverted: the toggles share mutable canvas state — chiefly `_pendingStyleOff`,
+which remembers that a style marker was typed and must toggle off on the next input — and
+splitting them across services broke `PendingBoldOff_InsideBold_TypingSplitsRun` and the
+multi-block task-list toggle. Extracting formatting means first giving that state an owner;
+it is not a mechanical move.
+
 ### Data flow and rendering pipeline
 
 The render pipeline is: **Document → MarkdownParser → BlockVisualMap → cached line visuals**.
@@ -153,7 +182,7 @@ The partial class is split by edit mode and by concern. All files share the same
 - **Layout** (`ComputeLayout`, `ComputeLayoutCore`, `WrapSegment`, `FitLine`, `BuildParagraphGroups`) — word wrapping, visual line computation, paragraph group joining for soft breaks
 - **Rendering** (`DrawLineContent` and the per-line drawers it calls, `DrawJoinedLine`, `ApplyInlineStyles`, `ApplyColorSpans`, `ApplySyntaxDimming`) — everything a line contains is drawn from `DrawLineContent`, at `y` in the line's own visual. Anything new that belongs *behind* the text goes there too, never into `OnRender`
 - **Text measurement** (`MeasureCharWidth`, `MeasureStringWidth`, `MeasureRangeWidth`, `GetLineHeight`, glyph/typeface management, `_charWidthCache`)
-- **Input handling** (`OnKeyDown`, `OnTextInput`, `OnMouseDown/Move/Up`, `Handle*` key dispatch methods)
+- **Input handling** (`OnKeyDown`, `OnTextInput`, `OnMouseDown/Move/Up`) — the event handlers stay in Input.cs, but each key's work lives in its own handler class (see *Input decomposition* above)
 - **Cursor/navigation mapping** (`CursorToVisualLineIndex`, `CursorXInVisualLine`, `HitTestVisualLine`, `HitTestToPosition`, `SetCursorFromVisualLine`)
 - **Formatting API** (in Formatting.cs: `ToggleBold/Italic/Code/Strikethrough`, `ToggleInlineStyle`, `ToggleHeading`, `ToggleBlockPrefixForSelection`, `ToggleFencedCode`, `InsertLink`, `InsertTable`, formatting query properties)
 - **Link popup** (in `LinkPopupController.cs`: `Show`, `Build`, `Close`, `Cancel`)
