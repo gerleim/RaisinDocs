@@ -166,13 +166,20 @@ public class FindReplaceTests
     [StaFact]
     public void ReplaceAll_AcrossBlocks()
     {
-        var canvas = CreateCanvas("foo one\nfoo two\nfoo three");
+        // Blank lines keep these three paragraphs in separate blocks. Without them they are lazy
+        // continuations of one another and merge into a single block, which would quietly turn
+        // this into a second copy of ReplaceAll_ReplacesAllOccurrences - the block count below
+        // pins the premise so that cannot happen unnoticed.
+        var canvas = CreateCanvas("foo one\n\nfoo two\n\nfoo three");
+        canvas.TestBlockCount.Should().Be(5);
+
         canvas.TestExecuteSearch("foo", caseSensitive: false);
         canvas.ReplaceAll("bar");
 
         canvas.TestGetBlockText(0).Should().Be("bar one");
-        canvas.TestGetBlockText(1).Should().Be("bar two");
-        canvas.TestGetBlockText(2).Should().Be("bar three");
+        canvas.TestGetBlockText(2).Should().Be("bar two");
+        canvas.TestGetBlockText(4).Should().Be("bar three");
+        canvas.TestSearchMatchCount.Should().Be(0);
     }
 
     [StaFact]
