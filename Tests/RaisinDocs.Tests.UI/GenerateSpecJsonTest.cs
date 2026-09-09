@@ -11,9 +11,18 @@ using Xunit.Abstractions;
 namespace RaisinDocs.Tests.UI;
 
 /// <summary>
-/// Test utility to regenerate spec_with_text.json with correct format.
-/// Run this once to update the spec file.
+/// Regenerates the expected text in spec_with_text.json from what the canvas renders now.
 /// </summary>
+/// <remarks>
+/// Skipped on purpose: this writes the file that <see cref="CommonMarkVisualRenderingTests"/>
+/// asserts against, so leaving it enabled makes that suite compare the code against itself and
+/// pass whatever it does. Run it only when a rendering change is intended, by removing the Skip
+/// temporarily, then review the resulting diff before committing - the diff is the whole point,
+/// since these expectations come from the code rather than from the spec.
+///
+/// It writes to the checked-in file rather than the copy in bin, so a regeneration shows up in
+/// git instead of silently altering one machine's baseline.
+/// </remarks>
 public class GenerateSpecJsonTest
 {
     private const int CanvasWidth = 800;
@@ -25,11 +34,17 @@ public class GenerateSpecJsonTest
         _output = output;
     }
 
-    [StaFact]
+    /// <summary>The checked-in fixture, not the build output copy of it.</summary>
+    internal static string SourceSpecPath => Path.GetFullPath(Path.Combine(
+        AppContext.BaseDirectory, "..", "..", "..", "..",
+        "RaisinDocs.Tests.Conformance", "spec_with_text.json"));
+
+    [StaFact(Skip = "Regenerates the baseline the visual rendering tests assert against. " +
+                    "Remove the Skip deliberately, then review the diff.")]
     [Trait("Category", "SpecGeneration")]
     public void RegenerateSpecWithCorrectFormat()
     {
-        var specPath = Path.Combine(AppContext.BaseDirectory, "spec_with_text.json");
+        var specPath = SourceSpecPath;
         var json = File.ReadAllText(specPath);
         var examples = JsonSerializer.Deserialize<List<SpecExample>>(json, new JsonSerializerOptions
         {

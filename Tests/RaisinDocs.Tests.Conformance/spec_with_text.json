@@ -6,7 +6,7 @@
     "start_line": 355,
     "end_line": 360,
     "section": "Tabs",
-    "text": "`foo\tbaz\t\tbim `"
+    "text": "[CODE: foo[\\t]baz[\\t][\\t]bim]"
   },
   {
     "markdown": "  \tfoo\tbaz\t\tbim\n",
@@ -15,7 +15,7 @@
     "start_line": 362,
     "end_line": 367,
     "section": "Tabs",
-    "text": "`foo\tbaz\t\tbim `"
+    "text": "[CODE: foo[\\t]baz[\\t][\\t]bim]"
   },
   {
     "markdown": "    a\ta\n    ὐ\ta\n",
@@ -24,7 +24,7 @@
     "start_line": 369,
     "end_line": 376,
     "section": "Tabs",
-    "text": "`a\ta ὐ\ta `"
+    "text": "[CODE: a[\\t]a]\n[CODE: ὐ[\\t]a]"
   },
   {
     "markdown": "  - foo\n\n\tbar\n",
@@ -33,7 +33,7 @@
     "start_line": 382,
     "end_line": 393,
     "section": "Tabs",
-    "text": "- foo\n bar"
+    "text": "[LIST: foo]\n[PARA: bar]"
   },
   {
     "markdown": "- foo\n\n\t\tbar\n",
@@ -42,7 +42,7 @@
     "start_line": 395,
     "end_line": 407,
     "section": "Tabs",
-    "text": "- foo\n ` bar `"
+    "text": "[LIST: foo]\n[CODE: [\\t]bar]"
   },
   {
     "markdown": ">\t\tfoo\n",
@@ -51,7 +51,7 @@
     "start_line": 418,
     "end_line": 425,
     "section": "Tabs",
-    "text": "> ` foo `"
+    "text": "[QUOTE: [\\t][\\t]foo]"
   },
   {
     "markdown": "-\t\tfoo\n",
@@ -60,7 +60,7 @@
     "start_line": 427,
     "end_line": 436,
     "section": "Tabs",
-    "text": "- ` foo `"
+    "text": "[LIST: o]"
   },
   {
     "markdown": "    foo\n\tbar\n",
@@ -69,7 +69,7 @@
     "start_line": 439,
     "end_line": 446,
     "section": "Tabs",
-    "text": "`foo bar `"
+    "text": "[CODE: foo]\n[CODE: bar]"
   },
   {
     "markdown": " - foo\n   - bar\n\t - baz\n",
@@ -78,7 +78,7 @@
     "start_line": 448,
     "end_line": 464,
     "section": "Tabs",
-    "text": "- foo - bar - baz"
+    "text": "[LIST: foo]\n[LIST: bar]"
   },
   {
     "markdown": "#\tFoo\n",
@@ -86,7 +86,8 @@
     "example": 10,
     "start_line": 466,
     "end_line": 470,
-    "section": "Tabs"
+    "section": "Tabs",
+    "text": "[H1: Foo]"
   },
   {
     "markdown": "*\t*\t*\t\n",
@@ -95,7 +96,7 @@
     "start_line": 472,
     "end_line": 476,
     "section": "Tabs",
-    "text": "---"
+    "text": "[BREAK:  --- ]"
   },
   {
     "markdown": "\\!\\\"\\#\\$\\%\\&\\'\\(\\)\\*\\+\\,\\-\\.\\/\\:\\;\\<\\=\\>\\?\\@\\[\\\\\\]\\^\\_\\`\\{\\|\\}\\~\n",
@@ -104,7 +105,7 @@
     "start_line": 489,
     "end_line": 493,
     "section": "Backslash escapes",
-    "text": "!\"#$%&'()*+,-./:;?@[\\]^_`{|}~"
+    "text": "[PARA: \\!\\\"\\#\\$\\%\\&\\'\\(\\)\\*\\+\\,\\-\\.\\/\\:\\;\\<\\=\\>\\?\\@\\[\\\\\\]\\^\\_\\`\\{\\|\\}\\~]"
   },
   {
     "markdown": "\\\t\\A\\a\\ \\3\\φ\\«\n",
@@ -113,7 +114,7 @@
     "start_line": 499,
     "end_line": 503,
     "section": "Backslash escapes",
-    "text": "\\\t\\A\\a\\ \\3\\φ\\«"
+    "text": "[PARA: \\[\\t]\\A\\a\\ \\3\\φ\\«]"
   },
   {
     "markdown": "\\*not emphasized*\n\\<br/> not a tag\n\\[not a link](/foo)\n\\`not code`\n1\\. not a list\n\\* not a list\n\\# not a heading\n\\[foo]: /url \"not a reference\"\n\\&ouml; not a character entity\n",
@@ -122,7 +123,7 @@
     "start_line": 509,
     "end_line": 529,
     "section": "Backslash escapes",
-    "text": "*not emphasized* \n not a tag [not a link](/foo) `not code` 1. not a list * not a list # not a heading [foo]: /url \"not a reference\" &ouml; not a character entity"
+    "text": "[PARA: \\*not emphasized* \\<br/> not a tag \\[not a link](/foo) \\`not code` 1\\. not a list \\* not a list \\# not a heading \\[foo]: /url \"not a reference\" \\&ouml; not a character entity]"
   },
   {
     "markdown": "\\\\*emphasis*\n",
@@ -130,7 +131,8 @@
     "example": 15,
     "start_line": 534,
     "end_line": 538,
-    "section": "Backslash escapes"
+    "section": "Backslash escapes",
+    "text": "[PARA: \\\\emphasis]"
   },
   {
     "markdown": "foo\\\nbar\n",
@@ -139,7 +141,7 @@
     "start_line": 543,
     "end_line": 549,
     "section": "Backslash escapes",
-    "text": "foo\n bar"
+    "text": "[PARA: foo]\n[PARA: bar]"
   },
   {
     "markdown": "`` \\[\\` ``\n",
@@ -148,7 +150,7 @@
     "start_line": 555,
     "end_line": 559,
     "section": "Backslash escapes",
-    "text": "`\\[\\``"
+    "text": "[PARA:  \\[\\` ]"
   },
   {
     "markdown": "    \\[\\]\n",
@@ -157,7 +159,7 @@
     "start_line": 562,
     "end_line": 567,
     "section": "Backslash escapes",
-    "text": "`\\[\\] `"
+    "text": "[CODE: \\[\\]]"
   },
   {
     "markdown": "~~~\n\\[\\]\n~~~\n",
@@ -166,7 +168,7 @@
     "start_line": 570,
     "end_line": 577,
     "section": "Backslash escapes",
-    "text": "`\\[\\] `"
+    "text": "[CODE: ~~~]\n[CODE: \\[\\]]\n[CODE: ~~~]"
   },
   {
     "markdown": "<https://example.com?find=\\*>\n",
@@ -175,7 +177,7 @@
     "start_line": 580,
     "end_line": 584,
     "section": "Backslash escapes",
-    "text": "https://example.com?find=\\*"
+    "text": "[PARA: https://example.com?find=\\*]"
   },
   {
     "markdown": "<a href=\"/bar\\/)\">\n",
@@ -184,7 +186,7 @@
     "start_line": 587,
     "end_line": 591,
     "section": "Backslash escapes",
-    "text": ""
+    "text": "[HTML: <a href=\"/bar\\/)\">]"
   },
   {
     "markdown": "[foo](/bar\\* \"ti\\*tle\")\n",
@@ -193,7 +195,7 @@
     "start_line": 597,
     "end_line": 601,
     "section": "Backslash escapes",
-    "text": "foo"
+    "text": "[PARA: foo]"
   },
   {
     "markdown": "[foo]\n\n[foo]: /bar\\* \"ti\\*tle\"\n",
@@ -202,7 +204,7 @@
     "start_line": 604,
     "end_line": 610,
     "section": "Backslash escapes",
-    "text": "foo"
+    "text": "[PARA: foo]\n[UNKNOWN: [foo]: /bar\\* \"ti\\*tle\"]"
   },
   {
     "markdown": "``` foo\\+bar\nfoo\n```\n",
@@ -211,16 +213,16 @@
     "start_line": 613,
     "end_line": 620,
     "section": "Backslash escapes",
-    "text": "```\nfoo \n```"
+    "text": "[CODE: ``` foo\\+bar]\n[CODE: foo]\n[CODE: ```]"
   },
   {
     "markdown": "&nbsp; &amp; &copy; &AElig; &Dcaron;\n&frac34; &HilbertSpace; &DifferentialD;\n&ClockwiseContourIntegral; &ngE;\n",
-    "html": "<p>  &amp; © Æ Ď\n¾ ℋ ⅆ\n∲ ≧̸</p>\n",
+    "html": "<p>\u00A0 &amp; © Æ Ď\n¾ ℋ ⅆ\n∲ ≧̸</p>\n",
     "example": 25,
     "start_line": 649,
     "end_line": 657,
     "section": "Entity and numeric character references",
-    "text": "& © Æ Ď ¾ ℋ ⅆ ∲ ≧̸"
+    "text": "[PARA: &nbsp; &amp; &copy; &AElig; &Dcaron; &frac34; &HilbertSpace; &DifferentialD; &ClockwiseContourIntegral; &ngE;]"
   },
   {
     "markdown": "&#35; &#1234; &#992; &#0;\n",
@@ -229,7 +231,7 @@
     "start_line": 668,
     "end_line": 672,
     "section": "Entity and numeric character references",
-    "text": "# Ӓ Ϡ �"
+    "text": "[PARA: &#35; &#1234; &#992; &#0;]"
   },
   {
     "markdown": "&#X22; &#XD06; &#xcab;\n",
@@ -238,7 +240,7 @@
     "start_line": 681,
     "end_line": 685,
     "section": "Entity and numeric character references",
-    "text": "\" ആ ಫ"
+    "text": "[PARA: &#X22; &#XD06; &#xcab;]"
   },
   {
     "markdown": "&nbsp &x; &#; &#x;\n&#87654321;\n&#abcdef0;\n&ThisIsNotDefined; &hi?;\n",
@@ -247,7 +249,7 @@
     "start_line": 690,
     "end_line": 700,
     "section": "Entity and numeric character references",
-    "text": "&nbsp &x; &#; &#x; &#87654321; &#abcdef0; &ThisIsNotDefined; &hi?;"
+    "text": "[PARA: &nbsp &x; &#; &#x; &#87654321; &#abcdef0; &ThisIsNotDefined; &hi?;]"
   },
   {
     "markdown": "&copy\n",
@@ -256,7 +258,7 @@
     "start_line": 707,
     "end_line": 711,
     "section": "Entity and numeric character references",
-    "text": "&copy"
+    "text": "[PARA: &copy]"
   },
   {
     "markdown": "&MadeUpEntity;\n",
@@ -265,7 +267,7 @@
     "start_line": 717,
     "end_line": 721,
     "section": "Entity and numeric character references",
-    "text": "&MadeUpEntity;"
+    "text": "[PARA: &MadeUpEntity;]"
   },
   {
     "markdown": "<a href=\"&ouml;&ouml;.html\">\n",
@@ -274,7 +276,7 @@
     "start_line": 728,
     "end_line": 732,
     "section": "Entity and numeric character references",
-    "text": ""
+    "text": "[HTML: <a href=\"&ouml;&ouml;.html\">]"
   },
   {
     "markdown": "[foo](/f&ouml;&ouml; \"f&ouml;&ouml;\")\n",
@@ -283,7 +285,7 @@
     "start_line": 735,
     "end_line": 739,
     "section": "Entity and numeric character references",
-    "text": "foo"
+    "text": "[PARA: foo]"
   },
   {
     "markdown": "[foo]\n\n[foo]: /f&ouml;&ouml; \"f&ouml;&ouml;\"\n",
@@ -292,7 +294,7 @@
     "start_line": 742,
     "end_line": 748,
     "section": "Entity and numeric character references",
-    "text": "foo"
+    "text": "[PARA: foo]\n[UNKNOWN: [foo]: /f&ouml;&ouml; \"f&ouml;&ouml;\"]"
   },
   {
     "markdown": "``` f&ouml;&ouml;\nfoo\n```\n",
@@ -301,7 +303,7 @@
     "start_line": 751,
     "end_line": 758,
     "section": "Entity and numeric character references",
-    "text": "```\nfoo \n```"
+    "text": "[CODE: ``` f&ouml;&ouml;]\n[CODE: foo]\n[CODE: ```]"
   },
   {
     "markdown": "`f&ouml;&ouml;`\n",
@@ -310,7 +312,7 @@
     "start_line": 764,
     "end_line": 768,
     "section": "Entity and numeric character references",
-    "text": "`f&ouml;&ouml;`"
+    "text": "[PARA: f&ouml;&ouml;]"
   },
   {
     "markdown": "    f&ouml;f&ouml;\n",
@@ -319,7 +321,7 @@
     "start_line": 771,
     "end_line": 776,
     "section": "Entity and numeric character references",
-    "text": "`f&ouml;f&ouml; `"
+    "text": "[CODE: f&ouml;f&ouml;]"
   },
   {
     "markdown": "&#42;foo&#42;\n*foo*\n",
@@ -327,7 +329,8 @@
     "example": 37,
     "start_line": 783,
     "end_line": 789,
-    "section": "Entity and numeric character references"
+    "section": "Entity and numeric character references",
+    "text": "[PARA: &#42;foo&#42; foo]"
   },
   {
     "markdown": "&#42; foo\n\n* foo\n",
@@ -336,7 +339,7 @@
     "start_line": 791,
     "end_line": 800,
     "section": "Entity and numeric character references",
-    "text": "* foo\n - foo"
+    "text": "[PARA: &#42; foo]\n[LIST: foo]"
   },
   {
     "markdown": "foo&#10;&#10;bar\n",
@@ -345,7 +348,7 @@
     "start_line": 802,
     "end_line": 808,
     "section": "Entity and numeric character references",
-    "text": "foo bar"
+    "text": "[PARA: foo&#10;&#10;bar]"
   },
   {
     "markdown": "&#9;foo\n",
@@ -354,7 +357,7 @@
     "start_line": 810,
     "end_line": 814,
     "section": "Entity and numeric character references",
-    "text": "foo"
+    "text": "[PARA: &#9;foo]"
   },
   {
     "markdown": "[a](url &quot;tit&quot;)\n",
@@ -363,7 +366,7 @@
     "start_line": 817,
     "end_line": 821,
     "section": "Entity and numeric character references",
-    "text": "[a](url \"tit\")"
+    "text": "[PARA: [a](url &quot;tit&quot;)]"
   },
   {
     "markdown": "- `one\n- two`\n",
@@ -372,7 +375,7 @@
     "start_line": 840,
     "end_line": 848,
     "section": "Precedence",
-    "text": "- `one\n - two`"
+    "text": "[LIST: `one]\n[LIST: two`]"
   },
   {
     "markdown": "***\n---\n___\n",
@@ -381,7 +384,7 @@
     "start_line": 879,
     "end_line": 887,
     "section": "Thematic breaks",
-    "text": "--- --- ---"
+    "text": "[BREAK:  --- ]\n[BREAK:  --- ]\n[BREAK:  --- ]"
   },
   {
     "markdown": "+++\n",
@@ -390,7 +393,7 @@
     "start_line": 892,
     "end_line": 896,
     "section": "Thematic breaks",
-    "text": "+++"
+    "text": "[PARA: +++]"
   },
   {
     "markdown": "===\n",
@@ -399,7 +402,7 @@
     "start_line": 899,
     "end_line": 903,
     "section": "Thematic breaks",
-    "text": "==="
+    "text": "[PARA: ===]"
   },
   {
     "markdown": "--\n**\n__\n",
@@ -408,7 +411,7 @@
     "start_line": 908,
     "end_line": 916,
     "section": "Thematic breaks",
-    "text": "-- ** __"
+    "text": "[PARA: -- ** __]"
   },
   {
     "markdown": " ***\n  ***\n   ***\n",
@@ -417,7 +420,7 @@
     "start_line": 921,
     "end_line": 929,
     "section": "Thematic breaks",
-    "text": "--- --- ---"
+    "text": "[BREAK:  --- ]\n[BREAK:  --- ]\n[BREAK:  --- ]"
   },
   {
     "markdown": "    ***\n",
@@ -426,7 +429,7 @@
     "start_line": 934,
     "end_line": 939,
     "section": "Thematic breaks",
-    "text": "`*** `"
+    "text": "[CODE: ***]"
   },
   {
     "markdown": "Foo\n    ***\n",
@@ -435,7 +438,7 @@
     "start_line": 942,
     "end_line": 948,
     "section": "Thematic breaks",
-    "text": "Foo ***"
+    "text": "[PARA: Foo]\n[PARA:     ***]"
   },
   {
     "markdown": "_____________________________________\n",
@@ -444,7 +447,7 @@
     "start_line": 953,
     "end_line": 957,
     "section": "Thematic breaks",
-    "text": "---"
+    "text": "[BREAK:  --- ]"
   },
   {
     "markdown": " - - -\n",
@@ -453,7 +456,7 @@
     "start_line": 962,
     "end_line": 966,
     "section": "Thematic breaks",
-    "text": "---"
+    "text": "[BREAK:  --- ]"
   },
   {
     "markdown": " **  * ** * ** * **\n",
@@ -462,7 +465,7 @@
     "start_line": 969,
     "end_line": 973,
     "section": "Thematic breaks",
-    "text": "---"
+    "text": "[BREAK:  --- ]"
   },
   {
     "markdown": "-     -      -      -\n",
@@ -471,7 +474,7 @@
     "start_line": 976,
     "end_line": 980,
     "section": "Thematic breaks",
-    "text": "---"
+    "text": "[BREAK:  --- ]"
   },
   {
     "markdown": "- - - -    \n",
@@ -480,7 +483,7 @@
     "start_line": 985,
     "end_line": 989,
     "section": "Thematic breaks",
-    "text": "---"
+    "text": "[BREAK:  --- ]"
   },
   {
     "markdown": "_ _ _ _ a\n\na------\n\n---a---\n",
@@ -489,7 +492,7 @@
     "start_line": 994,
     "end_line": 1004,
     "section": "Thematic breaks",
-    "text": "_ _ _ _ a\n a------\n ---a---"
+    "text": "[PARA: _ _ _ _ a]\n[PARA: a------]\n[PARA: ---a---]"
   },
   {
     "markdown": " *-*\n",
@@ -497,7 +500,8 @@
     "example": 56,
     "start_line": 1010,
     "end_line": 1014,
-    "section": "Thematic breaks"
+    "section": "Thematic breaks",
+    "text": "[PARA:  -]"
   },
   {
     "markdown": "- foo\n***\n- bar\n",
@@ -506,7 +510,7 @@
     "start_line": 1019,
     "end_line": 1031,
     "section": "Thematic breaks",
-    "text": "- foo\n --- - bar"
+    "text": "[LIST: foo]\n[BREAK:  --- ]\n[LIST: bar]"
   },
   {
     "markdown": "Foo\n***\nbar\n",
@@ -515,7 +519,7 @@
     "start_line": 1036,
     "end_line": 1044,
     "section": "Thematic breaks",
-    "text": "Foo\n --- bar"
+    "text": "[PARA: Foo]\n[BREAK:  --- ]\n[PARA: bar]"
   },
   {
     "markdown": "Foo\n---\nbar\n",
@@ -523,7 +527,8 @@
     "example": 59,
     "start_line": 1053,
     "end_line": 1060,
-    "section": "Thematic breaks"
+    "section": "Thematic breaks",
+    "text": "[H2: Foo]\n[UNKNOWN: ---]\n[PARA: bar]"
   },
   {
     "markdown": "* Foo\n* * *\n* Bar\n",
@@ -532,7 +537,7 @@
     "start_line": 1066,
     "end_line": 1078,
     "section": "Thematic breaks",
-    "text": "- Foo\n --- - Bar"
+    "text": "[LIST: Foo]\n[BREAK:  --- ]\n[LIST: Bar]"
   },
   {
     "markdown": "- Foo\n- * * *\n",
@@ -541,7 +546,7 @@
     "start_line": 1083,
     "end_line": 1093,
     "section": "Thematic breaks",
-    "text": "- Foo\n - ---"
+    "text": "[LIST: Foo]\n[LIST: * * *]"
   },
   {
     "markdown": "# foo\n## foo\n### foo\n#### foo\n##### foo\n###### foo\n",
@@ -549,7 +554,8 @@
     "example": 62,
     "start_line": 1112,
     "end_line": 1126,
-    "section": "ATX headings"
+    "section": "ATX headings",
+    "text": "[H1: foo]\n[H2: foo]\n[H3: foo]\n[H4: foo]\n[H5: foo]\n[H6: foo]"
   },
   {
     "markdown": "####### foo\n",
@@ -558,7 +564,7 @@
     "start_line": 1131,
     "end_line": 1135,
     "section": "ATX headings",
-    "text": "####### foo"
+    "text": "[PARA: ####### foo]"
   },
   {
     "markdown": "#5 bolt\n\n#hashtag\n",
@@ -567,7 +573,7 @@
     "start_line": 1146,
     "end_line": 1153,
     "section": "ATX headings",
-    "text": "#5 bolt\n #hashtag"
+    "text": "[PARA: #5 bolt]\n[PARA: #hashtag]"
   },
   {
     "markdown": "\\## foo\n",
@@ -576,7 +582,7 @@
     "start_line": 1158,
     "end_line": 1162,
     "section": "ATX headings",
-    "text": "## foo"
+    "text": "[PARA: \\## foo]"
   },
   {
     "markdown": "# foo *bar* \\*baz\\*\n",
@@ -584,7 +590,8 @@
     "example": 66,
     "start_line": 1167,
     "end_line": 1171,
-    "section": "ATX headings"
+    "section": "ATX headings",
+    "text": "[H1: foo bar \\*baz\\*]"
   },
   {
     "markdown": "#                  foo                     \n",
@@ -592,7 +599,8 @@
     "example": 67,
     "start_line": 1176,
     "end_line": 1180,
-    "section": "ATX headings"
+    "section": "ATX headings",
+    "text": "[H1:                  foo]"
   },
   {
     "markdown": " ### foo\n  ## foo\n   # foo\n",
@@ -600,7 +608,8 @@
     "example": 68,
     "start_line": 1185,
     "end_line": 1193,
-    "section": "ATX headings"
+    "section": "ATX headings",
+    "text": "[H3: foo]\n[H2: foo]\n[H1: foo]"
   },
   {
     "markdown": "    # foo\n",
@@ -609,7 +618,7 @@
     "start_line": 1198,
     "end_line": 1203,
     "section": "ATX headings",
-    "text": "`# foo `"
+    "text": "[CODE: # foo]"
   },
   {
     "markdown": "foo\n    # bar\n",
@@ -618,7 +627,7 @@
     "start_line": 1206,
     "end_line": 1212,
     "section": "ATX headings",
-    "text": "foo # bar"
+    "text": "[PARA: foo]\n[PARA:     # bar]"
   },
   {
     "markdown": "## foo ##\n  ###   bar    ###\n",
@@ -626,7 +635,8 @@
     "example": 71,
     "start_line": 1217,
     "end_line": 1223,
-    "section": "ATX headings"
+    "section": "ATX headings",
+    "text": "[H2: foo ##]\n[H3:   bar    ###]"
   },
   {
     "markdown": "# foo ##################################\n##### foo ##\n",
@@ -634,7 +644,8 @@
     "example": 72,
     "start_line": 1228,
     "end_line": 1234,
-    "section": "ATX headings"
+    "section": "ATX headings",
+    "text": "[H1: foo ##################################]\n[H5: foo ##]"
   },
   {
     "markdown": "### foo ###     \n",
@@ -642,7 +653,8 @@
     "example": 73,
     "start_line": 1239,
     "end_line": 1243,
-    "section": "ATX headings"
+    "section": "ATX headings",
+    "text": "[H3: foo ###]"
   },
   {
     "markdown": "### foo ### b\n",
@@ -650,7 +662,8 @@
     "example": 74,
     "start_line": 1250,
     "end_line": 1254,
-    "section": "ATX headings"
+    "section": "ATX headings",
+    "text": "[H3: foo ### b]"
   },
   {
     "markdown": "# foo#\n",
@@ -658,7 +671,8 @@
     "example": 75,
     "start_line": 1259,
     "end_line": 1263,
-    "section": "ATX headings"
+    "section": "ATX headings",
+    "text": "[H1: foo#]"
   },
   {
     "markdown": "### foo \\###\n## foo #\\##\n# foo \\#\n",
@@ -666,7 +680,8 @@
     "example": 76,
     "start_line": 1269,
     "end_line": 1277,
-    "section": "ATX headings"
+    "section": "ATX headings",
+    "text": "[H3: foo \\###]\n[H2: foo #\\##]\n[H1: foo \\#]"
   },
   {
     "markdown": "****\n## foo\n****\n",
@@ -674,7 +689,8 @@
     "example": 77,
     "start_line": 1283,
     "end_line": 1291,
-    "section": "ATX headings"
+    "section": "ATX headings",
+    "text": "[BREAK:  --- ]\n[H2: foo]\n[BREAK:  --- ]"
   },
   {
     "markdown": "Foo bar\n# baz\nBar foo\n",
@@ -682,7 +698,8 @@
     "example": 78,
     "start_line": 1294,
     "end_line": 1302,
-    "section": "ATX headings"
+    "section": "ATX headings",
+    "text": "[PARA: Foo bar]\n[H1: baz]\n[PARA: Bar foo]"
   },
   {
     "markdown": "## \n#\n### ###\n",
@@ -690,7 +707,8 @@
     "example": 79,
     "start_line": 1307,
     "end_line": 1315,
-    "section": "ATX headings"
+    "section": "ATX headings",
+    "text": "[H1: #]\n[H3: ###]"
   },
   {
     "markdown": "Foo *bar*\n=========\n\nFoo *bar*\n---------\n",
@@ -698,7 +716,8 @@
     "example": 80,
     "start_line": 1347,
     "end_line": 1356,
-    "section": "Setext headings"
+    "section": "Setext headings",
+    "text": "[H1: Foo bar]\n[UNKNOWN: =========]\n[H2: Foo bar]\n[UNKNOWN: ---------]"
   },
   {
     "markdown": "Foo *bar\nbaz*\n====\n",
@@ -706,7 +725,8 @@
     "example": 81,
     "start_line": 1361,
     "end_line": 1368,
-    "section": "Setext headings"
+    "section": "Setext headings",
+    "text": "[PARA: Foo *bar]\n[H1: baz*]\n[UNKNOWN: ====]"
   },
   {
     "markdown": "  Foo *bar\nbaz*\t\n====\n",
@@ -714,7 +734,8 @@
     "example": 82,
     "start_line": 1375,
     "end_line": 1382,
-    "section": "Setext headings"
+    "section": "Setext headings",
+    "text": "[PARA:   Foo *bar]\n[H1: baz*[\\t]]\n[UNKNOWN: ====]"
   },
   {
     "markdown": "Foo\n-------------------------\n\nFoo\n=\n",
@@ -722,7 +743,8 @@
     "example": 83,
     "start_line": 1387,
     "end_line": 1396,
-    "section": "Setext headings"
+    "section": "Setext headings",
+    "text": "[H2: Foo]\n[UNKNOWN: -------------------------]\n[H1: Foo]\n[UNKNOWN: =]"
   },
   {
     "markdown": "   Foo\n---\n\n  Foo\n-----\n\n  Foo\n  ===\n",
@@ -730,7 +752,8 @@
     "example": 84,
     "start_line": 1402,
     "end_line": 1415,
-    "section": "Setext headings"
+    "section": "Setext headings",
+    "text": "[H2:    Foo]\n[UNKNOWN: ---]\n[H2:   Foo]\n[UNKNOWN: -----]\n[H1:   Foo]\n[UNKNOWN:   ===]"
   },
   {
     "markdown": "    Foo\n    ---\n\n    Foo\n---\n",
@@ -739,7 +762,7 @@
     "start_line": 1420,
     "end_line": 1433,
     "section": "Setext headings",
-    "text": "`Foo --- Foo ` ---"
+    "text": "[CODE: Foo]\n[CODE: ---]\n[CODE: Foo]\n[BREAK:  --- ]"
   },
   {
     "markdown": "Foo\n   ----      \n",
@@ -747,7 +770,8 @@
     "example": 86,
     "start_line": 1439,
     "end_line": 1444,
-    "section": "Setext headings"
+    "section": "Setext headings",
+    "text": "[H2: Foo]\n[UNKNOWN:    ----]"
   },
   {
     "markdown": "Foo\n    ---\n",
@@ -756,7 +780,7 @@
     "start_line": 1449,
     "end_line": 1455,
     "section": "Setext headings",
-    "text": "Foo ---"
+    "text": "[PARA: Foo]\n[PARA:     ---]"
   },
   {
     "markdown": "Foo\n= =\n\nFoo\n--- -\n",
@@ -765,7 +789,7 @@
     "start_line": 1460,
     "end_line": 1471,
     "section": "Setext headings",
-    "text": "Foo = =\n Foo\n ---"
+    "text": "[PARA: Foo = =]\n[PARA: Foo]\n[BREAK:  --- ]"
   },
   {
     "markdown": "Foo  \n-----\n",
@@ -773,7 +797,8 @@
     "example": 89,
     "start_line": 1476,
     "end_line": 1481,
-    "section": "Setext headings"
+    "section": "Setext headings",
+    "text": "[H2: Foo]\n[UNKNOWN: -----]"
   },
   {
     "markdown": "Foo\\\n----\n",
@@ -781,7 +806,8 @@
     "example": 90,
     "start_line": 1486,
     "end_line": 1491,
-    "section": "Setext headings"
+    "section": "Setext headings",
+    "text": "[H2: Foo]\n[UNKNOWN: ----]"
   },
   {
     "markdown": "`Foo\n----\n`\n\n<a title=\"a lot\n---\nof dashes\"/>\n",
@@ -789,7 +815,8 @@
     "example": 91,
     "start_line": 1497,
     "end_line": 1510,
-    "section": "Setext headings"
+    "section": "Setext headings",
+    "text": "[H2: `Foo]\n[UNKNOWN: ----]\n[PARA: `]\n[H2: <a title=\"a lot]\n[UNKNOWN: ---]\n[PARA: of dashes\"/>]"
   },
   {
     "markdown": "> Foo\n---\n",
@@ -798,7 +825,7 @@
     "start_line": 1516,
     "end_line": 1524,
     "section": "Setext headings",
-    "text": "> Foo\n ---"
+    "text": "[QUOTE: Foo]\n[BREAK:  --- ]"
   },
   {
     "markdown": "> foo\nbar\n===\n",
@@ -807,7 +834,7 @@
     "start_line": 1527,
     "end_line": 1537,
     "section": "Setext headings",
-    "text": "> foo bar ==="
+    "text": "[QUOTE: foo]\n[PARA: bar ===]"
   },
   {
     "markdown": "- Foo\n---\n",
@@ -816,7 +843,7 @@
     "start_line": 1540,
     "end_line": 1548,
     "section": "Setext headings",
-    "text": "- Foo\n ---"
+    "text": "[LIST: Foo]\n[BREAK:  --- ]"
   },
   {
     "markdown": "Foo\nBar\n---\n",
@@ -824,7 +851,8 @@
     "example": 95,
     "start_line": 1555,
     "end_line": 1562,
-    "section": "Setext headings"
+    "section": "Setext headings",
+    "text": "[PARA: Foo]\n[H2: Bar]\n[UNKNOWN: ---]"
   },
   {
     "markdown": "---\nFoo\n---\nBar\n---\nBaz\n",
@@ -832,7 +860,8 @@
     "example": 96,
     "start_line": 1568,
     "end_line": 1580,
-    "section": "Setext headings"
+    "section": "Setext headings",
+    "text": "[BREAK:  --- ]\n[H2: Foo]\n[UNKNOWN: ---]\n[H2: Bar]\n[UNKNOWN: ---]\n[PARA: Baz]"
   },
   {
     "markdown": "\n====\n",
@@ -841,7 +870,7 @@
     "start_line": 1585,
     "end_line": 1590,
     "section": "Setext headings",
-    "text": "===="
+    "text": "[PARA: ====]"
   },
   {
     "markdown": "---\n---\n",
@@ -850,7 +879,7 @@
     "start_line": 1597,
     "end_line": 1603,
     "section": "Setext headings",
-    "text": "--- ---"
+    "text": "[BREAK:  --- ]\n[BREAK:  --- ]"
   },
   {
     "markdown": "- foo\n-----\n",
@@ -859,7 +888,7 @@
     "start_line": 1606,
     "end_line": 1614,
     "section": "Setext headings",
-    "text": "- foo\n ---"
+    "text": "[LIST: foo]\n[BREAK:  --- ]"
   },
   {
     "markdown": "    foo\n---\n",
@@ -868,7 +897,7 @@
     "start_line": 1617,
     "end_line": 1624,
     "section": "Setext headings",
-    "text": "`foo ` ---"
+    "text": "[CODE: foo]\n[BREAK:  --- ]"
   },
   {
     "markdown": "> foo\n-----\n",
@@ -877,7 +906,7 @@
     "start_line": 1627,
     "end_line": 1635,
     "section": "Setext headings",
-    "text": "> foo\n ---"
+    "text": "[QUOTE: foo]\n[BREAK:  --- ]"
   },
   {
     "markdown": "\\> foo\n------\n",
@@ -885,7 +914,8 @@
     "example": 102,
     "start_line": 1641,
     "end_line": 1646,
-    "section": "Setext headings"
+    "section": "Setext headings",
+    "text": "[H2: \\> foo]\n[UNKNOWN: ------]"
   },
   {
     "markdown": "Foo\n\nbar\n---\nbaz\n",
@@ -893,7 +923,8 @@
     "example": 103,
     "start_line": 1672,
     "end_line": 1682,
-    "section": "Setext headings"
+    "section": "Setext headings",
+    "text": "[PARA: Foo]\n[H2: bar]\n[UNKNOWN: ---]\n[PARA: baz]"
   },
   {
     "markdown": "Foo\nbar\n\n---\n\nbaz\n",
@@ -902,7 +933,7 @@
     "start_line": 1688,
     "end_line": 1700,
     "section": "Setext headings",
-    "text": "Foo bar\n --- baz"
+    "text": "[PARA: Foo bar]\n[BREAK:  --- ]\n[PARA: baz]"
   },
   {
     "markdown": "Foo\nbar\n* * *\nbaz\n",
@@ -911,7 +942,7 @@
     "start_line": 1706,
     "end_line": 1716,
     "section": "Setext headings",
-    "text": "Foo bar\n --- baz"
+    "text": "[PARA: Foo bar]\n[BREAK:  --- ]\n[PARA: baz]"
   },
   {
     "markdown": "Foo\nbar\n\\---\nbaz\n",
@@ -920,7 +951,7 @@
     "start_line": 1721,
     "end_line": 1731,
     "section": "Setext headings",
-    "text": "Foo bar --- baz"
+    "text": "[PARA: Foo bar \\--- baz]"
   },
   {
     "markdown": "    a simple\n      indented code block\n",
@@ -929,7 +960,7 @@
     "start_line": 1749,
     "end_line": 1756,
     "section": "Indented code blocks",
-    "text": "`a simple indented code block `"
+    "text": "[CODE: a simple]\n[CODE:   indented code block]"
   },
   {
     "markdown": "  - foo\n\n    bar\n",
@@ -938,7 +969,7 @@
     "start_line": 1763,
     "end_line": 1774,
     "section": "Indented code blocks",
-    "text": "- foo\n bar"
+    "text": "[LIST: foo]\n[PARA: bar]"
   },
   {
     "markdown": "1.  foo\n\n    - bar\n",
@@ -947,7 +978,7 @@
     "start_line": 1777,
     "end_line": 1790,
     "section": "Indented code blocks",
-    "text": "- foo\n - bar"
+    "text": "[OLIST: foo]\n[LIST: bar]"
   },
   {
     "markdown": "    <a/>\n    *hi*\n\n    - one\n",
@@ -956,7 +987,7 @@
     "start_line": 1797,
     "end_line": 1808,
     "section": "Indented code blocks",
-    "text": "```\n *hi* - one \n```"
+    "text": "[CODE: <a/>]\n[CODE: *hi*]\n[CODE: - one]"
   },
   {
     "markdown": "    chunk1\n\n    chunk2\n  \n \n \n    chunk3\n",
@@ -965,7 +996,7 @@
     "start_line": 1813,
     "end_line": 1830,
     "section": "Indented code blocks",
-    "text": "`chunk1 chunk2 chunk3 `"
+    "text": "[CODE: chunk1]\n[CODE: chunk2]\n[CODE: chunk3]"
   },
   {
     "markdown": "    chunk1\n      \n      chunk2\n",
@@ -974,7 +1005,7 @@
     "start_line": 1836,
     "end_line": 1845,
     "section": "Indented code blocks",
-    "text": "`chunk1 chunk2 `"
+    "text": "[CODE: chunk1]\n[CODE:   chunk2]"
   },
   {
     "markdown": "Foo\n    bar\n\n",
@@ -983,7 +1014,7 @@
     "start_line": 1851,
     "end_line": 1858,
     "section": "Indented code blocks",
-    "text": "Foo bar"
+    "text": "[PARA: Foo]\n[PARA:     bar]"
   },
   {
     "markdown": "    foo\nbar\n",
@@ -992,7 +1023,7 @@
     "start_line": 1865,
     "end_line": 1872,
     "section": "Indented code blocks",
-    "text": "`foo ` bar"
+    "text": "[CODE: foo]\n[PARA: bar]"
   },
   {
     "markdown": "# Heading\n    foo\nHeading\n------\n    foo\n----\n",
@@ -1001,7 +1032,7 @@
     "start_line": 1878,
     "end_line": 1893,
     "section": "Indented code blocks",
-    "text": "Heading `foo ` Heading `foo ` ---"
+    "text": "[H1: Heading]\n[CODE: foo]\n[H2: Heading]\n[UNKNOWN: ------]\n[CODE: foo]\n[BREAK:  --- ]"
   },
   {
     "markdown": "        foo\n    bar\n",
@@ -1010,7 +1041,7 @@
     "start_line": 1898,
     "end_line": 1905,
     "section": "Indented code blocks",
-    "text": "` foo bar `"
+    "text": "[CODE:     foo]\n[CODE: bar]"
   },
   {
     "markdown": "\n    \n    foo\n    \n\n",
@@ -1019,7 +1050,7 @@
     "start_line": 1911,
     "end_line": 1920,
     "section": "Indented code blocks",
-    "text": "`foo `"
+    "text": "[CODE: foo]"
   },
   {
     "markdown": "    foo  \n",
@@ -1028,7 +1059,7 @@
     "start_line": 1925,
     "end_line": 1930,
     "section": "Indented code blocks",
-    "text": "`foo `"
+    "text": "[CODE: foo  ]"
   },
   {
     "markdown": "```\n<\n >\n```\n",
@@ -1037,7 +1068,7 @@
     "start_line": 1980,
     "end_line": 1989,
     "section": "Fenced code blocks",
-    "text": "```\n \n```"
+    "text": "[CODE: ```]\n[CODE: <]\n[CODE:  >]\n[CODE: ```]"
   },
   {
     "markdown": "~~~\n<\n >\n~~~\n",
@@ -1046,7 +1077,7 @@
     "start_line": 1994,
     "end_line": 2003,
     "section": "Fenced code blocks",
-    "text": "```\n \n```"
+    "text": "[CODE: ~~~]\n[CODE: <]\n[CODE:  >]\n[CODE: ~~~]"
   },
   {
     "markdown": "``\nfoo\n``\n",
@@ -1055,7 +1086,7 @@
     "start_line": 2007,
     "end_line": 2013,
     "section": "Fenced code blocks",
-    "text": "`foo`"
+    "text": "[PARA:  foo ]"
   },
   {
     "markdown": "```\naaa\n~~~\n```\n",
@@ -1064,7 +1095,7 @@
     "start_line": 2018,
     "end_line": 2027,
     "section": "Fenced code blocks",
-    "text": "`aaa ~~~ `"
+    "text": "[CODE: ```]\n[CODE: aaa]\n[CODE: ~~~]\n[CODE: ```]"
   },
   {
     "markdown": "~~~\naaa\n```\n~~~\n",
@@ -1073,7 +1104,7 @@
     "start_line": 2030,
     "end_line": 2039,
     "section": "Fenced code blocks",
-    "text": "`aaa ``` `"
+    "text": "[CODE: ~~~]\n[CODE: aaa]\n[CODE: ```]\n[CODE: ~~~]"
   },
   {
     "markdown": "````\naaa\n```\n``````\n",
@@ -1082,7 +1113,7 @@
     "start_line": 2044,
     "end_line": 2053,
     "section": "Fenced code blocks",
-    "text": "`aaa ``` `"
+    "text": "[CODE: ````]\n[CODE: aaa]\n[CODE: ```]\n[CODE: ``````]"
   },
   {
     "markdown": "~~~~\naaa\n~~~\n~~~~\n",
@@ -1091,7 +1122,7 @@
     "start_line": 2056,
     "end_line": 2065,
     "section": "Fenced code blocks",
-    "text": "`aaa ~~~ `"
+    "text": "[CODE: ~~~~]\n[CODE: aaa]\n[CODE: ~~~]\n[CODE: ~~~~]"
   },
   {
     "markdown": "```\n",
@@ -1100,7 +1131,7 @@
     "start_line": 2071,
     "end_line": 2075,
     "section": "Fenced code blocks",
-    "text": "``"
+    "text": "[CODE: ```]"
   },
   {
     "markdown": "`````\n\n```\naaa\n",
@@ -1109,7 +1140,7 @@
     "start_line": 2078,
     "end_line": 2088,
     "section": "Fenced code blocks",
-    "text": "` ``` aaa `"
+    "text": "[CODE: `````]\n[CODE: ```]\n[CODE: aaa]"
   },
   {
     "markdown": "> ```\n> aaa\n\nbbb\n",
@@ -1118,7 +1149,7 @@
     "start_line": 2091,
     "end_line": 2102,
     "section": "Fenced code blocks",
-    "text": "> `aaa ` bbb"
+    "text": "[QUOTE: ```]\n[QUOTE: aaa]\n[PARA: bbb]"
   },
   {
     "markdown": "```\n\n  \n```\n",
@@ -1127,7 +1158,7 @@
     "start_line": 2107,
     "end_line": 2116,
     "section": "Fenced code blocks",
-    "text": "` `"
+    "text": "[CODE: ```]\n[CODE: ```]"
   },
   {
     "markdown": "```\n```\n",
@@ -1136,7 +1167,7 @@
     "start_line": 2121,
     "end_line": 2126,
     "section": "Fenced code blocks",
-    "text": "``"
+    "text": "[CODE: ```]\n[CODE: ```]"
   },
   {
     "markdown": " ```\n aaa\naaa\n```\n",
@@ -1145,7 +1176,7 @@
     "start_line": 2133,
     "end_line": 2142,
     "section": "Fenced code blocks",
-    "text": "`aaa aaa `"
+    "text": "[CODE:  ```]\n[CODE:  aaa]\n[CODE: aaa]\n[CODE: ```]"
   },
   {
     "markdown": "  ```\naaa\n  aaa\naaa\n  ```\n",
@@ -1154,7 +1185,7 @@
     "start_line": 2145,
     "end_line": 2156,
     "section": "Fenced code blocks",
-    "text": "`aaa aaa aaa `"
+    "text": "[CODE:   ```]\n[CODE: aaa]\n[CODE:   aaa]\n[CODE: aaa]\n[CODE:   ```]"
   },
   {
     "markdown": "   ```\n   aaa\n    aaa\n  aaa\n   ```\n",
@@ -1163,7 +1194,7 @@
     "start_line": 2159,
     "end_line": 2170,
     "section": "Fenced code blocks",
-    "text": "`aaa aaa aaa `"
+    "text": "[CODE:    ```]\n[CODE:    aaa]\n[CODE:     aaa]\n[CODE:   aaa]\n[CODE:    ```]"
   },
   {
     "markdown": "    ```\n    aaa\n    ```\n",
@@ -1172,7 +1203,7 @@
     "start_line": 2175,
     "end_line": 2184,
     "section": "Fenced code blocks",
-    "text": "```` aaa ``` `"
+    "text": "[CODE: ```]\n[CODE: aaa]\n[CODE: ```]"
   },
   {
     "markdown": "```\naaa\n  ```\n",
@@ -1181,7 +1212,7 @@
     "start_line": 2190,
     "end_line": 2197,
     "section": "Fenced code blocks",
-    "text": "`aaa `"
+    "text": "[CODE: ```]\n[CODE: aaa]\n[CODE:   ```]"
   },
   {
     "markdown": "   ```\naaa\n  ```\n",
@@ -1190,7 +1221,7 @@
     "start_line": 2200,
     "end_line": 2207,
     "section": "Fenced code blocks",
-    "text": "`aaa `"
+    "text": "[CODE:    ```]\n[CODE: aaa]\n[CODE:   ```]"
   },
   {
     "markdown": "```\naaa\n    ```\n",
@@ -1199,7 +1230,7 @@
     "start_line": 2212,
     "end_line": 2220,
     "section": "Fenced code blocks",
-    "text": "`aaa ``` `"
+    "text": "[CODE: ```]\n[CODE: aaa]\n[CODE:     ```]"
   },
   {
     "markdown": "``` ```\naaa\n",
@@ -1208,7 +1239,7 @@
     "start_line": 2226,
     "end_line": 2232,
     "section": "Fenced code blocks",
-    "text": "` ` aaa"
+    "text": "[PARA:   aaa]"
   },
   {
     "markdown": "~~~~~~\naaa\n~~~ ~~\n",
@@ -1217,7 +1248,7 @@
     "start_line": 2235,
     "end_line": 2243,
     "section": "Fenced code blocks",
-    "text": "`aaa ~~~ ~~ `"
+    "text": "[CODE: ~~~~~~]\n[CODE: aaa]\n[CODE: ~~~ ~~]"
   },
   {
     "markdown": "foo\n```\nbar\n```\nbaz\n",
@@ -1226,7 +1257,7 @@
     "start_line": 2249,
     "end_line": 2260,
     "section": "Fenced code blocks",
-    "text": "foo\n `bar ` baz"
+    "text": "[PARA: foo]\n[CODE: ```]\n[CODE: bar]\n[CODE: ```]\n[PARA: baz]"
   },
   {
     "markdown": "foo\n---\n~~~\nbar\n~~~\n# baz\n",
@@ -1235,7 +1266,7 @@
     "start_line": 2266,
     "end_line": 2278,
     "section": "Fenced code blocks",
-    "text": "foo `bar ` baz"
+    "text": "[H2: foo]\n[UNKNOWN: ---]\n[CODE: ~~~]\n[CODE: bar]\n[CODE: ~~~]\n[H1: baz]"
   },
   {
     "markdown": "```ruby\ndef foo(x)\n  return 3\nend\n```\n",
@@ -1244,7 +1275,7 @@
     "start_line": 2288,
     "end_line": 2299,
     "section": "Fenced code blocks",
-    "text": "```\ndef foo(x) return 3 end \n```"
+    "text": "[CODE: ```ruby]\n[CODE: def foo(x)]\n[CODE:   return 3]\n[CODE: end]\n[CODE: ```]"
   },
   {
     "markdown": "~~~~    ruby startline=3 $%@#$\ndef foo(x)\n  return 3\nend\n~~~~~~~\n",
@@ -1253,7 +1284,7 @@
     "start_line": 2302,
     "end_line": 2313,
     "section": "Fenced code blocks",
-    "text": "```\ndef foo(x) return 3 end \n```"
+    "text": "[CODE: ~~~~    ruby startline=3 $%@#$]\n[CODE: def foo(x)]\n[CODE:   return 3]\n[CODE: end]\n[CODE: ~~~~~~~]"
   },
   {
     "markdown": "````;\n````\n",
@@ -1262,7 +1293,7 @@
     "start_line": 2316,
     "end_line": 2321,
     "section": "Fenced code blocks",
-    "text": "```\n```"
+    "text": "[CODE: ````;]\n[CODE: ````]"
   },
   {
     "markdown": "``` aa ```\nfoo\n",
@@ -1271,7 +1302,7 @@
     "start_line": 2326,
     "end_line": 2332,
     "section": "Fenced code blocks",
-    "text": "`aa` foo"
+    "text": "[PARA:  aa  foo]"
   },
   {
     "markdown": "~~~ aa ``` ~~~\nfoo\n~~~\n",
@@ -1280,7 +1311,7 @@
     "start_line": 2337,
     "end_line": 2344,
     "section": "Fenced code blocks",
-    "text": "```\nfoo \n```"
+    "text": "[CODE: ~~~ aa ``` ~~~]\n[CODE: foo]\n[CODE: ~~~]"
   },
   {
     "markdown": "```\n``` aaa\n```\n",
@@ -1289,7 +1320,7 @@
     "start_line": 2349,
     "end_line": 2356,
     "section": "Fenced code blocks",
-    "text": "```` aaa `"
+    "text": "[CODE: ```]\n[CODE: ``` aaa]\n[CODE: ```]"
   },
   {
     "markdown": "<table><tr><td>\n<pre>\n**Hello**,\n\n_world_.\n</pre>\n</td></tr></table>\n",
@@ -1297,7 +1328,8 @@
     "example": 148,
     "start_line": 2428,
     "end_line": 2443,
-    "section": "HTML blocks"
+    "section": "HTML blocks",
+    "text": "[HTML: <table><tr><td>]\n[HTML: <pre>]\n[HTML: **Hello**,]\n[PARA: world. </pre>]\n[HTML: </td></tr></table>]"
   },
   {
     "markdown": "<table>\n  <tr>\n    <td>\n           hi\n    </td>\n  </tr>\n</table>\n\nokay.\n",
@@ -1305,7 +1337,8 @@
     "example": 149,
     "start_line": 2457,
     "end_line": 2476,
-    "section": "HTML blocks"
+    "section": "HTML blocks",
+    "text": "[HTML: <table>]\n[HTML:   <tr>]\n[HTML:     <td>]\n[HTML:            hi]\n[HTML:     </td>]\n[HTML:   </tr>]\n[HTML: </table>]\n[PARA: okay.]"
   },
   {
     "markdown": " <div>\n  *hello*\n         <foo><a>\n",
@@ -1314,7 +1347,7 @@
     "start_line": 2479,
     "end_line": 2487,
     "section": "HTML blocks",
-    "text": "*hello*"
+    "text": "[HTML:  <div>]\n[HTML:   *hello*]\n[HTML:          <foo><a>]"
   },
   {
     "markdown": "</div>\n*foo*\n",
@@ -1323,7 +1356,7 @@
     "start_line": 2492,
     "end_line": 2498,
     "section": "HTML blocks",
-    "text": "*foo*"
+    "text": "[HTML: </div>]\n[HTML: *foo*]"
   },
   {
     "markdown": "<DIV CLASS=\"foo\">\n\n*Markdown*\n\n</DIV>\n",
@@ -1331,7 +1364,8 @@
     "example": 152,
     "start_line": 2503,
     "end_line": 2513,
-    "section": "HTML blocks"
+    "section": "HTML blocks",
+    "text": "[HTML: <DIV CLASS=\"foo\">]\n[PARA: Markdown]\n[HTML: </DIV>]"
   },
   {
     "markdown": "<div id=\"foo\"\n  class=\"bar\">\n</div>\n",
@@ -1340,7 +1374,7 @@
     "start_line": 2519,
     "end_line": 2527,
     "section": "HTML blocks",
-    "text": ""
+    "text": "[HTML: <div id=\"foo\"]\n[HTML:   class=\"bar\">]\n[HTML: </div>]"
   },
   {
     "markdown": "<div id=\"foo\" class=\"bar\n  baz\">\n</div>\n",
@@ -1349,7 +1383,7 @@
     "start_line": 2530,
     "end_line": 2538,
     "section": "HTML blocks",
-    "text": ""
+    "text": "[HTML: <div id=\"foo\" class=\"bar]\n[HTML:   baz\">]\n[HTML: </div>]"
   },
   {
     "markdown": "<div>\n*foo*\n\n*bar*\n",
@@ -1357,7 +1391,8 @@
     "example": 155,
     "start_line": 2542,
     "end_line": 2551,
-    "section": "HTML blocks"
+    "section": "HTML blocks",
+    "text": "[HTML: <div>]\n[HTML: *foo*]\n[PARA: bar]"
   },
   {
     "markdown": "<div id=\"foo\"\n*hi*\n",
@@ -1366,7 +1401,7 @@
     "start_line": 2558,
     "end_line": 2564,
     "section": "HTML blocks",
-    "text": "<div id=\"foo\" *hi*"
+    "text": "[HTML: <div id=\"foo\"]\n[HTML: *hi*]"
   },
   {
     "markdown": "<div class\nfoo\n",
@@ -1375,7 +1410,7 @@
     "start_line": 2567,
     "end_line": 2573,
     "section": "HTML blocks",
-    "text": "<div class foo"
+    "text": "[HTML: <div class]\n[HTML: foo]"
   },
   {
     "markdown": "<div *???-&&&-<---\n*foo*\n",
@@ -1384,7 +1419,7 @@
     "start_line": 2579,
     "end_line": 2585,
     "section": "HTML blocks",
-    "text": "<div *???-&&&-<--- *foo*"
+    "text": "[HTML: <div *???-&&&-<---]\n[HTML: *foo*]"
   },
   {
     "markdown": "<div><a href=\"bar\">*foo*</a></div>\n",
@@ -1393,7 +1428,7 @@
     "start_line": 2591,
     "end_line": 2595,
     "section": "HTML blocks",
-    "text": "*foo*"
+    "text": "[HTML: <div><a href=\"bar\">*foo*</a></div>]"
   },
   {
     "markdown": "<table><tr><td>\nfoo\n</td></tr></table>\n",
@@ -1401,7 +1436,8 @@
     "example": 160,
     "start_line": 2598,
     "end_line": 2606,
-    "section": "HTML blocks"
+    "section": "HTML blocks",
+    "text": "[HTML: <table><tr><td>]\n[HTML: foo]\n[HTML: </td></tr></table>]"
   },
   {
     "markdown": "<div></div>\n``` c\nint x = 33;\n```\n",
@@ -1410,7 +1446,7 @@
     "start_line": 2615,
     "end_line": 2625,
     "section": "HTML blocks",
-    "text": "``` c int x = 33; ```"
+    "text": "[HTML: <div></div>]\n[HTML: ``` c]\n[HTML: int x = 33;]\n[HTML: ```]"
   },
   {
     "markdown": "<a href=\"foo\">\n*bar*\n</a>\n",
@@ -1419,7 +1455,7 @@
     "start_line": 2632,
     "end_line": 2640,
     "section": "HTML blocks",
-    "text": "*bar*"
+    "text": "[HTML: <a href=\"foo\">]\n[HTML: *bar*]\n[HTML: </a>]"
   },
   {
     "markdown": "<Warning>\n*bar*\n</Warning>\n",
@@ -1428,7 +1464,7 @@
     "start_line": 2645,
     "end_line": 2653,
     "section": "HTML blocks",
-    "text": "*bar*"
+    "text": "[HTML: <Warning>]\n[HTML: *bar*]\n[HTML: </Warning>]"
   },
   {
     "markdown": "<i class=\"foo\">\n*bar*\n</i>\n",
@@ -1437,7 +1473,7 @@
     "start_line": 2656,
     "end_line": 2664,
     "section": "HTML blocks",
-    "text": "*bar*"
+    "text": "[HTML: <i class=\"foo\">]\n[HTML: *bar*]\n[HTML: </i>]"
   },
   {
     "markdown": "</ins>\n*bar*\n",
@@ -1446,7 +1482,7 @@
     "start_line": 2667,
     "end_line": 2673,
     "section": "HTML blocks",
-    "text": "*bar*"
+    "text": "[HTML: </ins>]\n[HTML: *bar*]"
   },
   {
     "markdown": "<del>\n*foo*\n</del>\n",
@@ -1455,7 +1491,7 @@
     "start_line": 2682,
     "end_line": 2690,
     "section": "HTML blocks",
-    "text": "*foo*"
+    "text": "[HTML: <del>]\n[HTML: *foo*]\n[HTML: </del>]"
   },
   {
     "markdown": "<del>\n\n*foo*\n\n</del>\n",
@@ -1463,7 +1499,8 @@
     "example": 167,
     "start_line": 2697,
     "end_line": 2707,
-    "section": "HTML blocks"
+    "section": "HTML blocks",
+    "text": "[HTML: <del>]\n[PARA: foo]\n[HTML: </del>]"
   },
   {
     "markdown": "<del>*foo*</del>\n",
@@ -1471,7 +1508,8 @@
     "example": 168,
     "start_line": 2715,
     "end_line": 2719,
-    "section": "HTML blocks"
+    "section": "HTML blocks",
+    "text": "[PARA: <del>foo</del>]"
   },
   {
     "markdown": "<pre language=\"haskell\"><code>\nimport Text.HTML.TagSoup\n\nmain :: IO ()\nmain = print $ parseTags tags\n</code></pre>\nokay\n",
@@ -1480,7 +1518,7 @@
     "start_line": 2731,
     "end_line": 2747,
     "section": "HTML blocks",
-    "text": "` import Text.HTML.TagSoup main :: IO () main = print $ parseTags tags ` okay"
+    "text": "[HTML: <pre language=\"haskell\"><code>]\n[HTML: import Text.HTML.TagSoup]\n[HTML: main :: IO ()]\n[HTML: main = print $ parseTags tags]\n[HTML: </code></pre>]\n[PARA: okay]"
   },
   {
     "markdown": "<script type=\"text/javascript\">\n// JavaScript example\n\ndocument.getElementById(\"demo\").innerHTML = \"Hello JavaScript!\";\n</script>\nokay\n",
@@ -1489,7 +1527,7 @@
     "start_line": 2752,
     "end_line": 2766,
     "section": "HTML blocks",
-    "text": "// JavaScript example document.getElementById(\"demo\").innerHTML = \"Hello JavaScript!\"; okay"
+    "text": "[HTML: <script type=\"text/javascript\">]\n[HTML: // JavaScript example]\n[HTML: document.getElementById(\"demo\").innerHTML = \"Hello JavaScript!\";]\n[HTML: </script>]\n[PARA: okay]"
   },
   {
     "markdown": "<textarea>\n\n*foo*\n\n_bar_\n\n</textarea>\n",
@@ -1498,7 +1536,7 @@
     "start_line": 2771,
     "end_line": 2787,
     "section": "HTML blocks",
-    "text": "*foo* _bar_"
+    "text": "[HTML: <textarea>]\n[HTML: *foo*]\n[HTML: _bar_]\n[HTML: </textarea>]"
   },
   {
     "markdown": "<style\n  type=\"text/css\">\nh1 {color:red;}\n\np {color:blue;}\n</style>\nokay\n",
@@ -1507,7 +1545,7 @@
     "start_line": 2791,
     "end_line": 2807,
     "section": "HTML blocks",
-    "text": "h1 {color:red;} p {color:blue;} okay"
+    "text": "[HTML: <style]\n[HTML:   type=\"text/css\">]\n[HTML: h1 {color:red;}]\n[HTML: p {color:blue;}]\n[HTML: </style>]\n[PARA: okay]"
   },
   {
     "markdown": "<style\n  type=\"text/css\">\n\nfoo\n",
@@ -1516,7 +1554,7 @@
     "start_line": 2814,
     "end_line": 2824,
     "section": "HTML blocks",
-    "text": "foo"
+    "text": "[HTML: <style]\n[HTML:   type=\"text/css\">]\n[HTML: foo]"
   },
   {
     "markdown": "> <div>\n> foo\n\nbar\n",
@@ -1525,7 +1563,7 @@
     "start_line": 2827,
     "end_line": 2838,
     "section": "HTML blocks",
-    "text": "> foo bar"
+    "text": "[QUOTE: <div>]\n[QUOTE: foo]\n[PARA: bar]"
   },
   {
     "markdown": "- <div>\n- foo\n",
@@ -1534,7 +1572,7 @@
     "start_line": 2841,
     "end_line": 2851,
     "section": "HTML blocks",
-    "text": "- \n - foo"
+    "text": "[LIST: <div>]\n[LIST: foo]"
   },
   {
     "markdown": "<style>p{color:red;}</style>\n*foo*\n",
@@ -1542,7 +1580,8 @@
     "example": 176,
     "start_line": 2856,
     "end_line": 2862,
-    "section": "HTML blocks"
+    "section": "HTML blocks",
+    "text": "[HTML: <style>p{color:red;}</style>]\n[PARA: foo]"
   },
   {
     "markdown": "<!-- foo -->*bar*\n*baz*\n",
@@ -1550,7 +1589,8 @@
     "example": 177,
     "start_line": 2865,
     "end_line": 2871,
-    "section": "HTML blocks"
+    "section": "HTML blocks",
+    "text": "[HTML: *bar*]\n[PARA: baz]"
   },
   {
     "markdown": "<script>\nfoo\n</script>1. *bar*\n",
@@ -1559,7 +1599,7 @@
     "start_line": 2877,
     "end_line": 2885,
     "section": "HTML blocks",
-    "text": "foo 1. *bar*"
+    "text": "[HTML: <script>]\n[HTML: foo]\n[HTML: </script>1. *bar*]"
   },
   {
     "markdown": "<!-- Foo\n\nbar\n   baz -->\nokay\n",
@@ -1568,7 +1608,7 @@
     "start_line": 2890,
     "end_line": 2902,
     "section": "HTML blocks",
-    "text": "okay"
+    "text": "[HTML: <!-- Foo]\n[HTML: bar]\n[HTML:    baz -->]\n[PARA: okay]"
   },
   {
     "markdown": "<?php\n\n  echo '>';\n\n?>\nokay\n",
@@ -1577,7 +1617,7 @@
     "start_line": 2908,
     "end_line": 2922,
     "section": "HTML blocks",
-    "text": "'; ?> okay"
+    "text": "[HTML: <?php]\n[HTML:   echo '>';]\n[HTML: ?>]\n[PARA: okay]"
   },
   {
     "markdown": "<!DOCTYPE html>\n",
@@ -1586,7 +1626,7 @@
     "start_line": 2927,
     "end_line": 2931,
     "section": "HTML blocks",
-    "text": ""
+    "text": "[HTML: <!DOCTYPE html>]"
   },
   {
     "markdown": "<![CDATA[\nfunction matchwo(a,b)\n{\n  if (a < b && a < 0) then {\n    return 1;\n\n  } else {\n\n    return 0;\n  }\n}\n]]>\nokay\n",
@@ -1595,7 +1635,7 @@
     "start_line": 2936,
     "end_line": 2964,
     "section": "HTML blocks",
-    "text": "okay"
+    "text": "[HTML: <![CDATA[]\n[HTML: function matchwo(a,b)]\n[HTML: {]\n[HTML:   if (a < b && a < 0) then {]\n[HTML:     return 1;]\n[HTML:   } else {]\n[HTML:     return 0;]\n[HTML:   }]\n[HTML: }]\n[HTML: ]]>]\n[PARA: okay]"
   },
   {
     "markdown": "  <!-- foo -->\n\n    <!-- foo -->\n",
@@ -1604,7 +1644,7 @@
     "start_line": 2970,
     "end_line": 2978,
     "section": "HTML blocks",
-    "text": "```\n \n```"
+    "text": "[CODE: <!-- foo -->]"
   },
   {
     "markdown": "  <div>\n\n    <div>\n",
@@ -1613,7 +1653,7 @@
     "start_line": 2981,
     "end_line": 2989,
     "section": "HTML blocks",
-    "text": "```\n \n```"
+    "text": "[HTML:   <div>]\n[CODE: <div>]"
   },
   {
     "markdown": "Foo\n<div>\nbar\n</div>\n",
@@ -1622,7 +1662,7 @@
     "start_line": 2995,
     "end_line": 3005,
     "section": "HTML blocks",
-    "text": "Foo\n bar"
+    "text": "[PARA: Foo]\n[HTML: <div>]\n[HTML: bar]\n[HTML: </div>]"
   },
   {
     "markdown": "<div>\nbar\n</div>\n*foo*\n",
@@ -1631,7 +1671,7 @@
     "start_line": 3012,
     "end_line": 3022,
     "section": "HTML blocks",
-    "text": "bar *foo*"
+    "text": "[HTML: <div>]\n[HTML: bar]\n[HTML: </div>]\n[HTML: *foo*]"
   },
   {
     "markdown": "Foo\n<a href=\"bar\">\nbaz\n",
@@ -1640,7 +1680,7 @@
     "start_line": 3027,
     "end_line": 3035,
     "section": "HTML blocks",
-    "text": "Foo baz"
+    "text": "[PARA: Foo <a href=\"bar\"> baz]"
   },
   {
     "markdown": "<div>\n\n*Emphasized* text.\n\n</div>\n",
@@ -1648,7 +1688,8 @@
     "example": 188,
     "start_line": 3068,
     "end_line": 3078,
-    "section": "HTML blocks"
+    "section": "HTML blocks",
+    "text": "[HTML: <div>]\n[PARA: Emphasized text.]\n[HTML: </div>]"
   },
   {
     "markdown": "<div>\n*Emphasized* text.\n</div>\n",
@@ -1657,7 +1698,7 @@
     "start_line": 3081,
     "end_line": 3089,
     "section": "HTML blocks",
-    "text": "*Emphasized* text."
+    "text": "[HTML: <div>]\n[HTML: *Emphasized* text.]\n[HTML: </div>]"
   },
   {
     "markdown": "<table>\n\n<tr>\n\n<td>\nHi\n</td>\n\n</tr>\n\n</table>\n",
@@ -1665,7 +1706,8 @@
     "example": 190,
     "start_line": 3103,
     "end_line": 3123,
-    "section": "HTML blocks"
+    "section": "HTML blocks",
+    "text": "[HTML: <table>]\n[HTML: <tr>]\n[HTML: <td>]\n[HTML: Hi]\n[HTML: </td>]\n[HTML: </tr>]\n[HTML: </table>]"
   },
   {
     "markdown": "<table>\n\n  <tr>\n\n    <td>\n      Hi\n    </td>\n\n  </tr>\n\n</table>\n",
@@ -1673,7 +1715,8 @@
     "example": 191,
     "start_line": 3130,
     "end_line": 3151,
-    "section": "HTML blocks"
+    "section": "HTML blocks",
+    "text": "[HTML: <table>]\n[HTML:   <tr>]\n[CODE: <td>]\n[CODE:   Hi]\n[CODE: </td>]\n[HTML:   </tr>]\n[HTML: </table>]"
   },
   {
     "markdown": "[foo]: /url \"title\"\n\n[foo]\n",
@@ -1682,7 +1725,7 @@
     "start_line": 3179,
     "end_line": 3185,
     "section": "Link reference definitions",
-    "text": "foo"
+    "text": "[UNKNOWN: [foo]: /url \"title\"]\n[PARA: foo]"
   },
   {
     "markdown": "   [foo]: \n      /url  \n           'the title'  \n\n[foo]\n",
@@ -1691,7 +1734,7 @@
     "start_line": 3188,
     "end_line": 3196,
     "section": "Link reference definitions",
-    "text": "foo"
+    "text": "[PARA:    [foo]: ]\n[PARA:       /url]\n[PARA:            'the title']\n[PARA: [foo]]"
   },
   {
     "markdown": "[Foo*bar\\]]:my_(url) 'title (with parens)'\n\n[Foo*bar\\]]\n",
@@ -1700,7 +1743,7 @@
     "start_line": 3199,
     "end_line": 3205,
     "section": "Link reference definitions",
-    "text": "Foo*bar]"
+    "text": "[UNKNOWN: [Foo*bar\\]]:my_(url) 'title (with parens)']\n[PARA: Foo*bar\\]]"
   },
   {
     "markdown": "[Foo bar]:\n<my url>\n'title'\n\n[Foo bar]\n",
@@ -1709,7 +1752,7 @@
     "start_line": 3208,
     "end_line": 3216,
     "section": "Link reference definitions",
-    "text": "Foo bar"
+    "text": "[PARA: [Foo bar]: <my url> 'title']\n[PARA: [Foo bar]]"
   },
   {
     "markdown": "[foo]: /url '\ntitle\nline1\nline2\n'\n\n[foo]\n",
@@ -1718,7 +1761,7 @@
     "start_line": 3221,
     "end_line": 3235,
     "section": "Link reference definitions",
-    "text": "foo"
+    "text": "[UNKNOWN: [foo]: /url '[\\n]title[\\n]line1[\\n]line2[\\n]']\n[PARA: foo]"
   },
   {
     "markdown": "[foo]: /url 'title\n\nwith blank line'\n\n[foo]\n",
@@ -1727,7 +1770,7 @@
     "start_line": 3240,
     "end_line": 3250,
     "section": "Link reference definitions",
-    "text": "[foo]: /url 'title\n with blank line'\n [foo]"
+    "text": "[PARA: [foo]: /url 'title]\n[PARA: with blank line']\n[PARA: [foo]]"
   },
   {
     "markdown": "[foo]:\n/url\n\n[foo]\n",
@@ -1736,7 +1779,7 @@
     "start_line": 3255,
     "end_line": 3262,
     "section": "Link reference definitions",
-    "text": "foo"
+    "text": "[UNKNOWN: [foo]:[\\n]/url]\n[PARA: foo]"
   },
   {
     "markdown": "[foo]:\n\n[foo]\n",
@@ -1745,7 +1788,7 @@
     "start_line": 3267,
     "end_line": 3274,
     "section": "Link reference definitions",
-    "text": "[foo]:\n [foo]"
+    "text": "[PARA: [foo]:]\n[PARA: [foo]]"
   },
   {
     "markdown": "[foo]: <>\n\n[foo]\n",
@@ -1754,7 +1797,7 @@
     "start_line": 3279,
     "end_line": 3285,
     "section": "Link reference definitions",
-    "text": "foo"
+    "text": "[UNKNOWN: [foo]: <>]\n[PARA: foo]"
   },
   {
     "markdown": "[foo]: <bar>(baz)\n\n[foo]\n",
@@ -1763,7 +1806,7 @@
     "start_line": 3290,
     "end_line": 3297,
     "section": "Link reference definitions",
-    "text": "[foo]: (baz)\n [foo]"
+    "text": "[PARA: [foo]: <bar>(baz)]\n[PARA: [foo]]"
   },
   {
     "markdown": "[foo]: /url\\bar\\*baz \"foo\\\"bar\\baz\"\n\n[foo]\n",
@@ -1772,7 +1815,7 @@
     "start_line": 3303,
     "end_line": 3309,
     "section": "Link reference definitions",
-    "text": "foo"
+    "text": "[UNKNOWN: [foo]: /url\\bar\\*baz \"foo\\\"bar\\baz\"]\n[PARA: foo]"
   },
   {
     "markdown": "[foo]\n\n[foo]: url\n",
@@ -1781,7 +1824,7 @@
     "start_line": 3314,
     "end_line": 3320,
     "section": "Link reference definitions",
-    "text": "foo"
+    "text": "[PARA: foo]\n[UNKNOWN: [foo]: url]"
   },
   {
     "markdown": "[foo]\n\n[foo]: first\n[foo]: second\n",
@@ -1790,7 +1833,7 @@
     "start_line": 3326,
     "end_line": 3333,
     "section": "Link reference definitions",
-    "text": "foo"
+    "text": "[PARA: foo]\n[UNKNOWN: [foo]: first]\n[UNKNOWN: [foo]: second]"
   },
   {
     "markdown": "[FOO]: /url\n\n[Foo]\n",
@@ -1799,7 +1842,7 @@
     "start_line": 3339,
     "end_line": 3345,
     "section": "Link reference definitions",
-    "text": "Foo"
+    "text": "[UNKNOWN: [FOO]: /url]\n[PARA: Foo]"
   },
   {
     "markdown": "[ΑΓΩ]: /φου\n\n[αγω]\n",
@@ -1808,7 +1851,7 @@
     "start_line": 3348,
     "end_line": 3354,
     "section": "Link reference definitions",
-    "text": "αγω"
+    "text": "[UNKNOWN: [ΑΓΩ]: /φου]\n[PARA: αγω]"
   },
   {
     "markdown": "[foo]: /url\n",
@@ -1817,7 +1860,7 @@
     "start_line": 3363,
     "end_line": 3366,
     "section": "Link reference definitions",
-    "text": ""
+    "text": "[UNKNOWN: [foo]: /url]"
   },
   {
     "markdown": "[\nfoo\n]: /url\nbar\n",
@@ -1826,7 +1869,7 @@
     "start_line": 3371,
     "end_line": 3378,
     "section": "Link reference definitions",
-    "text": "bar"
+    "text": "[UNKNOWN: [[\\n]foo[\\n]]: /url[\\n]bar]"
   },
   {
     "markdown": "[foo]: /url \"title\" ok\n",
@@ -1835,7 +1878,7 @@
     "start_line": 3384,
     "end_line": 3388,
     "section": "Link reference definitions",
-    "text": "[foo]: /url \"title\" ok"
+    "text": "[PARA: [foo]: /url \"title\" ok]"
   },
   {
     "markdown": "[foo]: /url\n\"title\" ok\n",
@@ -1844,7 +1887,7 @@
     "start_line": 3393,
     "end_line": 3398,
     "section": "Link reference definitions",
-    "text": "\"title\" ok"
+    "text": "[UNKNOWN: [foo]: /url]\n[PARA: \"title\" ok]"
   },
   {
     "markdown": "    [foo]: /url \"title\"\n\n[foo]\n",
@@ -1853,7 +1896,7 @@
     "start_line": 3404,
     "end_line": 3412,
     "section": "Link reference definitions",
-    "text": "`[foo]: /url \"title\" ` [foo]"
+    "text": "[CODE: [foo]: /url \"title\"]\n[PARA: [foo]]"
   },
   {
     "markdown": "```\n[foo]: /url\n```\n\n[foo]\n",
@@ -1862,7 +1905,7 @@
     "start_line": 3418,
     "end_line": 3428,
     "section": "Link reference definitions",
-    "text": "`[foo]: /url ` [foo]"
+    "text": "[CODE: ```]\n[CODE: [foo]: /url]\n[CODE: ```]\n[PARA: [foo]]"
   },
   {
     "markdown": "Foo\n[bar]: /baz\n\n[bar]\n",
@@ -1871,7 +1914,7 @@
     "start_line": 3433,
     "end_line": 3442,
     "section": "Link reference definitions",
-    "text": "Foo [bar]: /baz\n [bar]"
+    "text": "[PARA: Foo [bar]: /baz]\n[PARA: [bar]]"
   },
   {
     "markdown": "# [Foo]\n[foo]: /url\n> bar\n",
@@ -1880,7 +1923,7 @@
     "start_line": 3448,
     "end_line": 3457,
     "section": "Link reference definitions",
-    "text": "Foo > bar"
+    "text": "[H1: Foo]\n[UNKNOWN: [foo]: /url]\n[QUOTE: bar]"
   },
   {
     "markdown": "[foo]: /url\nbar\n===\n[foo]\n",
@@ -1888,7 +1931,8 @@
     "example": 215,
     "start_line": 3459,
     "end_line": 3467,
-    "section": "Link reference definitions"
+    "section": "Link reference definitions",
+    "text": "[UNKNOWN: [foo]: /url]\n[H1: bar]\n[UNKNOWN: ===]\n[PARA: foo]"
   },
   {
     "markdown": "[foo]: /url\n===\n[foo]\n",
@@ -1897,7 +1941,7 @@
     "start_line": 3469,
     "end_line": 3476,
     "section": "Link reference definitions",
-    "text": "=== foo"
+    "text": "[UNKNOWN: [foo]: /url]\n[PARA: === foo]"
   },
   {
     "markdown": "[foo]: /foo-url \"foo\"\n[bar]: /bar-url\n  \"bar\"\n[baz]: /baz-url\n\n[foo],\n[bar],\n[baz]\n",
@@ -1906,7 +1950,7 @@
     "start_line": 3482,
     "end_line": 3495,
     "section": "Link reference definitions",
-    "text": "foo, bar, baz"
+    "text": "[UNKNOWN: [foo]: /foo-url \"foo\"]\n[UNKNOWN: [bar]: /bar-url]\n[PARA:   \"bar\" [baz]: /baz-url]\n[PARA: foo, bar, [baz]]"
   },
   {
     "markdown": "[foo]\n\n> [foo]: /url\n",
@@ -1915,7 +1959,7 @@
     "start_line": 3503,
     "end_line": 3511,
     "section": "Link reference definitions",
-    "text": "foo\n >"
+    "text": "[PARA: [foo]]\n[QUOTE: [foo]: /url]"
   },
   {
     "markdown": "aaa\n\nbbb\n",
@@ -1924,7 +1968,7 @@
     "start_line": 3525,
     "end_line": 3532,
     "section": "Paragraphs",
-    "text": "aaa\n bbb"
+    "text": "[PARA: aaa]\n[PARA: bbb]"
   },
   {
     "markdown": "aaa\nbbb\n\nccc\nddd\n",
@@ -1933,7 +1977,7 @@
     "start_line": 3537,
     "end_line": 3548,
     "section": "Paragraphs",
-    "text": "aaa bbb\n ccc ddd"
+    "text": "[PARA: aaa bbb]\n[PARA: ccc ddd]"
   },
   {
     "markdown": "aaa\n\n\nbbb\n",
@@ -1942,7 +1986,7 @@
     "start_line": 3553,
     "end_line": 3561,
     "section": "Paragraphs",
-    "text": "aaa\n bbb"
+    "text": "[PARA: aaa]\n[PARA: bbb]"
   },
   {
     "markdown": "  aaa\n bbb\n",
@@ -1951,7 +1995,7 @@
     "start_line": 3566,
     "end_line": 3572,
     "section": "Paragraphs",
-    "text": "aaa bbb"
+    "text": "[PARA:   aaa bbb]"
   },
   {
     "markdown": "aaa\n             bbb\n                                       ccc\n",
@@ -1960,7 +2004,7 @@
     "start_line": 3578,
     "end_line": 3586,
     "section": "Paragraphs",
-    "text": "aaa bbb ccc"
+    "text": "[PARA: aaa]\n[PARA:              bbb]\n[PARA:                                        ccc]"
   },
   {
     "markdown": "   aaa\nbbb\n",
@@ -1969,7 +2013,7 @@
     "start_line": 3592,
     "end_line": 3598,
     "section": "Paragraphs",
-    "text": "aaa bbb"
+    "text": "[PARA:    aaa bbb]"
   },
   {
     "markdown": "    aaa\nbbb\n",
@@ -1978,7 +2022,7 @@
     "start_line": 3601,
     "end_line": 3608,
     "section": "Paragraphs",
-    "text": "`aaa ` bbb"
+    "text": "[CODE: aaa]\n[PARA: bbb]"
   },
   {
     "markdown": "aaa     \nbbb     \n",
@@ -1987,7 +2031,7 @@
     "start_line": 3615,
     "end_line": 3621,
     "section": "Paragraphs",
-    "text": "aaa\n bbb"
+    "text": "[PARA: aaa]\n[PARA: bbb]"
   },
   {
     "markdown": "  \n\naaa\n  \n\n# aaa\n\n  \n",
@@ -1995,7 +2039,8 @@
     "example": 227,
     "start_line": 3632,
     "end_line": 3644,
-    "section": "Blank lines"
+    "section": "Blank lines",
+    "text": "[PARA: aaa]\n[H1: aaa]"
   },
   {
     "markdown": "> # Foo\n> bar\n> baz\n",
@@ -2004,7 +2049,7 @@
     "start_line": 3700,
     "end_line": 3710,
     "section": "Block quotes",
-    "text": "> Foo bar baz"
+    "text": "[QUOTE: # Foo]\n[QUOTE: bar]\n[QUOTE: baz]"
   },
   {
     "markdown": "># Foo\n>bar\n> baz\n",
@@ -2013,7 +2058,7 @@
     "start_line": 3715,
     "end_line": 3725,
     "section": "Block quotes",
-    "text": "> Foo bar baz"
+    "text": "[QUOTE: # Foo]\n[QUOTE: bar]\n[QUOTE: baz]"
   },
   {
     "markdown": "   > # Foo\n   > bar\n > baz\n",
@@ -2022,7 +2067,7 @@
     "start_line": 3730,
     "end_line": 3740,
     "section": "Block quotes",
-    "text": "> Foo bar baz"
+    "text": "[QUOTE: # Foo]\n[QUOTE: bar]\n[QUOTE: baz]"
   },
   {
     "markdown": "    > # Foo\n    > bar\n    > baz\n",
@@ -2031,7 +2076,7 @@
     "start_line": 3745,
     "end_line": 3754,
     "section": "Block quotes",
-    "text": "`> # Foo > bar > baz `"
+    "text": "[CODE: > # Foo]\n[CODE: > bar]\n[CODE: > baz]"
   },
   {
     "markdown": "> # Foo\n> bar\nbaz\n",
@@ -2040,7 +2085,7 @@
     "start_line": 3760,
     "end_line": 3770,
     "section": "Block quotes",
-    "text": "> Foo bar baz"
+    "text": "[QUOTE: # Foo]\n[QUOTE: bar]\n[PARA: baz]"
   },
   {
     "markdown": "> bar\nbaz\n> foo\n",
@@ -2049,7 +2094,7 @@
     "start_line": 3776,
     "end_line": 3786,
     "section": "Block quotes",
-    "text": "> bar baz foo"
+    "text": "[QUOTE: bar]\n[PARA: baz]\n[QUOTE: foo]"
   },
   {
     "markdown": "> foo\n---\n",
@@ -2058,7 +2103,7 @@
     "start_line": 3800,
     "end_line": 3808,
     "section": "Block quotes",
-    "text": "> foo\n ---"
+    "text": "[QUOTE: foo]\n[BREAK:  --- ]"
   },
   {
     "markdown": "> - foo\n- bar\n",
@@ -2067,7 +2112,7 @@
     "start_line": 3820,
     "end_line": 3832,
     "section": "Block quotes",
-    "text": "> - foo\n - bar"
+    "text": "[QUOTE: - foo]\n[LIST: bar]"
   },
   {
     "markdown": ">     foo\n    bar\n",
@@ -2076,7 +2121,7 @@
     "start_line": 3838,
     "end_line": 3848,
     "section": "Block quotes",
-    "text": "> `foo ` `bar `"
+    "text": "[QUOTE:     foo]\n[CODE: bar]"
   },
   {
     "markdown": "> ```\nfoo\n```\n",
@@ -2085,7 +2130,7 @@
     "start_line": 3851,
     "end_line": 3861,
     "section": "Block quotes",
-    "text": "> `` foo\n ``"
+    "text": "[QUOTE: ```]\n[PARA: foo]\n[CODE: ```]"
   },
   {
     "markdown": "> foo\n    - bar\n",
@@ -2094,7 +2139,7 @@
     "start_line": 3867,
     "end_line": 3875,
     "section": "Block quotes",
-    "text": "> foo - bar"
+    "text": "[QUOTE: foo]\n[CODE: - bar]"
   },
   {
     "markdown": ">\n",
@@ -2103,7 +2148,7 @@
     "start_line": 3891,
     "end_line": 3896,
     "section": "Block quotes",
-    "text": ">"
+    "text": ""
   },
   {
     "markdown": ">\n>  \n> \n",
@@ -2112,7 +2157,7 @@
     "start_line": 3899,
     "end_line": 3906,
     "section": "Block quotes",
-    "text": ">"
+    "text": ""
   },
   {
     "markdown": ">\n> foo\n>  \n",
@@ -2121,7 +2166,7 @@
     "start_line": 3911,
     "end_line": 3919,
     "section": "Block quotes",
-    "text": "> foo"
+    "text": "[QUOTE: foo]"
   },
   {
     "markdown": "> foo\n\n> bar\n",
@@ -2130,7 +2175,7 @@
     "start_line": 3924,
     "end_line": 3935,
     "section": "Block quotes",
-    "text": "> foo\n > bar"
+    "text": "[QUOTE: foo]\n[QUOTE: bar]"
   },
   {
     "markdown": "> foo\n> bar\n",
@@ -2139,7 +2184,7 @@
     "start_line": 3946,
     "end_line": 3954,
     "section": "Block quotes",
-    "text": "> foo bar"
+    "text": "[QUOTE: foo]\n[QUOTE: bar]"
   },
   {
     "markdown": "> foo\n>\n> bar\n",
@@ -2148,7 +2193,7 @@
     "start_line": 3959,
     "end_line": 3968,
     "section": "Block quotes",
-    "text": "> foo\n bar"
+    "text": "[QUOTE: foo]\n[QUOTE: bar]"
   },
   {
     "markdown": "foo\n> bar\n",
@@ -2157,7 +2202,7 @@
     "start_line": 3973,
     "end_line": 3981,
     "section": "Block quotes",
-    "text": "foo\n > bar"
+    "text": "[PARA: foo]\n[QUOTE: bar]"
   },
   {
     "markdown": "> aaa\n***\n> bbb\n",
@@ -2166,7 +2211,7 @@
     "start_line": 3987,
     "end_line": 3999,
     "section": "Block quotes",
-    "text": "> aaa\n --- > bbb"
+    "text": "[QUOTE: aaa]\n[BREAK:  --- ]\n[QUOTE: bbb]"
   },
   {
     "markdown": "> bar\nbaz\n",
@@ -2175,7 +2220,7 @@
     "start_line": 4005,
     "end_line": 4013,
     "section": "Block quotes",
-    "text": "> bar baz"
+    "text": "[QUOTE: bar]\n[PARA: baz]"
   },
   {
     "markdown": "> bar\n\nbaz\n",
@@ -2184,7 +2229,7 @@
     "start_line": 4016,
     "end_line": 4025,
     "section": "Block quotes",
-    "text": "> bar\n baz"
+    "text": "[QUOTE: bar]\n[PARA: baz]"
   },
   {
     "markdown": "> bar\n>\nbaz\n",
@@ -2193,7 +2238,7 @@
     "start_line": 4028,
     "end_line": 4037,
     "section": "Block quotes",
-    "text": "> bar\n baz"
+    "text": "[QUOTE: bar]\n[PARA: baz]"
   },
   {
     "markdown": "> > > foo\nbar\n",
@@ -2202,7 +2247,7 @@
     "start_line": 4044,
     "end_line": 4056,
     "section": "Block quotes",
-    "text": "> > > foo bar"
+    "text": "[QUOTE:  > foo]\n[PARA: bar]"
   },
   {
     "markdown": ">>> foo\n> bar\n>>baz\n",
@@ -2211,7 +2256,7 @@
     "start_line": 4059,
     "end_line": 4073,
     "section": "Block quotes",
-    "text": "> > > foo bar baz"
+    "text": "[QUOTE: > foo]\n[QUOTE: bar]\n[QUOTE: baz]"
   },
   {
     "markdown": ">     code\n\n>    not code\n",
@@ -2220,7 +2265,7 @@
     "start_line": 4081,
     "end_line": 4093,
     "section": "Block quotes",
-    "text": "> `code ` > not code"
+    "text": "[QUOTE:     code]\n[QUOTE:    not code]"
   },
   {
     "markdown": "A paragraph\nwith two lines.\n\n    indented code\n\n> A block quote.\n",
@@ -2229,7 +2274,7 @@
     "start_line": 4135,
     "end_line": 4150,
     "section": "List items",
-    "text": "A paragraph with two lines.\n `indented code ` > A block quote."
+    "text": "[PARA: A paragraph with two lines.]\n[CODE: indented code]\n[QUOTE: A block quote.]"
   },
   {
     "markdown": "1.  A paragraph\n    with two lines.\n\n        indented code\n\n    > A block quote.\n",
@@ -2238,7 +2283,7 @@
     "start_line": 4157,
     "end_line": 4176,
     "section": "List items",
-    "text": "- A paragraph with two lines.\n `indented code ` > A block quote."
+    "text": "[OLIST: A paragraph]\n[PARA: with two lines.]\n[CODE:     indented code]\n[PARA: > A block quote.]"
   },
   {
     "markdown": "- one\n\n two\n",
@@ -2247,7 +2292,7 @@
     "start_line": 4190,
     "end_line": 4199,
     "section": "List items",
-    "text": "- one\n two"
+    "text": "[LIST: one]\n[PARA:  two]"
   },
   {
     "markdown": "- one\n\n  two\n",
@@ -2256,7 +2301,7 @@
     "start_line": 4202,
     "end_line": 4213,
     "section": "List items",
-    "text": "- one\n two"
+    "text": "[LIST: one]\n[PARA: two]"
   },
   {
     "markdown": " -    one\n\n     two\n",
@@ -2265,7 +2310,7 @@
     "start_line": 4216,
     "end_line": 4226,
     "section": "List items",
-    "text": "- one\n ` two `"
+    "text": "[LIST: one]\n[CODE:  two]"
   },
   {
     "markdown": " -    one\n\n      two\n",
@@ -2274,7 +2319,7 @@
     "start_line": 4229,
     "end_line": 4240,
     "section": "List items",
-    "text": "- one\n two"
+    "text": "[LIST: one]\n[PARA: two]"
   },
   {
     "markdown": "   > > 1.  one\n>>\n>>     two\n",
@@ -2283,7 +2328,7 @@
     "start_line": 4251,
     "end_line": 4266,
     "section": "List items",
-    "text": "> > - one\n two"
+    "text": "[QUOTE:  1.  one]\n[QUOTE: ]\n[QUOTE:      two]"
   },
   {
     "markdown": ">>- one\n>>\n  >  > two\n",
@@ -2292,7 +2337,7 @@
     "start_line": 4278,
     "end_line": 4291,
     "section": "List items",
-    "text": "> > - one\n two"
+    "text": "[QUOTE: - one]\n[QUOTE: ]\n[QUOTE:  > two]"
   },
   {
     "markdown": "-one\n\n2.two\n",
@@ -2301,7 +2346,7 @@
     "start_line": 4297,
     "end_line": 4304,
     "section": "List items",
-    "text": "-one\n 2.two"
+    "text": "[PARA: -one]\n[PARA: 2.two]"
   },
   {
     "markdown": "- foo\n\n\n  bar\n",
@@ -2310,7 +2355,7 @@
     "start_line": 4310,
     "end_line": 4322,
     "section": "List items",
-    "text": "- foo\n bar"
+    "text": "[LIST: foo]\n[PARA: bar]"
   },
   {
     "markdown": "1.  foo\n\n    ```\n    bar\n    ```\n\n    baz\n\n    > bam\n",
@@ -2319,7 +2364,7 @@
     "start_line": 4327,
     "end_line": 4349,
     "section": "List items",
-    "text": "- foo\n `bar ` baz\n > bam"
+    "text": "[OLIST: foo]\n[PARA: ```]\n[PARA: bar]\n[PARA: ```]\n[PARA: baz]\n[PARA: > bam]"
   },
   {
     "markdown": "- Foo\n\n      bar\n\n\n      baz\n",
@@ -2328,7 +2373,7 @@
     "start_line": 4355,
     "end_line": 4373,
     "section": "List items",
-    "text": "- Foo\n `bar baz `"
+    "text": "[LIST: Foo]\n[CODE:   bar]\n[CODE:   baz]"
   },
   {
     "markdown": "123456789. ok\n",
@@ -2337,7 +2382,7 @@
     "start_line": 4377,
     "end_line": 4383,
     "section": "List items",
-    "text": "- ok"
+    "text": "[OLIST: ok]"
   },
   {
     "markdown": "1234567890. not ok\n",
@@ -2346,7 +2391,7 @@
     "start_line": 4386,
     "end_line": 4390,
     "section": "List items",
-    "text": "1234567890. not ok"
+    "text": "[PARA: 1234567890. not ok]"
   },
   {
     "markdown": "0. ok\n",
@@ -2355,7 +2400,7 @@
     "start_line": 4395,
     "end_line": 4401,
     "section": "List items",
-    "text": "- ok"
+    "text": "[OLIST: ok]"
   },
   {
     "markdown": "003. ok\n",
@@ -2364,7 +2409,7 @@
     "start_line": 4404,
     "end_line": 4410,
     "section": "List items",
-    "text": "- ok"
+    "text": "[OLIST: ok]"
   },
   {
     "markdown": "-1. not ok\n",
@@ -2373,7 +2418,7 @@
     "start_line": 4415,
     "end_line": 4419,
     "section": "List items",
-    "text": "-1. not ok"
+    "text": "[PARA: -1. not ok]"
   },
   {
     "markdown": "- foo\n\n      bar\n",
@@ -2382,7 +2427,7 @@
     "start_line": 4438,
     "end_line": 4450,
     "section": "List items",
-    "text": "- foo\n `bar `"
+    "text": "[LIST: foo]\n[CODE:   bar]"
   },
   {
     "markdown": "  10.  foo\n\n           bar\n",
@@ -2391,7 +2436,7 @@
     "start_line": 4455,
     "end_line": 4467,
     "section": "List items",
-    "text": "- foo\n `bar `"
+    "text": "[OLIST: foo]\n[CODE:     bar]"
   },
   {
     "markdown": "    indented code\n\nparagraph\n\n    more code\n",
@@ -2400,7 +2445,7 @@
     "start_line": 4474,
     "end_line": 4486,
     "section": "List items",
-    "text": "`indented code ` paragraph\n `more code `"
+    "text": "[CODE: indented code]\n[PARA: paragraph]\n[CODE: more code]"
   },
   {
     "markdown": "1.     indented code\n\n   paragraph\n\n       more code\n",
@@ -2409,7 +2454,7 @@
     "start_line": 4489,
     "end_line": 4505,
     "section": "List items",
-    "text": "- `indented code ` paragraph\n `more code `"
+    "text": "[OLIST:  indented code]\n[PARA:    paragraph]\n[CODE:    more code]"
   },
   {
     "markdown": "1.      indented code\n\n   paragraph\n\n       more code\n",
@@ -2418,7 +2463,7 @@
     "start_line": 4511,
     "end_line": 4527,
     "section": "List items",
-    "text": "- ` indented code ` paragraph\n `more code `"
+    "text": "[OLIST:   indented code]\n[PARA:    paragraph]\n[CODE:    more code]"
   },
   {
     "markdown": "   foo\n\nbar\n",
@@ -2427,7 +2472,7 @@
     "start_line": 4538,
     "end_line": 4545,
     "section": "List items",
-    "text": "foo\n bar"
+    "text": "[PARA:    foo]\n[PARA: bar]"
   },
   {
     "markdown": "-    foo\n\n  bar\n",
@@ -2436,7 +2481,7 @@
     "start_line": 4548,
     "end_line": 4557,
     "section": "List items",
-    "text": "- foo\n bar"
+    "text": "[LIST: foo]\n[PARA:   bar]"
   },
   {
     "markdown": "-  foo\n\n   bar\n",
@@ -2445,7 +2490,7 @@
     "start_line": 4565,
     "end_line": 4576,
     "section": "List items",
-    "text": "- foo\n bar"
+    "text": "[LIST: foo]\n[PARA: bar]"
   },
   {
     "markdown": "-\n  foo\n-\n  ```\n  bar\n  ```\n-\n      baz\n",
@@ -2454,7 +2499,7 @@
     "start_line": 4592,
     "end_line": 4613,
     "section": "List items",
-    "text": "- foo\n - `bar ` \n - `baz `"
+    "text": "[PARA: foo]\n[PARA:  bar ]\n[CODE:   baz]"
   },
   {
     "markdown": "-   \n  foo\n",
@@ -2463,7 +2508,7 @@
     "start_line": 4618,
     "end_line": 4625,
     "section": "List items",
-    "text": "- foo"
+    "text": "[PARA: foo]"
   },
   {
     "markdown": "-\n\n  foo\n",
@@ -2472,7 +2517,7 @@
     "start_line": 4632,
     "end_line": 4641,
     "section": "List items",
-    "text": "- \n foo"
+    "text": "[PARA: foo]"
   },
   {
     "markdown": "- foo\n-\n- bar\n",
@@ -2481,7 +2526,7 @@
     "start_line": 4646,
     "end_line": 4656,
     "section": "List items",
-    "text": "- foo\n - \n - bar"
+    "text": "[LIST: foo]\n[LIST: bar]"
   },
   {
     "markdown": "- foo\n-   \n- bar\n",
@@ -2490,7 +2535,7 @@
     "start_line": 4661,
     "end_line": 4671,
     "section": "List items",
-    "text": "- foo\n - \n - bar"
+    "text": "[LIST: foo]\n[LIST: bar]"
   },
   {
     "markdown": "1. foo\n2.\n3. bar\n",
@@ -2499,7 +2544,7 @@
     "start_line": 4676,
     "end_line": 4686,
     "section": "List items",
-    "text": "- foo\n - \n - bar"
+    "text": "[OLIST: foo]\n[OLIST: .]\n[OLIST: bar]"
   },
   {
     "markdown": "*\n",
@@ -2508,7 +2553,7 @@
     "start_line": 4691,
     "end_line": 4697,
     "section": "List items",
-    "text": "-"
+    "text": ""
   },
   {
     "markdown": "foo\n*\n\nfoo\n1.\n",
@@ -2517,7 +2562,7 @@
     "start_line": 4701,
     "end_line": 4712,
     "section": "List items",
-    "text": "foo *\n foo 1."
+    "text": "[PARA: foo *]\n[PARA: foo]\n[OLIST: .]"
   },
   {
     "markdown": " 1.  A paragraph\n     with two lines.\n\n         indented code\n\n     > A block quote.\n",
@@ -2526,7 +2571,7 @@
     "start_line": 4723,
     "end_line": 4742,
     "section": "List items",
-    "text": "- A paragraph with two lines.\n `indented code ` > A block quote."
+    "text": "[OLIST: A paragraph]\n[PARA: with two lines.]\n[CODE:     indented code]\n[PARA: > A block quote.]"
   },
   {
     "markdown": "  1.  A paragraph\n      with two lines.\n\n          indented code\n\n      > A block quote.\n",
@@ -2535,7 +2580,7 @@
     "start_line": 4747,
     "end_line": 4766,
     "section": "List items",
-    "text": "- A paragraph with two lines.\n `indented code ` > A block quote."
+    "text": "[OLIST: A paragraph]\n[PARA: with two lines.]\n[CODE:     indented code]\n[PARA: > A block quote.]"
   },
   {
     "markdown": "   1.  A paragraph\n       with two lines.\n\n           indented code\n\n       > A block quote.\n",
@@ -2544,7 +2589,7 @@
     "start_line": 4771,
     "end_line": 4790,
     "section": "List items",
-    "text": "- A paragraph with two lines.\n `indented code ` > A block quote."
+    "text": "[OLIST: A paragraph]\n[PARA: with two lines.]\n[CODE:     indented code]\n[PARA: > A block quote.]"
   },
   {
     "markdown": "    1.  A paragraph\n        with two lines.\n\n            indented code\n\n        > A block quote.\n",
@@ -2553,7 +2598,7 @@
     "start_line": 4795,
     "end_line": 4810,
     "section": "List items",
-    "text": "`1. A paragraph with two lines. indented code > A block quote. `"
+    "text": "[CODE: 1.  A paragraph]\n[CODE:     with two lines.]\n[CODE:         indented code]\n[CODE:     > A block quote.]"
   },
   {
     "markdown": "  1.  A paragraph\nwith two lines.\n\n          indented code\n\n      > A block quote.\n",
@@ -2562,7 +2607,7 @@
     "start_line": 4825,
     "end_line": 4844,
     "section": "List items",
-    "text": "- A paragraph with two lines.\n `indented code ` > A block quote."
+    "text": "[OLIST: A paragraph]\n[PARA: with two lines.]\n[CODE:     indented code]\n[PARA: > A block quote.]"
   },
   {
     "markdown": "  1.  A paragraph\n    with two lines.\n",
@@ -2571,7 +2616,7 @@
     "start_line": 4849,
     "end_line": 4857,
     "section": "List items",
-    "text": "- A paragraph with two lines."
+    "text": "[OLIST: A paragraph]\n[PARA: with two lines.]"
   },
   {
     "markdown": "> 1. > Blockquote\ncontinued here.\n",
@@ -2580,7 +2625,7 @@
     "start_line": 4862,
     "end_line": 4876,
     "section": "List items",
-    "text": "> - > Blockquote continued here."
+    "text": "[QUOTE: 1. > Blockquote]\n[PARA: continued here.]"
   },
   {
     "markdown": "> 1. > Blockquote\n> continued here.\n",
@@ -2589,7 +2634,7 @@
     "start_line": 4879,
     "end_line": 4893,
     "section": "List items",
-    "text": "> - > Blockquote continued here."
+    "text": "[QUOTE: 1. > Blockquote]\n[QUOTE: continued here.]"
   },
   {
     "markdown": "- foo\n  - bar\n    - baz\n      - boo\n",
@@ -2598,7 +2643,7 @@
     "start_line": 4907,
     "end_line": 4928,
     "section": "List items",
-    "text": "- foo - bar - baz - boo"
+    "text": "[LIST: foo]\n[LIST: bar]\n[LIST: baz]\n[LIST: boo]"
   },
   {
     "markdown": "- foo\n - bar\n  - baz\n   - boo\n",
@@ -2607,7 +2652,7 @@
     "start_line": 4933,
     "end_line": 4945,
     "section": "List items",
-    "text": "- foo\n - bar\n - baz\n - boo"
+    "text": "[LIST: foo]\n[LIST: bar]\n[LIST: baz]\n[LIST: boo]"
   },
   {
     "markdown": "10) foo\n    - bar\n",
@@ -2616,7 +2661,7 @@
     "start_line": 4950,
     "end_line": 4961,
     "section": "List items",
-    "text": "- foo - bar"
+    "text": "[OLIST: foo]\n[LIST: bar]"
   },
   {
     "markdown": "10) foo\n   - bar\n",
@@ -2625,7 +2670,7 @@
     "start_line": 4966,
     "end_line": 4976,
     "section": "List items",
-    "text": "- foo\n - bar"
+    "text": "[OLIST: foo]\n[LIST: bar]"
   },
   {
     "markdown": "- - foo\n",
@@ -2634,7 +2679,7 @@
     "start_line": 4981,
     "end_line": 4991,
     "section": "List items",
-    "text": "- - foo"
+    "text": "[LIST: - foo]"
   },
   {
     "markdown": "1. - 2. foo\n",
@@ -2643,7 +2688,7 @@
     "start_line": 4994,
     "end_line": 5008,
     "section": "List items",
-    "text": "- - - foo"
+    "text": "[OLIST: - 2. foo]"
   },
   {
     "markdown": "- # Foo\n- Bar\n  ---\n  baz\n",
@@ -2652,7 +2697,7 @@
     "start_line": 5013,
     "end_line": 5027,
     "section": "List items",
-    "text": "- Foo \n - Bar baz"
+    "text": "[LIST: # Foo]\n[LIST: Bar]\n[BREAK:  --- ]\n[PARA:   baz]"
   },
   {
     "markdown": "- foo\n- bar\n+ baz\n",
@@ -2661,7 +2706,7 @@
     "start_line": 5249,
     "end_line": 5261,
     "section": "Lists",
-    "text": "- foo\n - bar\n - baz"
+    "text": "[LIST: foo]\n[LIST: bar]\n[LIST: + baz]"
   },
   {
     "markdown": "1. foo\n2. bar\n3) baz\n",
@@ -2670,7 +2715,7 @@
     "start_line": 5264,
     "end_line": 5276,
     "section": "Lists",
-    "text": "- foo\n - bar\n - baz"
+    "text": "[OLIST: foo]\n[OLIST: bar]\n[OLIST: baz]"
   },
   {
     "markdown": "Foo\n- bar\n- baz\n",
@@ -2679,7 +2724,7 @@
     "start_line": 5283,
     "end_line": 5293,
     "section": "Lists",
-    "text": "Foo\n - bar\n - baz"
+    "text": "[PARA: Foo]\n[LIST: bar]\n[LIST: baz]"
   },
   {
     "markdown": "The number of windows in my house is\n14.  The number of doors is 6.\n",
@@ -2688,7 +2733,7 @@
     "start_line": 5360,
     "end_line": 5366,
     "section": "Lists",
-    "text": "The number of windows in my house is 14. The number of doors is 6."
+    "text": "[PARA: The number of windows in my house is]\n[OLIST: The number of doors is 6.]"
   },
   {
     "markdown": "The number of windows in my house is\n1.  The number of doors is 6.\n",
@@ -2697,7 +2742,7 @@
     "start_line": 5370,
     "end_line": 5378,
     "section": "Lists",
-    "text": "The number of windows in my house is\n - The number of doors is 6."
+    "text": "[PARA: The number of windows in my house is]\n[OLIST: The number of doors is 6.]"
   },
   {
     "markdown": "- foo\n\n- bar\n\n\n- baz\n",
@@ -2706,7 +2751,7 @@
     "start_line": 5384,
     "end_line": 5403,
     "section": "Lists",
-    "text": "- foo\n \n - bar\n \n - baz"
+    "text": "[LIST: foo]\n[LIST: bar]\n[LIST: baz]"
   },
   {
     "markdown": "- foo\n  - bar\n    - baz\n\n\n      bim\n",
@@ -2715,7 +2760,7 @@
     "start_line": 5405,
     "end_line": 5427,
     "section": "Lists",
-    "text": "- foo - bar - baz\n bim"
+    "text": "[LIST: foo]\n[LIST: bar]\n[LIST: baz]\n[PARA: bim]"
   },
   {
     "markdown": "- foo\n- bar\n\n<!-- -->\n\n- baz\n- bim\n",
@@ -2724,7 +2769,7 @@
     "start_line": 5435,
     "end_line": 5453,
     "section": "Lists",
-    "text": "- foo\n- bar\n\n- baz\n- bim"
+    "text": "[LIST: foo]\n[LIST: bar]\n[LIST: baz]\n[LIST: bim]"
   },
   {
     "markdown": "-   foo\n\n    notcode\n\n-   foo\n\n<!-- -->\n\n    code\n",
@@ -2733,7 +2778,7 @@
     "start_line": 5456,
     "end_line": 5479,
     "section": "Lists",
-    "text": "- foo\n notcode\n \n - foo\n \n `code `"
+    "text": "[LIST: foo]\n[PARA: notcode]\n[LIST: foo]\n[CODE: code]"
   },
   {
     "markdown": "- a\n - b\n  - c\n   - d\n  - e\n - f\n- g\n",
@@ -2742,7 +2787,7 @@
     "start_line": 5487,
     "end_line": 5505,
     "section": "Lists",
-    "text": "- a\n - b\n - c\n - d\n - e\n - f\n - g"
+    "text": "[LIST: a]\n[LIST: b]\n[LIST: c]\n[LIST: d]\n[LIST: e]\n[LIST: f]\n[LIST: g]"
   },
   {
     "markdown": "1. a\n\n  2. b\n\n   3. c\n",
@@ -2751,7 +2796,7 @@
     "start_line": 5508,
     "end_line": 5526,
     "section": "Lists",
-    "text": "- a\n \n - b\n \n - c"
+    "text": "[OLIST: a]\n[OLIST: b]\n[OLIST: c]"
   },
   {
     "markdown": "- a\n - b\n  - c\n   - d\n    - e\n",
@@ -2760,7 +2805,7 @@
     "start_line": 5532,
     "end_line": 5546,
     "section": "Lists",
-    "text": "- a\n - b\n - c\n - d - e"
+    "text": "[LIST: a]\n[LIST: b]\n[LIST: c]\n[LIST: d]\n[PARA: - e]"
   },
   {
     "markdown": "1. a\n\n  2. b\n\n    3. c\n",
@@ -2769,7 +2814,7 @@
     "start_line": 5552,
     "end_line": 5569,
     "section": "Lists",
-    "text": "- a\n \n - b\n \n `3. c `"
+    "text": "[OLIST: a]\n[OLIST: b]\n[CODE: 3. c]"
   },
   {
     "markdown": "- a\n- b\n\n- c\n",
@@ -2778,7 +2823,7 @@
     "start_line": 5575,
     "end_line": 5592,
     "section": "Lists",
-    "text": "- a\n \n - b\n \n - c"
+    "text": "[LIST: a]\n[LIST: b]\n[LIST: c]"
   },
   {
     "markdown": "* a\n*\n\n* c\n",
@@ -2787,7 +2832,7 @@
     "start_line": 5597,
     "end_line": 5612,
     "section": "Lists",
-    "text": "- a\n \n - \n - c"
+    "text": "[LIST: a]\n[LIST: c]"
   },
   {
     "markdown": "- a\n- b\n\n  c\n- d\n",
@@ -2796,7 +2841,7 @@
     "start_line": 5619,
     "end_line": 5638,
     "section": "Lists",
-    "text": "- a\n \n - b\n c\n \n - d"
+    "text": "[LIST: a]\n[LIST: b]\n[PARA: c]\n[LIST: d]"
   },
   {
     "markdown": "- a\n- b\n\n  [ref]: /url\n- d\n",
@@ -2805,7 +2850,7 @@
     "start_line": 5641,
     "end_line": 5659,
     "section": "Lists",
-    "text": "- a\n \n - b\n \n - d"
+    "text": "[LIST: a]\n[LIST: b]\n[UNKNOWN:   [ref]: /url]\n[LIST: d]"
   },
   {
     "markdown": "- a\n- ```\n  b\n\n\n  ```\n- c\n",
@@ -2814,7 +2859,7 @@
     "start_line": 5664,
     "end_line": 5683,
     "section": "Lists",
-    "text": "- a\n - `b ` \n - c"
+    "text": "[LIST: a]\n[LIST: ```]\n[PARA: b]\n[PARA: ```]\n[LIST: c]"
   },
   {
     "markdown": "- a\n  - b\n\n    c\n- d\n",
@@ -2823,7 +2868,7 @@
     "start_line": 5690,
     "end_line": 5708,
     "section": "Lists",
-    "text": "- a - b\n c\n \n \n - d"
+    "text": "[LIST: a]\n[LIST: b]\n[PARA: c]\n[LIST: d]"
   },
   {
     "markdown": "* a\n  > b\n  >\n* c\n",
@@ -2832,7 +2877,7 @@
     "start_line": 5714,
     "end_line": 5728,
     "section": "Lists",
-    "text": "- a > b\n \n - c"
+    "text": "[LIST: a]\n[QUOTE: b]\n[LIST: c]"
   },
   {
     "markdown": "- a\n  > b\n  ```\n  c\n  ```\n- d\n",
@@ -2841,7 +2886,7 @@
     "start_line": 5734,
     "end_line": 5752,
     "section": "Lists",
-    "text": "- a > b\n `c ` \n - d"
+    "text": "[LIST: a]\n[QUOTE: b]\n[PARA:  c ]\n[LIST: d]"
   },
   {
     "markdown": "- a\n",
@@ -2850,7 +2895,7 @@
     "start_line": 5757,
     "end_line": 5763,
     "section": "Lists",
-    "text": "- a"
+    "text": "[LIST: a]"
   },
   {
     "markdown": "- a\n  - b\n",
@@ -2859,7 +2904,7 @@
     "start_line": 5766,
     "end_line": 5777,
     "section": "Lists",
-    "text": "- a - b"
+    "text": "[LIST: a]\n[LIST: b]"
   },
   {
     "markdown": "1. ```\n   foo\n   ```\n\n   bar\n",
@@ -2868,7 +2913,7 @@
     "start_line": 5783,
     "end_line": 5797,
     "section": "Lists",
-    "text": "- `foo ` bar"
+    "text": "[OLIST: ```]\n[PARA: foo ```]\n[PARA: bar]"
   },
   {
     "markdown": "* foo\n  * bar\n\n  baz\n",
@@ -2877,7 +2922,7 @@
     "start_line": 5802,
     "end_line": 5817,
     "section": "Lists",
-    "text": "- foo\n - bar\n baz"
+    "text": "[LIST: foo]\n[LIST: bar]\n[PARA:   baz]"
   },
   {
     "markdown": "- a\n  - b\n  - c\n\n- d\n  - e\n  - f\n",
@@ -2886,7 +2931,7 @@
     "start_line": 5820,
     "end_line": 5845,
     "section": "Lists",
-    "text": "- a\n - b\n - c\n \n - d\n - e\n - f"
+    "text": "[LIST: a]\n[LIST: b]\n[LIST: c]\n[LIST: d]\n[LIST: e]\n[LIST: f]"
   },
   {
     "markdown": "`hi`lo`\n",
@@ -2895,7 +2940,7 @@
     "start_line": 5854,
     "end_line": 5858,
     "section": "Inlines",
-    "text": "`hi`lo`"
+    "text": "[PARA: hilo`]"
   },
   {
     "markdown": "`foo`\n",
@@ -2904,7 +2949,7 @@
     "start_line": 5886,
     "end_line": 5890,
     "section": "Code spans",
-    "text": "`foo`"
+    "text": "[PARA: foo]"
   },
   {
     "markdown": "`` foo ` bar ``\n",
@@ -2913,7 +2958,7 @@
     "start_line": 5897,
     "end_line": 5901,
     "section": "Code spans",
-    "text": "`foo ` bar`"
+    "text": "[PARA:  foo ` bar ]"
   },
   {
     "markdown": "` `` `\n",
@@ -2922,7 +2967,7 @@
     "start_line": 5907,
     "end_line": 5911,
     "section": "Code spans",
-    "text": "````"
+    "text": "[PARA:  `` ]"
   },
   {
     "markdown": "`  ``  `\n",
@@ -2931,7 +2976,7 @@
     "start_line": 5915,
     "end_line": 5919,
     "section": "Code spans",
-    "text": "` `` `"
+    "text": "[PARA:   ``  ]"
   },
   {
     "markdown": "` a`\n",
@@ -2940,25 +2985,25 @@
     "start_line": 5924,
     "end_line": 5928,
     "section": "Code spans",
-    "text": "` a`"
+    "text": "[PARA:  a]"
   },
   {
-    "markdown": "` b `\n",
-    "html": "<p><code> b </code></p>\n",
+    "markdown": "`\u00A0b\u00A0`\n",
+    "html": "<p><code>\u00A0b\u00A0</code></p>\n",
     "example": 333,
     "start_line": 5933,
     "end_line": 5937,
     "section": "Code spans",
-    "text": "` b `"
+    "text": "[PARA: \u00A0b\u00A0]"
   },
   {
-    "markdown": "` `\n`  `\n",
-    "html": "<p><code> </code>\n<code>  </code></p>\n",
+    "markdown": "`\u00A0`\n`  `\n",
+    "html": "<p><code>\u00A0</code>\n<code>  </code></p>\n",
     "example": 334,
     "start_line": 5941,
     "end_line": 5947,
     "section": "Code spans",
-    "text": "` ` ` `"
+    "text": ""
   },
   {
     "markdown": "``\nfoo\nbar  \nbaz\n``\n",
@@ -2967,7 +3012,7 @@
     "start_line": 5952,
     "end_line": 5960,
     "section": "Code spans",
-    "text": "`foo bar baz`"
+    "text": "[PARA:  foo bar baz ]"
   },
   {
     "markdown": "``\nfoo \n``\n",
@@ -2976,7 +3021,7 @@
     "start_line": 5962,
     "end_line": 5968,
     "section": "Code spans",
-    "text": "`foo `"
+    "text": "[PARA:  foo ]"
   },
   {
     "markdown": "`foo   bar \nbaz`\n",
@@ -2985,7 +3030,7 @@
     "start_line": 5973,
     "end_line": 5978,
     "section": "Code spans",
-    "text": "`foo bar baz`"
+    "text": "[PARA: foo   bar baz]"
   },
   {
     "markdown": "`foo\\`bar`\n",
@@ -2994,7 +3039,7 @@
     "start_line": 5990,
     "end_line": 5994,
     "section": "Code spans",
-    "text": "`foo\\`bar`"
+    "text": "[PARA: foo\\bar`]"
   },
   {
     "markdown": "``foo`bar``\n",
@@ -3003,7 +3048,7 @@
     "start_line": 6001,
     "end_line": 6005,
     "section": "Code spans",
-    "text": "`foo`bar`"
+    "text": "[PARA: foo`bar]"
   },
   {
     "markdown": "` foo `` bar `\n",
@@ -3012,7 +3057,7 @@
     "start_line": 6007,
     "end_line": 6011,
     "section": "Code spans",
-    "text": "`foo `` bar`"
+    "text": "[PARA:  foo `` bar ]"
   },
   {
     "markdown": "*foo`*`\n",
@@ -3021,7 +3066,7 @@
     "start_line": 6019,
     "end_line": 6023,
     "section": "Code spans",
-    "text": "*foo`*`"
+    "text": "[PARA: *foo*]"
   },
   {
     "markdown": "[not a `link](/foo`)\n",
@@ -3030,7 +3075,7 @@
     "start_line": 6028,
     "end_line": 6032,
     "section": "Code spans",
-    "text": "[not a `link](/foo`)"
+    "text": "[PARA: [not a link](/foo)]"
   },
   {
     "markdown": "`<a href=\"`\">`\n",
@@ -3039,7 +3084,7 @@
     "start_line": 6038,
     "end_line": 6042,
     "section": "Code spans",
-    "text": "\">`"
+    "text": "[PARA: <a href=\"\">`]"
   },
   {
     "markdown": "<a href=\"`\">`\n",
@@ -3048,7 +3093,7 @@
     "start_line": 6047,
     "end_line": 6051,
     "section": "Code spans",
-    "text": "`"
+    "text": "[PARA: <a href=\"`\">`]"
   },
   {
     "markdown": "`<https://foo.bar.`baz>`\n",
@@ -3057,7 +3102,7 @@
     "start_line": 6056,
     "end_line": 6060,
     "section": "Code spans",
-    "text": "baz>`"
+    "text": "[PARA: <https://foo.bar.baz>`]"
   },
   {
     "markdown": "<https://foo.bar.`baz>`\n",
@@ -3066,7 +3111,7 @@
     "start_line": 6065,
     "end_line": 6069,
     "section": "Code spans",
-    "text": "https://foo.bar.`baz`"
+    "text": "[PARA: https://foo.bar.`baz`]"
   },
   {
     "markdown": "```foo``\n",
@@ -3075,7 +3120,7 @@
     "start_line": 6075,
     "end_line": 6079,
     "section": "Code spans",
-    "text": "```foo``"
+    "text": "[PARA: ```foo``]"
   },
   {
     "markdown": "`foo\n",
@@ -3084,7 +3129,7 @@
     "start_line": 6082,
     "end_line": 6086,
     "section": "Code spans",
-    "text": "`foo"
+    "text": "[PARA: `foo]"
   },
   {
     "markdown": "`foo``bar``\n",
@@ -3093,7 +3138,7 @@
     "start_line": 6091,
     "end_line": 6095,
     "section": "Code spans",
-    "text": "`foo`bar`"
+    "text": "[PARA: `foobar]"
   },
   {
     "markdown": "*foo bar*\n",
@@ -3101,7 +3146,8 @@
     "example": 350,
     "start_line": 6308,
     "end_line": 6312,
-    "section": "Emphasis and strong emphasis"
+    "section": "Emphasis and strong emphasis",
+    "text": "[PARA: foo bar]"
   },
   {
     "markdown": "a * foo bar*\n",
@@ -3110,7 +3156,7 @@
     "start_line": 6318,
     "end_line": 6322,
     "section": "Emphasis and strong emphasis",
-    "text": "a * foo bar*"
+    "text": "[PARA: a * foo bar*]"
   },
   {
     "markdown": "a*\"foo\"*\n",
@@ -3119,16 +3165,16 @@
     "start_line": 6329,
     "end_line": 6333,
     "section": "Emphasis and strong emphasis",
-    "text": "a*\"foo\"*"
+    "text": "[PARA: a*\"foo\"*]"
   },
   {
-    "markdown": "* a *\n",
-    "html": "<p>* a *</p>\n",
+    "markdown": "*\u00A0a\u00A0*\n",
+    "html": "<p>*\u00A0a\u00A0*</p>\n",
     "example": 353,
     "start_line": 6338,
     "end_line": 6342,
     "section": "Emphasis and strong emphasis",
-    "text": "* a *"
+    "text": "[PARA: *\u00A0a\u00A0*]"
   },
   {
     "markdown": "*$*alpha.\n\n*£*bravo.\n\n*€*charlie.\n",
@@ -3137,7 +3183,7 @@
     "start_line": 6347,
     "end_line": 6357,
     "section": "Emphasis and strong emphasis",
-    "text": "*$*alpha.\n *£*bravo.\n *€*charlie."
+    "text": "[PARA: *$*alpha.]\n[PARA: *£*bravo.]\n[PARA: *€*charlie.]"
   },
   {
     "markdown": "foo*bar*\n",
@@ -3145,7 +3191,8 @@
     "example": 355,
     "start_line": 6362,
     "end_line": 6366,
-    "section": "Emphasis and strong emphasis"
+    "section": "Emphasis and strong emphasis",
+    "text": "[PARA: foobar]"
   },
   {
     "markdown": "5*6*78\n",
@@ -3153,7 +3200,8 @@
     "example": 356,
     "start_line": 6369,
     "end_line": 6373,
-    "section": "Emphasis and strong emphasis"
+    "section": "Emphasis and strong emphasis",
+    "text": "[PARA: 5678]"
   },
   {
     "markdown": "_foo bar_\n",
@@ -3161,7 +3209,8 @@
     "example": 357,
     "start_line": 6378,
     "end_line": 6382,
-    "section": "Emphasis and strong emphasis"
+    "section": "Emphasis and strong emphasis",
+    "text": "[PARA: foo bar]"
   },
   {
     "markdown": "_ foo bar_\n",
@@ -3170,7 +3219,7 @@
     "start_line": 6388,
     "end_line": 6392,
     "section": "Emphasis and strong emphasis",
-    "text": "_ foo bar_"
+    "text": "[PARA: _ foo bar_]"
   },
   {
     "markdown": "a_\"foo\"_\n",
@@ -3179,7 +3228,7 @@
     "start_line": 6398,
     "end_line": 6402,
     "section": "Emphasis and strong emphasis",
-    "text": "a_\"foo\"_"
+    "text": "[PARA: a_\"foo\"_]"
   },
   {
     "markdown": "foo_bar_\n",
@@ -3188,7 +3237,7 @@
     "start_line": 6407,
     "end_line": 6411,
     "section": "Emphasis and strong emphasis",
-    "text": "foo_bar_"
+    "text": "[PARA: foo_bar_]"
   },
   {
     "markdown": "5_6_78\n",
@@ -3197,7 +3246,7 @@
     "start_line": 6414,
     "end_line": 6418,
     "section": "Emphasis and strong emphasis",
-    "text": "5_6_78"
+    "text": "[PARA: 5_6_78]"
   },
   {
     "markdown": "пристаням_стремятся_\n",
@@ -3206,7 +3255,7 @@
     "start_line": 6421,
     "end_line": 6425,
     "section": "Emphasis and strong emphasis",
-    "text": "пристаням_стремятся_"
+    "text": "[PARA: пристаням_стремятся_]"
   },
   {
     "markdown": "aa_\"bb\"_cc\n",
@@ -3215,7 +3264,7 @@
     "start_line": 6431,
     "end_line": 6435,
     "section": "Emphasis and strong emphasis",
-    "text": "aa_\"bb\"_cc"
+    "text": "[PARA: aa_\"bb\"_cc]"
   },
   {
     "markdown": "foo-_(bar)_\n",
@@ -3223,7 +3272,8 @@
     "example": 364,
     "start_line": 6442,
     "end_line": 6446,
-    "section": "Emphasis and strong emphasis"
+    "section": "Emphasis and strong emphasis",
+    "text": "[PARA: foo-(bar)]"
   },
   {
     "markdown": "_foo*\n",
@@ -3232,7 +3282,7 @@
     "start_line": 6454,
     "end_line": 6458,
     "section": "Emphasis and strong emphasis",
-    "text": "_foo*"
+    "text": "[PARA: _foo*]"
   },
   {
     "markdown": "*foo bar *\n",
@@ -3241,7 +3291,7 @@
     "start_line": 6464,
     "end_line": 6468,
     "section": "Emphasis and strong emphasis",
-    "text": "*foo bar *"
+    "text": "[PARA: *foo bar *]"
   },
   {
     "markdown": "*foo bar\n*\n",
@@ -3250,7 +3300,7 @@
     "start_line": 6473,
     "end_line": 6479,
     "section": "Emphasis and strong emphasis",
-    "text": "*foo bar *"
+    "text": "[PARA: *foo bar *]"
   },
   {
     "markdown": "*(*foo)\n",
@@ -3259,7 +3309,7 @@
     "start_line": 6486,
     "end_line": 6490,
     "section": "Emphasis and strong emphasis",
-    "text": "*(*foo)"
+    "text": "[PARA: *(*foo)]"
   },
   {
     "markdown": "*(*foo*)*\n",
@@ -3267,7 +3317,8 @@
     "example": 369,
     "start_line": 6496,
     "end_line": 6500,
-    "section": "Emphasis and strong emphasis"
+    "section": "Emphasis and strong emphasis",
+    "text": "[PARA: (foo)]"
   },
   {
     "markdown": "*foo*bar\n",
@@ -3275,7 +3326,8 @@
     "example": 370,
     "start_line": 6505,
     "end_line": 6509,
-    "section": "Emphasis and strong emphasis"
+    "section": "Emphasis and strong emphasis",
+    "text": "[PARA: foobar]"
   },
   {
     "markdown": "_foo bar _\n",
@@ -3284,7 +3336,7 @@
     "start_line": 6518,
     "end_line": 6522,
     "section": "Emphasis and strong emphasis",
-    "text": "_foo bar _"
+    "text": "[PARA: _foo bar _]"
   },
   {
     "markdown": "_(_foo)\n",
@@ -3293,7 +3345,7 @@
     "start_line": 6528,
     "end_line": 6532,
     "section": "Emphasis and strong emphasis",
-    "text": "_(_foo)"
+    "text": "[PARA: _(_foo)]"
   },
   {
     "markdown": "_(_foo_)_\n",
@@ -3301,7 +3353,8 @@
     "example": 373,
     "start_line": 6537,
     "end_line": 6541,
-    "section": "Emphasis and strong emphasis"
+    "section": "Emphasis and strong emphasis",
+    "text": "[PARA: (foo)]"
   },
   {
     "markdown": "_foo_bar\n",
@@ -3310,7 +3363,7 @@
     "start_line": 6546,
     "end_line": 6550,
     "section": "Emphasis and strong emphasis",
-    "text": "_foo_bar"
+    "text": "[PARA: _foo_bar]"
   },
   {
     "markdown": "_пристаням_стремятся\n",
@@ -3319,7 +3372,7 @@
     "start_line": 6553,
     "end_line": 6557,
     "section": "Emphasis and strong emphasis",
-    "text": "_пристаням_стремятся"
+    "text": "[PARA: _пристаням_стремятся]"
   },
   {
     "markdown": "_foo_bar_baz_\n",
@@ -3327,7 +3380,8 @@
     "example": 376,
     "start_line": 6560,
     "end_line": 6564,
-    "section": "Emphasis and strong emphasis"
+    "section": "Emphasis and strong emphasis",
+    "text": "[PARA: foo_bar_baz]"
   },
   {
     "markdown": "_(bar)_.\n",
@@ -3335,7 +3389,8 @@
     "example": 377,
     "start_line": 6571,
     "end_line": 6575,
-    "section": "Emphasis and strong emphasis"
+    "section": "Emphasis and strong emphasis",
+    "text": "[PARA: (bar).]"
   },
   {
     "markdown": "**foo bar**\n",
@@ -3343,7 +3398,8 @@
     "example": 378,
     "start_line": 6580,
     "end_line": 6584,
-    "section": "Emphasis and strong emphasis"
+    "section": "Emphasis and strong emphasis",
+    "text": "[PARA: foo bar]"
   },
   {
     "markdown": "** foo bar**\n",
@@ -3352,7 +3408,7 @@
     "start_line": 6590,
     "end_line": 6594,
     "section": "Emphasis and strong emphasis",
-    "text": "** foo bar**"
+    "text": "[PARA: ** foo bar**]"
   },
   {
     "markdown": "a**\"foo\"**\n",
@@ -3361,7 +3417,7 @@
     "start_line": 6601,
     "end_line": 6605,
     "section": "Emphasis and strong emphasis",
-    "text": "a**\"foo\"**"
+    "text": "[PARA: a**\"foo\"**]"
   },
   {
     "markdown": "foo**bar**\n",
@@ -3369,7 +3425,8 @@
     "example": 381,
     "start_line": 6610,
     "end_line": 6614,
-    "section": "Emphasis and strong emphasis"
+    "section": "Emphasis and strong emphasis",
+    "text": "[PARA: foobar]"
   },
   {
     "markdown": "__foo bar__\n",
@@ -3377,7 +3434,8 @@
     "example": 382,
     "start_line": 6619,
     "end_line": 6623,
-    "section": "Emphasis and strong emphasis"
+    "section": "Emphasis and strong emphasis",
+    "text": "[PARA: foo bar]"
   },
   {
     "markdown": "__ foo bar__\n",
@@ -3386,7 +3444,7 @@
     "start_line": 6629,
     "end_line": 6633,
     "section": "Emphasis and strong emphasis",
-    "text": "__ foo bar__"
+    "text": "[PARA: __ foo bar__]"
   },
   {
     "markdown": "__\nfoo bar__\n",
@@ -3395,7 +3453,7 @@
     "start_line": 6637,
     "end_line": 6643,
     "section": "Emphasis and strong emphasis",
-    "text": "__ foo bar__"
+    "text": "[PARA: __ foo bar__]"
   },
   {
     "markdown": "a__\"foo\"__\n",
@@ -3404,7 +3462,7 @@
     "start_line": 6649,
     "end_line": 6653,
     "section": "Emphasis and strong emphasis",
-    "text": "a__\"foo\"__"
+    "text": "[PARA: a__\"foo\"__]"
   },
   {
     "markdown": "foo__bar__\n",
@@ -3413,7 +3471,7 @@
     "start_line": 6658,
     "end_line": 6662,
     "section": "Emphasis and strong emphasis",
-    "text": "foo__bar__"
+    "text": "[PARA: foo__bar__]"
   },
   {
     "markdown": "5__6__78\n",
@@ -3422,7 +3480,7 @@
     "start_line": 6665,
     "end_line": 6669,
     "section": "Emphasis and strong emphasis",
-    "text": "5__6__78"
+    "text": "[PARA: 5__6__78]"
   },
   {
     "markdown": "пристаням__стремятся__\n",
@@ -3431,7 +3489,7 @@
     "start_line": 6672,
     "end_line": 6676,
     "section": "Emphasis and strong emphasis",
-    "text": "пристаням__стремятся__"
+    "text": "[PARA: пристаням__стремятся__]"
   },
   {
     "markdown": "__foo, __bar__, baz__\n",
@@ -3439,7 +3497,8 @@
     "example": 389,
     "start_line": 6679,
     "end_line": 6683,
-    "section": "Emphasis and strong emphasis"
+    "section": "Emphasis and strong emphasis",
+    "text": "[PARA: foo, bar, baz]"
   },
   {
     "markdown": "foo-__(bar)__\n",
@@ -3447,7 +3506,8 @@
     "example": 390,
     "start_line": 6690,
     "end_line": 6694,
-    "section": "Emphasis and strong emphasis"
+    "section": "Emphasis and strong emphasis",
+    "text": "[PARA: foo-(bar)]"
   },
   {
     "markdown": "**foo bar **\n",
@@ -3456,7 +3516,7 @@
     "start_line": 6703,
     "end_line": 6707,
     "section": "Emphasis and strong emphasis",
-    "text": "**foo bar **"
+    "text": "[PARA: **foo bar **]"
   },
   {
     "markdown": "**(**foo)\n",
@@ -3465,7 +3525,7 @@
     "start_line": 6716,
     "end_line": 6720,
     "section": "Emphasis and strong emphasis",
-    "text": "**(**foo)"
+    "text": "[PARA: **(**foo)]"
   },
   {
     "markdown": "*(**foo**)*\n",
@@ -3473,7 +3533,8 @@
     "example": 393,
     "start_line": 6726,
     "end_line": 6730,
-    "section": "Emphasis and strong emphasis"
+    "section": "Emphasis and strong emphasis",
+    "text": "[PARA: (foo)]"
   },
   {
     "markdown": "**Gomphocarpus (*Gomphocarpus physocarpus*, syn.\n*Asclepias physocarpa*)**\n",
@@ -3481,7 +3542,8 @@
     "example": 394,
     "start_line": 6733,
     "end_line": 6739,
-    "section": "Emphasis and strong emphasis"
+    "section": "Emphasis and strong emphasis",
+    "text": "[PARA: Gomphocarpus (Gomphocarpus physocarpus, syn. Asclepias physocarpa)]"
   },
   {
     "markdown": "**foo \"*bar*\" foo**\n",
@@ -3489,7 +3551,8 @@
     "example": 395,
     "start_line": 6742,
     "end_line": 6746,
-    "section": "Emphasis and strong emphasis"
+    "section": "Emphasis and strong emphasis",
+    "text": "[PARA: foo \"bar\" foo]"
   },
   {
     "markdown": "**foo**bar\n",
@@ -3497,7 +3560,8 @@
     "example": 396,
     "start_line": 6751,
     "end_line": 6755,
-    "section": "Emphasis and strong emphasis"
+    "section": "Emphasis and strong emphasis",
+    "text": "[PARA: foobar]"
   },
   {
     "markdown": "__foo bar __\n",
@@ -3506,7 +3570,7 @@
     "start_line": 6763,
     "end_line": 6767,
     "section": "Emphasis and strong emphasis",
-    "text": "__foo bar __"
+    "text": "[PARA: __foo bar __]"
   },
   {
     "markdown": "__(__foo)\n",
@@ -3515,7 +3579,7 @@
     "start_line": 6773,
     "end_line": 6777,
     "section": "Emphasis and strong emphasis",
-    "text": "__(__foo)"
+    "text": "[PARA: __(__foo)]"
   },
   {
     "markdown": "_(__foo__)_\n",
@@ -3523,7 +3587,8 @@
     "example": 399,
     "start_line": 6783,
     "end_line": 6787,
-    "section": "Emphasis and strong emphasis"
+    "section": "Emphasis and strong emphasis",
+    "text": "[PARA: (foo)]"
   },
   {
     "markdown": "__foo__bar\n",
@@ -3532,7 +3597,7 @@
     "start_line": 6792,
     "end_line": 6796,
     "section": "Emphasis and strong emphasis",
-    "text": "__foo__bar"
+    "text": "[PARA: __foo__bar]"
   },
   {
     "markdown": "__пристаням__стремятся\n",
@@ -3541,7 +3606,7 @@
     "start_line": 6799,
     "end_line": 6803,
     "section": "Emphasis and strong emphasis",
-    "text": "__пристаням__стремятся"
+    "text": "[PARA: __пристаням__стремятся]"
   },
   {
     "markdown": "__foo__bar__baz__\n",
@@ -3549,7 +3614,8 @@
     "example": 402,
     "start_line": 6806,
     "end_line": 6810,
-    "section": "Emphasis and strong emphasis"
+    "section": "Emphasis and strong emphasis",
+    "text": "[PARA: foo__bar__baz]"
   },
   {
     "markdown": "__(bar)__.\n",
@@ -3557,7 +3623,8 @@
     "example": 403,
     "start_line": 6817,
     "end_line": 6821,
-    "section": "Emphasis and strong emphasis"
+    "section": "Emphasis and strong emphasis",
+    "text": "[PARA: (bar).]"
   },
   {
     "markdown": "*foo [bar](/url)*\n",
@@ -3565,7 +3632,8 @@
     "example": 404,
     "start_line": 6829,
     "end_line": 6833,
-    "section": "Emphasis and strong emphasis"
+    "section": "Emphasis and strong emphasis",
+    "text": "[PARA: foo bar]"
   },
   {
     "markdown": "*foo\nbar*\n",
@@ -3573,7 +3641,8 @@
     "example": 405,
     "start_line": 6836,
     "end_line": 6842,
-    "section": "Emphasis and strong emphasis"
+    "section": "Emphasis and strong emphasis",
+    "text": "[PARA: foo bar]"
   },
   {
     "markdown": "_foo __bar__ baz_\n",
@@ -3581,7 +3650,8 @@
     "example": 406,
     "start_line": 6848,
     "end_line": 6852,
-    "section": "Emphasis and strong emphasis"
+    "section": "Emphasis and strong emphasis",
+    "text": "[PARA: foo bar baz]"
   },
   {
     "markdown": "_foo _bar_ baz_\n",
@@ -3589,7 +3659,8 @@
     "example": 407,
     "start_line": 6855,
     "end_line": 6859,
-    "section": "Emphasis and strong emphasis"
+    "section": "Emphasis and strong emphasis",
+    "text": "[PARA: foo bar baz]"
   },
   {
     "markdown": "__foo_ bar_\n",
@@ -3597,7 +3668,8 @@
     "example": 408,
     "start_line": 6862,
     "end_line": 6866,
-    "section": "Emphasis and strong emphasis"
+    "section": "Emphasis and strong emphasis",
+    "text": "[PARA: foo bar]"
   },
   {
     "markdown": "*foo *bar**\n",
@@ -3605,7 +3677,8 @@
     "example": 409,
     "start_line": 6869,
     "end_line": 6873,
-    "section": "Emphasis and strong emphasis"
+    "section": "Emphasis and strong emphasis",
+    "text": "[PARA: foo bar]"
   },
   {
     "markdown": "*foo **bar** baz*\n",
@@ -3613,7 +3686,8 @@
     "example": 410,
     "start_line": 6876,
     "end_line": 6880,
-    "section": "Emphasis and strong emphasis"
+    "section": "Emphasis and strong emphasis",
+    "text": "[PARA: foo bar baz]"
   },
   {
     "markdown": "*foo**bar**baz*\n",
@@ -3621,7 +3695,8 @@
     "example": 411,
     "start_line": 6882,
     "end_line": 6886,
-    "section": "Emphasis and strong emphasis"
+    "section": "Emphasis and strong emphasis",
+    "text": "[PARA: foobarbaz]"
   },
   {
     "markdown": "*foo**bar*\n",
@@ -3629,7 +3704,8 @@
     "example": 412,
     "start_line": 6906,
     "end_line": 6910,
-    "section": "Emphasis and strong emphasis"
+    "section": "Emphasis and strong emphasis",
+    "text": "[PARA: foo**bar]"
   },
   {
     "markdown": "***foo** bar*\n",
@@ -3637,7 +3713,8 @@
     "example": 413,
     "start_line": 6919,
     "end_line": 6923,
-    "section": "Emphasis and strong emphasis"
+    "section": "Emphasis and strong emphasis",
+    "text": "[PARA: foo bar]"
   },
   {
     "markdown": "*foo **bar***\n",
@@ -3645,7 +3722,8 @@
     "example": 414,
     "start_line": 6926,
     "end_line": 6930,
-    "section": "Emphasis and strong emphasis"
+    "section": "Emphasis and strong emphasis",
+    "text": "[PARA: foo bar]"
   },
   {
     "markdown": "*foo**bar***\n",
@@ -3653,7 +3731,8 @@
     "example": 415,
     "start_line": 6933,
     "end_line": 6937,
-    "section": "Emphasis and strong emphasis"
+    "section": "Emphasis and strong emphasis",
+    "text": "[PARA: foobar]"
   },
   {
     "markdown": "foo***bar***baz\n",
@@ -3661,7 +3740,8 @@
     "example": 416,
     "start_line": 6944,
     "end_line": 6948,
-    "section": "Emphasis and strong emphasis"
+    "section": "Emphasis and strong emphasis",
+    "text": "[PARA: foobarbaz]"
   },
   {
     "markdown": "foo******bar*********baz\n",
@@ -3669,7 +3749,8 @@
     "example": 417,
     "start_line": 6950,
     "end_line": 6954,
-    "section": "Emphasis and strong emphasis"
+    "section": "Emphasis and strong emphasis",
+    "text": "[PARA: foobar***baz]"
   },
   {
     "markdown": "*foo **bar *baz* bim** bop*\n",
@@ -3677,7 +3758,8 @@
     "example": 418,
     "start_line": 6959,
     "end_line": 6963,
-    "section": "Emphasis and strong emphasis"
+    "section": "Emphasis and strong emphasis",
+    "text": "[PARA: foo bar baz bim bop]"
   },
   {
     "markdown": "*foo [*bar*](/url)*\n",
@@ -3685,7 +3767,8 @@
     "example": 419,
     "start_line": 6966,
     "end_line": 6970,
-    "section": "Emphasis and strong emphasis"
+    "section": "Emphasis and strong emphasis",
+    "text": "[PARA: foo *bar*]"
   },
   {
     "markdown": "** is not an empty emphasis\n",
@@ -3694,7 +3777,7 @@
     "start_line": 6975,
     "end_line": 6979,
     "section": "Emphasis and strong emphasis",
-    "text": "** is not an empty emphasis"
+    "text": "[PARA: ** is not an empty emphasis]"
   },
   {
     "markdown": "**** is not an empty strong emphasis\n",
@@ -3703,7 +3786,7 @@
     "start_line": 6982,
     "end_line": 6986,
     "section": "Emphasis and strong emphasis",
-    "text": "**** is not an empty strong emphasis"
+    "text": "[PARA: **** is not an empty strong emphasis]"
   },
   {
     "markdown": "**foo [bar](/url)**\n",
@@ -3711,7 +3794,8 @@
     "example": 422,
     "start_line": 6995,
     "end_line": 6999,
-    "section": "Emphasis and strong emphasis"
+    "section": "Emphasis and strong emphasis",
+    "text": "[PARA: foo bar]"
   },
   {
     "markdown": "**foo\nbar**\n",
@@ -3719,7 +3803,8 @@
     "example": 423,
     "start_line": 7002,
     "end_line": 7008,
-    "section": "Emphasis and strong emphasis"
+    "section": "Emphasis and strong emphasis",
+    "text": "[PARA: foo bar]"
   },
   {
     "markdown": "__foo _bar_ baz__\n",
@@ -3727,7 +3812,8 @@
     "example": 424,
     "start_line": 7014,
     "end_line": 7018,
-    "section": "Emphasis and strong emphasis"
+    "section": "Emphasis and strong emphasis",
+    "text": "[PARA: foo bar baz]"
   },
   {
     "markdown": "__foo __bar__ baz__\n",
@@ -3735,7 +3821,8 @@
     "example": 425,
     "start_line": 7021,
     "end_line": 7025,
-    "section": "Emphasis and strong emphasis"
+    "section": "Emphasis and strong emphasis",
+    "text": "[PARA: foo bar baz]"
   },
   {
     "markdown": "____foo__ bar__\n",
@@ -3743,7 +3830,8 @@
     "example": 426,
     "start_line": 7028,
     "end_line": 7032,
-    "section": "Emphasis and strong emphasis"
+    "section": "Emphasis and strong emphasis",
+    "text": "[PARA: foo bar]"
   },
   {
     "markdown": "**foo **bar****\n",
@@ -3751,7 +3839,8 @@
     "example": 427,
     "start_line": 7035,
     "end_line": 7039,
-    "section": "Emphasis and strong emphasis"
+    "section": "Emphasis and strong emphasis",
+    "text": "[PARA: foo bar]"
   },
   {
     "markdown": "**foo *bar* baz**\n",
@@ -3759,7 +3848,8 @@
     "example": 428,
     "start_line": 7042,
     "end_line": 7046,
-    "section": "Emphasis and strong emphasis"
+    "section": "Emphasis and strong emphasis",
+    "text": "[PARA: foo bar baz]"
   },
   {
     "markdown": "**foo*bar*baz**\n",
@@ -3767,7 +3857,8 @@
     "example": 429,
     "start_line": 7049,
     "end_line": 7053,
-    "section": "Emphasis and strong emphasis"
+    "section": "Emphasis and strong emphasis",
+    "text": "[PARA: foobarbaz]"
   },
   {
     "markdown": "***foo* bar**\n",
@@ -3775,7 +3866,8 @@
     "example": 430,
     "start_line": 7056,
     "end_line": 7060,
-    "section": "Emphasis and strong emphasis"
+    "section": "Emphasis and strong emphasis",
+    "text": "[PARA: foo bar]"
   },
   {
     "markdown": "**foo *bar***\n",
@@ -3783,7 +3875,8 @@
     "example": 431,
     "start_line": 7063,
     "end_line": 7067,
-    "section": "Emphasis and strong emphasis"
+    "section": "Emphasis and strong emphasis",
+    "text": "[PARA: foo bar]"
   },
   {
     "markdown": "**foo *bar **baz**\nbim* bop**\n",
@@ -3791,7 +3884,8 @@
     "example": 432,
     "start_line": 7072,
     "end_line": 7078,
-    "section": "Emphasis and strong emphasis"
+    "section": "Emphasis and strong emphasis",
+    "text": "[PARA: foo bar baz bim bop]"
   },
   {
     "markdown": "**foo [*bar*](/url)**\n",
@@ -3799,7 +3893,8 @@
     "example": 433,
     "start_line": 7081,
     "end_line": 7085,
-    "section": "Emphasis and strong emphasis"
+    "section": "Emphasis and strong emphasis",
+    "text": "[PARA: foo *bar*]"
   },
   {
     "markdown": "__ is not an empty emphasis\n",
@@ -3808,7 +3903,7 @@
     "start_line": 7090,
     "end_line": 7094,
     "section": "Emphasis and strong emphasis",
-    "text": "__ is not an empty emphasis"
+    "text": "[PARA: __ is not an empty emphasis]"
   },
   {
     "markdown": "____ is not an empty strong emphasis\n",
@@ -3817,7 +3912,7 @@
     "start_line": 7097,
     "end_line": 7101,
     "section": "Emphasis and strong emphasis",
-    "text": "____ is not an empty strong emphasis"
+    "text": "[PARA: ____ is not an empty strong emphasis]"
   },
   {
     "markdown": "foo ***\n",
@@ -3826,7 +3921,7 @@
     "start_line": 7107,
     "end_line": 7111,
     "section": "Emphasis and strong emphasis",
-    "text": "foo ***"
+    "text": "[PARA: foo ***]"
   },
   {
     "markdown": "foo *\\**\n",
@@ -3834,7 +3929,8 @@
     "example": 437,
     "start_line": 7114,
     "end_line": 7118,
-    "section": "Emphasis and strong emphasis"
+    "section": "Emphasis and strong emphasis",
+    "text": "[PARA: foo \\*]"
   },
   {
     "markdown": "foo *_*\n",
@@ -3842,7 +3938,8 @@
     "example": 438,
     "start_line": 7121,
     "end_line": 7125,
-    "section": "Emphasis and strong emphasis"
+    "section": "Emphasis and strong emphasis",
+    "text": "[PARA: foo _]"
   },
   {
     "markdown": "foo *****\n",
@@ -3851,7 +3948,7 @@
     "start_line": 7128,
     "end_line": 7132,
     "section": "Emphasis and strong emphasis",
-    "text": "foo *****"
+    "text": "[PARA: foo *****]"
   },
   {
     "markdown": "foo **\\***\n",
@@ -3859,7 +3956,8 @@
     "example": 440,
     "start_line": 7135,
     "end_line": 7139,
-    "section": "Emphasis and strong emphasis"
+    "section": "Emphasis and strong emphasis",
+    "text": "[PARA: foo \\*]"
   },
   {
     "markdown": "foo **_**\n",
@@ -3867,7 +3965,8 @@
     "example": 441,
     "start_line": 7142,
     "end_line": 7146,
-    "section": "Emphasis and strong emphasis"
+    "section": "Emphasis and strong emphasis",
+    "text": "[PARA: foo _]"
   },
   {
     "markdown": "**foo*\n",
@@ -3875,7 +3974,8 @@
     "example": 442,
     "start_line": 7153,
     "end_line": 7157,
-    "section": "Emphasis and strong emphasis"
+    "section": "Emphasis and strong emphasis",
+    "text": "[PARA: *foo]"
   },
   {
     "markdown": "*foo**\n",
@@ -3883,7 +3983,8 @@
     "example": 443,
     "start_line": 7160,
     "end_line": 7164,
-    "section": "Emphasis and strong emphasis"
+    "section": "Emphasis and strong emphasis",
+    "text": "[PARA: foo*]"
   },
   {
     "markdown": "***foo**\n",
@@ -3891,7 +3992,8 @@
     "example": 444,
     "start_line": 7167,
     "end_line": 7171,
-    "section": "Emphasis and strong emphasis"
+    "section": "Emphasis and strong emphasis",
+    "text": "[PARA: *foo]"
   },
   {
     "markdown": "****foo*\n",
@@ -3899,7 +4001,8 @@
     "example": 445,
     "start_line": 7174,
     "end_line": 7178,
-    "section": "Emphasis and strong emphasis"
+    "section": "Emphasis and strong emphasis",
+    "text": "[PARA: ***foo]"
   },
   {
     "markdown": "**foo***\n",
@@ -3907,7 +4010,8 @@
     "example": 446,
     "start_line": 7181,
     "end_line": 7185,
-    "section": "Emphasis and strong emphasis"
+    "section": "Emphasis and strong emphasis",
+    "text": "[PARA: foo*]"
   },
   {
     "markdown": "*foo****\n",
@@ -3915,7 +4019,8 @@
     "example": 447,
     "start_line": 7188,
     "end_line": 7192,
-    "section": "Emphasis and strong emphasis"
+    "section": "Emphasis and strong emphasis",
+    "text": "[PARA: foo***]"
   },
   {
     "markdown": "foo ___\n",
@@ -3924,7 +4029,7 @@
     "start_line": 7198,
     "end_line": 7202,
     "section": "Emphasis and strong emphasis",
-    "text": "foo ___"
+    "text": "[PARA: foo ___]"
   },
   {
     "markdown": "foo _\\__\n",
@@ -3932,7 +4037,8 @@
     "example": 449,
     "start_line": 7205,
     "end_line": 7209,
-    "section": "Emphasis and strong emphasis"
+    "section": "Emphasis and strong emphasis",
+    "text": "[PARA: foo \\_]"
   },
   {
     "markdown": "foo _*_\n",
@@ -3940,7 +4046,8 @@
     "example": 450,
     "start_line": 7212,
     "end_line": 7216,
-    "section": "Emphasis and strong emphasis"
+    "section": "Emphasis and strong emphasis",
+    "text": "[PARA: foo *]"
   },
   {
     "markdown": "foo _____\n",
@@ -3949,7 +4056,7 @@
     "start_line": 7219,
     "end_line": 7223,
     "section": "Emphasis and strong emphasis",
-    "text": "foo _____"
+    "text": "[PARA: foo _____]"
   },
   {
     "markdown": "foo __\\___\n",
@@ -3957,7 +4064,8 @@
     "example": 452,
     "start_line": 7226,
     "end_line": 7230,
-    "section": "Emphasis and strong emphasis"
+    "section": "Emphasis and strong emphasis",
+    "text": "[PARA: foo \\_]"
   },
   {
     "markdown": "foo __*__\n",
@@ -3965,7 +4073,8 @@
     "example": 453,
     "start_line": 7233,
     "end_line": 7237,
-    "section": "Emphasis and strong emphasis"
+    "section": "Emphasis and strong emphasis",
+    "text": "[PARA: foo *]"
   },
   {
     "markdown": "__foo_\n",
@@ -3973,7 +4082,8 @@
     "example": 454,
     "start_line": 7240,
     "end_line": 7244,
-    "section": "Emphasis and strong emphasis"
+    "section": "Emphasis and strong emphasis",
+    "text": "[PARA: _foo]"
   },
   {
     "markdown": "_foo__\n",
@@ -3981,7 +4091,8 @@
     "example": 455,
     "start_line": 7251,
     "end_line": 7255,
-    "section": "Emphasis and strong emphasis"
+    "section": "Emphasis and strong emphasis",
+    "text": "[PARA: foo_]"
   },
   {
     "markdown": "___foo__\n",
@@ -3989,7 +4100,8 @@
     "example": 456,
     "start_line": 7258,
     "end_line": 7262,
-    "section": "Emphasis and strong emphasis"
+    "section": "Emphasis and strong emphasis",
+    "text": "[PARA: _foo]"
   },
   {
     "markdown": "____foo_\n",
@@ -3997,7 +4109,8 @@
     "example": 457,
     "start_line": 7265,
     "end_line": 7269,
-    "section": "Emphasis and strong emphasis"
+    "section": "Emphasis and strong emphasis",
+    "text": "[PARA: ___foo]"
   },
   {
     "markdown": "__foo___\n",
@@ -4005,7 +4118,8 @@
     "example": 458,
     "start_line": 7272,
     "end_line": 7276,
-    "section": "Emphasis and strong emphasis"
+    "section": "Emphasis and strong emphasis",
+    "text": "[PARA: foo_]"
   },
   {
     "markdown": "_foo____\n",
@@ -4013,7 +4127,8 @@
     "example": 459,
     "start_line": 7279,
     "end_line": 7283,
-    "section": "Emphasis and strong emphasis"
+    "section": "Emphasis and strong emphasis",
+    "text": "[PARA: foo___]"
   },
   {
     "markdown": "**foo**\n",
@@ -4021,7 +4136,8 @@
     "example": 460,
     "start_line": 7289,
     "end_line": 7293,
-    "section": "Emphasis and strong emphasis"
+    "section": "Emphasis and strong emphasis",
+    "text": "[PARA: foo]"
   },
   {
     "markdown": "*_foo_*\n",
@@ -4029,7 +4145,8 @@
     "example": 461,
     "start_line": 7296,
     "end_line": 7300,
-    "section": "Emphasis and strong emphasis"
+    "section": "Emphasis and strong emphasis",
+    "text": "[PARA: foo]"
   },
   {
     "markdown": "__foo__\n",
@@ -4037,7 +4154,8 @@
     "example": 462,
     "start_line": 7303,
     "end_line": 7307,
-    "section": "Emphasis and strong emphasis"
+    "section": "Emphasis and strong emphasis",
+    "text": "[PARA: foo]"
   },
   {
     "markdown": "_*foo*_\n",
@@ -4045,7 +4163,8 @@
     "example": 463,
     "start_line": 7310,
     "end_line": 7314,
-    "section": "Emphasis and strong emphasis"
+    "section": "Emphasis and strong emphasis",
+    "text": "[PARA: foo]"
   },
   {
     "markdown": "****foo****\n",
@@ -4053,7 +4172,8 @@
     "example": 464,
     "start_line": 7320,
     "end_line": 7324,
-    "section": "Emphasis and strong emphasis"
+    "section": "Emphasis and strong emphasis",
+    "text": "[PARA: foo]"
   },
   {
     "markdown": "____foo____\n",
@@ -4061,7 +4181,8 @@
     "example": 465,
     "start_line": 7327,
     "end_line": 7331,
-    "section": "Emphasis and strong emphasis"
+    "section": "Emphasis and strong emphasis",
+    "text": "[PARA: foo]"
   },
   {
     "markdown": "******foo******\n",
@@ -4069,7 +4190,8 @@
     "example": 466,
     "start_line": 7338,
     "end_line": 7342,
-    "section": "Emphasis and strong emphasis"
+    "section": "Emphasis and strong emphasis",
+    "text": "[PARA: foo]"
   },
   {
     "markdown": "***foo***\n",
@@ -4077,7 +4199,8 @@
     "example": 467,
     "start_line": 7347,
     "end_line": 7351,
-    "section": "Emphasis and strong emphasis"
+    "section": "Emphasis and strong emphasis",
+    "text": "[PARA: foo]"
   },
   {
     "markdown": "_____foo_____\n",
@@ -4085,7 +4208,8 @@
     "example": 468,
     "start_line": 7354,
     "end_line": 7358,
-    "section": "Emphasis and strong emphasis"
+    "section": "Emphasis and strong emphasis",
+    "text": "[PARA: foo]"
   },
   {
     "markdown": "*foo _bar* baz_\n",
@@ -4093,7 +4217,8 @@
     "example": 469,
     "start_line": 7363,
     "end_line": 7367,
-    "section": "Emphasis and strong emphasis"
+    "section": "Emphasis and strong emphasis",
+    "text": "[PARA: foo _bar baz_]"
   },
   {
     "markdown": "*foo __bar *baz bim__ bam*\n",
@@ -4101,7 +4226,8 @@
     "example": 470,
     "start_line": 7370,
     "end_line": 7374,
-    "section": "Emphasis and strong emphasis"
+    "section": "Emphasis and strong emphasis",
+    "text": "[PARA: foo bar *baz bim bam]"
   },
   {
     "markdown": "**foo **bar baz**\n",
@@ -4109,7 +4235,8 @@
     "example": 471,
     "start_line": 7379,
     "end_line": 7383,
-    "section": "Emphasis and strong emphasis"
+    "section": "Emphasis and strong emphasis",
+    "text": "[PARA: **foo bar baz]"
   },
   {
     "markdown": "*foo *bar baz*\n",
@@ -4117,7 +4244,8 @@
     "example": 472,
     "start_line": 7386,
     "end_line": 7390,
-    "section": "Emphasis and strong emphasis"
+    "section": "Emphasis and strong emphasis",
+    "text": "[PARA: *foo bar baz]"
   },
   {
     "markdown": "*[bar*](/url)\n",
@@ -4126,7 +4254,7 @@
     "start_line": 7395,
     "end_line": 7399,
     "section": "Emphasis and strong emphasis",
-    "text": "*bar*"
+    "text": "[PARA: *bar*]"
   },
   {
     "markdown": "_foo [bar_](/url)\n",
@@ -4135,7 +4263,7 @@
     "start_line": 7402,
     "end_line": 7406,
     "section": "Emphasis and strong emphasis",
-    "text": "_foo bar_"
+    "text": "[PARA: _foo bar_]"
   },
   {
     "markdown": "*<img src=\"foo\" title=\"*\"/>\n",
@@ -4143,7 +4271,8 @@
     "example": 475,
     "start_line": 7409,
     "end_line": 7413,
-    "section": "Emphasis and strong emphasis"
+    "section": "Emphasis and strong emphasis",
+    "text": "[PARA: *<img src=\"foo\" title=\"*\"/>]"
   },
   {
     "markdown": "**<a href=\"**\">\n",
@@ -4152,7 +4281,7 @@
     "start_line": 7416,
     "end_line": 7420,
     "section": "Emphasis and strong emphasis",
-    "text": "**"
+    "text": "[PARA: **<a href=\"**\">]"
   },
   {
     "markdown": "__<a href=\"__\">\n",
@@ -4161,7 +4290,7 @@
     "start_line": 7423,
     "end_line": 7427,
     "section": "Emphasis and strong emphasis",
-    "text": "__"
+    "text": "[PARA: __<a href=\"__\">]"
   },
   {
     "markdown": "*a `*`*\n",
@@ -4170,7 +4299,7 @@
     "start_line": 7430,
     "end_line": 7434,
     "section": "Emphasis and strong emphasis",
-    "text": "a `*`"
+    "text": "[PARA: a *]"
   },
   {
     "markdown": "_a `_`_\n",
@@ -4179,7 +4308,7 @@
     "start_line": 7437,
     "end_line": 7441,
     "section": "Emphasis and strong emphasis",
-    "text": "a `_`"
+    "text": "[PARA: a _]"
   },
   {
     "markdown": "**a<https://foo.bar/?q=**>\n",
@@ -4188,7 +4317,7 @@
     "start_line": 7444,
     "end_line": 7448,
     "section": "Emphasis and strong emphasis",
-    "text": "**ahttps://foo.bar/?q=**"
+    "text": "[PARA: **ahttps://foo.bar/?q=**]"
   },
   {
     "markdown": "__a<https://foo.bar/?q=__>\n",
@@ -4197,7 +4326,7 @@
     "start_line": 7451,
     "end_line": 7455,
     "section": "Emphasis and strong emphasis",
-    "text": "__ahttps://foo.bar/?q=__"
+    "text": "[PARA: __ahttps://foo.bar/?q=__]"
   },
   {
     "markdown": "[link](/uri \"title\")\n",
@@ -4206,7 +4335,7 @@
     "start_line": 7539,
     "end_line": 7543,
     "section": "Links",
-    "text": "link"
+    "text": "[PARA: link]"
   },
   {
     "markdown": "[link](/uri)\n",
@@ -4215,7 +4344,7 @@
     "start_line": 7549,
     "end_line": 7553,
     "section": "Links",
-    "text": "link"
+    "text": "[PARA: link]"
   },
   {
     "markdown": "[](./target.md)\n",
@@ -4233,7 +4362,7 @@
     "start_line": 7562,
     "end_line": 7566,
     "section": "Links",
-    "text": "link"
+    "text": "[PARA: link]"
   },
   {
     "markdown": "[link](<>)\n",
@@ -4242,7 +4371,7 @@
     "start_line": 7569,
     "end_line": 7573,
     "section": "Links",
-    "text": "link"
+    "text": "[PARA: link]"
   },
   {
     "markdown": "[]()\n",
@@ -4251,7 +4380,7 @@
     "start_line": 7576,
     "end_line": 7580,
     "section": "Links",
-    "text": ""
+    "text": "[PARA: []()]"
   },
   {
     "markdown": "[link](/my uri)\n",
@@ -4260,7 +4389,7 @@
     "start_line": 7585,
     "end_line": 7589,
     "section": "Links",
-    "text": "[link](/my uri)"
+    "text": "[PARA: [link](/my uri)]"
   },
   {
     "markdown": "[link](</my uri>)\n",
@@ -4269,7 +4398,7 @@
     "start_line": 7591,
     "end_line": 7595,
     "section": "Links",
-    "text": "link"
+    "text": "[PARA: link]"
   },
   {
     "markdown": "[link](foo\nbar)\n",
@@ -4278,7 +4407,7 @@
     "start_line": 7600,
     "end_line": 7606,
     "section": "Links",
-    "text": "[link](foo bar)"
+    "text": "[PARA: [link](foo bar)]"
   },
   {
     "markdown": "[link](<foo\nbar>)\n",
@@ -4287,7 +4416,7 @@
     "start_line": 7608,
     "end_line": 7614,
     "section": "Links",
-    "text": "[link]()"
+    "text": "[PARA: [link](<foo bar>)]"
   },
   {
     "markdown": "[a](<b)c>)\n",
@@ -4296,7 +4425,7 @@
     "start_line": 7619,
     "end_line": 7623,
     "section": "Links",
-    "text": "a"
+    "text": "[PARA: a]"
   },
   {
     "markdown": "[link](<foo\\>)\n",
@@ -4305,7 +4434,7 @@
     "start_line": 7627,
     "end_line": 7631,
     "section": "Links",
-    "text": "[link]()"
+    "text": "[PARA: [link](<foo\\>)]"
   },
   {
     "markdown": "[a](<b)c\n[a](<b)c>\n[a](<b>c)\n",
@@ -4314,7 +4443,7 @@
     "start_line": 7636,
     "end_line": 7644,
     "section": "Links",
-    "text": "[a]( [a](c)"
+    "text": "[PARA: [a](<b)c [a](<b)c> [a](<b>c)]"
   },
   {
     "markdown": "[link](\\(foo\\))\n",
@@ -4323,7 +4452,7 @@
     "start_line": 7648,
     "end_line": 7652,
     "section": "Links",
-    "text": "link"
+    "text": "[PARA: link]"
   },
   {
     "markdown": "[link](foo(and(bar)))\n",
@@ -4332,7 +4461,7 @@
     "start_line": 7657,
     "end_line": 7661,
     "section": "Links",
-    "text": "link"
+    "text": "[PARA: link]"
   },
   {
     "markdown": "[link](foo(and(bar))\n",
@@ -4341,7 +4470,7 @@
     "start_line": 7666,
     "end_line": 7670,
     "section": "Links",
-    "text": "[link](foo(and(bar))"
+    "text": "[PARA: [link](foo(and(bar))]"
   },
   {
     "markdown": "[link](foo\\(and\\(bar\\))\n",
@@ -4350,7 +4479,7 @@
     "start_line": 7673,
     "end_line": 7677,
     "section": "Links",
-    "text": "link"
+    "text": "[PARA: link]"
   },
   {
     "markdown": "[link](<foo(and(bar)>)\n",
@@ -4359,7 +4488,7 @@
     "start_line": 7680,
     "end_line": 7684,
     "section": "Links",
-    "text": "link"
+    "text": "[PARA: link]"
   },
   {
     "markdown": "[link](foo\\)\\:)\n",
@@ -4368,7 +4497,7 @@
     "start_line": 7690,
     "end_line": 7694,
     "section": "Links",
-    "text": "link"
+    "text": "[PARA: link]"
   },
   {
     "markdown": "[link](#fragment)\n\n[link](https://example.com#fragment)\n\n[link](https://example.com?foo=3#frag)\n",
@@ -4377,7 +4506,7 @@
     "start_line": 7699,
     "end_line": 7709,
     "section": "Links",
-    "text": "link\n link\n link"
+    "text": "[PARA: link]\n[PARA: link]\n[PARA: link]"
   },
   {
     "markdown": "[link](foo\\bar)\n",
@@ -4386,7 +4515,7 @@
     "start_line": 7715,
     "end_line": 7719,
     "section": "Links",
-    "text": "link"
+    "text": "[PARA: link]"
   },
   {
     "markdown": "[link](foo%20b&auml;)\n",
@@ -4395,7 +4524,7 @@
     "start_line": 7731,
     "end_line": 7735,
     "section": "Links",
-    "text": "link"
+    "text": "[PARA: link]"
   },
   {
     "markdown": "[link](\"title\")\n",
@@ -4404,7 +4533,7 @@
     "start_line": 7742,
     "end_line": 7746,
     "section": "Links",
-    "text": "link"
+    "text": "[PARA: link]"
   },
   {
     "markdown": "[link](/url \"title\")\n[link](/url 'title')\n[link](/url (title))\n",
@@ -4413,7 +4542,7 @@
     "start_line": 7751,
     "end_line": 7759,
     "section": "Links",
-    "text": "link link link"
+    "text": "[PARA: link link link]"
   },
   {
     "markdown": "[link](/url \"title \\\"&quot;\")\n",
@@ -4422,16 +4551,16 @@
     "start_line": 7765,
     "end_line": 7769,
     "section": "Links",
-    "text": "link"
+    "text": "[PARA: link]"
   },
   {
-    "markdown": "[link](/url \"title\")\n",
+    "markdown": "[link](/url\u00A0\"title\")\n",
     "html": "<p><a href=\"/url%C2%A0%22title%22\">link</a></p>\n",
     "example": 507,
     "start_line": 7776,
     "end_line": 7780,
     "section": "Links",
-    "text": "link"
+    "text": "[PARA: link]"
   },
   {
     "markdown": "[link](/url \"title \"and\" title\")\n",
@@ -4440,7 +4569,7 @@
     "start_line": 7785,
     "end_line": 7789,
     "section": "Links",
-    "text": "[link](/url \"title \"and\" title\")"
+    "text": "[PARA: [link](/url \"title \"and\" title\")]"
   },
   {
     "markdown": "[link](/url 'title \"and\" title')\n",
@@ -4449,7 +4578,7 @@
     "start_line": 7794,
     "end_line": 7798,
     "section": "Links",
-    "text": "link"
+    "text": "[PARA: link]"
   },
   {
     "markdown": "[link](   /uri\n  \"title\"  )\n",
@@ -4458,7 +4587,7 @@
     "start_line": 7819,
     "end_line": 7824,
     "section": "Links",
-    "text": "link"
+    "text": "[PARA: link]"
   },
   {
     "markdown": "[link] (/uri)\n",
@@ -4467,7 +4596,7 @@
     "start_line": 7830,
     "end_line": 7834,
     "section": "Links",
-    "text": "[link] (/uri)"
+    "text": "[PARA: [link] (/uri)]"
   },
   {
     "markdown": "[link [foo [bar]]](/uri)\n",
@@ -4476,7 +4605,7 @@
     "start_line": 7840,
     "end_line": 7844,
     "section": "Links",
-    "text": "link [foo [bar]]"
+    "text": "[PARA: link [foo [bar]]]"
   },
   {
     "markdown": "[link] bar](/uri)\n",
@@ -4485,7 +4614,7 @@
     "start_line": 7847,
     "end_line": 7851,
     "section": "Links",
-    "text": "[link] bar](/uri)"
+    "text": "[PARA: [link] bar](/uri)]"
   },
   {
     "markdown": "[link [bar](/uri)\n",
@@ -4494,7 +4623,7 @@
     "start_line": 7854,
     "end_line": 7858,
     "section": "Links",
-    "text": "[link bar"
+    "text": "[PARA: [link bar]"
   },
   {
     "markdown": "[link \\[bar](/uri)\n",
@@ -4503,7 +4632,7 @@
     "start_line": 7861,
     "end_line": 7865,
     "section": "Links",
-    "text": "link [bar"
+    "text": "[PARA: link \\[bar]"
   },
   {
     "markdown": "[link *foo **bar** `#`*](/uri)\n",
@@ -4512,7 +4641,7 @@
     "start_line": 7870,
     "end_line": 7874,
     "section": "Links",
-    "text": "link foo bar `#`"
+    "text": "[PARA: link *foo **bar** `#`*]"
   },
   {
     "markdown": "[![moon](moon.jpg)](/uri)\n",
@@ -4520,7 +4649,8 @@
     "example": 517,
     "start_line": 7877,
     "end_line": 7881,
-    "section": "Links"
+    "section": "Links",
+    "text": ""
   },
   {
     "markdown": "[foo [bar](/uri)](/uri)\n",
@@ -4529,7 +4659,7 @@
     "start_line": 7886,
     "end_line": 7890,
     "section": "Links",
-    "text": "[foo bar](/uri)"
+    "text": "[PARA: [foo bar](/uri)]"
   },
   {
     "markdown": "[foo *[bar [baz](/uri)](/uri)*](/uri)\n",
@@ -4537,7 +4667,8 @@
     "example": 519,
     "start_line": 7893,
     "end_line": 7897,
-    "section": "Links"
+    "section": "Links",
+    "text": "[PARA: [foo [bar baz](/uri)](/uri)]"
   },
   {
     "markdown": "![[[foo](uri1)](uri2)](uri3)\n",
@@ -4545,7 +4676,8 @@
     "example": 520,
     "start_line": 7900,
     "end_line": 7904,
-    "section": "Links"
+    "section": "Links",
+    "text": ""
   },
   {
     "markdown": "*[foo*](/uri)\n",
@@ -4554,7 +4686,7 @@
     "start_line": 7910,
     "end_line": 7914,
     "section": "Links",
-    "text": "*foo*"
+    "text": "[PARA: *foo*]"
   },
   {
     "markdown": "[foo *bar](baz*)\n",
@@ -4563,7 +4695,7 @@
     "start_line": 7917,
     "end_line": 7921,
     "section": "Links",
-    "text": "foo *bar"
+    "text": "[PARA: foo *bar]"
   },
   {
     "markdown": "*foo [bar* baz]\n",
@@ -4571,7 +4703,8 @@
     "example": 523,
     "start_line": 7927,
     "end_line": 7931,
-    "section": "Links"
+    "section": "Links",
+    "text": "[PARA: foo [bar baz]]"
   },
   {
     "markdown": "[foo <bar attr=\"](baz)\">\n",
@@ -4580,7 +4713,7 @@
     "start_line": 7937,
     "end_line": 7941,
     "section": "Links",
-    "text": "[foo"
+    "text": "[PARA: [foo <bar attr=\"](baz)\">]"
   },
   {
     "markdown": "[foo`](/uri)`\n",
@@ -4589,7 +4722,7 @@
     "start_line": 7944,
     "end_line": 7948,
     "section": "Links",
-    "text": "[foo`](/uri)`"
+    "text": "[PARA: [foo](/uri)]"
   },
   {
     "markdown": "[foo<https://example.com/?search=](uri)>\n",
@@ -4598,7 +4731,7 @@
     "start_line": 7951,
     "end_line": 7955,
     "section": "Links",
-    "text": "[foohttps://example.com/?search=](uri)"
+    "text": "[PARA: [foohttps://example.com/?search=](uri)]"
   },
   {
     "markdown": "[foo][bar]\n\n[bar]: /url \"title\"\n",
@@ -4607,7 +4740,7 @@
     "start_line": 7989,
     "end_line": 7995,
     "section": "Links",
-    "text": "foo"
+    "text": "[PARA: foo]\n[UNKNOWN: [bar]: /url \"title\"]"
   },
   {
     "markdown": "[link [foo [bar]]][ref]\n\n[ref]: /uri\n",
@@ -4616,7 +4749,7 @@
     "start_line": 8004,
     "end_line": 8010,
     "section": "Links",
-    "text": "link [foo [bar]]"
+    "text": "[PARA: link [foo [bar]]]\n[UNKNOWN: [ref]: /uri]"
   },
   {
     "markdown": "[link \\[bar][ref]\n\n[ref]: /uri\n",
@@ -4625,7 +4758,7 @@
     "start_line": 8013,
     "end_line": 8019,
     "section": "Links",
-    "text": "link [bar"
+    "text": "[PARA: link \\[bar]\n[UNKNOWN: [ref]: /uri]"
   },
   {
     "markdown": "[link *foo **bar** `#`*][ref]\n\n[ref]: /uri\n",
@@ -4634,7 +4767,7 @@
     "start_line": 8024,
     "end_line": 8030,
     "section": "Links",
-    "text": "link foo bar `#`"
+    "text": "[PARA: link *foo **bar** `#`*]\n[UNKNOWN: [ref]: /uri]"
   },
   {
     "markdown": "[![moon](moon.jpg)][ref]\n\n[ref]: /uri\n",
@@ -4642,7 +4775,8 @@
     "example": 531,
     "start_line": 8033,
     "end_line": 8039,
-    "section": "Links"
+    "section": "Links",
+    "text": "[UNKNOWN: [ref]: /uri]"
   },
   {
     "markdown": "[foo [bar](/uri)][ref]\n\n[ref]: /uri\n",
@@ -4651,7 +4785,7 @@
     "start_line": 8044,
     "end_line": 8050,
     "section": "Links",
-    "text": "[foo bar]ref"
+    "text": "[PARA: [foo bar]ref]\n[UNKNOWN: [ref]: /uri]"
   },
   {
     "markdown": "[foo *bar [baz][ref]*][ref]\n\n[ref]: /uri\n",
@@ -4659,7 +4793,8 @@
     "example": 533,
     "start_line": 8053,
     "end_line": 8059,
-    "section": "Links"
+    "section": "Links",
+    "text": "[PARA: [foo bar baz]ref]\n[UNKNOWN: [ref]: /uri]"
   },
   {
     "markdown": "*[foo*][ref]\n\n[ref]: /uri\n",
@@ -4668,7 +4803,7 @@
     "start_line": 8068,
     "end_line": 8074,
     "section": "Links",
-    "text": "*foo*"
+    "text": "[PARA: *foo*]\n[UNKNOWN: [ref]: /uri]"
   },
   {
     "markdown": "[foo *bar][ref]*\n\n[ref]: /uri\n",
@@ -4677,7 +4812,7 @@
     "start_line": 8077,
     "end_line": 8083,
     "section": "Links",
-    "text": "foo *bar*"
+    "text": "[PARA: foo *bar*]\n[UNKNOWN: [ref]: /uri]"
   },
   {
     "markdown": "[foo <bar attr=\"][ref]\">\n\n[ref]: /uri\n",
@@ -4686,7 +4821,7 @@
     "start_line": 8089,
     "end_line": 8095,
     "section": "Links",
-    "text": "[foo"
+    "text": "[PARA: [foo <bar attr=\"][ref]\">]\n[UNKNOWN: [ref]: /uri]"
   },
   {
     "markdown": "[foo`][ref]`\n\n[ref]: /uri\n",
@@ -4695,7 +4830,7 @@
     "start_line": 8098,
     "end_line": 8104,
     "section": "Links",
-    "text": "[foo`][ref]`"
+    "text": "[PARA: [foo][ref]]\n[UNKNOWN: [ref]: /uri]"
   },
   {
     "markdown": "[foo<https://example.com/?search=][ref]>\n\n[ref]: /uri\n",
@@ -4704,7 +4839,7 @@
     "start_line": 8107,
     "end_line": 8113,
     "section": "Links",
-    "text": "[foohttps://example.com/?search=][ref]"
+    "text": "[PARA: [foohttps://example.com/?search=][ref]]\n[UNKNOWN: [ref]: /uri]"
   },
   {
     "markdown": "[foo][BaR]\n\n[bar]: /url \"title\"\n",
@@ -4713,7 +4848,7 @@
     "start_line": 8118,
     "end_line": 8124,
     "section": "Links",
-    "text": "foo"
+    "text": "[PARA: foo]\n[UNKNOWN: [bar]: /url \"title\"]"
   },
   {
     "markdown": "[ẞ]\n\n[SS]: /url\n",
@@ -4722,7 +4857,7 @@
     "start_line": 8129,
     "end_line": 8135,
     "section": "Links",
-    "text": "ẞ"
+    "text": "[PARA: ẞ]\n[UNKNOWN: [SS]: /url]"
   },
   {
     "markdown": "[Foo\n  bar]: /url\n\n[Baz][Foo bar]\n",
@@ -4731,7 +4866,7 @@
     "start_line": 8141,
     "end_line": 8148,
     "section": "Links",
-    "text": "Baz"
+    "text": "[UNKNOWN: [Foo[\\n]bar]: /url]\n[PARA: [Baz][Foo bar]]"
   },
   {
     "markdown": "[foo] [bar]\n\n[bar]: /url \"title\"\n",
@@ -4740,7 +4875,7 @@
     "start_line": 8154,
     "end_line": 8160,
     "section": "Links",
-    "text": "[foo] bar"
+    "text": "[PARA: [foo] bar]\n[UNKNOWN: [bar]: /url \"title\"]"
   },
   {
     "markdown": "[foo]\n[bar]\n\n[bar]: /url \"title\"\n",
@@ -4749,7 +4884,7 @@
     "start_line": 8163,
     "end_line": 8171,
     "section": "Links",
-    "text": "[foo] bar"
+    "text": "[PARA: [foo] bar]\n[UNKNOWN: [bar]: /url \"title\"]"
   },
   {
     "markdown": "[foo]: /url1\n\n[foo]: /url2\n\n[bar][foo]\n",
@@ -4758,7 +4893,7 @@
     "start_line": 8204,
     "end_line": 8212,
     "section": "Links",
-    "text": "bar"
+    "text": "[UNKNOWN: [foo]: /url1]\n[UNKNOWN: [foo]: /url2]\n[PARA: bar]"
   },
   {
     "markdown": "[bar][foo\\!]\n\n[foo!]: /url\n",
@@ -4767,7 +4902,7 @@
     "start_line": 8219,
     "end_line": 8225,
     "section": "Links",
-    "text": "[bar][foo!]"
+    "text": "[PARA: [bar][foo\\!]]\n[UNKNOWN: [foo!]: /url]"
   },
   {
     "markdown": "[foo][ref[]\n\n[ref[]: /uri\n",
@@ -4776,7 +4911,7 @@
     "start_line": 8231,
     "end_line": 8238,
     "section": "Links",
-    "text": "[foo][ref[]\n [ref[]: /uri"
+    "text": "[PARA: [foo][ref[]]\n[PARA: [ref[]: /uri]"
   },
   {
     "markdown": "[foo][ref[bar]]\n\n[ref[bar]]: /uri\n",
@@ -4785,7 +4920,7 @@
     "start_line": 8241,
     "end_line": 8248,
     "section": "Links",
-    "text": "[foo][ref[bar]]\n [ref[bar]]: /uri"
+    "text": "[PARA: [foo][ref[bar]]]\n[PARA: [ref[bar]]: /uri]"
   },
   {
     "markdown": "[[[foo]]]\n\n[[[foo]]]: /url\n",
@@ -4794,7 +4929,7 @@
     "start_line": 8251,
     "end_line": 8258,
     "section": "Links",
-    "text": "[[[foo]]]\n [[[foo]]]: /url"
+    "text": "[PARA: [[[foo]]]]\n[PARA: [[[foo]]]: /url]"
   },
   {
     "markdown": "[foo][ref\\[]\n\n[ref\\[]: /uri\n",
@@ -4803,7 +4938,7 @@
     "start_line": 8261,
     "end_line": 8267,
     "section": "Links",
-    "text": "foo"
+    "text": "[PARA: foo]\n[UNKNOWN: [ref\\[]: /uri]"
   },
   {
     "markdown": "[bar\\\\]: /uri\n\n[bar\\\\]\n",
@@ -4812,7 +4947,7 @@
     "start_line": 8272,
     "end_line": 8278,
     "section": "Links",
-    "text": "bar\\"
+    "text": "[UNKNOWN: [bar\\\\]: /uri]\n[PARA: bar\\\\]"
   },
   {
     "markdown": "[]\n\n[]: /uri\n",
@@ -4821,7 +4956,7 @@
     "start_line": 8284,
     "end_line": 8291,
     "section": "Links",
-    "text": "[]\n []: /uri"
+    "text": "[PARA: []]\n[PARA: []: /uri]"
   },
   {
     "markdown": "[\n ]\n\n[\n ]: /uri\n",
@@ -4830,7 +4965,7 @@
     "start_line": 8294,
     "end_line": 8305,
     "section": "Links",
-    "text": "[ ]\n [ ]: /uri"
+    "text": "[UNKNOWN: [[\\n]]: /uri]"
   },
   {
     "markdown": "[foo][]\n\n[foo]: /url \"title\"\n",
@@ -4839,7 +4974,7 @@
     "start_line": 8317,
     "end_line": 8323,
     "section": "Links",
-    "text": "foo"
+    "text": "[PARA: foo]\n[UNKNOWN: [foo]: /url \"title\"]"
   },
   {
     "markdown": "[*foo* bar][]\n\n[*foo* bar]: /url \"title\"\n",
@@ -4847,7 +4982,8 @@
     "example": 554,
     "start_line": 8326,
     "end_line": 8332,
-    "section": "Links"
+    "section": "Links",
+    "text": "[PARA: *foo* bar]\n[UNKNOWN: [*foo* bar]: /url \"title\"]"
   },
   {
     "markdown": "[Foo][]\n\n[foo]: /url \"title\"\n",
@@ -4856,7 +4992,7 @@
     "start_line": 8337,
     "end_line": 8343,
     "section": "Links",
-    "text": "Foo"
+    "text": "[PARA: Foo]\n[UNKNOWN: [foo]: /url \"title\"]"
   },
   {
     "markdown": "[foo] \n[]\n\n[foo]: /url \"title\"\n",
@@ -4865,7 +5001,7 @@
     "start_line": 8350,
     "end_line": 8358,
     "section": "Links",
-    "text": "foo []"
+    "text": "[PARA: foo []]\n[UNKNOWN: [foo]: /url \"title\"]"
   },
   {
     "markdown": "[foo]\n\n[foo]: /url \"title\"\n",
@@ -4874,7 +5010,7 @@
     "start_line": 8370,
     "end_line": 8376,
     "section": "Links",
-    "text": "foo"
+    "text": "[PARA: foo]\n[UNKNOWN: [foo]: /url \"title\"]"
   },
   {
     "markdown": "[*foo* bar]\n\n[*foo* bar]: /url \"title\"\n",
@@ -4882,7 +5018,8 @@
     "example": 558,
     "start_line": 8379,
     "end_line": 8385,
-    "section": "Links"
+    "section": "Links",
+    "text": "[PARA: *foo* bar]\n[UNKNOWN: [*foo* bar]: /url \"title\"]"
   },
   {
     "markdown": "[[*foo* bar]]\n\n[*foo* bar]: /url \"title\"\n",
@@ -4890,7 +5027,8 @@
     "example": 559,
     "start_line": 8388,
     "end_line": 8394,
-    "section": "Links"
+    "section": "Links",
+    "text": "[PARA: [*foo* bar]]\n[UNKNOWN: [*foo* bar]: /url \"title\"]"
   },
   {
     "markdown": "[[bar [foo]\n\n[foo]: /url\n",
@@ -4899,7 +5037,7 @@
     "start_line": 8397,
     "end_line": 8403,
     "section": "Links",
-    "text": "[[bar foo"
+    "text": "[PARA: [[bar foo]\n[UNKNOWN: [foo]: /url]"
   },
   {
     "markdown": "[Foo]\n\n[foo]: /url \"title\"\n",
@@ -4908,7 +5046,7 @@
     "start_line": 8408,
     "end_line": 8414,
     "section": "Links",
-    "text": "Foo"
+    "text": "[PARA: Foo]\n[UNKNOWN: [foo]: /url \"title\"]"
   },
   {
     "markdown": "[foo] bar\n\n[foo]: /url\n",
@@ -4917,7 +5055,7 @@
     "start_line": 8419,
     "end_line": 8425,
     "section": "Links",
-    "text": "foo bar"
+    "text": "[PARA: foo bar]\n[UNKNOWN: [foo]: /url]"
   },
   {
     "markdown": "\\[foo]\n\n[foo]: /url \"title\"\n",
@@ -4926,7 +5064,7 @@
     "start_line": 8431,
     "end_line": 8437,
     "section": "Links",
-    "text": "[foo]"
+    "text": "[PARA: \\[foo]]\n[UNKNOWN: [foo]: /url \"title\"]"
   },
   {
     "markdown": "[foo*]: /url\n\n*[foo*]\n",
@@ -4935,7 +5073,7 @@
     "start_line": 8443,
     "end_line": 8449,
     "section": "Links",
-    "text": "*foo*"
+    "text": "[UNKNOWN: [foo*]: /url]\n[PARA: *foo*]"
   },
   {
     "markdown": "[foo][bar]\n\n[foo]: /url1\n[bar]: /url2\n",
@@ -4944,7 +5082,7 @@
     "start_line": 8455,
     "end_line": 8462,
     "section": "Links",
-    "text": "foo"
+    "text": "[PARA: foo]\n[UNKNOWN: [foo]: /url1]\n[UNKNOWN: [bar]: /url2]"
   },
   {
     "markdown": "[foo][]\n\n[foo]: /url1\n",
@@ -4953,7 +5091,7 @@
     "start_line": 8464,
     "end_line": 8470,
     "section": "Links",
-    "text": "foo"
+    "text": "[PARA: foo]\n[UNKNOWN: [foo]: /url1]"
   },
   {
     "markdown": "[foo]()\n\n[foo]: /url1\n",
@@ -4962,7 +5100,7 @@
     "start_line": 8474,
     "end_line": 8480,
     "section": "Links",
-    "text": "foo"
+    "text": "[PARA: foo]\n[UNKNOWN: [foo]: /url1]"
   },
   {
     "markdown": "[foo](not a link)\n\n[foo]: /url1\n",
@@ -4971,7 +5109,7 @@
     "start_line": 8482,
     "end_line": 8488,
     "section": "Links",
-    "text": "foo(not a link)"
+    "text": "[PARA: foo(not a link)]\n[UNKNOWN: [foo]: /url1]"
   },
   {
     "markdown": "[foo][bar][baz]\n\n[baz]: /url\n",
@@ -4980,7 +5118,7 @@
     "start_line": 8493,
     "end_line": 8499,
     "section": "Links",
-    "text": "[foo]bar"
+    "text": "[PARA: [foo]bar]\n[UNKNOWN: [baz]: /url]"
   },
   {
     "markdown": "[foo][bar][baz]\n\n[baz]: /url1\n[bar]: /url2\n",
@@ -4989,7 +5127,7 @@
     "start_line": 8505,
     "end_line": 8512,
     "section": "Links",
-    "text": "foobaz"
+    "text": "[PARA: foobaz]\n[UNKNOWN: [baz]: /url1]\n[UNKNOWN: [bar]: /url2]"
   },
   {
     "markdown": "[foo][bar][baz]\n\n[baz]: /url1\n[foo]: /url2\n",
@@ -4998,7 +5136,7 @@
     "start_line": 8518,
     "end_line": 8525,
     "section": "Links",
-    "text": "[foo]bar"
+    "text": "[PARA: [foo]bar]\n[UNKNOWN: [baz]: /url1]\n[UNKNOWN: [foo]: /url2]"
   },
   {
     "markdown": "![foo](/url \"title\")\n",
@@ -5006,7 +5144,8 @@
     "example": 572,
     "start_line": 8541,
     "end_line": 8545,
-    "section": "Images"
+    "section": "Images",
+    "text": ""
   },
   {
     "markdown": "![foo *bar*]\n\n[foo *bar*]: train.jpg \"train & tracks\"\n",
@@ -5014,7 +5153,8 @@
     "example": 573,
     "start_line": 8548,
     "end_line": 8554,
-    "section": "Images"
+    "section": "Images",
+    "text": "[UNKNOWN: [foo *bar*]: train.jpg \"train & tracks\"]"
   },
   {
     "markdown": "![foo ![bar](/url)](/url2)\n",
@@ -5022,7 +5162,8 @@
     "example": 574,
     "start_line": 8557,
     "end_line": 8561,
-    "section": "Images"
+    "section": "Images",
+    "text": ""
   },
   {
     "markdown": "![foo [bar](/url)](/url2)\n",
@@ -5030,7 +5171,8 @@
     "example": 575,
     "start_line": 8564,
     "end_line": 8568,
-    "section": "Images"
+    "section": "Images",
+    "text": ""
   },
   {
     "markdown": "![foo *bar*][]\n\n[foo *bar*]: train.jpg \"train & tracks\"\n",
@@ -5038,7 +5180,8 @@
     "example": 576,
     "start_line": 8578,
     "end_line": 8584,
-    "section": "Images"
+    "section": "Images",
+    "text": "[UNKNOWN: [foo *bar*]: train.jpg \"train & tracks\"]"
   },
   {
     "markdown": "![foo *bar*][foobar]\n\n[FOOBAR]: train.jpg \"train & tracks\"\n",
@@ -5046,7 +5189,8 @@
     "example": 577,
     "start_line": 8587,
     "end_line": 8593,
-    "section": "Images"
+    "section": "Images",
+    "text": "[UNKNOWN: [FOOBAR]: train.jpg \"train & tracks\"]"
   },
   {
     "markdown": "![foo](train.jpg)\n",
@@ -5054,7 +5198,8 @@
     "example": 578,
     "start_line": 8596,
     "end_line": 8600,
-    "section": "Images"
+    "section": "Images",
+    "text": ""
   },
   {
     "markdown": "My ![foo bar](/path/to/train.jpg  \"title\"   )\n",
@@ -5062,7 +5207,8 @@
     "example": 579,
     "start_line": 8603,
     "end_line": 8607,
-    "section": "Images"
+    "section": "Images",
+    "text": "[PARA: My ]"
   },
   {
     "markdown": "![foo](<url>)\n",
@@ -5070,7 +5216,8 @@
     "example": 580,
     "start_line": 8610,
     "end_line": 8614,
-    "section": "Images"
+    "section": "Images",
+    "text": ""
   },
   {
     "markdown": "![](/url)\n",
@@ -5078,7 +5225,8 @@
     "example": 581,
     "start_line": 8617,
     "end_line": 8621,
-    "section": "Images"
+    "section": "Images",
+    "text": ""
   },
   {
     "markdown": "![foo][bar]\n\n[bar]: /url\n",
@@ -5086,7 +5234,8 @@
     "example": 582,
     "start_line": 8626,
     "end_line": 8632,
-    "section": "Images"
+    "section": "Images",
+    "text": "[UNKNOWN: [bar]: /url]"
   },
   {
     "markdown": "![foo][bar]\n\n[BAR]: /url\n",
@@ -5094,7 +5243,8 @@
     "example": 583,
     "start_line": 8635,
     "end_line": 8641,
-    "section": "Images"
+    "section": "Images",
+    "text": "[UNKNOWN: [BAR]: /url]"
   },
   {
     "markdown": "![foo][]\n\n[foo]: /url \"title\"\n",
@@ -5102,7 +5252,8 @@
     "example": 584,
     "start_line": 8646,
     "end_line": 8652,
-    "section": "Images"
+    "section": "Images",
+    "text": "[UNKNOWN: [foo]: /url \"title\"]"
   },
   {
     "markdown": "![*foo* bar][]\n\n[*foo* bar]: /url \"title\"\n",
@@ -5110,7 +5261,8 @@
     "example": 585,
     "start_line": 8655,
     "end_line": 8661,
-    "section": "Images"
+    "section": "Images",
+    "text": "[UNKNOWN: [*foo* bar]: /url \"title\"]"
   },
   {
     "markdown": "![Foo][]\n\n[foo]: /url \"title\"\n",
@@ -5118,7 +5270,8 @@
     "example": 586,
     "start_line": 8666,
     "end_line": 8672,
-    "section": "Images"
+    "section": "Images",
+    "text": "[UNKNOWN: [foo]: /url \"title\"]"
   },
   {
     "markdown": "![foo] \n[]\n\n[foo]: /url \"title\"\n",
@@ -5126,7 +5279,8 @@
     "example": 587,
     "start_line": 8678,
     "end_line": 8686,
-    "section": "Images"
+    "section": "Images",
+    "text": "[PARA:  []]\n[UNKNOWN: [foo]: /url \"title\"]"
   },
   {
     "markdown": "![foo]\n\n[foo]: /url \"title\"\n",
@@ -5134,7 +5288,8 @@
     "example": 588,
     "start_line": 8691,
     "end_line": 8697,
-    "section": "Images"
+    "section": "Images",
+    "text": "[UNKNOWN: [foo]: /url \"title\"]"
   },
   {
     "markdown": "![*foo* bar]\n\n[*foo* bar]: /url \"title\"\n",
@@ -5142,7 +5297,8 @@
     "example": 589,
     "start_line": 8700,
     "end_line": 8706,
-    "section": "Images"
+    "section": "Images",
+    "text": "[UNKNOWN: [*foo* bar]: /url \"title\"]"
   },
   {
     "markdown": "![[foo]]\n\n[[foo]]: /url \"title\"\n",
@@ -5151,7 +5307,7 @@
     "start_line": 8711,
     "end_line": 8718,
     "section": "Images",
-    "text": "![[foo]]\n [[foo]]: /url \"title\""
+    "text": "[PARA: ![[foo]]]\n[PARA: [[foo]]: /url \"title\"]"
   },
   {
     "markdown": "![Foo]\n\n[foo]: /url \"title\"\n",
@@ -5159,7 +5315,8 @@
     "example": 591,
     "start_line": 8723,
     "end_line": 8729,
-    "section": "Images"
+    "section": "Images",
+    "text": "[UNKNOWN: [foo]: /url \"title\"]"
   },
   {
     "markdown": "!\\[foo]\n\n[foo]: /url \"title\"\n",
@@ -5168,7 +5325,7 @@
     "start_line": 8735,
     "end_line": 8741,
     "section": "Images",
-    "text": "![foo]"
+    "text": "[PARA: !\\[foo]]\n[UNKNOWN: [foo]: /url \"title\"]"
   },
   {
     "markdown": "\\![foo]\n\n[foo]: /url \"title\"\n",
@@ -5177,7 +5334,7 @@
     "start_line": 8747,
     "end_line": 8753,
     "section": "Images",
-    "text": "!foo"
+    "text": "[PARA: \\!foo]\n[UNKNOWN: [foo]: /url \"title\"]"
   },
   {
     "markdown": "<http://foo.bar.baz>\n",
@@ -5186,7 +5343,7 @@
     "start_line": 8780,
     "end_line": 8784,
     "section": "Autolinks",
-    "text": "http://foo.bar.baz"
+    "text": "[PARA: http://foo.bar.baz]"
   },
   {
     "markdown": "<https://foo.bar.baz/test?q=hello&id=22&boolean>\n",
@@ -5195,7 +5352,7 @@
     "start_line": 8787,
     "end_line": 8791,
     "section": "Autolinks",
-    "text": "https://foo.bar.baz/test?q=hello&id=22&boolean"
+    "text": "[PARA: https://foo.bar.baz/test?q=hello&id=22&boolean]"
   },
   {
     "markdown": "<irc://foo.bar:2233/baz>\n",
@@ -5204,7 +5361,7 @@
     "start_line": 8794,
     "end_line": 8798,
     "section": "Autolinks",
-    "text": "irc://foo.bar:2233/baz"
+    "text": "[PARA: irc://foo.bar:2233/baz]"
   },
   {
     "markdown": "<MAILTO:FOO@BAR.BAZ>\n",
@@ -5213,7 +5370,7 @@
     "start_line": 8803,
     "end_line": 8807,
     "section": "Autolinks",
-    "text": "MAILTO:FOO@BAR.BAZ"
+    "text": "[PARA: MAILTO:FOO@BAR.BAZ]"
   },
   {
     "markdown": "<a+b+c:d>\n",
@@ -5222,7 +5379,7 @@
     "start_line": 8815,
     "end_line": 8819,
     "section": "Autolinks",
-    "text": "a+b+c:d"
+    "text": "[PARA: a+b+c:d]"
   },
   {
     "markdown": "<made-up-scheme://foo,bar>\n",
@@ -5231,7 +5388,7 @@
     "start_line": 8822,
     "end_line": 8826,
     "section": "Autolinks",
-    "text": "made-up-scheme://foo,bar"
+    "text": "[PARA: made-up-scheme://foo,bar]"
   },
   {
     "markdown": "<https://../>\n",
@@ -5240,7 +5397,7 @@
     "start_line": 8829,
     "end_line": 8833,
     "section": "Autolinks",
-    "text": "https://../"
+    "text": "[PARA: https://../]"
   },
   {
     "markdown": "<localhost:5001/foo>\n",
@@ -5249,7 +5406,7 @@
     "start_line": 8836,
     "end_line": 8840,
     "section": "Autolinks",
-    "text": "localhost:5001/foo"
+    "text": "[PARA: localhost:5001/foo]"
   },
   {
     "markdown": "<https://foo.bar/baz bim>\n",
@@ -5258,7 +5415,7 @@
     "start_line": 8845,
     "end_line": 8849,
     "section": "Autolinks",
-    "text": ""
+    "text": "[PARA: <https://foo.bar/baz bim>]"
   },
   {
     "markdown": "<https://example.com/\\[\\>\n",
@@ -5267,7 +5424,7 @@
     "start_line": 8854,
     "end_line": 8858,
     "section": "Autolinks",
-    "text": "https://example.com/\\[\\"
+    "text": "[PARA: https://example.com/\\[\\]"
   },
   {
     "markdown": "<foo@bar.example.com>\n",
@@ -5276,7 +5433,7 @@
     "start_line": 8876,
     "end_line": 8880,
     "section": "Autolinks",
-    "text": "foo@bar.example.com"
+    "text": "[PARA: foo@bar.example.com]"
   },
   {
     "markdown": "<foo+special@Bar.baz-bar0.com>\n",
@@ -5285,7 +5442,7 @@
     "start_line": 8883,
     "end_line": 8887,
     "section": "Autolinks",
-    "text": "foo+special@Bar.baz-bar0.com"
+    "text": "[PARA: foo+special@Bar.baz-bar0.com]"
   },
   {
     "markdown": "<foo\\+@bar.example.com>\n",
@@ -5294,7 +5451,7 @@
     "start_line": 8892,
     "end_line": 8896,
     "section": "Autolinks",
-    "text": ""
+    "text": "[PARA: <foo\\+@bar.example.com>]"
   },
   {
     "markdown": "<>\n",
@@ -5303,7 +5460,7 @@
     "start_line": 8901,
     "end_line": 8905,
     "section": "Autolinks",
-    "text": "<>"
+    "text": "[PARA: <>]"
   },
   {
     "markdown": "< https://foo.bar >\n",
@@ -5312,7 +5469,7 @@
     "start_line": 8908,
     "end_line": 8912,
     "section": "Autolinks",
-    "text": ""
+    "text": "[PARA: < https://foo.bar >]"
   },
   {
     "markdown": "<m:abc>\n",
@@ -5321,7 +5478,7 @@
     "start_line": 8915,
     "end_line": 8919,
     "section": "Autolinks",
-    "text": ""
+    "text": "[PARA: <m:abc>]"
   },
   {
     "markdown": "<foo.bar.baz>\n",
@@ -5330,7 +5487,7 @@
     "start_line": 8922,
     "end_line": 8926,
     "section": "Autolinks",
-    "text": ""
+    "text": "[PARA: <foo.bar.baz>]"
   },
   {
     "markdown": "https://example.com\n",
@@ -5339,7 +5496,7 @@
     "start_line": 8929,
     "end_line": 8933,
     "section": "Autolinks",
-    "text": "https://example.com"
+    "text": "[PARA: https://example.com]"
   },
   {
     "markdown": "foo@bar.example.com\n",
@@ -5348,7 +5505,7 @@
     "start_line": 8936,
     "end_line": 8940,
     "section": "Autolinks",
-    "text": "foo@bar.example.com"
+    "text": "[PARA: oo@bar.example.com]"
   },
   {
     "markdown": "<a><bab><c2c>\n",
@@ -5357,7 +5514,7 @@
     "start_line": 9016,
     "end_line": 9020,
     "section": "Raw HTML",
-    "text": ""
+    "text": "[PARA: <a><bab><c2c>]"
   },
   {
     "markdown": "<a/><b2/>\n",
@@ -5366,7 +5523,7 @@
     "start_line": 9025,
     "end_line": 9029,
     "section": "Raw HTML",
-    "text": ""
+    "text": "[PARA: <a/><b2/>]"
   },
   {
     "markdown": "<a  /><b2\ndata=\"foo\" >\n",
@@ -5375,7 +5532,7 @@
     "start_line": 9034,
     "end_line": 9040,
     "section": "Raw HTML",
-    "text": ""
+    "text": "[PARA: <a  /><b2 data=\"foo\" >]"
   },
   {
     "markdown": "<a foo=\"bar\" bam = 'baz <em>\"</em>'\n_boolean zoop:33=zoop:33 />\n",
@@ -5383,7 +5540,8 @@
     "example": 616,
     "start_line": 9045,
     "end_line": 9051,
-    "section": "Raw HTML"
+    "section": "Raw HTML",
+    "text": "[PARA: <a foo=\"bar\" bam = 'baz <em>\"</em>' _boolean zoop:33=zoop:33 />]"
   },
   {
     "markdown": "Foo <responsive-image src=\"foo.jpg\" />\n",
@@ -5392,7 +5550,7 @@
     "start_line": 9056,
     "end_line": 9060,
     "section": "Raw HTML",
-    "text": "Foo"
+    "text": "[PARA: Foo <responsive-image src=\"foo.jpg\" />]"
   },
   {
     "markdown": "<33> <__>\n",
@@ -5401,7 +5559,7 @@
     "start_line": 9065,
     "end_line": 9069,
     "section": "Raw HTML",
-    "text": ""
+    "text": "[PARA: <33> <__>]"
   },
   {
     "markdown": "<a h*#ref=\"hi\">\n",
@@ -5410,7 +5568,7 @@
     "start_line": 9074,
     "end_line": 9078,
     "section": "Raw HTML",
-    "text": ""
+    "text": "[PARA: <a h*#ref=\"hi\">]"
   },
   {
     "markdown": "<a href=\"hi'> <a href=hi'>\n",
@@ -5419,7 +5577,7 @@
     "start_line": 9083,
     "end_line": 9087,
     "section": "Raw HTML",
-    "text": ""
+    "text": "[PARA: <a href=\"hi'> <a href=hi'>]"
   },
   {
     "markdown": "< a><\nfoo><bar/ >\n<foo bar=baz\nbim!bop />\n",
@@ -5428,7 +5586,7 @@
     "start_line": 9092,
     "end_line": 9102,
     "section": "Raw HTML",
-    "text": ""
+    "text": "[PARA: < a>< foo><bar/ > <foo bar=baz bim!bop />]"
   },
   {
     "markdown": "<a href='bar'title=title>\n",
@@ -5437,7 +5595,7 @@
     "start_line": 9107,
     "end_line": 9111,
     "section": "Raw HTML",
-    "text": ""
+    "text": "[PARA: <a href='bar'title=title>]"
   },
   {
     "markdown": "</a></foo >\n",
@@ -5446,7 +5604,7 @@
     "start_line": 9116,
     "end_line": 9120,
     "section": "Raw HTML",
-    "text": ""
+    "text": "[PARA: </a></foo >]"
   },
   {
     "markdown": "</a href=\"foo\">\n",
@@ -5455,7 +5613,7 @@
     "start_line": 9125,
     "end_line": 9129,
     "section": "Raw HTML",
-    "text": ""
+    "text": "[PARA: </a href=\"foo\">]"
   },
   {
     "markdown": "foo <!-- this is a --\ncomment - with hyphens -->\n",
@@ -5464,7 +5622,7 @@
     "start_line": 9134,
     "end_line": 9140,
     "section": "Raw HTML",
-    "text": "foo"
+    "text": "[PARA: foo ]"
   },
   {
     "markdown": "foo <!--> foo -->\n\nfoo <!---> foo -->\n",
@@ -5473,7 +5631,7 @@
     "start_line": 9142,
     "end_line": 9149,
     "section": "Raw HTML",
-    "text": "foo foo -->\n foo foo -->"
+    "text": "[PARA: foo  foo -->]\n[PARA: foo  foo -->]"
   },
   {
     "markdown": "foo <?php echo $a; ?>\n",
@@ -5482,7 +5640,7 @@
     "start_line": 9154,
     "end_line": 9158,
     "section": "Raw HTML",
-    "text": "foo"
+    "text": "[PARA: foo <?php echo $a; ?>]"
   },
   {
     "markdown": "foo <!ELEMENT br EMPTY>\n",
@@ -5491,7 +5649,7 @@
     "start_line": 9163,
     "end_line": 9167,
     "section": "Raw HTML",
-    "text": "foo"
+    "text": "[PARA: foo <!ELEMENT br EMPTY>]"
   },
   {
     "markdown": "foo <![CDATA[>&<]]>\n",
@@ -5500,7 +5658,7 @@
     "start_line": 9172,
     "end_line": 9176,
     "section": "Raw HTML",
-    "text": "foo &"
+    "text": "[PARA: foo <![CDATA[>&<]]>]"
   },
   {
     "markdown": "foo <a href=\"&ouml;\">\n",
@@ -5509,7 +5667,7 @@
     "start_line": 9182,
     "end_line": 9186,
     "section": "Raw HTML",
-    "text": "foo"
+    "text": "[PARA: foo <a href=\"&ouml;\">]"
   },
   {
     "markdown": "foo <a href=\"\\*\">\n",
@@ -5518,7 +5676,7 @@
     "start_line": 9191,
     "end_line": 9195,
     "section": "Raw HTML",
-    "text": "foo"
+    "text": "[PARA: foo <a href=\"\\*\">]"
   },
   {
     "markdown": "<a href=\"\\\"\">\n",
@@ -5527,7 +5685,7 @@
     "start_line": 9198,
     "end_line": 9202,
     "section": "Raw HTML",
-    "text": ""
+    "text": "[PARA: <a href=\"\\\"\">]"
   },
   {
     "markdown": "foo  \nbaz\n",
@@ -5536,7 +5694,7 @@
     "start_line": 9212,
     "end_line": 9218,
     "section": "Hard line breaks",
-    "text": "foo\n baz"
+    "text": "[PARA: foo]\n[PARA: baz]"
   },
   {
     "markdown": "foo\\\nbaz\n",
@@ -5545,7 +5703,7 @@
     "start_line": 9224,
     "end_line": 9230,
     "section": "Hard line breaks",
-    "text": "foo\n baz"
+    "text": "[PARA: foo]\n[PARA: baz]"
   },
   {
     "markdown": "foo       \nbaz\n",
@@ -5554,7 +5712,7 @@
     "start_line": 9235,
     "end_line": 9241,
     "section": "Hard line breaks",
-    "text": "foo\n baz"
+    "text": "[PARA: foo]\n[PARA: baz]"
   },
   {
     "markdown": "foo  \n     bar\n",
@@ -5563,7 +5721,7 @@
     "start_line": 9246,
     "end_line": 9252,
     "section": "Hard line breaks",
-    "text": "foo\n bar"
+    "text": "[PARA: foo]\n[PARA:      bar]"
   },
   {
     "markdown": "foo\\\n     bar\n",
@@ -5572,7 +5730,7 @@
     "start_line": 9255,
     "end_line": 9261,
     "section": "Hard line breaks",
-    "text": "foo\n bar"
+    "text": "[PARA: foo]\n[PARA:      bar]"
   },
   {
     "markdown": "*foo  \nbar*\n",
@@ -5580,7 +5738,8 @@
     "example": 638,
     "start_line": 9267,
     "end_line": 9273,
-    "section": "Hard line breaks"
+    "section": "Hard line breaks",
+    "text": "[PARA: *foo]\n[PARA: bar*]"
   },
   {
     "markdown": "*foo\\\nbar*\n",
@@ -5588,7 +5747,8 @@
     "example": 639,
     "start_line": 9276,
     "end_line": 9282,
-    "section": "Hard line breaks"
+    "section": "Hard line breaks",
+    "text": "[PARA: *foo]\n[PARA: bar*]"
   },
   {
     "markdown": "`code  \nspan`\n",
@@ -5597,7 +5757,7 @@
     "start_line": 9287,
     "end_line": 9292,
     "section": "Hard line breaks",
-    "text": "`code span`"
+    "text": "[PARA: `code]\n[PARA: span`]"
   },
   {
     "markdown": "`code\\\nspan`\n",
@@ -5606,7 +5766,7 @@
     "start_line": 9295,
     "end_line": 9300,
     "section": "Hard line breaks",
-    "text": "`code\\ span`"
+    "text": "[PARA: `code]\n[PARA: span`]"
   },
   {
     "markdown": "<a href=\"foo  \nbar\">\n",
@@ -5615,7 +5775,7 @@
     "start_line": 9305,
     "end_line": 9311,
     "section": "Hard line breaks",
-    "text": ""
+    "text": "[PARA: <a href=\"foo]\n[PARA: bar\">]"
   },
   {
     "markdown": "<a href=\"foo\\\nbar\">\n",
@@ -5624,7 +5784,7 @@
     "start_line": 9314,
     "end_line": 9320,
     "section": "Hard line breaks",
-    "text": ""
+    "text": "[PARA: <a href=\"foo]\n[PARA: bar\">]"
   },
   {
     "markdown": "foo\\\n",
@@ -5633,7 +5793,7 @@
     "start_line": 9327,
     "end_line": 9331,
     "section": "Hard line breaks",
-    "text": "foo\\"
+    "text": "[PARA: foo]"
   },
   {
     "markdown": "foo  \n",
@@ -5642,7 +5802,7 @@
     "start_line": 9334,
     "end_line": 9338,
     "section": "Hard line breaks",
-    "text": "foo"
+    "text": "[PARA: foo]"
   },
   {
     "markdown": "### foo\\\n",
@@ -5650,7 +5810,8 @@
     "example": 646,
     "start_line": 9341,
     "end_line": 9345,
-    "section": "Hard line breaks"
+    "section": "Hard line breaks",
+    "text": "[H3: foo]"
   },
   {
     "markdown": "### foo  \n",
@@ -5658,7 +5819,8 @@
     "example": 647,
     "start_line": 9348,
     "end_line": 9352,
-    "section": "Hard line breaks"
+    "section": "Hard line breaks",
+    "text": "[H3: foo]"
   },
   {
     "markdown": "foo\nbaz\n",
@@ -5667,7 +5829,7 @@
     "start_line": 9363,
     "end_line": 9369,
     "section": "Soft line breaks",
-    "text": "foo baz"
+    "text": "[PARA: foo baz]"
   },
   {
     "markdown": "foo \n baz\n",
@@ -5676,7 +5838,7 @@
     "start_line": 9375,
     "end_line": 9381,
     "section": "Soft line breaks",
-    "text": "foo baz"
+    "text": "[PARA: foo baz]"
   },
   {
     "markdown": "hello $.;'there\n",
@@ -5685,7 +5847,7 @@
     "start_line": 9395,
     "end_line": 9399,
     "section": "Textual content",
-    "text": "hello $.;'there"
+    "text": "[PARA: hello $.;'there]"
   },
   {
     "markdown": "Foo χρῆν\n",
@@ -5694,7 +5856,7 @@
     "start_line": 9402,
     "end_line": 9406,
     "section": "Textual content",
-    "text": "Foo χρῆν"
+    "text": "[PARA: Foo χρῆν]"
   },
   {
     "markdown": "Multiple     spaces\n",
@@ -5703,6 +5865,6 @@
     "start_line": 9411,
     "end_line": 9415,
     "section": "Textual content",
-    "text": "Multiple spaces"
+    "text": "[PARA: Multiple     spaces]"
   }
 ]
