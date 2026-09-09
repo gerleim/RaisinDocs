@@ -103,6 +103,39 @@ public class MarkdownParserTests
         result[0].Kind.Should().Be(BlockKind.UnorderedListItem);
     }
 
+    [Fact]
+    public void BareMarker_AfterItsOwnItemContent_OpensTheNextItem()
+    {
+        // "-" then indented "foo" is one item whose content sits on the following line
+        // (CommonMark 5.2, item starting with a blank line). The second "-" is therefore a
+        // sibling item, not text continuing the "foo" paragraph - it used to be demoted to a
+        // paragraph and swallowed, losing the second item and its text.
+        var result = ParseBlocks("-", "  foo", "-", "  bar");
+
+        result[0].Kind.Should().Be(BlockKind.UnorderedListItem);
+        result[1].Kind.Should().Be(BlockKind.Paragraph);
+        result[2].Kind.Should().Be(BlockKind.UnorderedListItem);
+        result[3].Kind.Should().Be(BlockKind.Paragraph);
+    }
+
+    [Fact]
+    public void BareMarker_AfterAnOrdinaryParagraph_IsStillContinuationText()
+    {
+        // The case the demotion exists for: nothing opened a list, so the lone "*" is text.
+        var result = ParseBlocks("*foo bar", "*");
+
+        result[1].Kind.Should().Be(BlockKind.Paragraph);
+    }
+
+    [Fact]
+    public void BareMarker_AfterUnindentedParagraph_IsStillASetextUnderline()
+    {
+        var result = ParseBlocks("hello", "-");
+
+        result[0].Kind.Should().Be(BlockKind.Heading2);
+        result[1].Kind.Should().Be(BlockKind.SetextUnderline);
+    }
+
     // --- Ordered list items ---
 
     [Fact]

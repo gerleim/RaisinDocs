@@ -743,10 +743,45 @@ public static class MarkdownParser
             // Check if this is just a bare marker with no space after it
             if (stripped.Length == 1 && stripped[0] is '-' or '*' or '+')
             {
+                // Unless the paragraph before it is a list item's own content, in which case this
+                // marker opens the next item rather than continuing that paragraph.
+                if (ParagraphIsListItemContent(blocks, getBlockText, i - 1))
+                    continue;
+
                 // This is a bare marker following a paragraph - treat as continuation, not as list item
                 blocks[i] = blocks[i] with { Kind = BlockKind.Paragraph };
             }
         }
+    }
+
+    /// <summary>
+    /// Whether the paragraph at <paramref name="paragraphIndex"/> is the content of a list item
+    /// that opened above it, rather than a paragraph in its own right.
+    /// </summary>
+    /// <remarks>
+    /// Covers the item written with its text on the following line:
+    /// <code>
+    /// -
+    ///   foo
+    /// </code>
+    /// where "foo" is indented to the bare marker's content column and so belongs to the item.
+    /// This runs before the hierarchy is built, so the relationship has to be read off the
+    /// indentation directly.
+    /// </remarks>
+    private static bool ParagraphIsListItemContent(
+        List<ParsedBlock> blocks, Func<int, string> getBlockText, int paragraphIndex)
+    {
+        // Back up over the run of paragraph lines to whatever opened it.
+        int opener = paragraphIndex;
+        while (opener > 0 && blocks[opener].Kind == BlockKind.Paragraph)
+            opener--;
+
+        if (blocks[opener].Kind is not (BlockKind.UnorderedListItem or BlockKind.OrderedListItem
+            or BlockKind.TaskListItemUnchecked or BlockKind.TaskListItemChecked))
+            return false;
+
+        var (_, columns) = MeasureLeadingWhitespace(getBlockText(paragraphIndex));
+        return columns >= blocks[opener].ContentColumn;
     }
 
     internal static bool IsSetextUnderline(string text, out char underlineChar)
