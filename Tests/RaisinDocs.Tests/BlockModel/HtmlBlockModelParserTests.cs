@@ -626,6 +626,29 @@ public class HtmlBlockModelParserTests
     }
 
     [Fact]
+    public void FullPipeline_ListFollowedByParagraph_HasBlankLineSoItIsNotAContinuation()
+    {
+        // Without the blank line "after" is a lazy continuation of the list item, and visual mode
+        // draws it indented at the item's content column - it reads as part of the bullet rather
+        // than as the separate paragraph the HTML said it was.
+        var html = "<ul><li>A</li></ul><p>after</p>";
+        var markdown = HtmlBlockModelParser.ConvertHtmlToMarkdown(html);
+
+        markdown.Should().Be("- A\n\nafter");
+    }
+
+    [Fact]
+    public void FullPipeline_ListFollowedByHeading_StaysAdjacent()
+    {
+        // Only paragraphs get absorbed. A heading interrupts a list item on its own, so no blank
+        // line is added - see ConvertToMarkdown_ListThenHrThenHeading_NoEmptyLinesBetweenBlocks.
+        var html = "<ul><li>A</li></ul><h2>Title</h2>";
+        var markdown = HtmlBlockModelParser.ConvertHtmlToMarkdown(html);
+
+        markdown.Should().Be("- A\n## Title");
+    }
+
+    [Fact]
     public void FullPipeline_ListFollowedByParagraph_SeparatesBlocks()
     {
         var html = "<ul><li>Item</li></ul><p>After list</p>";

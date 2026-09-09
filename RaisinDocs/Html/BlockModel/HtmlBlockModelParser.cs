@@ -621,6 +621,27 @@ internal static class HtmlBlockModelParser
     /// Stage 3: Convert structured blocks to markdown string.
     /// Applies settings and handles all formatting.
     /// </summary>
+    /// <summary>
+    /// Whether a blank line has to separate two adjacent blocks to stop the second being read as
+    /// a continuation of the first.
+    /// </summary>
+    /// <remarks>
+    /// Blocks are otherwise emitted adjacent on purpose - browsers do not show the gap, so adding
+    /// one everywhere would pad pasted content with blank lines it never had. Only a paragraph is
+    /// at risk: written straight after a list item or another paragraph it becomes a lazy
+    /// continuation of it, which renders indented under the bullet instead of as its own block.
+    /// Headings, thematic breaks, blockquotes, fenced code and further list items all interrupt a
+    /// paragraph on their own and need no separator.
+    /// </remarks>
+    private static bool NeedsBlankLineBetween(BlockKind? previous, BlockKind current)
+    {
+        if (current != BlockKind.Paragraph) return false;
+
+        return previous is BlockKind.Paragraph
+            or BlockKind.UnorderedListItem
+            or BlockKind.OrderedListItem;
+    }
+
     internal static string ConvertToMarkdown(List<BlockElement> blocks, MarkdownOutputSettings? settings = null)
     {
         settings ??= new();
@@ -629,8 +650,7 @@ internal static class HtmlBlockModelParser
 
         foreach (var block in blocks)
         {
-            // Add blank line between consecutive paragraphs for proper separation
-            if (previousBlockKind == BlockKind.Paragraph && block.Kind == BlockKind.Paragraph)
+            if (NeedsBlankLineBetween(previousBlockKind, block.Kind))
             {
                 output.Add("");
             }
