@@ -1099,19 +1099,14 @@ public class Document
 
             if (continuationIndices.Count > 0)
             {
-                // Calculate offset adjustments BEFORE merging
-                int parentBlockLen = _blocks[i].Length;
-                var offsetAdjustments = new Dictionary<int, int>();
-                int accumulatedLen = parentBlockLen + 1; // +1 for newline
+                // Merge block text: combine i with all continuations after it, recording where
+                // each continuation lands. The merge trims, so those positions have to come out
+                // of the trimmed text - derived from the raw block lengths they put the cursor
+                // past the end of the merged block.
+                var offsetAdjustments = new Dictionary<int, int>();  // start of the continuation in the merged text
+                var trimmedLeading = new Dictionary<int, int>();     // leading chars the trim dropped
+                var trimmedLengths = new Dictionary<int, int>();     // continuation length after trimming
 
-                for (int j = 0; j < continuationIndices.Count; j++)
-                {
-                    int contIdx = continuationIndices[j];
-                    offsetAdjustments[contIdx] = accumulatedLen;
-                    accumulatedLen += _blocks[contIdx].Length + 1; // +1 for the newline
-                }
-
-                // Merge block text: combine i with all continuations after it
                 var parentText = _blocks[i].ToString();
                 for (int j = 0; j < continuationIndices.Count; j++)
                 {
@@ -1119,8 +1114,11 @@ public class Document
                     string contText = _blocks[contIdx].ToString();
                     // Trim trailing spaces from parent and leading spaces from continuation to avoid duplication
                     parentText = parentText.TrimEnd();
-                    contText = contText.TrimStart();
-                    parentText += "\n" + contText;
+                    string trimmedCont = contText.TrimStart();
+                    trimmedLeading[contIdx] = contText.Length - trimmedCont.Length;
+                    trimmedLengths[contIdx] = trimmedCont.Length;
+                    offsetAdjustments[contIdx] = parentText.Length + 1; // +1 for the newline
+                    parentText += "\n" + trimmedCont;
                 }
                 _blocks[i] = new StringBuilder(parentText);
 
@@ -1134,7 +1132,8 @@ public class Document
                     {
                         // Cursor is in a continuation block - move it to the parent block
                         CursorBlock = i;
-                        CursorOffset = offsetAdjustments[idxToRemove] + CursorOffset;
+                        CursorOffset = offsetAdjustments[idxToRemove]
+                            + MapIntoTrimmedContinuation(CursorOffset, idxToRemove);
                     }
                     else if (CursorBlock > idxToRemove)
                     {
@@ -1146,7 +1145,8 @@ public class Document
                     if (AnchorBlock == idxToRemove)
                     {
                         AnchorBlock = i;
-                        AnchorOffset = offsetAdjustments[idxToRemove] + AnchorOffset;
+                        AnchorOffset = offsetAdjustments[idxToRemove]
+                            + MapIntoTrimmedContinuation(AnchorOffset, idxToRemove);
                     }
                     else if (AnchorBlock > idxToRemove)
                     {
@@ -1157,9 +1157,18 @@ public class Document
                     parsedBlocks.RemoveAt(idxToRemove);
                 }
 
+                // The parent's own trailing spaces were trimmed as well, so a cursor sitting
+                // on them has nowhere left to be.
+                int mergedLen = _blocks[i].Length;
+                if (CursorBlock == i) CursorOffset = Math.Min(CursorOffset, mergedLen);
+                if (AnchorBlock == i) AnchorOffset = Math.Min(AnchorOffset, mergedLen);
+
                 // Update the parent block to clear Children since they're merged
                 parsedBlocks[i] = parsed with { Children = null };
                 merged = true;
+
+                int MapIntoTrimmedContinuation(int offset, int contIdx)
+                    => Math.Clamp(offset - trimmedLeading[contIdx], 0, trimmedLengths[contIdx]);
             }
 
             i--;

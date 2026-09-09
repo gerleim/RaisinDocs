@@ -20,6 +20,21 @@ public class VisualModeTypingTests
         return canvas;
     }
 
+    // --- Typing where a paragraph continuation gets merged ---
+
+    [StaFact]
+    public void Type_AtEndOfIndentedContinuation_DoesNotThrow()
+    {
+        // Layout merges "  f" into the paragraph above it and trims the indent, so the cursor
+        // has to be trimmed along with the text - otherwise the next keystroke inserts past
+        // the end of the merged block.
+        var canvas = CreateCanvas("\n-\n  ");
+        canvas.TestSetCursor(2, 2);
+        canvas.TestTypeText("fx");
+
+        canvas.TestGetBlockText(1).Should().Be("-\nfx");
+    }
+
     // --- Typing into list items should not delete the prefix ---
 
     [StaFact]

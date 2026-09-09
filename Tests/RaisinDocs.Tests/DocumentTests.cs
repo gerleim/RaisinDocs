@@ -2138,6 +2138,26 @@ public class DocumentTests
     }
 
     [Fact]
+    public void ParagraphContinuation_IndentedContinuation_KeepsCursorInsideMergedBlock()
+    {
+        // The merge trims the continuation's leading spaces, so the cursor offset has to be
+        // trimmed with it - otherwise it lands past the end of the merged block.
+        var doc = new Document();
+        doc.SetText("\n-\n  f");   // blank line, then "-", then an indented continuation
+        doc.CursorBlock = 2;
+        doc.CursorOffset = 3; // end of "  f"
+        doc.CollapseSelection();
+
+        var parsedBlocks = MarkdownParser.Parse(i => doc.GetBlockText(i), doc.BlockCount);
+        doc.MergeParagraphContinuations(parsedBlocks);
+
+        doc.GetBlockText(1).Should().Be("-\nf");
+        doc.CursorBlock.Should().Be(1);
+        doc.CursorOffset.Should().Be(3, "the cursor was at the end of the continuation text");
+        doc.AnchorOffset.Should().Be(doc.CursorOffset);
+    }
+
+    [Fact]
     public void ParagraphContinuation_Document_Merges()
     {
         // Create a document with parsed blocks that have continuations marked
