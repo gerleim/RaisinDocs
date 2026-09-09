@@ -260,7 +260,7 @@ public class HtmlBlockModelParserTests
     }
 
     [Fact]
-    public void ConvertToMarkdown_HeaderAndParagraph_SeparatesWithBlankLine()
+    public void ConvertToMarkdown_HeaderThenParagraph_StaysAdjacent()
     {
         var blocks = new List<BlockElement>
         {
@@ -284,11 +284,11 @@ public class HtmlBlockModelParserTests
 
         var markdown = HtmlBlockModelParser.ConvertToMarkdown(blocks);
 
-        var lines = markdown.Split('\n');
-        lines.Should().HaveCountGreaterThan(2);
-        lines[0].Should().Be("### Title");
-        lines[1].Should().Be("");  // Blank line
-        lines[2].Should().Be("Content");
+        // No blank line, on purpose. A heading is a leaf block, so the paragraph after it cannot
+        // become a lazy continuation the way one after a list item or another paragraph can - it
+        // renders at the margin either way. Blocks are kept adjacent unless the separator changes
+        // what is rendered, so pasted content is not padded with lines it never had.
+        markdown.Should().Be("### Title\nContent");
     }
 
     [Fact]
