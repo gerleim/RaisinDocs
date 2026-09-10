@@ -35,6 +35,26 @@ public class VisualModeTypingTests
         canvas.TestGetBlockText(1).Should().Be("-\nfx");
     }
 
+    [StaFact]
+    public void Type_ContinuationIntoAListItem_RendersAsAListItem()
+    {
+        // Typed rather than pasted: "-d" merges into the paragraph above it while it is still
+        // a paragraph, and the merge is physical. Typing the space that turns it into "- d"
+        // has to break that merge, or the marker stays buried in a paragraph block and renders
+        // as text - which is what pasting the same two lines does not do.
+        var canvas = CreateCanvas("-foo\n-d");
+        canvas.TestBlockCount.Should().Be(1, "layout merged the continuation, still a paragraph");
+
+        canvas.TestSetCursor(0, 6);      // between the marker and the d
+        canvas.TestTypeText(" ");
+        canvas.TestComputeLayout();
+
+        canvas.TestBlockCount.Should().Be(2);
+        canvas.TestGetBlockText(0).Should().Be("-foo");
+        canvas.TestGetBlockText(1).Should().Be("- d");
+        canvas.TestGetVisualBlockInfos()[1].Kind.Should().Be(BlockKind.UnorderedListItem);
+    }
+
     // --- Typing into list items should not delete the prefix ---
 
     [StaFact]

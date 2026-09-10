@@ -2157,6 +2157,116 @@ public class DocumentTests
         doc.AnchorOffset.Should().Be(doc.CursorOffset);
     }
 
+    /// <summary>
+    /// What a layout pass does to the block structure: split the merges that no longer hold,
+    /// parse, then merge what still belongs together.
+    /// </summary>
+    private static List<ParsedBlock> LayoutPass(Document doc)
+    {
+        doc.SplitStaleContinuations();
+        var parsed = MarkdownParser.Parse(i => doc.GetBlockText(i), doc.BlockCount);
+        if (doc.MergeParagraphContinuations(parsed))
+            parsed = MarkdownParser.Parse(i => doc.GetBlockText(i), doc.BlockCount);
+        return parsed;
+    }
+
+    [Fact]
+    public void MergedContinuation_TypedIntoAListItem_SplitsBackOut()
+    {
+        // "-d" is a paragraph, so it merges into the paragraph above it. Typing the space that
+        // makes it "- d" makes it a list item, and the merge has to come undone for it to render
+        // as one - the parser only ever sees whole blocks.
+        var doc = new Document();
+        doc.SetText("-foo\n-d");
+
+        LayoutPass(doc);
+        doc.BlockCount.Should().Be(1, "the continuation merges while it is still a paragraph");
+        doc.GetBlockText(0).Should().Be("-foo\n-d");
+
+        doc.CursorBlock = 0;
+        doc.CursorOffset = 6;   // between the marker and the d
+        doc.CollapseSelection();
+        doc.Insert(' ');
+        doc.CollapseSelection();
+
+        var parsed = LayoutPass(doc);
+
+        doc.BlockCount.Should().Be(2);
+        doc.GetBlockText(0).Should().Be("-foo");
+        doc.GetBlockText(1).Should().Be("- d");
+        parsed[0].Kind.Should().Be(BlockKind.Paragraph);
+        parsed[1].Kind.Should().Be(BlockKind.UnorderedListItem);
+        doc.CursorBlock.Should().Be(1);
+        doc.CursorOffset.Should().Be(2, "the cursor stays where it was typed, in the split-out line");
+        doc.AnchorBlock.Should().Be(doc.CursorBlock);
+        doc.AnchorOffset.Should().Be(doc.CursorOffset);
+    }
+
+    [Fact]
+    public void MergedContinuation_TypedIntoAHeading_SplitsBackOut()
+    {
+        var doc = new Document();
+        doc.SetText("foo\nbar");
+        LayoutPass(doc);
+        doc.BlockCount.Should().Be(1);
+
+        doc.CursorBlock = 0;
+        doc.CursorOffset = 4;   // start of the continuation line
+        doc.CollapseSelection();
+        doc.Insert('#'); doc.Insert(' ');
+
+        var parsed = LayoutPass(doc);
+
+        doc.BlockCount.Should().Be(2);
+        doc.GetBlockText(1).Should().Be("# bar");
+        parsed[1].Kind.Should().Be(BlockKind.Heading1);
+    }
+
+    [Fact]
+    public void MergedContinuation_BareMarker_StaysMerged()
+    {
+        // A bare marker after a paragraph is a continuation, not a list item. Classifying the
+        // line on its own says otherwise, so the split has to ask the parser - or this block
+        // would split and re-merge on every pass.
+        var doc = new Document();
+        doc.SetText("foo\n*");
+
+        LayoutPass(doc);
+        doc.BlockCount.Should().Be(1);
+        doc.GetBlockText(0).Should().Be("foo\n*");
+
+        LayoutPass(doc);
+        doc.BlockCount.Should().Be(1, "a pass that changes nothing must leave the merge alone");
+        doc.GetBlockText(0).Should().Be("foo\n*");
+    }
+
+    [Fact]
+    public void MergedContinuation_SplitShiftsTheBlocksBelow()
+    {
+        var doc = new Document();
+        doc.SetText("-foo\n-d\n\ntail");
+        LayoutPass(doc);
+        doc.BlockCount.Should().Be(3, "the merged pair, the blank line, and the tail");
+
+        // Make the continuation a list item, then park the cursor below it - the split is what
+        // has to move the cursor's block index, not the edit.
+        doc.CursorBlock = 0;
+        doc.CursorOffset = 6;
+        doc.CollapseSelection();
+        doc.Insert(' ');
+
+        doc.CursorBlock = 2;    // in "tail"
+        doc.CursorOffset = 4;
+        doc.CollapseSelection();
+
+        LayoutPass(doc);
+
+        doc.BlockCount.Should().Be(4);
+        doc.GetBlockText(3).Should().Be("tail");
+        doc.CursorBlock.Should().Be(3, "the cursor follows its block down");
+        doc.CursorOffset.Should().Be(4);
+    }
+
     [Fact]
     public void ParagraphContinuation_Document_Merges()
     {

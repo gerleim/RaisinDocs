@@ -1066,6 +1066,94 @@ public class Document
         CollapseSelection();
     }
 
+    /// <summary>
+    /// Undoes merges that no longer hold: splits a merged paragraph block back into one block
+    /// per line when its lines would not parse as a paragraph and its continuations any more.
+    /// True if anything moved, in which case the parse above it is stale.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="MergeParagraphContinuations"/> is destructive - the continuation blocks are
+    /// gone, and the parser only ever sees the joined text. Typing a list marker, heading hash
+    /// or quote onto a continuation line would otherwise be invisible: the block still starts
+    /// with the parent's text, so it still classifies as a paragraph and the new construct never
+    /// renders. Splitting here puts the lines back as blocks; the merge that runs after the next
+    /// parse re-joins whatever still belongs together.
+    /// </remarks>
+    internal bool SplitStaleContinuations()
+    {
+        bool splitAny = false;
+
+        // Reverse, so the inserts do not move blocks this loop has yet to look at.
+        for (int i = _blocks.Count - 1; i >= 0; i--)
+        {
+            if (!ContainsNewline(_blocks[i])) continue;
+
+            var lines = _blocks[i].ToString().Split('\n');
+            if (!AnyLineIsBlockLevel(lines)) continue;
+            if (MarkdownParser.MergeStillHolds(lines)) continue;
+
+            SplitBlockIntoLines(i, lines);
+            splitAny = true;
+        }
+
+        return splitAny;
+    }
+
+    /// <summary>
+    /// Whether the block holds a newline, which only a merge puts there. Over the chunks
+    /// rather than the indexer: this runs over every block of the document on every layout
+    /// pass, and the indexer walks the chunk list on each character.
+    /// </summary>
+    private static bool ContainsNewline(StringBuilder sb)
+    {
+        foreach (var chunk in sb.GetChunks())
+            if (chunk.Span.IndexOf('\n') >= 0) return true;
+        return false;
+    }
+
+    /// <summary>
+    /// Cheap pre-filter for <see cref="SplitStaleContinuations"/>: whether any line on its own
+    /// looks like something other than a paragraph. False here means the merge cannot have gone
+    /// stale, and the parse it would take to be sure is skipped.
+    /// </summary>
+    private static bool AnyLineIsBlockLevel(string[] lines)
+    {
+        foreach (var line in lines)
+            if (MarkdownParser.ClassifyBlock(line) != BlockKind.Paragraph) return true;
+        return false;
+    }
+
+    /// <summary>
+    /// Replaces the block at <paramref name="index"/> with one block per line, carrying the
+    /// cursor and anchor onto the line they now sit in.
+    /// </summary>
+    private void SplitBlockIntoLines(int index, string[] lines)
+    {
+        _blocks[index] = new StringBuilder(lines[0]);
+        for (int j = 1; j < lines.Length; j++)
+            _blocks.Insert(index + j, new StringBuilder(lines[j]));
+
+        (CursorBlock, CursorOffset) = MapOntoSplitLines(CursorBlock, CursorOffset, index, lines);
+        (AnchorBlock, AnchorOffset) = MapOntoSplitLines(AnchorBlock, AnchorOffset, index, lines);
+    }
+
+    private static (int Block, int Offset) MapOntoSplitLines(
+        int block, int offset, int index, string[] lines)
+    {
+        if (block > index) return (block + lines.Length - 1, offset);
+        if (block != index) return (block, offset);
+
+        // The offset is into the joined text, so walk the lines off it. The newline that joined
+        // each pair belongs to neither line: an offset on it lands at the end of the earlier one.
+        for (int j = 0; j < lines.Length - 1; j++)
+        {
+            if (offset <= lines[j].Length) return (index + j, offset);
+            offset -= lines[j].Length + 1;
+        }
+
+        return (index + lines.Length - 1, Math.Min(offset, lines[^1].Length));
+    }
+
     // Merge paragraph continuation blocks
     /// <summary>
     /// Folds lazy paragraph continuations into their parent block. True if anything moved.

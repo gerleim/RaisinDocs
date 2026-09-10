@@ -61,6 +61,13 @@ public partial class DocsCanvas
             // diagnostics are off; there is no closure per stage.
             long _t = System.Diagnostics.Stopwatch.GetTimestamp();
 
+            // A merge is physical, so a continuation edited into a list item or a heading would
+            // stay buried in the block it was folded into. Split those back out before parsing;
+            // the merge below re-joins the lines that still belong together.
+            if (_doc.Document.SplitStaleContinuations())
+                _content.ParsedBlocks = null;
+            _t = LayoutDiag.Mark("split", _t);
+
             _content.ParsedBlocks ??= MarkdownParser.Parse(i => _doc.GetBlockText(i), _doc.BlockCount, _rendering.SyntaxHighlighter);
             _t = LayoutDiag.Mark("parse", _t);
 

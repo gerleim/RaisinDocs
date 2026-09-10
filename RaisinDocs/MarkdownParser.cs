@@ -1119,6 +1119,30 @@ public static class MarkdownParser
         return false;
     }
 
+    /// <summary>
+    /// Whether <paramref name="lines"/> - the lines of a block the merge already folded together -
+    /// would still parse as one paragraph and its lazy continuations.
+    /// </summary>
+    /// <remarks>
+    /// The merge is physical: <see cref="Document.MergeParagraphContinuations"/> joins the lines
+    /// into one block and drops the rest. Editing a continuation into a list item, heading or
+    /// quote therefore leaves the parser looking at one paragraph whose text happens to contain
+    /// newlines, and the new block never appears. Document asks this before every parse so a
+    /// merge that no longer holds can be undone.
+    ///
+    /// The answer has to come from a parse rather than from classifying each line on its own:
+    /// a bare marker after a paragraph is a continuation, not a list item, and only the parse
+    /// knows that. Callers pre-filter on the cheap test so this runs on suspects only.
+    /// </remarks>
+    internal static bool MergeStillHolds(IReadOnlyList<string> lines)
+    {
+        if (lines.Count < 2) return true;
+
+        var parsed = Parse(i => lines[i], lines.Count);
+        if (parsed[0].Kind != BlockKind.Paragraph) return false;
+        return parsed[0].Children?.Count == lines.Count - 1;
+    }
+
     private static void MergeParagraphContinuations(List<ParsedBlock> blocks, Func<int, string> getBlockText)
     {
         // Mark paragraph lazy continuations in hierarchy
