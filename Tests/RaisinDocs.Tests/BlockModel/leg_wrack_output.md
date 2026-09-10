@@ -35,6 +35,7 @@ Examples:
 - melee attacks?
 - grappling?
 - charging?
+
 No definition exists.
 ---
 ### Question 2 — Melee attacks
@@ -43,9 +44,11 @@ Suppose the target is already adjacent.
 RAW gives:
 - prone attack: –2
 - movement rolls: chance die
+
 Is swinging a sword while lying on the ground
 - simply an attack (–2), or
 - a Physical roll requiring movement (chance die)?
+
 RAW never answers.
 ---
 ### Question 3 — Dodge
@@ -58,4 +61,5 @@ RAW never states whether Dodge becomes a chance die.
 Earlier we discussed that a strict reading suggests:
 - passive Defense → –2
 - active Dodge → chance die
+
 …but this is an inference.
