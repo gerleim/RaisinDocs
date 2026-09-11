@@ -57,6 +57,8 @@ public partial class DocsCanvas
     void ILayoutDataServices.InvalidateLayout() => InvalidateLayout();
     void ILayoutDataServices.ComputeLayout() => ComputeLayout();
     BlockVisualSpacing? ILayoutDataServices.GetVisualLineSpacing(VisualLine vl) => GetVisualLineSpacing(vl);
+    double ILayoutDataServices.GetTextStartXForVisualLine(VisualLine vl, int vlIndex)
+        => _layoutEngine.GetTextStartXForVisualLine(vl, vlIndex);
 
     // ====== IRenderingServices ======
     ThemePalette IRenderingServices.Palette => _palette;
@@ -71,6 +73,8 @@ public partial class DocsCanvas
         => MeasureRangeWidth(text, start, length, runs, blockKind, map);
     double IRenderingServices.MeasureJoinedRange(ParagraphGroup group, int start, int length)
         => MeasureJoinedRange(group, start, length);
+    double? IRenderingServices.LaidOutX(int vlIndex, int offset)
+        => _renderingContext.LaidOutX(vlIndex, offset);
 
     // ====== IParsedContentServices ======
     List<ParsedBlock>? IParsedContentServices.ParsedBlocks
@@ -112,6 +116,8 @@ public partial class DocsCanvas
     void INavigationServices.HitTestToPosition(Point pos, out int blockIndex, out int charOffset)
         => HitTestToPosition(pos, out blockIndex, out charOffset);
     int INavigationServices.HitTestVisualLine(double y) => HitTestVisualLine(y);
+    double INavigationServices.XInVisualLine(int vlIndex, int offset)
+        => _navigationEngine.XInVisualLine(vlIndex, offset);
     void INavigationServices.ApplyInlineStyles(FormattedText ft, VisualLine vl, ParsedBlock parsed, string blockText)
         => ApplyInlineStyles(ft, vl, parsed, blockText);
 
@@ -132,9 +138,9 @@ public partial class DocsCanvas
     bool ISearchServices.HasSearchHighlights => _findAndReplaceController?.HasHighlights ?? false;
     int ISearchServices.SearchHighlightSignature => _findAndReplaceController?.HighlightSignature ?? 0;
     void ISearchServices.EnsureSearchMatchesCurrent() => _findAndReplaceController?.EnsureMatchesCurrent();
-    void ISearchServices.DrawSearchHighlightsForLine(DrawingContext dc, VisualLine vl,
+    void ISearchServices.DrawSearchHighlightsForLine(DrawingContext dc, int vlIndex, VisualLine vl,
         double y, double bgH)
-        => _findAndReplaceController?.DrawSearchHighlightsForLine(dc, vl, y, bgH);
+        => _findAndReplaceController?.DrawSearchHighlightsForLine(dc, vlIndex, vl, y, bgH);
 
     // ====== ILoggingServices ======
     IDocsLogger? ILoggingServices.Logger => Logger;

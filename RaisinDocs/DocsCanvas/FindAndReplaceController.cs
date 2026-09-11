@@ -11,9 +11,7 @@ internal class FindAndReplaceController
     private readonly IRenderingServices _rendering;
     private readonly ILayoutDataServices _layout;
     private readonly IScrollServices _scroll;
-    private readonly IParsedContentServices _content;
-    private readonly IVisualModeServices _visual;
-    private readonly ITableServices _table;
+    private readonly INavigationServices _navigation;
 
     private List<SearchMatch> _searchMatches = [];
     private int _currentMatchIndex = -1;
@@ -39,9 +37,7 @@ internal class FindAndReplaceController
         IRenderingServices rendering,
         ILayoutDataServices layout,
         IScrollServices scroll,
-        IParsedContentServices content,
-        IVisualModeServices visual,
-        ITableServices table)
+        INavigationServices navigation)
     {
         _search = search ?? throw new ArgumentNullException(nameof(search));
         _doc = doc ?? throw new ArgumentNullException(nameof(doc));
@@ -49,9 +45,7 @@ internal class FindAndReplaceController
         _rendering = rendering ?? throw new ArgumentNullException(nameof(rendering));
         _layout = layout ?? throw new ArgumentNullException(nameof(layout));
         _scroll = scroll ?? throw new ArgumentNullException(nameof(scroll));
-        _content = content ?? throw new ArgumentNullException(nameof(content));
-        _visual = visual ?? throw new ArgumentNullException(nameof(visual));
-        _table = table ?? throw new ArgumentNullException(nameof(table));
+        _navigation = navigation ?? throw new ArgumentNullException(nameof(navigation));
     }
 
     // --- Public API ---
@@ -288,7 +282,7 @@ internal class FindAndReplaceController
     /// Two passes, so the current match's colour lands on top of any ordinary match it
     /// overlaps rather than under it.
     /// </remarks>
-    internal void DrawSearchHighlightsForLine(DrawingContext dc, DocsCanvas.VisualLine vl,
+    internal void DrawSearchHighlightsForLine(DrawingContext dc, int vlIndex, DocsCanvas.VisualLine vl,
         double y, double bgH)
     {
         if (_searchMatches.Count == 0) return;
@@ -302,12 +296,12 @@ internal class FindAndReplaceController
                 if (pass == 1 && !isCurrent) continue;
 
                 var brush = isCurrent ? _rendering.Palette.CurrentSearchMatch : _rendering.Palette.SearchMatch;
-                DrawMatchOnLine(dc, vl, _searchMatches[mi], brush, y, bgH);
+                DrawMatchOnLine(dc, vlIndex, vl, _searchMatches[mi], brush, y, bgH);
             }
         }
     }
 
-    private void DrawMatchOnLine(DrawingContext dc, DocsCanvas.VisualLine vl, SearchMatch match,
+    private void DrawMatchOnLine(DrawingContext dc, int vlIndex, DocsCanvas.VisualLine vl, SearchMatch match,
         Brush brush, double y, double bgH)
     {
         if (vl.Group is { } group)
@@ -315,7 +309,7 @@ internal class FindAndReplaceController
             // Cheap reject before SourceToJoined, which the old per-match loop paid for on
             // every joined line in view whether the match was in the group or not.
             if (match.Block < group.FirstBlock || match.Block > group.LastBlock) return;
-            DrawMatchOnJoinedLine(dc, vl, match, brush, y, bgH);
+            DrawMatchOnJoinedLine(dc, vlIndex, vl, match, brush, y, bgH);
             return;
         }
 
@@ -328,34 +322,8 @@ internal class FindAndReplaceController
         int hlStart = Math.Max(match.Offset, vl.StartOffset);
         int hlEnd = Math.Min(matchEnd, vlEnd);
 
-        string blockText = _doc.GetBlockText(vl.BlockIndex);
-        var parsed = _content.ParsedBlocks![vl.BlockIndex];
-        var map = _visual.IsVisual ? _content.VisualMaps?[vl.BlockIndex] : null;
-
-        double x1, x2;
-        if (_visual.IsVisual && parsed.Table != null && parsed.TableRow != null)
-        {
-            if (_table.TableColumnWidths.TryGetValue(parsed.Table, out var colWidths))
-            {
-                x1 = _table.CursorXInTableRow(vl.BlockIndex, parsed, colWidths, hlStart);
-                x2 = _table.CursorXInTableRow(vl.BlockIndex, parsed, colWidths, hlEnd);
-            }
-            else return;
-        }
-        else
-        {
-            x1 = _rendering.MeasureRangeWidth(blockText, vl.StartOffset, hlStart - vl.StartOffset,
-                parsed.Runs, parsed.Kind, map);
-            x2 = _rendering.MeasureRangeWidth(blockText, vl.StartOffset, hlEnd - vl.StartOffset,
-                parsed.Runs, parsed.Kind, map);
-
-            if (map?.ReplacementPrefix != null && vl.StartOffset == 0)
-            {
-                double prefixW = _rendering.Measure.MeasureReplacementPrefix(map.ReplacementPrefix!, map.PrefixMeasureKind);
-                x1 += prefixW;
-                x2 += prefixW;
-            }
-        }
+        double x1 = _navigation.XInVisualLine(vlIndex, hlStart);
+        double x2 = _navigation.XInVisualLine(vlIndex, hlEnd);
 
         double w = Math.Max(0, x2 - x1);
         if (w > 0)
@@ -404,7 +372,7 @@ internal class FindAndReplaceController
         _rendering.InvalidateVisual();
     }
 
-    private void DrawMatchOnJoinedLine(DrawingContext dc, DocsCanvas.VisualLine vl,
+    private void DrawMatchOnJoinedLine(DrawingContext dc, int vlIndex, DocsCanvas.VisualLine vl,
         SearchMatch match, Brush brush, double y, double bgH)
     {
         var group = vl.Group!;
@@ -420,8 +388,8 @@ internal class FindAndReplaceController
         int hlStart = Math.Max(vlStart, matchStartJoined);
         int hlEnd = Math.Min(vlEnd, matchEndJoined);
 
-        double x1 = _rendering.MeasureJoinedRange(group, vlStart, hlStart - vlStart);
-        double x2 = _rendering.MeasureJoinedRange(group, vlStart, hlEnd - vlStart);
+        double x1 = _navigation.XInVisualLine(vlIndex, hlStart);
+        double x2 = _navigation.XInVisualLine(vlIndex, hlEnd);
 
         double w = Math.Max(0, x2 - x1);
         if (w > 0)

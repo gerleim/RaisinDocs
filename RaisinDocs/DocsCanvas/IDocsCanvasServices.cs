@@ -44,6 +44,12 @@ internal interface ILayoutDataServices
     Dictionary<int, DocsCanvas.ParagraphGroup>? BlockToGroup { get; set; }
     double GetEffectiveLineHeight(DocsCanvas.VisualLine vl);
     double GetTextStartXForVisualLine(DocsCanvas.VisualLine vl);
+
+    /// <summary>
+    /// Same, for a line whose index the caller already has. The overload above recovers the
+    /// index by scanning, so anything on a render path wants this one.
+    /// </summary>
+    double GetTextStartXForVisualLine(DocsCanvas.VisualLine vl, int vlIndex);
     void InvalidateLayout();
     void ComputeLayout();
     BlockVisualSpacing? GetVisualLineSpacing(DocsCanvas.VisualLine vl);
@@ -71,6 +77,12 @@ internal interface IRenderingServices
 
     /// <summary>Measures the width of a range in a joined/merged paragraph group.</summary>
     double MeasureJoinedRange(DocsCanvas.ParagraphGroup group, int start, int length);
+
+    /// <summary>
+    /// X of an offset from where a visual line's text is drawn, read off the glyphs WPF laid out,
+    /// kerning included; null when the line is not drawn as a single run of text.
+    /// </summary>
+    double? LaidOutX(int vlIndex, int offset);
 }
 
 /// <summary>
@@ -122,6 +134,12 @@ internal interface INavigationServices
     List<double> LineYPositions { get; }
     void HitTestToPosition(Point pos, out int blockIndex, out int charOffset);
     int HitTestVisualLine(double y);
+
+    /// <summary>
+    /// The X of one offset on one visual line, relative to the left padding: the caret, a
+    /// selection edge and a highlight edge all draw at <c>_padding + this</c>.
+    /// </summary>
+    double XInVisualLine(int vlIndex, int offset);
     void ApplyInlineStyles(System.Windows.Media.FormattedText ft, DocsCanvas.VisualLine vl, ParsedBlock parsed, string blockText);
 }
 
@@ -171,7 +189,7 @@ internal interface ISearchServices
     void EnsureSearchMatchesCurrent();
 
     /// <summary>Draws the matches falling on one line, behind its text.</summary>
-    void DrawSearchHighlightsForLine(DrawingContext dc, DocsCanvas.VisualLine vl,
+    void DrawSearchHighlightsForLine(DrawingContext dc, int vlIndex, DocsCanvas.VisualLine vl,
         double y, double bgH);
 }
 

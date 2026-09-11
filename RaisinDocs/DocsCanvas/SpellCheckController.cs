@@ -13,7 +13,6 @@ internal sealed class SpellCheckController
     private readonly IRenderingServices _rendering;
     private readonly ILayoutDataServices _layout;
     private readonly IParsedContentServices _content;
-    private readonly ITableServices _table;
     private readonly INavigationServices _nav;
     private readonly IVisualModeServices _visualMode;
     private readonly IScrollServices _scroll;
@@ -31,7 +30,7 @@ internal sealed class SpellCheckController
 
     public SpellCheckController(ICanvasOperations canvas, IImageServices images, IDocumentServices doc,
         IRenderingServices rendering, ILayoutDataServices layout, IParsedContentServices content,
-        ITableServices table, INavigationServices nav, IVisualModeServices visualMode, IScrollServices scroll)
+        INavigationServices nav, IVisualModeServices visualMode, IScrollServices scroll)
     {
         _canvas = canvas ?? throw new ArgumentNullException(nameof(canvas));
         _images = images ?? throw new ArgumentNullException(nameof(images));
@@ -39,7 +38,6 @@ internal sealed class SpellCheckController
         _rendering = rendering ?? throw new ArgumentNullException(nameof(rendering));
         _layout = layout ?? throw new ArgumentNullException(nameof(layout));
         _content = content ?? throw new ArgumentNullException(nameof(content));
-        _table = table ?? throw new ArgumentNullException(nameof(table));
         _nav = nav ?? throw new ArgumentNullException(nameof(nav));
         _visualMode = visualMode ?? throw new ArgumentNullException(nameof(visualMode));
         _scroll = scroll ?? throw new ArgumentNullException(nameof(scroll));
@@ -221,7 +219,7 @@ internal sealed class SpellCheckController
 
             if (vl.Group != null)
             {
-                DrawSpellingErrorsOnJoinedLine(dc, vl, lineY, lineH, effectiveScroll);
+                DrawSpellingErrorsOnJoinedLine(dc, i, vl, lineY, lineH, effectiveScroll);
                 continue;
             }
 
@@ -229,9 +227,6 @@ internal sealed class SpellCheckController
             var errors = _blockSpellingErrors[vl.BlockIndex];
             if (errors is null) continue;
 
-            string blockText = _doc.GetBlockText(vl.BlockIndex);
-            var parsed = _content.ParsedBlocks![vl.BlockIndex];
-            var map = _visualMode.IsVisual ? _content.VisualMaps?[vl.BlockIndex] : null;
             int vlEnd = vl.StartOffset + vl.Length;
 
             foreach (var err in errors)
@@ -242,31 +237,8 @@ internal sealed class SpellCheckController
                 int hlStart = Math.Max(err.StartOffset, vl.StartOffset);
                 int hlEnd = Math.Min(errEnd, vlEnd);
 
-                double x1, x2;
-                if (_visualMode.IsVisual && parsed.Table != null && parsed.TableRow != null)
-                {
-                    if (_table.TableColumnWidths.TryGetValue(parsed.Table, out var colWidths))
-                    {
-                        x1 = _table.CursorXInTableRow(vl.BlockIndex, parsed, colWidths, hlStart);
-                        x2 = _table.CursorXInTableRow(vl.BlockIndex, parsed, colWidths, hlEnd);
-                    }
-                    else continue;
-                }
-                else
-                {
-                    x1 = _rendering.MeasureRangeWidth(blockText, vl.StartOffset, hlStart - vl.StartOffset,
-                        parsed.Runs, parsed.Kind, map);
-                    x2 = _rendering.MeasureRangeWidth(blockText, vl.StartOffset, hlEnd - vl.StartOffset,
-                        parsed.Runs, parsed.Kind, map);
-
-                    if (map?.ReplacementPrefix != null && vl.StartOffset == 0)
-                    {
-                        double prefixW = _rendering.Measure.MeasureReplacementPrefix(
-                            map.ReplacementPrefix!, map.PrefixMeasureKind);
-                        x1 += prefixW;
-                        x2 += prefixW;
-                    }
-                }
+                double x1 = _nav.XInVisualLine(i, hlStart);
+                double x2 = _nav.XInVisualLine(i, hlEnd);
 
                 double w = x2 - x1;
                 if (w > 0)
@@ -278,7 +250,7 @@ internal sealed class SpellCheckController
         }
     }
 
-    private void DrawSpellingErrorsOnJoinedLine(DrawingContext dc, DocsCanvas.VisualLine vl,
+    private void DrawSpellingErrorsOnJoinedLine(DrawingContext dc, int vlIndex, DocsCanvas.VisualLine vl,
         double lineY, double lineH, double effectiveScroll)
     {
         var group = vl.Group!;
@@ -302,8 +274,8 @@ internal sealed class SpellCheckController
                 int hlStart = Math.Max(vlStart, startJoined);
                 int hlEnd = Math.Min(vlEnd, endJoined);
 
-                double x1 = _rendering.MeasureJoinedRange(group, vlStart, hlStart - vlStart);
-                double x2 = _rendering.MeasureJoinedRange(group, vlStart, hlEnd - vlStart);
+                double x1 = _nav.XInVisualLine(vlIndex, hlStart);
+                double x2 = _nav.XInVisualLine(vlIndex, hlEnd);
 
                 double w = x2 - x1;
                 if (w > 0)

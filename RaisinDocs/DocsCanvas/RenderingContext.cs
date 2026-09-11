@@ -250,6 +250,7 @@ public partial class DocsCanvas
                 _docsCanvas.ContentLayer.Children.Remove(dv);
                 _lineVisuals[i] = null;
                 if (_lineFt != null && i < _lineFt.Length) _lineFt[i] = null;
+                if (_lineStops != null && i < _lineStops.Length) _lineStops[i] = null;
             }
         }
 
@@ -418,6 +419,132 @@ public partial class DocsCanvas
             return true;
         }
 
+        /// <summary>
+        /// Test hook: draws one visual line on its own and hands back the rectangle it painted
+        /// in <paramref name="brush"/>, in the line's own coordinates. Goes through the real
+        /// <see cref="DrawLineContent"/>, so a highlight that measures itself the wrong way is
+        /// caught here rather than only on screen.
+        /// </summary>
+        internal Rect? TestLineRectPaintedWith(int i, Brush brush)
+        {
+            if (i < 0 || i >= _layout.VisualLines.Count) return null;
+
+            _rendering.Measure.EnsureMeasured(_docsCanvas);
+            EnsureLineFtCache(_layout.VisualLines.Count, _docsCanvas.RenderVersion);
+
+            var dv = new DrawingVisual();
+            using (var dc = dv.RenderOpen())
+                DrawLineContent(dc, i, _layout.VisualLines[i], 0);
+
+            return FindRectPaintedWith(dv.Drawing, brush);
+        }
+
+        /// <summary>
+        /// Test hook: the X every run of glyphs on a visual line is drawn at, in order. A list
+        /// item's marker is a run of its own, so the words start at the second one.
+        /// </summary>
+        internal List<double> TestLineGlyphOriginXs(int i)
+        {
+            var origins = new List<double>();
+            if (i < 0 || i >= _layout.VisualLines.Count) return origins;
+
+            _rendering.Measure.EnsureMeasured(_docsCanvas);
+            EnsureLineFtCache(_layout.VisualLines.Count, _docsCanvas.RenderVersion);
+
+            var dv = new DrawingVisual();
+            using (var dc = dv.RenderOpen())
+                DrawLineContent(dc, i, _layout.VisualLines[i], 0);
+
+            CollectGlyphOriginXs(dv.Drawing, origins);
+            return origins;
+        }
+
+        /// <summary>
+        /// Test hook: the left edge of every glyph the renderer draws on a visual line, in drawing
+        /// order, read off the glyph runs WPF actually laid out - kerning and all.
+        /// </summary>
+        internal List<double> TestLineGlyphLeftEdges(int i)
+        {
+            var edges = new List<double>();
+            if (i < 0 || i >= _layout.VisualLines.Count) return edges;
+
+            _rendering.Measure.EnsureMeasured(_docsCanvas);
+            EnsureLineFtCache(_layout.VisualLines.Count, _docsCanvas.RenderVersion);
+
+            var dv = new DrawingVisual();
+            using (var dc = dv.RenderOpen())
+                DrawLineContent(dc, i, _layout.VisualLines[i], 0);
+
+            CollectGlyphLeftEdges(dv.Drawing, edges);
+            return edges;
+        }
+
+        /// <summary>
+        /// Appends the left edge of every character in a drawing's glyph runs, in drawing order,
+        /// and returns the right edge of the furthest run.
+        /// </summary>
+        private static double CollectGlyphLeftEdges(Drawing? drawing, List<double> into)
+        {
+            double right = 0;
+            switch (drawing)
+            {
+                case GlyphRunDrawing { GlyphRun: { } run }:
+                {
+                    double x = run.BaselineOrigin.X;
+                    var advances = run.AdvanceWidths;
+                    var clusters = run.ClusterMap;
+                    int chars = run.Characters?.Count ?? advances.Count;
+                    // Per character, via the cluster map, so a ligature shows up as two characters
+                    // sharing an edge rather than as a shifted run.
+                    var glyphX = new double[advances.Count + 1];
+                    for (int g = 0; g < advances.Count; g++)
+                        glyphX[g + 1] = glyphX[g] + advances[g];
+                    for (int c = 0; c < chars; c++)
+                    {
+                        int g = clusters != null && c < clusters.Count ? clusters[c] : c;
+                        into.Add(x + glyphX[Math.Min(g, advances.Count)]);
+                    }
+                    right = x + glyphX[advances.Count];
+                    break;
+                }
+                case DrawingGroup group:
+                    foreach (var child in group.Children)
+                        right = Math.Max(right, CollectGlyphLeftEdges(child, into));
+                    break;
+            }
+            return right;
+        }
+
+        private static void CollectGlyphOriginXs(Drawing? drawing, List<double> into)
+        {
+            switch (drawing)
+            {
+                case GlyphRunDrawing { GlyphRun: { } run }:
+                    into.Add(run.BaselineOrigin.X);
+                    break;
+                case DrawingGroup group:
+                    foreach (var child in group.Children)
+                        CollectGlyphOriginXs(child, into);
+                    break;
+            }
+        }
+
+        private static Rect? FindRectPaintedWith(Drawing? drawing, Brush brush)
+        {
+            switch (drawing)
+            {
+                case GeometryDrawing gd
+                    when ReferenceEquals(gd.Brush, brush) && gd.Geometry is RectangleGeometry rg:
+                    return rg.Rect;
+                case DrawingGroup group:
+                    foreach (var child in group.Children)
+                        if (FindRectPaintedWith(child, brush) is { } found) return found;
+                    return null;
+                default:
+                    return null;
+            }
+        }
+
         private void TrimLineVisuals(int firstVisible, int lastVisible)
         {
             if (_lineVisuals == null || _visualsHi < _visualsLo) return;
@@ -440,6 +567,8 @@ public partial class DocsCanvas
         }
 
         private FormattedText?[]? _lineFt;
+        // The caret stops read off each cached line's glyphs, dropped whenever its text is.
+        private double[]?[]? _lineStops;
         private int _lineFtVersion = -1;
         private int _lineFtLo, _lineFtHi = -1;
         private const int LineFtWindow = 400;
@@ -449,6 +578,7 @@ public partial class DocsCanvas
             if (_lineFtVersion != version || _lineFt == null || _lineFt.Length < count)
             {
                 _lineFt = new FormattedText?[count];
+                _lineStops = new double[]?[count];
                 _lineFtVersion = version;
                 _lineFtLo = 0;
                 _lineFtHi = -1;
@@ -461,8 +591,8 @@ public partial class DocsCanvas
             if (_lineFt == null || _lineFtHi < _lineFtLo) return;
             int lo = Math.Max(0, firstVisible - LineFtWindow);
             int hi = Math.Min(_lineFt.Length - 1, lastVisible + LineFtWindow);
-            for (int i = _lineFtLo; i < lo && i <= _lineFtHi; i++) _lineFt[i] = null;
-            for (int i = _lineFtHi; i > hi && i >= _lineFtLo; i--) _lineFt[i] = null;
+            for (int i = _lineFtLo; i < lo && i <= _lineFtHi; i++) { _lineFt[i] = null; _lineStops![i] = null; }
+            for (int i = _lineFtHi; i > hi && i >= _lineFtLo; i--) { _lineFt[i] = null; _lineStops![i] = null; }
             _lineFtLo = Math.Max(_lineFtLo, lo);
             _lineFtHi = Math.Min(_lineFtHi, hi);
         }
@@ -472,6 +602,140 @@ public partial class DocsCanvas
             if (_lineFtHi < _lineFtLo) { _lineFtLo = _lineFtHi = i; return; }
             if (i < _lineFtLo) _lineFtLo = i;
             if (i > _lineFtHi) _lineFtHi = i;
+        }
+
+        /// <summary>
+        /// The one <see cref="FormattedText"/> a visual line is drawn with, built once per render
+        /// version - or null when the line is not drawn as a single run of text: a table row, a
+        /// rule, a line carrying an image, or a line with nothing visible on it.
+        /// </summary>
+        /// <remarks>
+        /// Drawing and measuring both come through here, so the caret stops in
+        /// <see cref="LaidOutX"/> are read off exactly the text that is on screen.
+        /// </remarks>
+        private FormattedText? GetLineText(int i)
+        {
+            if (i < 0 || i >= _layout.VisualLines.Count) return null;
+            EnsureLineFtCache(_layout.VisualLines.Count, _docsCanvas.RenderVersion);
+            if (_lineFt![i] is { } cached) return cached;
+
+            var vl = _layout.VisualLines[i];
+            if (vl.Length == 0) return null;
+
+            FormattedText? ft;
+            if (vl.Group != null)
+            {
+                if (HasImagesOnLine(vl, vl.Group.JoinedMap)) return null;
+                ft = BuildJoinedLineText(vl);
+            }
+            else
+            {
+                if (_content.ParsedBlocks == null || vl.BlockIndex >= _content.ParsedBlocks.Count) return null;
+                var parsed = _content.ParsedBlocks[vl.BlockIndex];
+                if (_visual.IsVisual
+                    && (parsed.Kind == BlockKind.ThematicBreak || (parsed.Table != null && parsed.TableRow != null)))
+                    return null;
+
+                string blockText = _doc.Document.GetBlockText(vl.BlockIndex);
+                double fontSize = _rendering.Measure.GetBlockFontSize(parsed.Kind);
+                var baseTypeface = TextMeasurer.GetBlockBaseTypeface(parsed.Kind);
+                var map = _visual.IsVisual ? _content.VisualMaps?[vl.BlockIndex] : null;
+
+                if (map != null)
+                {
+                    if (HasImagesOnLine(vl, map)) return null;
+                    string displayText = map.BuildDisplayString(blockText, vl.StartOffset, vl.Length);
+                    if (displayText.Length == 0) return null;
+
+                    ft = new FormattedText(displayText, CultureInfo.InvariantCulture,
+                        FlowDirection.LeftToRight, baseTypeface, fontSize,
+                        _rendering.Palette.Foreground, _rendering.Measure.DpiScale);
+                    ApplyInlineStylesVisual(ft, vl, parsed, map);
+                    if (parsed.Kind == BlockKind.TaskListItemChecked)
+                    {
+                        ft.SetForegroundBrush(_rendering.Palette.Syntax, 0, displayText.Length);
+                        ft.SetTextDecorations(TextDecorations.Strikethrough, 0, displayText.Length);
+                    }
+                }
+                else
+                {
+                    string text = blockText.Substring(vl.StartOffset, vl.Length);
+                    ft = new FormattedText(text, CultureInfo.InvariantCulture,
+                        FlowDirection.LeftToRight, baseTypeface, fontSize,
+                        _rendering.Palette.Foreground, _rendering.Measure.DpiScale);
+                    ApplyInlineStyles(ft, vl, parsed, blockText);
+                }
+            }
+
+            if (ft == null) return null;
+            _lineFt[i] = ft;
+            NoteCached(i);
+            return ft;
+        }
+
+        private static readonly double[] _notLaidOut = [];
+
+        /// <summary>
+        /// The X of every character boundary in line <paramref name="i"/>'s text, from where the
+        /// text is drawn: one stop per display character plus the end of the line.
+        /// </summary>
+        private double[]? GetCaretStops(int i)
+        {
+            if (GetLineText(i) is not { } ft) return null;
+
+            var stops = _lineStops![i];
+            if (stops == null)
+                _lineStops[i] = stops = BuildCaretStops(ft) ?? _notLaidOut;
+            return stops.Length == 0 ? null : stops;
+        }
+
+        private static double[]? BuildCaretStops(FormattedText ft)
+        {
+            var drawing = new DrawingGroup();
+            using (var dc = drawing.Open())
+                dc.DrawText(ft, new Point(0, 0));
+
+            var stops = new List<double>(ft.Text.Length + 1);
+            double right = CollectGlyphLeftEdges(drawing, stops);
+
+            // Anything but one edge per character means the glyph runs did not map onto the text
+            // one-to-one, and the caller measures the old way rather than guess.
+            if (stops.Count != ft.Text.Length) return null;
+            stops.Add(right);
+            return stops.ToArray();
+        }
+
+        /// <summary>
+        /// The X of <paramref name="offset"/> from where visual line <paramref name="i"/>'s text is
+        /// drawn, read off the glyphs WPF laid out; null when the line is not drawn as a single
+        /// run of text. The offset is in the line's block, or in the group's joined text.
+        /// </summary>
+        /// <remarks>
+        /// Summing each character's advance width from the font gets close but not there: WPF
+        /// kerns the text it draws, so every kerned pair - "y." or "St" or "To" - pulls what
+        /// follows it left of the sum, by about a thirtieth of the font size at a time.
+        /// </remarks>
+        internal double? LaidOutX(int i, int offset)
+        {
+            if (GetCaretStops(i) is not { } stops) return null;
+
+            var vl = _layout.VisualLines[i];
+            int raw = Math.Clamp(offset, vl.StartOffset, vl.StartOffset + vl.Length);
+            int k = DisplayIndex(vl, raw) - DisplayIndex(vl, vl.StartOffset);
+            return k >= 0 && k < stops.Length ? stops[k] : null;
+        }
+
+        /// <summary>
+        /// Where a raw offset lands in the line's display text - the mapping
+        /// <see cref="ApplyInlineStylesVisual"/> styles the text by.
+        /// </summary>
+        private int DisplayIndex(VisualLine vl, int raw)
+        {
+            if (vl.Group is { } group)
+                return group.JoinedMap.RawToVisual(raw) + SoftBreakShift(group.SoftBreakOffsets, raw);
+
+            var map = _visual.IsVisual ? _content.VisualMaps?[vl.BlockIndex] : null;
+            return map?.RawToVisual(raw) ?? raw;
         }
 
         public RenderingContext(
@@ -635,13 +899,13 @@ public partial class DocsCanvas
             double bgH = SnappedLineHeight(i, vl);
             DrawCodeBlockBackground(dc, vl, y, bgH);
             DrawColorBlockBackground(dc, vl, y, bgH);
-            DrawInlineColorBackground(dc, vl, y, bgH);
+            DrawInlineColorBackground(dc, i, vl, y, bgH);
             if (_visual.IsVisual && _content.ParsedBlocks != null
                 && vl.BlockIndex < _content.ParsedBlocks.Count)
                 _table.TableRenderer.DrawTableRowBackground(
                     dc, _content.ParsedBlocks[vl.BlockIndex], y, bgH);
-            DrawSelectionForLine(dc, vl, y, bgH);
-            _search.DrawSearchHighlightsForLine(dc, vl, y, bgH);
+            DrawSelectionForLine(dc, i, vl, y, bgH);
+            _search.DrawSearchHighlightsForLine(dc, i, vl, y, bgH);
 
             if (vl.Length > 0)
             {
@@ -682,7 +946,7 @@ public partial class DocsCanvas
                         if (HasImagesOnLine(vl, map))
                         {
                             DrawVisualLineWithImages(dc, vl, blockText(), parsed, map,
-                                y, fontSize, baseTypeface);
+                                y, fontSize, baseTypeface, textX);
                         }
                         else
                         {
@@ -729,43 +993,14 @@ public partial class DocsCanvas
                                 }
                             }
 
-                            var ft = _lineFt![i];
-                            if (ft == null)
-                            {
-                                string displayText = map.BuildDisplayString(blockText(), vl.StartOffset, vl.Length);
-                                if (displayText.Length > 0)
-                                {
-                                    ft = new FormattedText(displayText, CultureInfo.InvariantCulture,
-                                        FlowDirection.LeftToRight, baseTypeface, fontSize,
-                                        _rendering.Palette.Foreground, _rendering.Measure.DpiScale);
-                                    ApplyInlineStylesVisual(ft, vl, parsed, map);
-                                    if (parsed.Kind == BlockKind.TaskListItemChecked)
-                                    {
-                                        ft.SetForegroundBrush(_rendering.Palette.Syntax, 0, displayText.Length);
-                                        ft.SetTextDecorations(TextDecorations.Strikethrough, 0, displayText.Length);
-                                    }
-                                    _lineFt[i] = ft;
-                                    NoteCached(i);
-                                }
-                            }
-                            if (ft != null)
+                            if (GetLineText(i) is { } ft)
                                 dc.DrawText(ft, new Point(textX, y));
                         }
                     }
                     else
                     {
-                        var ft = _lineFt![i];
-                        if (ft == null)
-                        {
-                            string text = blockText().Substring(vl.StartOffset, vl.Length);
-                            ft = new FormattedText(text, CultureInfo.InvariantCulture,
-                                FlowDirection.LeftToRight, baseTypeface, fontSize,
-                                _rendering.Palette.Foreground, _rendering.Measure.DpiScale);
-                            ApplyInlineStyles(ft, vl, parsed, blockText());
-                            _lineFt[i] = ft;
-                            NoteCached(i);
-                        }
-                        dc.DrawText(ft, new Point(textX, y));
+                        if (GetLineText(i) is { } ft)
+                            dc.DrawText(ft, new Point(textX, y));
 
                         if (_docsCanvas._showWhitespace)
                             DrawTrailingSpaceDots(dc, vl, blockText(), parsed, textX, y);
@@ -787,22 +1022,22 @@ public partial class DocsCanvas
             {
                 // Not cached: this path draws images as well as text, so it does not reduce to
                 // a single FormattedText the way the others do.
+                // A joined line is drawn from the margin, prefix width and all - the same X
+                // DrawJoinedLine gives the cached path below, and the same one the caret uses.
+                double joinedTextX = DocsCanvas._padding;
+                if (group.JoinedMap.ReplacementPrefix != null && vl.StartOffset == 0)
+                    joinedTextX += _rendering.Measure.MeasureReplacementPrefix(
+                        group.JoinedMap.ReplacementPrefix, group.JoinedMap.PrefixMeasureKind);
+
                 DrawVisualLineWithImages(dc, vl, group.JoinedText, group.JoinedParsed,
                     group.JoinedMap, y,
-                    _rendering.Measure.GetBlockFontSize(BlockKind.Paragraph), TextMeasurer.GetBlockBaseTypeface(BlockKind.Paragraph));
+                    _rendering.Measure.GetBlockFontSize(BlockKind.Paragraph), TextMeasurer.GetBlockBaseTypeface(BlockKind.Paragraph),
+                    joinedTextX);
                 return;
             }
 
-            var ft = _lineFt![index];
-            if (ft == null)
-            {
-                ft = BuildJoinedLineText(vl);
-                if (ft == null) return;
-                _lineFt[index] = ft;
-                NoteCached(index);
-            }
-
-            dc.DrawText(ft, new Point(DocsCanvas._padding, y));
+            if (GetLineText(index) is { } ft)
+                dc.DrawText(ft, new Point(DocsCanvas._padding, y));
         }
 
         /// <summary>
@@ -1268,13 +1503,20 @@ public partial class DocsCanvas
             return false;
         }
 
+        /// <summary>
+        /// The text-and-images path, for a line an inline image keeps from reducing to a single
+        /// <see cref="FormattedText"/>. <paramref name="textX"/> is where the line's text starts,
+        /// which the caller already knows - it used to rebuild that from the margin and the width
+        /// of the marker's replacement text, and so drew a list item's words short of the column
+        /// the same item without an image is drawn on.
+        /// </summary>
         private void DrawVisualLineWithImages(DrawingContext dc, VisualLine vl,
             string blockText, ParsedBlock parsed, BlockVisualMap map,
-            double y, double fontSize, Typeface baseTypeface)
+            double y, double fontSize, Typeface baseTypeface, double textX)
         {
             if (map.Images == null) return;
 
-            double x = DocsCanvas._padding;
+            double x = textX;
             double screenY = y;
             double textLineH = _rendering.Measure.GetLineHeight(vl.BlockKind);
             double totalLineH = vl.OverrideHeight > textLineH ? vl.OverrideHeight : textLineH;
@@ -1298,7 +1540,6 @@ public partial class DocsCanvas
                         DrawListBullet(dc, new AbsoluteX(spacing.MarkerStartX), new AbsoluteY(screenY),
                             parsed.Kind, parsed.ListNestingLevel);
                     }
-                    x += _rendering.Measure.MeasureReplacementPrefix(map.ReplacementPrefix, map.PrefixMeasureKind);
                 }
                 else if (parsed.Kind == BlockKind.OrderedListItem)
                 {
@@ -1308,11 +1549,9 @@ public partial class DocsCanvas
                         DrawOrderedListNumber(dc, new AbsoluteX(spacing.MarkerRightX), new AbsoluteY(screenY),
                             map.ReplacementPrefix, fontSize, parsed.ListNestingLevel);
                     }
-                    x += _rendering.Measure.MeasureReplacementPrefix(map.ReplacementPrefix, map.PrefixMeasureKind);
                 }
                 else if (map.IsContinuationIndent)
                 {
-                    x += _rendering.Measure.MeasureReplacementPrefix(map.ReplacementPrefix, map.PrefixMeasureKind);
                 }
                 else
                 {
@@ -1320,7 +1559,6 @@ public partial class DocsCanvas
                         CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
                         TextMeasurer.NormalTypeface, fontSize, _rendering.Palette.Syntax, _rendering.Measure.DpiScale);
                     dc.DrawText(prefixFt, new Point(DocsCanvas._padding, screenY));
-                    x += _rendering.Measure.MeasureReplacementPrefix(map.ReplacementPrefix, map.PrefixMeasureKind);
                 }
             }
 
@@ -1531,7 +1769,7 @@ public partial class DocsCanvas
         }
 
         /// <summary>Tints the spans of one line that carry an inline colour background.</summary>
-        private void DrawInlineColorBackground(DrawingContext dc, VisualLine vl,
+        private void DrawInlineColorBackground(DrawingContext dc, int vlIndex, VisualLine vl,
             double y, double bgH)
         {
             if (_content.ParsedBlocks == null) return;
@@ -1582,17 +1820,8 @@ public partial class DocsCanvas
                 int rangeStart = Math.Max(cs.Start, vl.StartOffset);
                 int rangeEnd = Math.Min(csEnd, vlEnd);
 
-                double x1 = _rendering.MeasureRangeWidth(blockText, vl.StartOffset, rangeStart - vl.StartOffset,
-                    parsed.Runs, parsed.Kind, map);
-                double x2 = _rendering.MeasureRangeWidth(blockText, vl.StartOffset, rangeEnd - vl.StartOffset,
-                    parsed.Runs, parsed.Kind, map);
-
-                if (map?.ReplacementPrefix != null && vl.StartOffset == 0)
-                {
-                    double prefixW = _rendering.Measure.MeasureReplacementPrefix(map.ReplacementPrefix!, map.PrefixMeasureKind);
-                    x1 += prefixW;
-                    x2 += prefixW;
-                }
+                double x1 = _navigation.XInVisualLine(vlIndex, rangeStart);
+                double x2 = _navigation.XInVisualLine(vlIndex, rangeEnd);
 
                 double w = x2 - x1;
                 if (w <= 0) continue;
@@ -1610,7 +1839,7 @@ public partial class DocsCanvas
         /// state and changes without the content changing, so
         /// <see cref="DropLineVisualsForSelectionChange"/> drops the lines it moved across.
         /// </remarks>
-        private void DrawSelectionForLine(DrawingContext dc, VisualLine vl,
+        private void DrawSelectionForLine(DrawingContext dc, int vlIndex, VisualLine vl,
             double y, double bgH)
         {
             var rectSel = _docsCanvas.TryGetTableRectSelection();
@@ -1626,7 +1855,7 @@ public partial class DocsCanvas
 
             if (vl.Group != null)
             {
-                DrawJoinedSelection(dc, vl, y, bgH, sb, so, eb, eo);
+                DrawJoinedSelection(dc, vlIndex, vl, y, bgH, sb, so, eb, eo);
                 return;
             }
 
@@ -1641,37 +1870,8 @@ public partial class DocsCanvas
             int hlEnd = Document.ComparePositions(vl.BlockIndex, vlEnd, eb, eo) <= 0
                 ? vlEnd : eo;
 
-            var parsed = _content.ParsedBlocks![vl.BlockIndex];
-            string blockText = _doc.Document.GetBlockText(vl.BlockIndex);
-            var map = _visual.IsVisual ? _content.VisualMaps?[vl.BlockIndex] : null;
-
-            double x1, x2;
-            if (_visual.IsVisual && parsed.Table != null && parsed.TableRow != null)
-            {
-                if (_table.TableColumnWidths.TryGetValue(parsed.Table, out var colWidths))
-                {
-                    x1 = _table.TableRenderer.CursorXInTableRow(vl.BlockIndex, parsed, colWidths, hlStart);
-                    x2 = _table.TableRenderer.CursorXInTableRow(vl.BlockIndex, parsed, colWidths, hlEnd);
-                }
-                else
-                {
-                    x1 = 0; x2 = 0;
-                }
-            }
-            else
-            {
-                x1 = _rendering.MeasureRangeWidth(blockText, vl.StartOffset, hlStart - vl.StartOffset,
-                    parsed.Runs, parsed.Kind, map);
-                x2 = _rendering.MeasureRangeWidth(blockText, vl.StartOffset, hlEnd - vl.StartOffset,
-                    parsed.Runs, parsed.Kind, map);
-
-                if (map != null && map.ReplacementPrefix != null && vl.StartOffset == 0)
-                {
-                    double prefixW = _rendering.Measure.MeasureReplacementPrefix(map.ReplacementPrefix!, map.PrefixMeasureKind);
-                    x1 += prefixW;
-                    x2 += prefixW;
-                }
-            }
+            double x1 = _navigation.XInVisualLine(vlIndex, hlStart);
+            double x2 = _navigation.XInVisualLine(vlIndex, hlEnd);
 
             bool selectionContinues = Document.ComparePositions(vl.BlockIndex, vlEnd, eb, eo) < 0;
             if (selectionContinues && x2 - x1 < 4)
@@ -1705,7 +1905,7 @@ public partial class DocsCanvas
                 new Rect(DocsCanvas._padding + xStart, y, xEnd - xStart, bgH));
         }
 
-        private void DrawJoinedSelection(DrawingContext dc, VisualLine vl,
+        private void DrawJoinedSelection(DrawingContext dc, int vlIndex, VisualLine vl,
             double y, double lineH,
             int sb, int so, int eb, int eo)
         {
@@ -1725,8 +1925,8 @@ public partial class DocsCanvas
             int hlStart = Math.Max(vlStart, selStartJoined);
             int hlEnd = Math.Min(vlEnd, selEndJoined);
 
-            double x1 = _rendering.MeasureJoinedRange(group, vlStart, hlStart - vlStart);
-            double x2 = _rendering.MeasureJoinedRange(group, vlStart, hlEnd - vlStart);
+            double x1 = _navigation.XInVisualLine(vlIndex, hlStart);
+            double x2 = _navigation.XInVisualLine(vlIndex, hlEnd);
 
             bool selectionContinues = vlEnd < selEndJoined;
             if (selectionContinues && x2 - x1 < 4)

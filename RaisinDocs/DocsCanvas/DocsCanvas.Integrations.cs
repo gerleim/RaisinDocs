@@ -29,9 +29,7 @@ public partial class DocsCanvas
             (IRenderingServices)this,
             (ILayoutDataServices)this,
             (IScrollServices)this,
-            (IParsedContentServices)this,
-            (IVisualModeServices)this,
-            (ITableServices)this);
+            (INavigationServices)this);
 
     internal void OpenFind(bool showReplace)
     {
@@ -171,7 +169,6 @@ public partial class DocsCanvas
             (IRenderingServices)this,
             (ILayoutDataServices)this,
             (IParsedContentServices)this,
-            (ITableServices)this,
             (INavigationServices)this,
             (IVisualModeServices)this,
             (IScrollServices)this);

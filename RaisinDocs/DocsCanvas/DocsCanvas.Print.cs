@@ -35,6 +35,37 @@ partial class DocsCanvas
     /// </summary>
     internal double TestRenderedJoinedLineWidth(int vi)
         => _renderingContext.BuildJoinedLineText(_visualLines[vi])?.Width ?? 0;
+    /// <summary>The selection rectangle a visual line paints, in the line's own coordinates.</summary>
+    internal Rect? TestSelectionRect(int vi) => _renderingContext.TestLineRectPaintedWith(vi, _palette.Selection);
+
+    /// <summary>The search-match rectangle a visual line paints, current match or not.</summary>
+    internal Rect? TestSearchMatchRect(int vi)
+        => _renderingContext.TestLineRectPaintedWith(vi, _palette.CurrentSearchMatch)
+           ?? _renderingContext.TestLineRectPaintedWith(vi, _palette.SearchMatch);
+
+    /// <summary>Every X a visual line draws glyphs at, as the renderer draws them.</summary>
+    internal List<double> TestLineGlyphOriginXs(int vi) => _renderingContext.TestLineGlyphOriginXs(vi);
+
+    /// <summary>The left edge of every character a visual line draws, from the real glyph runs.</summary>
+    internal List<double> TestLineGlyphLeftEdges(int vi) => _renderingContext.TestLineGlyphLeftEdges(vi);
+
+    /// <summary>
+    /// Where the caret and the highlights place each visible offset of a visual line, in the
+    /// same order <see cref="TestLineGlyphLeftEdges"/> lists the glyphs.
+    /// </summary>
+    internal List<(int Offset, double X)> TestLineVisibleOffsetXs(int vi)
+    {
+        var result = new List<(int, double)>();
+        var vl = _visualLines[vi];
+        var map = vl.Group != null ? vl.Group.JoinedMap : IsVisual ? _visualMaps?[vl.BlockIndex] : null;
+        for (int o = vl.StartOffset; o < vl.StartOffset + vl.Length; o++)
+        {
+            if (map != null && map.IsHidden(o)) continue;
+            result.Add((o, _padding + _navigationEngine.XInVisualLine(vi, o)));
+        }
+        return result;
+    }
+
     internal List<VisualLine> TestVisualLines => _visualLines;
     internal TextMeasurer TestMeasure => _measure;
 

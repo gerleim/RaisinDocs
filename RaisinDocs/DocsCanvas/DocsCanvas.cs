@@ -1331,8 +1331,8 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider, IDocsC
     internal int HitTestInVisualLineInternal(int vlIndex, double x)
         => _navigationEngine.HitTestInVisualLine(vlIndex, x);
 
-    private int HitTestInJoinedLine(VisualLine vl, double x)
-        => _navigationEngine.HitTestInJoinedLine(vl, x);
+    private int HitTestInJoinedLine(int vlIndex, VisualLine vl, double x)
+        => _navigationEngine.HitTestInJoinedLine(vlIndex, vl, x);
 
     internal int HitTestVisualLine(double y) => _navigationEngine.HitTestVisualLine(y);
 

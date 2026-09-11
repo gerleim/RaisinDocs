@@ -107,16 +107,41 @@ public partial class DocsCanvas
     internal double CursorXInVisualLine(int vlIndex)
     {
         var vl = _layout.VisualLines[vlIndex];
+        int offset = vl.Group != null
+            ? vl.Group.SourceToJoined(_doc.Document.CursorBlock, _doc.Document.CursorOffset)
+            : _doc.Document.CursorOffset;
+
+        return XInVisualLine(vlIndex, offset);
+    }
+
+    /// <summary>
+    /// The X of <paramref name="offset"/> on visual line <paramref name="vlIndex"/>, relative to
+    /// the left padding - so the thing drawn there goes at <c>_padding + x</c>. For a line in a
+    /// joined paragraph group the offset is in the group's joined text; otherwise it is an offset
+    /// in the line's own block.
+    /// </summary>
+    /// <remarks>
+    /// The one place that answers this question. The caret, both ends of the selection, the search
+    /// highlights and the spelling squiggles all come through here, because anything that measures
+    /// the same span its own way ends up drawing beside the text rather than over it: the earlier
+    /// highlight code measured from the left margin and added the width of the list marker's
+    /// replacement text, which is not the marker column the text is actually laid out on, and is
+    /// not there at all on a wrapped line. Within the line the positions come off the glyphs WPF
+    /// actually drew, because summed advance widths miss kerning.
+    /// </remarks>
+    internal double XInVisualLine(int vlIndex, int offset)
+    {
+        var vl = _layout.VisualLines[vlIndex];
 
         if (vl.Group != null)
         {
-            int joinedOffset = vl.Group.SourceToJoined(_doc.Document.CursorBlock, _doc.Document.CursorOffset);
-            int localOffset = Math.Clamp(joinedOffset - vl.StartOffset, 0, vl.Length);
+            int localOffset = Math.Clamp(offset - vl.StartOffset, 0, vl.Length);
             if (localOffset == 0) return 0;
+            if (_rendering.LaidOutX(vlIndex, offset) is { } joinedX) return joinedX;
             return _rendering.MeasureJoinedRange(vl.Group, vl.StartOffset, localOffset);
         }
 
-        int localOff = Math.Clamp(_doc.Document.CursorOffset - vl.StartOffset, 0, vl.Length);
+        int localOff = Math.Clamp(offset - vl.StartOffset, 0, vl.Length);
         var map = _visual.IsVisual ? _visual.VisualMaps?[vl.BlockIndex] : null;
 
         var parsed = _content.ParsedBlocks![vl.BlockIndex];
@@ -127,13 +152,18 @@ public partial class DocsCanvas
         }
 
         string blockText = _doc.GetBlockText(vl.BlockIndex);
-        double x = _layout.GetTextStartXForVisualLine(vl);
 
-        // Subtract padding since we're returning cursor x relative to control left edge
-        // (ContentStartX from cache already accounts for ReplacementPrefix width)
-        x -= DocsCanvas._padding;
+        // The text column the line is laid out on: the marker column for a list item, the
+        // indent for a blockquote or a nested block, and the same on the block's wrapped lines
+        // as on its first. Relative to the control's left edge, so drop the padding back off.
+        double x = _layout.GetTextStartXForVisualLine(vl, vlIndex) - DocsCanvas._padding;
 
         if (localOff == 0) return x;
+
+        // Off the glyphs WPF drew, whenever the line is drawn as one run of text. The sums below
+        // are what is left for the lines that are not - a line carrying an image.
+        if (_rendering.LaidOutX(vlIndex, vl.StartOffset + localOff) is { } laidOutX)
+            return x + laidOutX;
 
         if (map == null)
         {
@@ -196,7 +226,7 @@ public partial class DocsCanvas
         // Joined paragraph groups have their own text/parse/map and their offsets are
         // relative to the joined text, not to the source block.
         if (vl.Group != null)
-            return HitTestInJoinedLine(vl, clickX);
+            return HitTestInJoinedLine(vlIndex, vl, clickX);
 
         var parsed = _content.ParsedBlocks![vl.BlockIndex];
 
@@ -221,6 +251,7 @@ public partial class DocsCanvas
         // Measure x position for each visible character and find closest to offsetFromTextStart
         // Start at 0 since offsetFromTextStart is already relative to where text starts
         double accum = 0;
+        bool laidOut = _rendering.LaidOutX(vlIndex, vl.StartOffset) != null;
 
         int runIdx = 0;
         double closestDist = double.MaxValue;
@@ -245,6 +276,14 @@ public partial class DocsCanvas
             double charW = _rendering.Measure.MeasureCharWidth(blockText[i], parsed.Kind, style);
             double charEnd = accum + charW;
 
+            // Where the glyph really is - the same stops the caret is drawn at - so a click lands
+            // on the character under the pointer rather than one kerned pair to the side of it.
+            if (laidOut)
+            {
+                charStart = _rendering.LaidOutX(vlIndex, i) ?? charStart;
+                charEnd = _rendering.LaidOutX(vlIndex, i + 1) ?? charEnd;
+            }
+
             // Check if click is closer to this char's start or end
             double distToStart = Math.Abs(offsetFromTextStart - charStart);
             double distToEnd = Math.Abs(offsetFromTextStart - charEnd);
@@ -268,7 +307,7 @@ public partial class DocsCanvas
         if (vl.Length == 0) return vl.StartOffset;
 
         if (vl.Group != null)
-            return HitTestInJoinedLine(vl, x);
+            return HitTestInJoinedLine(vlIndex, vl, x);
 
         var parsed = _content.ParsedBlocks![vl.BlockIndex];
         if (_visual.IsVisual && parsed.Table != null && parsed.TableRow != null
@@ -292,6 +331,10 @@ public partial class DocsCanvas
             accum = prefixW;
         }
 
+        // Source mode only: in visual mode this measures from the margin plus the prefix, which
+        // is not the column the laid-out stops are relative to.
+        bool laidOut = map == null && _rendering.LaidOutX(vlIndex, vl.StartOffset) != null;
+
         int runIdx = 0;
         for (int i = 0; i < vl.Length; i++)
         {
@@ -311,6 +354,14 @@ public partial class DocsCanvas
             }
             var style = TextMeasurer.GetStyleAtOffset(parsed.Runs, offset, ref runIdx);
             double charW = _rendering.Measure.MeasureCharWidth(blockText[offset], parsed.Kind, style);
+            if (laidOut)
+            {
+                double start = _rendering.LaidOutX(vlIndex, offset) ?? accum;
+                double end = _rendering.LaidOutX(vlIndex, offset + 1) ?? accum + charW;
+                if (x < (start + end) / 2) return offset;
+                accum = end;
+                continue;
+            }
             if (x < accum + charW / 2)
             {
                 return offset;
@@ -320,12 +371,13 @@ public partial class DocsCanvas
         return vl.StartOffset + vl.Length;
     }
 
-    internal int HitTestInJoinedLine(VisualLine vl, double x)
+    internal int HitTestInJoinedLine(int vlIndex, VisualLine vl, double x)
     {
         var group = vl.Group!;
         var softBreaks = new HashSet<int>(group.SoftBreakOffsets);
         double accum = 0;
         int runIdx = 0;
+        bool laidOut = _rendering.LaidOutX(vlIndex, vl.StartOffset) != null;
 
         for (int i = 0; i < vl.Length; i++)
         {
@@ -350,6 +402,16 @@ public partial class DocsCanvas
             double testWidth = charW;
             if (softBreaks.Contains(offset) && group.JoinedText[offset] == '¶')
                 testWidth += _rendering.Measure.MeasureCharWidth(' ', BlockKind.Paragraph, style);
+
+            if (laidOut)
+            {
+                // The next offset's stop already sits past a soft break's visual space.
+                double start = _rendering.LaidOutX(vlIndex, offset) ?? accum;
+                double end = _rendering.LaidOutX(vlIndex, offset + 1) ?? accum + testWidth;
+                if (x < (start + end) / 2) return offset;
+                accum = end;
+                continue;
+            }
 
             // Check if click is in this character's area
             if (x < accum + testWidth / 2)
