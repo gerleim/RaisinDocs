@@ -1829,50 +1829,6 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider, IDocsC
             ft.SetForegroundBrush(_palette.Syntax, localStart, localEnd - localStart);
     }
 
-    private void DrawCodeBlockBackgrounds(DrawingContext dc, double effectiveScroll,
-        double viewTop, double viewBottom)
-    {
-        double contentWidth = ActualWidth;
-
-        for (int i = 0; i < _visualLines.Count; i++)
-        {
-            var vl = _visualLines[i];
-            if (vl.BlockKind is not BlockKind.FencedCodeLine and not BlockKind.IndentedCodeLine) continue;
-
-            double lineH = _measure.GetLineHeight(vl.BlockKind);
-            double lineY = _lineYPositions[i];
-            if (lineY + lineH < viewTop) continue;
-            if (lineY > viewBottom) break;
-
-            dc.DrawRectangle(_palette.CodeBackground, null,
-                new Rect(0, lineY - effectiveScroll, contentWidth, lineH));
-        }
-    }
-
-    private void DrawColorBlockBackgrounds(DrawingContext dc, double effectiveScroll,
-        double viewTop, double viewBottom)
-    {
-        if (_parsedBlocks == null) return;
-        double contentWidth = ActualWidth;
-
-        for (int i = 0; i < _visualLines.Count; i++)
-        {
-            var vl = _visualLines[i];
-            if (vl.BlockIndex >= _parsedBlocks.Count) continue;
-            var parsed = _parsedBlocks[vl.BlockIndex];
-            if (parsed.Kind is BlockKind.FencedCodeLine or BlockKind.IndentedCodeLine) continue;
-            if (parsed.BlockColor?.Background is not { } bg) continue;
-
-            double lineH = GetEffectiveLineHeight(vl);
-            double lineY = _lineYPositions[i];
-            if (lineY + lineH < viewTop) continue;
-            if (lineY > viewBottom) break;
-
-            dc.DrawRectangle(GetCachedBrush(40, bg.R, bg.G, bg.B), null,
-                new Rect(0, lineY - effectiveScroll, contentWidth, lineH));
-        }
-    }
-
     internal double MeasureRangeWidth(string text, int start, int length,
         IReadOnlyList<StyledRun> runs, BlockKind blockKind, BlockVisualMap? map)
     {
