@@ -114,7 +114,7 @@ Where cost could creep in:
 
 1. **Tables that fit are no slower.** `ComputeAllTableColumnWidths` records which tables shrank (tier 2/3). Rows of fitted tables get `TableLayout = null` and no `OverrideHeight`, so layout, heights and pre-render cost are unchanged. They do go through `BuildCellLine` like wrapped rows (step 4), and the cache below makes that cheaper per frame than today's `CursorXInTableRow`.
 2. **No FormattedText per frame for the caret.** Today `CursorXInTableRow` builds a FormattedText and highlight geometry every render while the caret is in a table; `BuildCaretStops` would add a DrawingGroup and glyph walk on top. So:
-   - **Owner:** TableRenderer holds the cache next to `BuildCellLine`. RenderingContext drives its lifetime from `EnsureLineFtCache` (reset on `RenderVersion`) and `TrimLineFtCache` (same window, RenderingContext.cs:589).
+   - **Owner:** TableRenderer holds the cache next to `BuildCellLine`. RenderingContext drives its lifetime from `EnsureLineFtCache` (reset when `RenderVersion` or `LayoutVersion` changes, see the key below) and `TrimLineFtCache` (same window, RenderingContext.cs:589).
    - **Per visual line:** for each cell and sub-line, the FormattedText, `AlignX`, and `Stops`.
    - **Keyed on `RenderVersion` and `LayoutVersion`.** The print paginator runs `canvas.ComputeLayoutCore(_contentWidth)` over the canvas's own `_visualLines` and column widths, then only sets `_layoutDirty` (Print.cs:183-189); `RenderVersion` does not move. Without `LayoutVersion` in the key, a query before the next arrange would store print-width entries under the screen's `RenderVersion`, and they would outlive the restore. `ComputeLayoutCore` bumps `LayoutVersion` (LayoutEngine.cs:528), so the cost is one rebuild after printing.
    - **Filled by the screen path only.** `DrawTableRow` gets an optional cache-slot argument that RenderingContext.cs:942 passes for line i. Print.cs:443 passes none, so its print widths and its own line indexes never reach the cache, and Print.cs itself is unchanged.
@@ -138,7 +138,7 @@ Where cost could creep in:
   - **Conditions:** quiet machine, `dotnet build-server shutdown` first, Release both sides. The capture drives the wheel — ask before running it.
 
 ## Tests: new `Tests/RaisinDocs.Tests.UI/TableCellWrapTests.cs`
-- **Hooks:** `TestCursorY`, `TestCaretHeight`, `TestTableRowLineCount(vi)`, `TestTableColumnWidths(block)`, and list forms of `TestSelectionRects` / `TestSearchMatchRects`.
+- **Hooks:** `TestCursorY`, `TestCaretHeight`, `TestCursorXNoLayout` (`CursorXInVisualLine` without the `ComputeLayout()` that `TestCursorX` runs first, DocsCanvas.cs:656), `TestTableRowLineCount(vi)`, `TestTableColumnWidths(block)`, and list forms of `TestSelectionRects` / `TestSearchMatchRects`.
 - **Setup:** explicit width, as in `SelectionHighlightAlignmentTests.MakeCanvasAt` (:187-198).
 
 Cases:
@@ -158,7 +158,10 @@ Cases:
 14. **Print path:** `TestComputeLayoutAtWidth(narrow)` gives wrapped rows.
 15. **Regression:** TableCursorTests, TableEditingTests, SelectionHighlightAlignmentTests and VerticalGoalColumnTests pass. No test calls `CursorXInTableRow`, but the comments at TableCursorTests.cs:95 (char-by-char advances, no kerning) and :105 name it and are updated. That file has uncommitted changes from the other session, so the line numbers may move.
 16. **Sub-line clamps:** Up from the row below into a row whose cell under X is shorter than the row lands on that cell's last line; a click below a short cell's text does the same.
-17. **Print leaves the cache alone:** build the print layout at a narrow width, query the caret X in a table row *before* the next arrange (so the miss path runs against print lines), then arrange and check the screen caret X still matches its pre-print value.
+17. **Print leaves the cache alone:** put the caret in a column whose X moves when the table shrinks.
+    - Record `TestCursorX` at screen width.
+    - `TestComputeLayoutAtWidth(narrow)`, then read `TestCursorXNoLayout`. It must differ from the screen value, which proves the miss path ran against the print lines. `TestCursorX` can't be used here: its `ComputeLayout()` sees `_layoutDirty` and lays out at screen width before querying, so the test would pass with or without `LayoutVersion` in the key.
+    - Read `TestCursorX` again. It must match the recorded screen value. Without `LayoutVersion` in the key it returns the print-width entry, so the test fails.
 18. **Empty cell** in a wrapped row: caret, click and Up/Down work on it.
 
 ## Verification
