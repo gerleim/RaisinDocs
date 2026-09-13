@@ -861,7 +861,42 @@ public class MinimapScrollbar : FrameworkElement, IMinimapDataProvider
         }
 
         _hoverY = y;
+        LogViewportBand();
         InvalidateVisual();
+    }
+
+    private (double Top, double Height) _loggedBand = (double.NaN, double.NaN);
+
+    /// <summary>
+    /// Writes the viewport box's screen rectangle to the scroll log, as "minimap band X,Y WxH",
+    /// when the pointer is over the minimap and diagnostics are on.
+    /// </summary>
+    /// <remarks>
+    /// For the scroll capture. A press inside the box drags it and one outside jumps the view, so
+    /// a drag started at a fixed height on the minimap was a drag only when the view happened to be
+    /// there - and measured a click whenever it was not, which looked like a successful run. The
+    /// harness hovers first and presses where this says the box is.
+    ///
+    /// On hover rather than on render, so nothing is written during the gestures being measured;
+    /// and only when the box has moved, so resting the pointer on the minimap writes one line.
+    /// </remarks>
+    private void LogViewportBand()
+    {
+        if (!ScrollDiag.Enabled || _vpHeight <= 0) return;
+        if (_loggedBand.Top == _vpTop && _loggedBand.Height == _vpHeight) return;
+
+        try
+        {
+            var topLeft = PointToScreen(new Point(0, _vpTop));
+            var bottomRight = PointToScreen(new Point(ActualWidth, _vpTop + _vpHeight));
+            ScrollDiag.Log($"minimap band {topLeft.X:F0},{topLeft.Y:F0} " +
+                $"{bottomRight.X - topLeft.X:F0}x{bottomRight.Y - topLeft.Y:F0}");
+            _loggedBand = (_vpTop, _vpHeight);
+        }
+        catch (InvalidOperationException)
+        {
+            // Not connected to a presentation source.
+        }
     }
 
     protected override void OnMouseLeftButtonDown(MouseButtonEventArgs e)

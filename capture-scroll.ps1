@@ -300,21 +300,25 @@ function Invoke-ScrollSweep {
             }
 
             if ($minimap) {
-                # Down the minimap and back. Alternating keeps the view off the ends of the
-                # document, where a drag clamps and reveals nothing.
-                $x  = $minimap.X + [int]($minimap.Width / 2)
-                $y1 = $minimap.Y + [int]($minimap.Height * 0.20)
-                $y2 = $minimap.Y + [int]($minimap.Height * 0.80)
-                $down = ($r % 2) -eq 1
-                Write-Host ("  pass {0}/{1}  {2,-10}    drag {3}" -f $r, $Repeats, 'minimap', $(if ($down) { 'down' } else { 'up' }))
-                if ($down) {
+                # Press on the viewport box itself, wherever the wheel gestures left it. A press
+                # outside the box jumps the view there instead of dragging, and the drag used to
+                # start at a fixed 20% or 80% of the minimap - a drag only when the view happened
+                # to be under that point, a click that still looked like a successful run when not.
+                # Half the minimap's height, towards whichever end has the room, so every drag
+                # covers the same distance and none clamps against an end of the document.
+                $x = $minimap.X + [int]($minimap.Width / 2)
+                $band = Get-MinimapBand ([System.Drawing.Point]::new($x, $minimap.Y + [int]($minimap.Height / 2)))
+                if ($band) {
+                    $from = $band.Y + [int]($band.Height / 2)
+                    $down = $from -lt ($minimap.Y + $minimap.Height / 2)
+                    $to = if ($down) { $from + [int]($minimap.Height / 2) } else { $from - [int]($minimap.Height / 2) }
+                    Write-Host ("  pass {0}/{1}  {2,-10}    drag {3}" -f $r, $Repeats, 'minimap', $(if ($down) { 'down' } else { 'up' }))
                     [Raisin.WPF.Automation.SyntheticInput]::Drag(
-                        [System.Drawing.Point]::new($x, $y1), [System.Drawing.Point]::new($x, $y2), 40, 12)
+                        [System.Drawing.Point]::new($x, $from), [System.Drawing.Point]::new($x, $to), 40, 12)
+                    Wait-Cancellable 1200
                 } else {
-                    [Raisin.WPF.Automation.SyntheticInput]::Drag(
-                        [System.Drawing.Point]::new($x, $y2), [System.Drawing.Point]::new($x, $y1), 40, 12)
+                    Write-Warning "pass ${r}: the minimap reported no viewport box - skipping the drag rather than clicking"
                 }
-                Wait-Cancellable 1200
                 $guard.Check("minimap drag pass $r")
             }
         }
@@ -360,6 +364,37 @@ function Get-MinimapRect {
         return $null
     }
     $m = [regex]::Match($line.Line, 'minimap rect (-?\d+),(-?\d+) (\d+)x(\d+)')
+    [pscustomobject]@{
+        X      = [int]$m.Groups[1].Value
+        Y      = [int]$m.Groups[2].Value
+        Width  = [int]$m.Groups[3].Value
+        Height = [int]$m.Groups[4].Value
+    }
+}
+
+<##
+ # Where the minimap's viewport box is on screen now.
+ #
+ # Hovers the minimap, which makes it write "minimap band X,Y WxH" to the scroll log, and reads
+ # back the newest such line this run has written. The minimap writes one only when the box has
+ # moved, so the newest line is the current position even when the hover added none. Null when
+ # the run has none at all, so the caller skips the drag rather than pressing somewhere that turns
+ # out to be a click.
+ #>
+function Get-MinimapBand([System.Drawing.Point] $hoverAt) {
+    $log = "$env:LOCALAPPDATA\RaisinDocs\scroll.log"
+
+    # Two positions, so the minimap sees a move even if the pointer was already resting there.
+    [Raisin.WPF.Automation.SyntheticInput]::CursorPosition = [System.Drawing.Point]::new($hoverAt.X, $hoverAt.Y - 4)
+    Start-Sleep -Milliseconds 80
+    [Raisin.WPF.Automation.SyntheticInput]::CursorPosition = $hoverAt
+    Start-Sleep -Milliseconds 300
+
+    if (-not (Test-Path $log)) { return $null }
+    $line = Get-Content $log | Select-Object -Skip $script:logStart |
+        Select-String -Pattern 'minimap band (-?\d+),(-?\d+) (\d+)x(\d+)' | Select-Object -Last 1
+    if (-not $line) { return $null }
+    $m = $line.Matches[0]
     [pscustomobject]@{
         X      = [int]$m.Groups[1].Value
         Y      = [int]$m.Groups[2].Value
