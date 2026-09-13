@@ -335,8 +335,12 @@ public class MinimapScrollbar : FrameworkElement, IMinimapDataProvider
                 _tableCells.Clear();
                 if (Canvas!.GetMinimapTableRowInfo(lineIdx, _tableCells,
                     out bool isHeader, out double tableWidth,
-                    out var tableColorSpans))
+                    out var tableColorSpans, out int rowLines))
                 {
+                    // A row whose cells wrap is several lines of text tall; each is drawn at a line's
+                    // height, or the row's glyphs would be scaled up to fill it.
+                    double textLineH = lineH / Math.Max(1, rowLines);
+                    double textScale = textLineH / CharHeight;
                     double propBaseAdvance = s_propCellW * 2 * (16.0 / 24.0) * xScale;
                     int bgPxEnd = Math.Min(w, (int)(1 + tableWidth * xScale));
 
@@ -354,7 +358,7 @@ public class MinimapScrollbar : FrameworkElement, IMinimapDataProvider
                     foreach (var cell in _tableCells)
                     {
                         RenderTextGlyphs(cell.Text, 1 + cell.XOffset * xScale,
-                            lineY, scale, propBaseAdvance, false,
+                            lineY + cell.LineIndex * textLineH, textScale, propBaseAdvance, false,
                             fg.B, fg.G, fg.R, tableColorSpans, cell.RawStart,
                             py0, pyEnd, w, h);
                     }

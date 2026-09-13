@@ -692,6 +692,10 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider, IDocsC
     internal double TestCursorXNoLayout => _padding + CursorXInVisualLine(CursorToVisualLineIndex());
 
     internal int TestTableCellLineBuilds => _tableRenderer.CellLineBuilds;
+
+    internal int TestLineVisualBuilds => _renderingContext.LineVisualBuilds;
+
+    internal bool TestHasLineVisual(int vi) => _renderingContext.TestHasLineVisual(vi);
     internal record struct VisualBlockInfo(string RawText, string VisualText, BlockKind Kind, bool CreateVisualSeparation = false);
 
     internal string TestGetBlockText(int block) => _doc.GetBlockText(block);

@@ -555,6 +555,99 @@ public class TableCellWrapTests
                 $"column {c}'s text is selected, not a sliver past the last pipe");
     }
 
+    // --- 12. The minimap draws a wrapped row as its lines ---
+
+    [StaFact]
+    public void MinimapRowInfo_CarriesEachLineOfEachCell_AndTheRowsLineCount()
+    {
+        var canvas = MakeCanvasAt(WrappedRowTable(), WrapWidth);
+        int vi = TableRows(canvas)[1];
+        var layout = canvas.TestVisualLines[vi].TableLayout!;
+
+        var cells = new List<MinimapTableCell>();
+        canvas.GetMinimapTableRowInfo(vi, cells, out _, out _, out _, out int lineCount).Should().BeTrue();
+
+        lineCount.Should().Be(layout.LineCount);
+        cells.Count(c => c.XOffset > cells[0].XOffset).Should().Be(layout.CellLineCount(1), "one entry per line of the wrapped cell");
+        cells.Select(c => c.LineIndex).Max().Should().Be(layout.LineCount - 1);
+        cells.Where(c => c.LineIndex > 0).Should().OnlyContain(c => layout.LineStarts[1].Contains(c.RawStart));
+        canvas.GetMinimapLineImage(vi).Should().BeNull("a tall table row is not an image line");
+    }
+
+    // --- 14. The layout print takes wraps at the page width ---
+
+    [StaFact]
+    public void LayoutAtAPageWidth_WrapsATableTheScreenFits()
+    {
+        string md = $"| Key | Value |\n|---|---|\n| k | {LongProse(12)} |";
+        var canvas = MakeCanvasAt(md, 800);
+        int vi = TableRows(canvas)[1];
+        canvas.TestVisualLines[vi].TableLayout.Should().BeNull();
+
+        canvas.TestComputeLayoutAtWidth(250);
+
+        var printed = canvas.TestVisualLines[vi];
+        printed.TableLayout.Should().NotBeNull();
+        printed.OverrideHeight.Should().BeApproximately(printed.TableLayout!.LineCount * LineHeight(canvas, vi), Eps,
+            "the paginator breaks pages by this height, and the header tint is drawn to it");
+    }
+
+    // --- Step 10. Scrolling must not cost more ---
+
+    [StaFact]
+    public void PreRender_CountsATallRowAsItsLines_AgainstTheBudget()
+    {
+        var sb = new System.Text.StringBuilder("| Element | Contents |\n|---|---|\n");
+        for (int r = 0; r < 60; r++) sb.Append($"| Row{r} | {LongProse(60)} |\n");
+        var canvas = MakeCanvasAt(sb.ToString(), WrapWidth);
+        var lines = canvas.TestVisualLines;
+        int maxCost = lines.Max(l => l.TableLayout?.LineCount ?? 1);
+        maxCost.Should().BeGreaterThan(3);
+
+        canvas.SetScrollOffsetDirect(0);
+        canvas.TestUpdateContentLayer(CanvasHeight);   // builds everything visible, and a first slice of the margin
+
+        for (int frame = 0; frame < 5; frame++)
+        {
+            var before = Enumerable.Range(0, lines.Count).Where(canvas.TestHasLineVisual).ToHashSet();
+            canvas.TestUpdateContentLayer(CanvasHeight);
+            var built = Enumerable.Range(0, lines.Count).Where(i => canvas.TestHasLineVisual(i) && !before.Contains(i)).ToList();
+
+            int spent = built.Sum(i => Math.Max(1, lines[i].TableLayout?.LineCount ?? 1));
+            spent.Should().BeLessThanOrEqualTo(6 + maxCost - 1,
+                $"frame {frame} pre-rendered rows {string.Join(",", built)}: a budget of 6 lines may overrun only by the last row it started");
+        }
+    }
+
+    [StaFact]
+    public void Scrolling_WithinBuiltLines_BuildsNoLineVisual_AndNoCellLine_ForTheCaret()
+    {
+        var sb = new System.Text.StringBuilder("| Element | Contents |\n|---|---|\n");
+        for (int r = 0; r < 40; r++) sb.Append($"| Row{r} | {LongProse(40)} |\n");
+        var canvas = MakeCanvasAt(sb.ToString(), WrapWidth);
+        var row = canvas.TestVisualLines[TableRows(canvas)[1]];
+        canvas.TestSetCursor(row.BlockIndex, row.TableLayout!.LineStarts[1][1] + 3);
+
+        canvas.SetScrollOffsetDirect(0);
+        for (int frame = 0; frame < 200; frame++) canvas.TestUpdateContentLayer(CanvasHeight);
+        canvas.TestRenderOnce();
+        _ = canvas.TestCursorXNoLayout;
+
+        int visuals = canvas.TestLineVisualBuilds;
+        int cellLines = canvas.TestTableCellLineBuilds;
+
+        for (double y = 0; y <= 60; y += 3)
+        {
+            canvas.SetScrollOffsetDirect(y);
+            canvas.TestUpdateContentLayer(CanvasHeight);
+            canvas.TestRenderOnce();
+            _ = canvas.TestCursorXNoLayout;   // what a render asks while the caret is in a table
+        }
+
+        canvas.TestLineVisualBuilds.Should().Be(visuals, "every line the scroll reaches was already built");
+        canvas.TestTableCellLineBuilds.Should().Be(cellLines, "the caret's cell line comes from the cache on every frame");
+    }
+
     // --- 6. Alignment applies to each line of a cell ---
 
     [StaTheory]

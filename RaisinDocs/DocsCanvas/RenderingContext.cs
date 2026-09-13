@@ -130,12 +130,28 @@ public partial class DocsCanvas
             int budget = PreRenderBudget;
             for (int d = 1; d <= PreRenderMargin && budget > 0; d++)
             {
-                if (BuildLineVisual(lastVisible + d)) budget--;
-                if (budget > 0 && BuildLineVisual(firstVisible - d)) budget--;
+                if (BuildLineVisual(lastVisible + d)) budget -= BuildCost(lastVisible + d);
+                if (budget > 0 && BuildLineVisual(firstVisible - d)) budget -= BuildCost(firstVisible - d);
             }
 
             TrimLineVisuals(firstVisible, lastVisible);
         }
+
+        /// <summary>
+        /// What building line <paramref name="i"/> spends of the pre-render budget: its lines of
+        /// text. The budget counts lines so that no frame draws much more than a few, and a table
+        /// row whose cells wrap draws a line's worth of text per line it is tall.
+        /// </summary>
+        private int BuildCost(int i)
+            => i >= 0 && i < _layout.VisualLines.Count
+                ? Math.Max(1, _layout.VisualLines[i].TableLayout?.LineCount ?? 1)
+                : 1;
+
+        /// <summary>How many line visuals have been built - for tests that a scroll builds none.</summary>
+        internal int LineVisualBuilds { get; private set; }
+
+        internal bool TestHasLineVisual(int i)
+            => _lineVisuals != null && i >= 0 && i < _lineVisuals.Length && _lineVisuals[i] != null;
 
         /// <summary>
         /// Builds and positions the cached line visuals for the current scroll offset.
@@ -388,6 +404,7 @@ public partial class DocsCanvas
             if (_lineVisuals[i] != null) return false;
 
             var vl = _layout.VisualLines[i];
+            LineVisualBuilds++;
             long t0 = ScrollDiag.Enabled ? System.Diagnostics.Stopwatch.GetTimestamp() : 0;
             var dv = new DrawingVisual
             {

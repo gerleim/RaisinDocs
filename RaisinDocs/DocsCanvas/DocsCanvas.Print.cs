@@ -412,7 +412,8 @@ partial class DocsCanvas
 
                     if (tableStart >= first && tableStart <= last)
                     {
-                        double headerH = _canvas._measure.GetLineHeight(_lines[tableStart].BlockKind);
+                        // The row's own height, which is several lines when its cells wrap.
+                        double headerH = GetLineHeight(tableStart);
                         double headerY = _lineYs[tableStart] - effectiveScroll;
                         dc.DrawRectangle(_printPalette.TableHeaderBackground, null,
                             new Rect(_padding, headerY, tableWidth, headerH));

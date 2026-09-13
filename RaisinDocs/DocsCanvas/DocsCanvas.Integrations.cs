@@ -10,7 +10,8 @@ namespace RaisinDocs;
 /// Record structs for integration data.
 /// </summary>
 internal readonly record struct TocEntry(int BlockIndex, int HeadingLevel, string Text);
-internal readonly record struct MinimapTableCell(string Text, double XOffset, int RawStart);
+/// <param name="LineIndex">Which of the row's lines of text this piece of the cell is on.</param>
+internal readonly record struct MinimapTableCell(string Text, double XOffset, int RawStart, int LineIndex);
 
 /// <summary>
 /// Partial class containing Find/Replace, Table of Contents, Spell Check, and Minimap integrations.
@@ -279,6 +280,9 @@ public partial class DocsCanvas
             return null;
         var vl = _visualLines[index];
         if (vl.OverrideHeight <= 0) return null;
+        // A wrapped table row is tall because it holds several lines of text, not because it holds
+        // an image; treating an image in one of its cells as the line's picture would skip the text.
+        if (vl.TableLayout != null) return null;
 
         BlockVisualMap? map = null;
         if (vl.Group != null)
@@ -368,14 +372,19 @@ public partial class DocsCanvas
         colorSpans = parsed.ColorSpans;
     }
 
+    /// <param name="lineCount">
+    /// How many lines of text the row holds - more than one when its cells wrap, and each entry in
+    /// <paramref name="cells"/> then says which it is on.
+    /// </param>
     internal bool GetMinimapTableRowInfo(int index, List<MinimapTableCell> cells,
         out bool isHeader, out double tableWidth,
-        out IReadOnlyList<ColorSpan>? colorSpans)
+        out IReadOnlyList<ColorSpan>? colorSpans, out int lineCount)
     {
         cells.Clear();
         isHeader = false;
         tableWidth = 0;
         colorSpans = null;
+        lineCount = 1;
 
         if (!IsVisual || _visualLines == null || _parsedBlocks == null
             || index < 0 || index >= _visualLines.Count)
@@ -398,24 +407,31 @@ public partial class DocsCanvas
             ? _visualMaps[vl.BlockIndex]
             : null;
 
+        var layout = vl.TableLayout;
         double xOffset = 0;
         int cellCount = Math.Min(parsed.TableRow.Cells.Count, colWidths.Length);
         for (int c = 0; c < cellCount; c++)
         {
             var cell = parsed.TableRow.Cells[c];
             var (s, e) = cell.TrimContent(blockText);
+            int cellLines = layout != null && c < layout.CellCount ? layout.CellLineCount(c) : 1;
 
-            string cellText = map != null
-                ? map.BuildDisplayString(blockText, s, e - s)
-                : blockText.Substring(s, e - s);
+            for (int k = 0; k < cellLines; k++)
+            {
+                var (ls, le) = layout != null && c < layout.CellCount ? layout.GetLine(c, k) : (s, e);
+                string lineText = map != null
+                    ? map.BuildDisplayString(blockText, ls, le - ls)
+                    : blockText.Substring(ls, le - ls);
 
-            cells.Add(new MinimapTableCell(cellText, xOffset + _tableCellPadding, s));
+                cells.Add(new MinimapTableCell(lineText, xOffset + _tableCellPadding, ls, k));
+            }
             xOffset += colWidths[c];
         }
 
         isHeader = parsed.Kind == BlockKind.TableHeaderRow;
         tableWidth = xOffset;
         colorSpans = parsed.ColorSpans;
+        lineCount = layout?.LineCount ?? 1;
         return true;
     }
 
