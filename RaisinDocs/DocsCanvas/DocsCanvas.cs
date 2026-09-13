@@ -1369,7 +1369,16 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider, IDocsC
             ComputeLayout();
             // Before the render pass, not during it: building the cached line visuals adds
             // children, and the tree cannot be mutated while it is being rendered.
-            _renderingContext.UpdateContentLayer(finalSize.Height);
+            // Timed because it is where a line visual is built, which canvas-onrender never sees.
+            if (!ScrollDiag.Enabled)
+                _renderingContext.UpdateContentLayer(finalSize.Height);
+            else
+            {
+                long t0 = System.Diagnostics.Stopwatch.GetTimestamp();
+                _renderingContext.UpdateContentLayer(finalSize.Height);
+                ScrollDiag.Note("canvas-arrange",
+                    System.Diagnostics.Stopwatch.GetElapsedTime(t0).TotalMilliseconds);
+            }
         }
         return result;
     }

@@ -254,6 +254,9 @@ public partial class DocsCanvas
             }
         }
 
+        private bool IsTableRow(VisualLine vl)
+            => _visual.IsVisual && vl.BlockKind is BlockKind.TableHeaderRow or BlockKind.TableDataRow;
+
         private bool LineDrawsImage(VisualLine vl, string url)
         {
             var images = vl.Group != null
@@ -385,6 +388,7 @@ public partial class DocsCanvas
             if (_lineVisuals[i] != null) return false;
 
             var vl = _layout.VisualLines[i];
+            long t0 = ScrollDiag.Enabled ? System.Diagnostics.Stopwatch.GetTimestamp() : 0;
             var dv = new DrawingVisual
             {
                 // Rasterised once and composited thereafter. RenderAtScale has to follow
@@ -412,6 +416,12 @@ public partial class DocsCanvas
                 DrawLineContent(dc, i, vl, y);
             }
 
+            // Split by kind: a table row issues a DrawText per cell, and it is the line kind
+            // whose build cost changes when cells wrap. See design/Table Cell Wrapping.md.
+            if (ScrollDiag.Enabled)
+                ScrollDiag.Note(IsTableRow(vl) ? "line-build-table" : "line-build",
+                    System.Diagnostics.Stopwatch.GetElapsedTime(t0).TotalMilliseconds);
+
             _lineVisuals[i] = dv;
             _docsCanvas.ContentLayer.Children.Add(dv);
             if (_visualsHi < _visualsLo) { _visualsLo = _visualsHi = i; }
@@ -437,6 +447,22 @@ public partial class DocsCanvas
                 DrawLineContent(dc, i, _layout.VisualLines[i], 0);
 
             return FindRectPaintedWith(dv.Drawing, brush);
+        }
+
+        /// <summary>
+        /// Benchmark hook: draws one visual line into a throwaway visual, which is the UI-thread
+        /// part of building its cached visual. The rasterisation behind the cache is not in it.
+        /// </summary>
+        internal void TestDrawLineContent(int i)
+        {
+            if (i < 0 || i >= _layout.VisualLines.Count) return;
+
+            _rendering.Measure.EnsureMeasured(_docsCanvas);
+            EnsureLineFtCache(_layout.VisualLines.Count, _docsCanvas.RenderVersion);
+
+            var dv = new DrawingVisual();
+            using var dc = dv.RenderOpen();
+            DrawLineContent(dc, i, _layout.VisualLines[i], 0);
         }
 
         /// <summary>

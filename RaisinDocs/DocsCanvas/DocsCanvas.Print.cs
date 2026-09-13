@@ -69,6 +69,17 @@ partial class DocsCanvas
     internal List<VisualLine> TestVisualLines => _visualLines;
     internal TextMeasurer TestMeasure => _measure;
 
+    // Benchmark hooks: the UI-thread work of a scroll frame, one piece at a time, with no window.
+    // See Tests/RaisinDocs.Tests.UI/TableScrollBenchmark.cs.
+    internal void TestDrawLineContent(int vi) => _renderingContext.TestDrawLineContent(vi);
+    internal void TestUpdateContentLayer(double viewportHeight) => _renderingContext.UpdateContentLayer(viewportHeight);
+    internal void TestRenderOnce()
+    {
+        var dv = new DrawingVisual();
+        using var dc = dv.RenderOpen();
+        OnRenderCore(dc);
+    }
+
     internal void TestComputeLayoutAtWidth(double width)
     {
         _parsedBlocks ??= MarkdownParser.Parse(i => _doc.GetBlockText(i), _doc.BlockCount, _syntaxHighlighter);
