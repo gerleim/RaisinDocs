@@ -18,6 +18,16 @@ public partial class App : Application
     /// </summary>
     internal const string LayoutDiagSwitch = "--layout-diag";
 
+    /// <summary>Open in this edit mode for this run, whatever the saved settings say.</summary>
+    /// <remarks>
+    /// For the scroll capture, which has to know which renderer it is measuring: a restored
+    /// setting is whatever mode was last used. Not saved back - see MainWindow.SaveSession.
+    /// </remarks>
+    internal const string VisualSwitch = "--visual";
+    internal const string SourceSwitch = "--source";
+
+    internal static DocsCanvas.EditMode? EditModeOverride { get; private set; }
+
     protected override void OnStartup(StartupEventArgs e)
     {
         // Here rather than in a window's Loaded: the canvas wires its scroll counters up in
@@ -28,6 +38,10 @@ public partial class App : Application
                 DocsCanvas.ScrollDiagnostics = true;
             else if (string.Equals(arg, LayoutDiagSwitch, StringComparison.OrdinalIgnoreCase))
                 DocsCanvas.LayoutDiagnostics = true;
+            else if (string.Equals(arg, VisualSwitch, StringComparison.OrdinalIgnoreCase))
+                EditModeOverride = DocsCanvas.EditMode.Visual;
+            else if (string.Equals(arg, SourceSwitch, StringComparison.OrdinalIgnoreCase))
+                EditModeOverride = DocsCanvas.EditMode.Source;
         }
 
         base.OnStartup(e);

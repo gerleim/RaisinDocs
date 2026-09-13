@@ -38,6 +38,9 @@ public partial class MainWindow : Window
     /// </remarks>
     private bool _openedFromPath;
 
+    /// <summary>The edit mode the settings held before a --visual or --source override.</summary>
+    private DocsCanvas.EditMode _savedEditMode;
+
     private DocsEditorState _editorState = new()
     {
         Theme = DocsCanvas.EditorTheme.DarkBlue,
@@ -60,6 +63,10 @@ public partial class MainWindow : Window
             // started. The open tabs are a session: a file on the command line opens that file
             // instead of resuming it, and leaves the saved tab list for the next plain start.
             RestoreSettings();
+
+            _savedEditMode = _editorState.EditMode;
+            if (App.EditModeOverride is { } mode)
+                _editorState.EditMode = mode;
 
             if (path is not null)
             {
@@ -525,6 +532,11 @@ public partial class MainWindow : Window
 
         if (ActiveTab != null)
             state.EditorState = ActiveTab.Editor.GetState();
+
+        // A command-line mode is for that run. Saved only if it was changed away from during it,
+        // since that change is the user's own choice.
+        if (App.EditModeOverride is { } mode && state.EditorState is { } es && es.EditMode == mode)
+            es.EditMode = _savedEditMode;
 
         _sessionStore.Save(state);
     }

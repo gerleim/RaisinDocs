@@ -56,6 +56,14 @@
     Fill the chosen display's working area - the screen less the taskbar. The largest window the
     panel can hold, and the repeatable way to ask for it.
 
+.PARAMETER Mode
+    Source or Visual. Passed to the editor on every run, so the renderer being measured never
+    depends on whichever mode the saved settings last held. Source is the default because every
+    capture before this switch existed was taken in source mode: the editor ignored its settings
+    when given a file, and those settings defaulted to source. Anything about tables, images or
+    hidden markup has to be measured with -Mode Visual. The mode the editor actually ran in is
+    read back from its gesture log into the .meta file.
+
 .PARAMETER Size
     An explicit window size as WxH, for example 1920x1032, placed at the top-left of the chosen
     display's working area. Window height multiplies the per-frame work, because it sets how many
@@ -92,6 +100,7 @@ param(
     [switch] $Automated,
     [int]    $Repeats = 3,
     [string] $Monitor,
+    [ValidateSet('Source', 'Visual')] [string] $Mode = 'Source',
     [switch] $Maximise,
     [string] $Size
 )
@@ -373,7 +382,10 @@ Write-Host ""
 # --scroll-diag so the gesture log and the capture describe the same run.
 # Quoted: Start-Process joins an ArgumentList with spaces and quotes nothing, so a path with
 # a space in it arrives as several arguments and the editor opens the first word.
-$editorArgs = @('--scroll-diag')
+$editorArgs = @('--scroll-diag', "--$($Mode.ToLowerInvariant())")
+# Where this run's gesture lines start, so the mode check below reads only them.
+$scrollLog = "$env:LOCALAPPDATA\RaisinDocs\scroll.log"
+$logStart = if (Test-Path $scrollLog) { @(Get-Content $scrollLog).Count } else { 0 }
 if ($File) { $editorArgs += '"{0}"' -f (Resolve-Path $File).Path }
 $app = Start-Process -FilePath (Resolve-Path $editor).Path -ArgumentList $editorArgs -PassThru
 
@@ -502,6 +514,19 @@ if ((Test-Path $csv) -and (Get-Item $csv).Length -gt 0) {
     $meta += "capture   : $(Split-Path $csv -Leaf)"
     $meta += "taken     : $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
     $meta += "editor    : $config"
+    # Requested, and what the gestures say they ran in. A mismatch means the capture measured the
+    # other renderer, and it is written down rather than trusted.
+    $ranIn = @()
+    if (Test-Path $scrollLog) {
+        $ranIn = @(Get-Content $scrollLog | Select-Object -Skip $logStart |
+            Select-String -Pattern 'gesture .* mode (\w+)' |
+            ForEach-Object { $_.Matches[0].Groups[1].Value } | Sort-Object -Unique)
+    }
+    $ranText = if ($ranIn.Count -eq 0) { 'unknown - no gesture reported a mode' } else { $ranIn -join ', ' }
+    if ($ranIn.Count -gt 0 -and ($ranIn.Count -ne 1 -or $ranIn[0] -ne $Mode.ToLowerInvariant())) {
+        Write-Warning "asked for $Mode mode but the gestures ran in: $ranText"
+    }
+    $meta += "mode      : $($Mode.ToLowerInvariant()) requested, ran in $ranText"
     $meta += "document  : $(if ($File) { "$(Split-Path $File -Leaf), $(@(Get-Content $File).Count) lines" } else { '(none)' })"
     $meta += "window    : $(if ($windowRect) { "$($windowRect.Width)x$($windowRect.Height) at $($windowRect.X),$($windowRect.Y)" } else { 'unknown' })"
     $meta += "display   : $(if ($panel) { $panel.DeviceName } else { 'unknown' })"

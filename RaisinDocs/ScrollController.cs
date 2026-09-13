@@ -525,6 +525,17 @@ internal class ScrollController
     private double _gestureQpcStart;
 
     /// <summary>
+    /// What the owner is showing, written into each gesture's summary - the canvas reports its
+    /// edit mode.
+    /// </summary>
+    /// <remarks>
+    /// Source and visual mode draw different lines, so a capture taken in the wrong one measures
+    /// a different renderer. The harness opened every file in source mode for a long time without
+    /// that showing anywhere; the log now says which it was.
+    /// </remarks>
+    internal Func<string>? DiagContext { get; set; }
+
+    /// <summary>
     /// Feeds the smoother's animation - scrollbar drags and minimap jumps - through the same
     /// counters as the wheel coast, so the two are directly comparable in the log.
     /// </summary>
@@ -636,7 +647,8 @@ internal class ScrollController
                     ? $"on {(_gestureDevice.Length > 0 ? _gestureDevice : "unknown display")} " +
                       $"{_gestureHz}Hz  "
                     : string.Empty) +
-                $"{_frames} ticks, {_paints} paints" + Environment.NewLine +
+                $"{_frames} ticks, {_paints} paints" +
+                (DiagContext != null ? $"  mode {DiagContext()}" : string.Empty) + Environment.NewLine +
                     $"    qpc {_gestureQpcStart:F3}..{QpcMs:F3}" + Environment.NewLine +
                 $"    {frames}" + Environment.NewLine +
                 $"    {paints}" + Environment.NewLine +

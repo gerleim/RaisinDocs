@@ -835,7 +835,10 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider, IDocsC
         ContentLayer.Transform = ContentScroll;
         _layers = new VisualCollection(this) { ContentLayer, OverlayLayer };
 
-        _scroll = new ScrollController(InvalidateVisual, () => Math.Max(0, _totalContentHeight - ActualHeight));
+        _scroll = new ScrollController(InvalidateVisual, () => Math.Max(0, _totalContentHeight - ActualHeight))
+        {
+            DiagContext = () => _editMode == EditMode.Visual ? "visual" : "source",
+        };
         _linkHandler = new LinkHandler((INavigationServices)this, (IDocumentServices)this, (IParsedContentServices)this, (ILayoutDataServices)this, (IVisualModeServices)this, (IScrollServices)this);
         _linkPopup = new LinkPopupController(_doc, this);
         _tableInputHandler = new TableInputHandler((IDocumentServices)this, (IParsedContentServices)this, (ICanvasOperations)this);
