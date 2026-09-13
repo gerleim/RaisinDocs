@@ -9,6 +9,8 @@ In visual mode a table wider than the window is cut off on the right. Each heade
 1. **Column widths use the browser rule.** Each column keeps at least its longest word; the shortfall comes out of columns in proportion to (natural − min).
 2. **Long words break mid-word** when even the minimums don't fit, down to a floor of about 3 characters per column.
 3. **Up/Down move one wrapped line within the cell**, keeping pixel X. From the cell's first or last line they move to the adjacent row.
+4. **Every table row goes through `BuildCellLine`**, fitted or wrapped (step 4). One path for drawing, caret, clicks and spans, at the price of every table's widths and caret positions shifting slightly.
+5. **TableRenderer owns the cell-line cache** (step 10.2). The alternative, RenderingContext, would need TableRenderer to depend back on it.
 
 **Out of scope:** `\` hard breaks inside cells, and vertical alignment of shorter cells — cells are top-aligned. Both are in the v01 item and stay open there.
 
@@ -67,6 +69,7 @@ In TableRenderer, forwarded through `ITableServices` (IDocsCanvasServices.cs:119
   - Clamp `subLine` to **this cell's** line count, not the row's, so a click below a short cell's text lands on its last line.
   - Offset at the midpoint between caret stops.
   - On a non-last sub-line, clamp to that line's last visible character, so a click past the end of line k stays on k instead of landing at the start of k+1 (which would make Up look stuck).
+  - This is stricter than paragraphs. `HitTestInVisualLineProper` returns the line end (CursorNavigationEngine.cs:301), which is the next line's start, and the caret shows there; only End reaches the end of a wrapped line, through `CursorAtLineEnd` (:643). Home/End stay row-wide in a table, so after a **mid-word** break (tier 3) the offset after the line's last character can't be reached from that line. It still shows as the start of k+1. Accepted.
 - **`RangeSpansInTableRow(vl, parsed, colWidths, start, end, List<LineSpan>)`:** one `LineSpan(X1, X2, SubLine, RowLineCount, Continues)` per sub-line the range crosses, in every cell it overlaps. Side effect: a fully selected row no longer paints a 4px sliver (offsets 0 and len sit on the pipes).
 
 In CursorNavigationEngine and `INavigationServices`:
@@ -82,11 +85,18 @@ In CursorNavigationEngine and `INavigationServices`:
 |---|---|
 | RenderingContext.cs:841-848, caret | Draw from `CaretBox`: top offset, one sub-line tall |
 | RenderingContext.cs:1873-1885, `DrawSelectionForLine` | Loop over spans. Single-line row keeps `(y, bgH)`; otherwise top `Round(k*baseH)`, bottom `Round((k+1)*baseH)` or `bgH` on the last line. Shared helper on `LineSpan`. |
-| FindAndReplaceController.cs:325-330 | Loop over spans |
-| SpellCheckController.cs:240-248 | Loop over spans; squiggle Y = `lineY + (k+1)*baseH - 2` |
+| FindAndReplaceController.cs:325-330 | Loop over spans. Highlights draw inside the line visual with `(y, bgH)` like the selection, so top and height come from the same `LineSpan` helper |
+| SpellCheckController.cs:240-248 | Loop over spans; squiggle Y = `lineY - effectiveScroll + (k+1)*baseH - 2` |
 | DocsCanvas.cs:1350-1353, `EnsureCursorVisible` | Scroll to the caret's sub-line box |
 | DocsCanvas.Formatting.cs:283-287, link popup | Y = `lineY + Top + Height + 4` |
 | LinkHandler.cs:105-111, tooltip | Under the hovered sub-line |
+
+Every other caller of `XInVisualLine`, `CursorXInVisualLine` and the hit tests was checked and needs no change:
+- `DrawInlineColorBackground` returns early for table rows (RenderingContext.cs:1805).
+- The joined-line paths (RenderingContext.cs:1928, FindAndReplaceController.cs:391, SpellCheckController.cs:277) never see a table row.
+- `HoverImageHandler` (:73) runs in source mode only.
+- The `HitTestToPosition` callers (Input.cs:49/87/140, LinkHandler.cs:45/78, SpellCheckController.cs:330) get the local Y inside it.
+- `TestLineVisibleOffsetXs` (Print.cs:56) still returns X only. That is fine for its existing tests, but it can't tell sub-lines apart.
 
 ### 8. Up/Down and PageUp/PageDown: CursorNavigationEngine.cs:674-742
 - **`TryMoveWithinTableCell(vli, goalX, dir)`:** when the row has more than one line and `SubLine+dir` is inside the cell, set `CursorOffset = HitTestTableCellLine(column, SubLine+dir, goalX)`. The caret stays in the cell even if goal X is outside it.
@@ -140,7 +150,11 @@ Where cost could creep in:
   - **Conditions:** quiet machine, `dotnet build-server shutdown` first, Release both sides. The capture drives the wheel — ask before running it.
 
 ## Tests: new `Tests/RaisinDocs.Tests.UI/TableCellWrapTests.cs`
-- **Hooks:** `TestCursorY`, `TestCaretHeight`, `TestCursorXNoLayout` (`CursorXInVisualLine` without the `ComputeLayout()` that `TestCursorX` runs first, DocsCanvas.cs:656), `TestTableRowLineCount(vi)`, `TestTableColumnWidths(block)`, and list forms of `TestSelectionRects` / `TestSearchMatchRects`.
+- **New hooks:**
+  - `TestCursorY`, `TestCaretHeight`.
+  - `TestCursorXNoLayout`: `CursorXInVisualLine` without the `ComputeLayout()` that `TestCursorX` runs first (DocsCanvas.cs:656).
+  - `TestTableRowLineCount(vi)`, `TestTableColumnWidths(block)`.
+  - `TestSelectionRects(vi)` / `TestSearchMatchRects(vi)`, returning every rect a line paints in the brush. The existing `TestSelectionRect` / `TestSearchMatchRect` (Print.cs:39-44) return one, through `FindRectPaintedWith`, so they need a collecting variant of it (RenderingContext.cs:439); they are not a rename.
 - **Setup:** explicit width, as in `SelectionHighlightAlignmentTests.MakeCanvasAt` (:187-198).
 
 Cases:
