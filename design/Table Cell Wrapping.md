@@ -178,10 +178,46 @@ Taken on `c9097f0`, which adds only the measuring. Tables are still clipped here
 **What stands out:**
 - **A wide row is already 4.5× dearer to draw than a fitted one** while clipped. Each cell builds one long `FormattedText` whether or not it is visible.
 - **The caret costs about twice as much in a table cell as in a paragraph, every frame.** That is `CursorXInTableRow` building a `FormattedText` per call. Step 10.2's cache is aimed at exactly this.
-- **Overlay render is 6.6× dearer for wide tables** at the same line count and content height. That was not expected and is not yet explained: the only code in the overlay that knows about tables is `DrawTableLines`, and it draws the same number of lines for both documents. Worth understanding before comparing the after numbers.
+- **Overlay render is 6.6× dearer for wide tables** at the same line count and content height. That was not expected and is not yet explained: the only code in the overlay that knows about tables is `DrawTableLines`, and it draws the same number of lines for both documents. The wheel capture below shows no such difference in the real app (`canvas-onrender` 0.03 ms for both), so compare this row before and after the change, not against the capture.
 - **Arrange p95 tracks row draw cost.** Most frames build nothing; the ones that do build up to 6 lines.
 
-The wheel capture (`capture-scroll.ps1`) is still to be taken. It is the only measurement that covers rasterisation and composition.
+**Wheel capture.** The only measurement that includes rasterisation and composition.
+- **Setup:** `capture-scroll.ps1 -Automated -Release -Mode Visual -Monitor DISPLAY1 -Size 1200x800`, on the 280 Hz primary (3.57 ms budget). `dotnet build-server shutdown` ran first, and both `.meta` files read `quiet: yes`, `interfered: none detected`, and `mode: visual requested, ran in visual`.
+- **Commits:** taken on `72209e1`. The captures are `scroll-20260913-212703.csv` (wide) and `scroll-20260913-213334.csv` (fitted), in `%LOCALAPPDATA%\RaisinDocs\captures`.
+- **A capture before this one was discarded.** Every capture had been opening its file in source mode, and a restored setting would not have fixed that. `11fc557` and `72209e1` now make the capture pass the mode explicitly and record the mode it ran in. An earlier wide run is also left out: it ran beside 16 build processes from another session.
+
+Gesture-level results, three passes each. A wheel "flick" is 1, 3 or 10 notches (0.33–0.70 s); "sustained" is 30 notches (2.2 s):
+
+| | Wide Tables | Fitted Tables |
+|---|---|---|
+| wheel flicks: frames displayed/s | 259–279 | 248–274 |
+| wheel flicks: intervals over 1.5× | 3.3–6.1% | 3.0–10.7% |
+| wheel flicks: animation error median / p95 | 0.16–0.29 / 1.1–3.6 ms | 0.20–0.29 / 0.9–6.8 ms |
+| wheel sustained: frames displayed/s | 274–278 | 274–276 |
+| wheel sustained: intervals over 1.5× | 1.0–2.2% | 1.8–2.3% |
+| wheel sustained: animation error median / p95 | 0.20–0.22 / 1.3–1.6 ms | 0.19–0.23 / 1.3–1.8 ms |
+| never displayed | 0–2.6% | 0–3.9% |
+| **minimap drag: frames displayed/s** | **44–77** | **112–116** |
+| **minimap drag: display interval** | **14.25 ms** | **7.15 ms** |
+| minimap drag: animation error median | 3.5–6.0 ms | 3.3–3.5 ms |
+
+In-app costs from the same runs, as logged per gesture:
+
+| | Wide Tables | Fitted Tables |
+|---|---|---|
+| `line-build-table` avg, sustained wheel | 0.61–0.63 ms | 0.39–0.45 ms |
+| `line-build` (other lines) avg | 0.15–0.18 ms | 0.16–0.18 ms |
+| `canvas-arrange` avg / max, sustained wheel | 0.03–0.10 / 0.9–1.2 ms | 0.02–0.08 / 0.6–5.3 ms |
+| `canvas-arrange` avg / max, minimap drag | 6.6–6.8 / 9–14 ms | 2.6–2.8 / 3.5–6.0 ms |
+| `canvas-onrender` avg | 0.03 ms | 0.03 ms |
+| `minimap-rebuild` avg / max | 4.4–6.7 / 15 ms | 1.5–2.3 / 4.5 ms |
+
+**What this says:**
+- **The wheel doesn't care about table width today.** Both documents hold 3.57 ms at one refresh per frame, with the same spread. The flick differences are within run-to-run noise: the fitted run's worst flick is the first gesture of its run, where caches are coldest.
+- **The minimap drag already does.** Every drag builds about 1040 line visuals (≈574 table rows), about 26 per move, because a drag jumps a screen at a time. Wide rows cost 0.41 ms each against 0.13 ms fitted, so a move costs 6.7 ms against 2.7 ms. That takes the drag from two refreshes per frame to four, and from 114/s to about 75/s, **before any wrapping**.
+- **Wrapping will land mostly on the drag.** A wrapped row is taller, so a screen holds fewer rows, but each row draws more sub-lines. The per-screen DrawText count is what moves, and the drag rebuilds whole screens. Step 10.4's weighted pre-render budget does nothing for this case, because the visible lines are always built in full.
+- **The minimap's own rebuild is 3× dearer for wide tables** (4.4–6.7 ms against 1.5–2.3 ms). It renders each cell's full text, even though the canvas clips it.
+- **In-process overlay difference doesn't show in the app.** The benchmark measured overlay render as 6.6× dearer for wide tables, but `canvas-onrender` averages 0.03 ms for both in the real app. The benchmark figure is likely an artefact of rendering with no window. It is not a scroll cost.
 
 ## Tests: new `Tests/RaisinDocs.Tests.UI/TableCellWrapTests.cs`
 - **New hooks:**
