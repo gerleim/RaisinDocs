@@ -96,6 +96,8 @@ Every other caller of `XInVisualLine`, `CursorXInVisualLine` and the hit tests w
 - The joined-line paths (RenderingContext.cs:1928, FindAndReplaceController.cs:391, SpellCheckController.cs:277) never see a table row.
 - `HoverImageHandler` (:73) runs in source mode only.
 - The `HitTestToPosition` callers (Input.cs:49/87/140, LinkHandler.cs:45/78, SpellCheckController.cs:330) get the local Y inside it.
+- `VerticalGoalX` (CursorNavigationEngine.cs:665) takes the goal X from `CursorXInVisualLine`, which is what moving up and down inside a cell needs.
+- `TestCursorX` (DocsCanvas.cs:658) returns X only; `TestCursorY` covers the sub-line.
 - `TestLineVisibleOffsetXs` (Print.cs:56) still returns X only. That is fine for its existing tests, but it can't tell sub-lines apart.
 
 ### 8. Up/Down and PageUp/PageDown: CursorNavigationEngine.cs:674-742
@@ -154,7 +156,7 @@ Where cost could creep in:
   - `TestCursorY`, `TestCaretHeight`.
   - `TestCursorXNoLayout`: `CursorXInVisualLine` without the `ComputeLayout()` that `TestCursorX` runs first (DocsCanvas.cs:656).
   - `TestTableRowLineCount(vi)`, `TestTableColumnWidths(block)`.
-  - `TestSelectionRects(vi)` / `TestSearchMatchRects(vi)`, returning every rect a line paints in the brush. The existing `TestSelectionRect` / `TestSearchMatchRect` (Print.cs:39-44) return one, through `FindRectPaintedWith`, so they need a collecting variant of it (RenderingContext.cs:439); they are not a rename.
+  - `TestSelectionRects(vi)` / `TestSearchMatchRects(vi)`, returning every rect a line paints in the brush. The existing `TestSelectionRect` / `TestSearchMatchRect` (Print.cs:39-44) return one, through `FindRectPaintedWith`, so they need a collecting variant of it (RenderingContext.cs:532); they are not a rename.
 - **Setup:** explicit width, as in `SelectionHighlightAlignmentTests.MakeCanvasAt` (:187-198).
 
 Cases:
