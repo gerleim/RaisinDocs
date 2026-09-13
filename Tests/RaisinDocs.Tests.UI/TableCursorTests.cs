@@ -92,17 +92,16 @@ public class TableCursorTests
     }
 
     // --- Table cursor X must match FormattedText measurement ---
-    // CursorXInTableRow uses char-by-char glyph advances (no kerning).
-    // DrawTableRow renders with FormattedText (kerning/shaping applied).
-    // The source-mode paragraph path in CursorXInVisualLine uses
-    // FormattedText.BuildHighlightGeometry, so we compare against that
-    // as the ground truth.
+    // PositionInTableRow reads the caret X off the glyphs of the FormattedText
+    // each cell line is drawn with, so kerning and shaping are included.
+    // The source-mode paragraph path in CursorXInVisualLine does the same from
+    // its own line's glyphs, so we compare against that as the ground truth.
 
     [StaFact]
     public void CursorX_InTableCell_MatchesFormattedTextMeasurement()
     {
         // Same text as paragraph (source mode → FormattedText path)
-        // vs in a table DATA row (visual mode → CursorXInTableRow).
+        // vs in a table DATA row (visual mode → PositionInTableRow).
         // Both Paragraph and TableRow use NormalTypeface + BaseFontSize.
         // Header rows use BoldTypeface so we compare against a data row.
         var canvas = CreateCanvas("Example\n| Header |\n|---|\n| Example |");

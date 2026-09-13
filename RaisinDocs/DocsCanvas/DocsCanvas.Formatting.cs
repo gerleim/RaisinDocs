@@ -283,8 +283,8 @@ public partial class DocsCanvas
         int vli = CursorToVisualLineIndex();
         double effectiveScroll = _scroll.EffectiveOffset;
         double lineY = _lineYPositions[vli] - effectiveScroll;
-        double lineH = GetEffectiveLineHeight(_visualLines[vli]);
-        _linkPopup.SetPopupPosition(_padding, lineY + lineH + 4);
+        var (_, caretTop, caretHeight) = CaretBox(vli);
+        _linkPopup.SetPopupPosition(_padding, lineY + caretTop + caretHeight + 4);
     }
 
     public void InsertFgColor(string colorName)

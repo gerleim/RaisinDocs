@@ -104,11 +104,23 @@ internal class LinkHandler
                 double effectiveScroll = _scroll.Scroll.EffectiveOffset;
                 int vli = _nav.HitTestVisualLine(pos.Y + effectiveScroll);
                 double lineY = _nav.LineYPositions[vli] - effectiveScroll;
-                double lineH = _layout.GetEffectiveLineHeight(_nav.VisualLines[vli]);
+                var vl = _nav.VisualLines[vli];
+                double lineH = _layout.GetEffectiveLineHeight(vl);
+
+                // Under the line of text the pointer is on. A table row whose cells wrap is that
+                // many lines tall - OverrideHeight is exactly LineCount of them.
+                double below = lineH;
+                if (vl.TableLayout is { LineCount: > 1 } rowLayout)
+                {
+                    double textLineH = vl.OverrideHeight / rowLayout.LineCount;
+                    int k = (int)Math.Clamp(Math.Floor((pos.Y - lineY) / textLineH), 0, rowLayout.LineCount - 1);
+                    below = (k + 1) * textLineH;
+                }
+
                 _linkToolTip.Content = url;
                 _linkToolTip.PlacementTarget = _nav as DocsCanvas;
                 _linkToolTip.HorizontalOffset = DocsCanvas._padding;
-                _linkToolTip.VerticalOffset = lineY + lineH;
+                _linkToolTip.VerticalOffset = lineY + below;
                 _linkToolTip.IsOpen = true;
             }
         }

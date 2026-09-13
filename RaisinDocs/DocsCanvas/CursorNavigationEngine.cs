@@ -115,6 +115,45 @@ public partial class DocsCanvas
     }
 
     /// <summary>
+    /// The caret's box on visual line <paramref name="vlIndex"/>: its X, relative to the left
+    /// padding, and the top and height of the part of the line it is drawn across.
+    /// </summary>
+    internal (double X, double Top, double Height) CaretBox(int vlIndex)
+    {
+        var vl = _layout.VisualLines[vlIndex];
+        int offset = vl.Group != null
+            ? vl.Group.SourceToJoined(_doc.Document.CursorBlock, _doc.Document.CursorOffset)
+            : _doc.Document.CursorOffset;
+
+        return PositionInVisualLine(vlIndex, offset);
+    }
+
+    /// <summary>
+    /// Where <paramref name="offset"/> is drawn on visual line <paramref name="vlIndex"/>: its X as
+    /// <see cref="XInVisualLine"/> gives it, and the top and height, within the line, of the text
+    /// line it is on.
+    /// </summary>
+    /// <remarks>
+    /// Every line is one text line tall except a table row whose cells wrap, which is as many as
+    /// its tallest cell: there the answer is the one line of the cell the offset is on. Everything
+    /// drawn at an offset - the caret, and the scroll that keeps it in view - takes its Y from here.
+    /// </remarks>
+    internal (double X, double Top, double Height) PositionInVisualLine(int vlIndex, int offset)
+    {
+        var vl = _layout.VisualLines[vlIndex];
+        if (_visual.IsVisual && vl.Group == null && vl.TableLayout != null
+            && _content.ParsedBlocks![vl.BlockIndex] is { TableRow: not null, Table: { } table } parsed
+            && _table.TableColumnWidths.TryGetValue(table, out var colWidths))
+        {
+            var pos = _table.PositionInTableRow(vlIndex, vl, parsed, colWidths, offset);
+            double baseH = _rendering.Measure.GetLineHeight(vl.BlockKind);
+            return (pos.X, pos.SubLine * baseH, baseH);
+        }
+
+        return (XInVisualLine(vlIndex, offset), 0, _layout.GetEffectiveLineHeight(vl));
+    }
+
+    /// <summary>
     /// The X of <paramref name="offset"/> on visual line <paramref name="vlIndex"/>, relative to
     /// the left padding - so the thing drawn there goes at <c>_padding + x</c>. For a line in a
     /// joined paragraph group the offset is in the group's joined text; otherwise it is an offset
@@ -148,7 +187,7 @@ public partial class DocsCanvas
         if (_visual.IsVisual && parsed.Table != null && parsed.TableRow != null
             && _table.TableColumnWidths.TryGetValue(parsed.Table, out var colWidths))
         {
-            return _table.CursorXInTableRow(vl.BlockIndex, parsed, colWidths, localOff);
+            return _table.PositionInTableRow(vlIndex, vl, parsed, colWidths, localOff).X;
         }
 
         string blockText = _doc.GetBlockText(vl.BlockIndex);
@@ -218,7 +257,11 @@ public partial class DocsCanvas
         return width;
     }
 
-    internal int HitTestInVisualLineProper(int vlIndex, double clickX)
+    /// <param name="localY">
+    /// How far below the line's top the point is. Only a table row with wrapped cells reads it, to
+    /// pick the line of the cell.
+    /// </param>
+    internal int HitTestInVisualLineProper(int vlIndex, double clickX, double localY = 0)
     {
         var vl = _layout.VisualLines[vlIndex];
         if (vl.Length == 0) return vl.StartOffset;
@@ -235,7 +278,7 @@ public partial class DocsCanvas
         if (_visual.IsVisual && parsed.Table != null && parsed.TableRow != null
             && _table.TableColumnWidths.TryGetValue(parsed.Table, out var colWidths))
         {
-            return _table.HitTestInTableRow(vl, parsed, colWidths, clickX);
+            return _table.HitTestInTableRow(vlIndex, vl, parsed, colWidths, clickX, localY);
         }
 
         var map = _visual.IsVisual ? _visual.VisualMaps?[vl.BlockIndex] : null;
@@ -301,7 +344,7 @@ public partial class DocsCanvas
         return Math.Min(closestOffset, vl.StartOffset + vl.Length);
     }
 
-    internal int HitTestInVisualLine(int vlIndex, double x)
+    internal int HitTestInVisualLine(int vlIndex, double x, double localY = 0)
     {
         var vl = _layout.VisualLines[vlIndex];
         if (vl.Length == 0) return vl.StartOffset;
@@ -313,7 +356,7 @@ public partial class DocsCanvas
         if (_visual.IsVisual && parsed.Table != null && parsed.TableRow != null
             && _table.TableColumnWidths.TryGetValue(parsed.Table, out var colWidths))
         {
-            return _table.HitTestInTableRow(vl, parsed, colWidths, x);
+            return _table.HitTestInTableRow(vlIndex, vl, parsed, colWidths, x, localY);
         }
 
         var map = _visual.IsVisual ? _visual.VisualMaps?[vl.BlockIndex] : null;
@@ -443,8 +486,11 @@ public partial class DocsCanvas
         int vli = HitTestVisualLine(pos.Y + effectiveScroll);
         var vl = _layout.VisualLines[vli];
         double xForHitTest = pos.X - DocsCanvas._padding;
+        double localY = pos.Y + effectiveScroll - _layout.LineYPositions[vli];
 
-        int rawOffset = _visual.IsVisual ? HitTestInVisualLineProper(vli, xForHitTest) : HitTestInVisualLine(vli, xForHitTest);
+        int rawOffset = _visual.IsVisual
+            ? HitTestInVisualLineProper(vli, xForHitTest, localY)
+            : HitTestInVisualLine(vli, xForHitTest, localY);
 
         if (vl.Group != null)
         {

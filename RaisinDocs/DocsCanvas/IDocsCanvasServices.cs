@@ -83,6 +83,12 @@ internal interface IRenderingServices
     /// kerning included; null when the line is not drawn as a single run of text.
     /// </summary>
     double? LaidOutX(int vlIndex, int offset);
+
+    /// <summary>
+    /// Bumped whenever what a line looks like may have changed; a cache of anything drawn is keyed
+    /// on it.
+    /// </summary>
+    int RenderVersion { get; }
 }
 
 /// <summary>
@@ -120,8 +126,8 @@ internal interface ITableServices
 {
     Dictionary<TableInfo, double[]> TableColumnWidths { get; }
     DocsCanvas.TableRenderer TableRenderer { get; }
-    double CursorXInTableRow(int blockIndex, ParsedBlock parsed, double[] colWidths, int cursorOffset);
-    int HitTestInTableRow(DocsCanvas.VisualLine vl, ParsedBlock parsed, double[] colWidths, double x);
+    DocsCanvas.TableCaretPos PositionInTableRow(int vlIndex, DocsCanvas.VisualLine vl, ParsedBlock parsed, double[] colWidths, int offset);
+    int HitTestInTableRow(int vlIndex, DocsCanvas.VisualLine vl, ParsedBlock parsed, double[] colWidths, double x, double localY);
 }
 
 /// <summary>

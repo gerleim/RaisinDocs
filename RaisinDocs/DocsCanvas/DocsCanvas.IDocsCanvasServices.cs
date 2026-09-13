@@ -75,6 +75,7 @@ public partial class DocsCanvas
         => MeasureJoinedRange(group, start, length);
     double? IRenderingServices.LaidOutX(int vlIndex, int offset)
         => _renderingContext.LaidOutX(vlIndex, offset);
+    int IRenderingServices.RenderVersion => RenderVersion;
 
     // ====== IParsedContentServices ======
     List<ParsedBlock>? IParsedContentServices.ParsedBlocks
@@ -105,10 +106,10 @@ public partial class DocsCanvas
     // ====== ITableServices ======
     Dictionary<TableInfo, double[]> ITableServices.TableColumnWidths => _tableColumnWidths;
     TableRenderer ITableServices.TableRenderer => _tableRenderer;
-    double ITableServices.CursorXInTableRow(int blockIndex, ParsedBlock parsed, double[] colWidths, int cursorOffset)
-        => CursorXInTableRow(blockIndex, parsed, colWidths, cursorOffset);
-    int ITableServices.HitTestInTableRow(VisualLine vl, ParsedBlock parsed, double[] colWidths, double x)
-        => HitTestInTableRow(vl, parsed, colWidths, x);
+    TableCaretPos ITableServices.PositionInTableRow(int vlIndex, VisualLine vl, ParsedBlock parsed, double[] colWidths, int offset)
+        => _tableRenderer.PositionInTableRow(vlIndex, vl, parsed, colWidths, offset);
+    int ITableServices.HitTestInTableRow(int vlIndex, VisualLine vl, ParsedBlock parsed, double[] colWidths, double x, double localY)
+        => _tableRenderer.HitTestInTableRow(vlIndex, vl, parsed, colWidths, x, localY);
 
     // ====== INavigationServices ======
     List<VisualLine> INavigationServices.VisualLines => _visualLines;

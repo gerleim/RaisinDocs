@@ -655,6 +655,9 @@ public partial class DocsCanvas
         /// <summary>Drops cached lines that have scrolled well outside the viewport.</summary>
         private void TrimLineFtCache(int firstVisible, int lastVisible)
         {
+            // The table cell lines are the same kind of thing for table rows, kept to the same window.
+            _table.TableRenderer.TrimCellLines(firstVisible - LineFtWindow, lastVisible + LineFtWindow);
+
             if (_lineFt == null || _lineFtHi < _lineFtLo) return;
             int lo = Math.Max(0, firstVisible - LineFtWindow);
             int hi = Math.Min(_lineFt.Length - 1, lastVisible + LineFtWindow);
@@ -756,7 +759,7 @@ public partial class DocsCanvas
             return stops.Length == 0 ? null : stops;
         }
 
-        private static double[]? BuildCaretStops(FormattedText ft)
+        internal static double[]? BuildCaretStops(FormattedText ft)
         {
             var drawing = new DrawingGroup();
             using (var dc = drawing.Open())
@@ -908,10 +911,12 @@ public partial class DocsCanvas
                 if (_docsCanvas._cursorVisible && _docsCanvas.IsFocused && _layout.VisualLines.Count > 0)
                 {
                     int vli = _docsCanvas.CursorToVisualLineIndex();
-                    double cx = DocsCanvas._padding + _docsCanvas.CursorXInVisualLine(vli);
-                    double cy = _layout.LineYPositions[vli] - effectiveScroll;
-                    double lineH = _layout.GetEffectiveLineHeight(_layout.VisualLines[vli]);
-                    odc.DrawLine(_rendering.Palette.CursorPen, new Point(cx, cy), new Point(cx, cy + lineH));
+                    // Across the caret's own line of text: in a table row whose cells wrap that is
+                    // one line of the cell, not the whole row.
+                    var (caretX, caretTop, caretHeight) = _docsCanvas.CaretBox(vli);
+                    double cx = DocsCanvas._padding + caretX;
+                    double cy = _layout.LineYPositions[vli] - effectiveScroll + caretTop;
+                    odc.DrawLine(_rendering.Palette.CursorPen, new Point(cx, cy), new Point(cx, cy + caretHeight));
                 }
 
                 if (!_visual.IsVisual && _images.ImagePreview == DocsCanvas.ImagePreviewMode.OnHover && _docsCanvas._hoveredImage != null)
@@ -1006,7 +1011,7 @@ public partial class DocsCanvas
                     }
                     else if (_visual.IsVisual && parsed.Table != null && parsed.TableRow != null)
                     {
-                        _table.TableRenderer.DrawTableRow(dc, vl, blockText(), parsed, y, fontSize, baseTypeface);
+                        _table.TableRenderer.DrawTableRow(dc, vl, blockText(), parsed, y, fontSize, baseTypeface, cacheLine: i);
                     }
                     else if (map != null)
                     {

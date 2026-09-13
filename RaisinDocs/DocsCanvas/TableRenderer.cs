@@ -281,17 +281,19 @@ public partial class DocsCanvas
         /// of the whole row. A row of a table that fits has no layout and draws each cell as its
         /// single line, through the same <see cref="BuildCellLine"/>.
         /// </remarks>
+        /// <param name="cacheLine">
+        /// The visual line index this row is drawn for, so the cell lines it builds are kept for the
+        /// caret and hit tests to reuse; -1 draws without touching the cache, which is what print
+        /// does - its lines are laid out at the page width, not the screen's.
+        /// </param>
         public void DrawTableRow(DrawingContext dc, VisualLine vl, string blockText,
             ParsedBlock parsed, double y,
-            double fontSize, Typeface baseTypeface)
+            double fontSize, Typeface baseTypeface, int cacheLine = -1)
         {
             if (parsed.TableRow == null || parsed.Table == null) return;
             if (!_table.TableColumnWidths.TryGetValue(parsed.Table, out var colWidths)) return;
 
-            BlockVisualMap? map = null;
-            if (_content.VisualMaps != null && vl.BlockIndex < _content.VisualMaps.Count)
-                map = _content.VisualMaps[vl.BlockIndex];
-
+            var map = MapFor(vl.BlockIndex);
             var layout = vl.TableLayout;
             double x = DocsCanvas._padding;
             double lineH = _rendering.Measure.GetLineHeight(vl.BlockKind);
@@ -300,16 +302,16 @@ public partial class DocsCanvas
             for (int c = 0; c < Math.Min(parsed.TableRow.Cells.Count, colWidths.Length); c++)
             {
                 var (s, e) = parsed.TableRow.Cells[c].TrimContent(blockText);
-                int cellLines = layout != null && c < layout.CellCount ? layout.CellLineCount(c) : 1;
+                int cellLines = CellLineCount(layout, c);
 
                 dc.PushClip(new RectangleGeometry(new Rect(x, y, colWidths[c], rowLines * lineH)));
 
                 for (int k = 0; k < cellLines; k++)
                 {
-                    var (ls, le) = layout != null && c < layout.CellCount ? layout.GetLine(c, k) : (s, e);
-                    if (BuildCellLine(blockText, parsed, map, c, colWidths, ls, le, fontSize, baseTypeface)
-                        is not { } line)
-                        continue;
+                    var (ls, le) = LineRange(layout, c, k, s, e);
+                    var line = GetCellLine(cacheLine, cellLines, blockText, parsed, map, c, k, colWidths, ls, le,
+                        fontSize, baseTypeface);
+                    if (line.Ft == null) continue;
 
                     double textX = x + DocsCanvas._tableCellPadding + line.AlignX;
                     double lineY = y + k * lineH;
@@ -322,44 +324,168 @@ public partial class DocsCanvas
             }
         }
 
+        private BlockVisualMap? MapFor(int blockIndex)
+            => _content.VisualMaps != null && blockIndex < _content.VisualMaps.Count ? _content.VisualMaps[blockIndex] : null;
+
+        private static int CellLineCount(TableRowLayout? layout, int cell)
+            => layout != null && cell < layout.CellCount ? layout.CellLineCount(cell) : 1;
+
+        private static (int Start, int End) LineRange(TableRowLayout? layout, int cell, int k, int trimStart, int trimEnd)
+            => layout != null && cell < layout.CellCount ? layout.GetLine(cell, k) : (trimStart, trimEnd);
+
         /// <summary>
-        /// One line of one cell, ready to draw: its text styled as the cell styles it, and how far
-        /// its column's alignment moves it right of the cell's padded left edge. Null when nothing
-        /// on the line is visible.
+        /// One line of one cell: its text styled as the cell styles it, how far its column's
+        /// alignment moves it right of the cell's padded left edge, and - built on first use - the
+        /// X of every character boundary, read off the glyphs the text is drawn with.
+        /// </summary>
+        private sealed class CellLine
+        {
+            /// <summary>Null when nothing on the line is visible.</summary>
+            public FormattedText? Ft { get; init; }
+            public double AlignX { get; init; }
+            public double[]? Stops { get; set; }
+        }
+
+        /// <summary>
+        /// Cell lines already built, per visual line, cell and line - the text a row was drawn with,
+        /// kept for every position question asked about it afterwards.
         /// </summary>
         /// <remarks>
-        /// Drawing and every position question about a cell are to come through here, so the caret,
-        /// a click and the glyphs cannot disagree about where a character is. Alignment is taken
-        /// from this line's own width, which excludes the trailing space a wrapped line keeps, so a
-        /// centred or right-aligned column aligns each of a cell's lines.
+        /// The caret asks where it is on every render while it sits in a table, and a render is a
+        /// scroll frame. Without this each ask built a FormattedText, which measured at twice a
+        /// paragraph caret's cost; the stops needed to wrap make a fresh build dearer still. See
+        /// design/Table Cell Wrapping.md, step 10.2.
+        ///
+        /// Keyed on both RenderVersion and LayoutVersion, and checked on every lookup. The print
+        /// paginator lays the canvas's own lines out at the page width and restores them without
+        /// moving RenderVersion, and a table position query reaches none of the places a render
+        /// would reset a cache from. LayoutVersion moves on both of those layouts, so an entry built
+        /// against the page's lines cannot survive into the screen's. Print itself never writes
+        /// here: it draws with no cache line.
         /// </remarks>
-        private (FormattedText Ft, double AlignX)? BuildCellLine(string blockText, ParsedBlock parsed,
+        private CellLine?[]?[]?[]? _cellLines;
+        private int _cellLinesRender = -1, _cellLinesLayout = -1;
+        private int _cellLinesLo, _cellLinesHi = -1;
+
+        /// <summary>How many cell lines have been built, cached or not - for tests of the cache.</summary>
+        internal int CellLineBuilds { get; private set; }
+
+        private void EnsureCellLineCache()
+        {
+            int count = _layout.VisualLines.Count;
+            if (_cellLines != null && _cellLines.Length >= count
+                && _cellLinesRender == _rendering.RenderVersion && _cellLinesLayout == _layout.LayoutVersion)
+                return;
+
+            _cellLines = new CellLine?[]?[]?[count];
+            _cellLinesRender = _rendering.RenderVersion;
+            _cellLinesLayout = _layout.LayoutVersion;
+            _cellLinesLo = 0;
+            _cellLinesHi = -1;
+        }
+
+        /// <summary>Drops cached cell lines outside [lo, hi], the window the line text cache keeps.</summary>
+        internal void TrimCellLines(int lo, int hi)
+        {
+            if (_cellLines == null || _cellLinesHi < _cellLinesLo) return;
+            lo = Math.Max(0, lo);
+            hi = Math.Min(_cellLines.Length - 1, hi);
+            for (int i = _cellLinesLo; i < lo && i <= _cellLinesHi; i++) _cellLines[i] = null;
+            for (int i = _cellLinesHi; i > hi && i >= _cellLinesLo; i--) _cellLines[i] = null;
+            _cellLinesLo = Math.Max(_cellLinesLo, lo);
+            _cellLinesHi = Math.Min(_cellLinesHi, hi);
+        }
+
+        /// <summary>
+        /// Line <paramref name="k"/> of cell <paramref name="column"/>, from the cache when
+        /// <paramref name="vli"/> names a screen line, built and stored when it is not there yet.
+        /// </summary>
+        private CellLine GetCellLine(int vli, int cellLines, string blockText, ParsedBlock parsed,
+            BlockVisualMap? map, int column, int k, double[] colWidths, int ls, int le,
+            double fontSize, Typeface baseTypeface)
+        {
+            CellLine?[]? slots = null;
+            if (vli >= 0)
+            {
+                EnsureCellLineCache();
+                if (vli < _cellLines!.Length)
+                {
+                    var row = _cellLines[vli] ??= new CellLine?[]?[colWidths.Length];
+                    if (column < row.Length)
+                    {
+                        slots = row[column] ??= new CellLine?[cellLines];
+                        if (k < slots.Length && slots[k] is { } hit) return hit;
+                    }
+                    if (_cellLinesHi < _cellLinesLo) { _cellLinesLo = _cellLinesHi = vli; }
+                    else { if (vli < _cellLinesLo) _cellLinesLo = vli; if (vli > _cellLinesHi) _cellLinesHi = vli; }
+                }
+            }
+
+            var line = BuildCellLine(blockText, parsed, map, column, colWidths, ls, le, fontSize, baseTypeface);
+            if (slots != null && k < slots.Length) slots[k] = line;
+            return line;
+        }
+
+        /// <remarks>
+        /// Alignment is taken from this line's own width, which excludes the trailing space a
+        /// wrapped line keeps, so a centred or right-aligned column aligns each of a cell's lines. A
+        /// line with nothing visible aligns as zero width, which puts the caret in an empty
+        /// centred cell at its centre.
+        /// </remarks>
+        private CellLine BuildCellLine(string blockText, ParsedBlock parsed,
             BlockVisualMap? map, int column, double[] colWidths, int ls, int le,
             double fontSize, Typeface baseTypeface)
         {
+            CellLineBuilds++;
+
             string lineText = map != null
                 ? map.BuildDisplayString(blockText, ls, le - ls)
                 : blockText.Substring(ls, le - ls);
-            if (lineText.Length == 0) return null;
 
-            var typeface = parsed.Kind == BlockKind.TableHeaderRow ? TextMeasurer.BoldTypeface : baseTypeface;
-            var ft = new FormattedText(lineText, CultureInfo.InvariantCulture,
-                FlowDirection.LeftToRight, typeface, fontSize,
-                _rendering.Palette.Foreground, _rendering.Measure.DpiScale);
+            FormattedText? ft = null;
+            if (lineText.Length > 0)
+            {
+                var typeface = parsed.Kind == BlockKind.TableHeaderRow ? TextMeasurer.BoldTypeface : baseTypeface;
+                ft = new FormattedText(lineText, CultureInfo.InvariantCulture,
+                    FlowDirection.LeftToRight, typeface, fontSize,
+                    _rendering.Palette.Foreground, _rendering.Measure.DpiScale);
 
-            if (map != null)
-                ApplyInlineStylesForCell(ft, parsed, map, ls, le);
-            else
-                ApplyInlineStylesForCellRaw(ft, lineText, parsed, ls, le);
+                if (map != null)
+                    ApplyInlineStylesForCell(ft, parsed, map, ls, le);
+                else
+                    ApplyInlineStylesForCellRaw(ft, lineText, parsed, ls, le);
+            }
 
+            double width = ft?.Width ?? 0;
             double contentWidth = colWidths[column] - DocsCanvas._tableCellPadding * 2;
             double alignX = parsed.Table!.Alignments[column] switch
             {
-                ColumnAlignment.Center => Math.Max(0, (contentWidth - ft.Width) / 2),
-                ColumnAlignment.Right => Math.Max(0, contentWidth - ft.Width),
+                ColumnAlignment.Center => Math.Max(0, (contentWidth - width) / 2),
+                ColumnAlignment.Right => Math.Max(0, contentWidth - width),
                 _ => 0,
             };
-            return (ft, alignX);
+            return new CellLine { Ft = ft, AlignX = alignX };
+        }
+
+        /// <summary>
+        /// The X of every character boundary on a cell line, from where its text is drawn: off the
+        /// glyphs WPF laid out when they map onto the text one to one, off highlight geometry when
+        /// they do not.
+        /// </summary>
+        private static double[] StopsFor(CellLine line)
+        {
+            if (line.Stops != null) return line.Stops;
+            if (line.Ft is not { } ft) return line.Stops = [0];
+
+            var stops = RenderingContext.BuildCaretStops(ft);
+            if (stops == null)
+            {
+                stops = new double[ft.Text.Length + 1];
+                for (int j = 1; j <= ft.Text.Length; j++)
+                    stops[j] = ft.BuildHighlightGeometry(new Point(0, 0), 0, j)?.Bounds.Right
+                               ?? ft.WidthIncludingTrailingWhitespace;
+            }
+            return line.Stops = stops;
         }
 
         /// <summary>
@@ -393,152 +519,128 @@ public partial class DocsCanvas
         }
 
         /// <summary>
-        /// Calculates the X position of the cursor within a table row for rendering.
-        /// Accounts for cell alignment and visual styles.
+        /// Where <paramref name="offset"/> is in a table row: its X relative to the left padding,
+        /// the cell it is in, and which of that cell's lines.
         /// </summary>
-        internal double CursorXInTableRow(int blockIndex, ParsedBlock parsed, double[] colWidths, int cursorOffset)
-        {
-            var cells = parsed.TableRow!.Cells;
-            string blockText = _doc.GetBlockText(blockIndex);
-            BlockVisualMap? map = (_content.VisualMaps != null && blockIndex < _content.VisualMaps.Count) ? _content.VisualMaps[blockIndex] : null;
-
-            double x = 0;
-            for (int c = 0; c < cells.Count && c < colWidths.Length; c++)
-            {
-                var cell = cells[c];
-                int cellEnd = cell.Start + cell.Length;
-                if (cursorOffset >= cell.Start && cursorOffset <= cellEnd)
-                {
-                    var (trimStart, trimEnd) = cell.TrimContent(blockText);
-
-                    string cellText = map != null
-                        ? map.BuildDisplayString(blockText, trimStart, trimEnd - trimStart)
-                        : blockText.Substring(trimStart, trimEnd - trimStart);
-
-                    int visualOffset;
-                    if (map != null)
-                    {
-                        int visBase = map.RawToVisual(trimStart);
-                        visualOffset = Math.Clamp(map.RawToVisual(cursorOffset) - visBase, 0, cellText.Length);
-                    }
-                    else
-                    {
-                        visualOffset = Math.Clamp(cursorOffset - trimStart, 0, cellText.Length);
-                    }
-
-                    bool isHeader = parsed.Kind == BlockKind.TableHeaderRow;
-                    double fontSize = _rendering.Measure.GetBlockFontSize(parsed.Kind);
-                    var cellTypeface = isHeader ? TextMeasurer.BoldTypeface : TextMeasurer.GetBlockBaseTypeface(parsed.Kind);
-
-                    var ft = new FormattedText(cellText, CultureInfo.InvariantCulture,
-                        FlowDirection.LeftToRight, cellTypeface, fontSize,
-                        _rendering.Palette.Foreground, _rendering.Measure.DpiScale);
-
-                    if (map != null)
-                        ApplyInlineStylesForCell(ft, parsed, map, trimStart, trimEnd);
-                    else
-                        ApplyInlineStylesForCellRaw(ft, cellText, parsed, trimStart, trimEnd);
-
-                    double textW = 0;
-                    if (visualOffset > 0)
-                    {
-                        var geom = ft.BuildHighlightGeometry(new Point(0, 0), 0, visualOffset);
-                        textW = geom != null ? geom.Bounds.Right : ft.WidthIncludingTrailingWhitespace;
-                    }
-
-                    var align = parsed.Table!.Alignments[c];
-                    double cellContentWidth = colWidths[c] - DocsCanvas._tableCellPadding * 2;
-                    double alignOffset = align switch
-                    {
-                        ColumnAlignment.Center => Math.Max(0, (cellContentWidth - ft.Width) / 2),
-                        ColumnAlignment.Right => Math.Max(0, cellContentWidth - ft.Width),
-                        _ => 0,
-                    };
-                    return x + DocsCanvas._tableCellPadding + alignOffset + textW;
-                }
-                x += colWidths[c];
-            }
-            return x;
-        }
-
-        /// <summary>
-        /// Performs hit testing on a table row to find the character offset at a given X position.
-        /// </summary>
-        internal int HitTestInTableRow(VisualLine vl, ParsedBlock parsed, double[] colWidths, double x)
+        /// <remarks>
+        /// An offset where one of a cell's lines ends and the next begins belongs to the next line,
+        /// as it does in a wrapped paragraph. An offset in the padding around a cell's text sits at
+        /// that text's nearer end.
+        /// </remarks>
+        internal TableCaretPos PositionInTableRow(int vli, VisualLine vl, ParsedBlock parsed, double[] colWidths, int offset)
         {
             var cells = parsed.TableRow!.Cells;
             string blockText = _doc.GetBlockText(vl.BlockIndex);
-            BlockVisualMap? map = (_content.VisualMaps != null && vl.BlockIndex < _content.VisualMaps.Count) ? _content.VisualMaps[vl.BlockIndex] : null;
-            double cx = 0;
+            var map = MapFor(vl.BlockIndex);
+            var layout = vl.TableLayout;
+            int drawn = Math.Min(cells.Count, colWidths.Length);
 
-            for (int c = 0; c < cells.Count && c < colWidths.Length; c++)
+            double x = 0;
+            for (int c = 0; c < drawn; c++)
             {
-                if (x < cx + colWidths[c] || c == cells.Count - 1 || c == colWidths.Length - 1)
+                var cell = cells[c];
+                if (offset >= cell.Start && offset <= cell.Start + cell.Length)
                 {
-                    var cell = cells[c];
-                    var (trimStart, trimEnd) = cell.TrimContent(blockText);
+                    var (s, e) = cell.TrimContent(blockText);
+                    int cellLines = CellLineCount(layout, c);
+                    int k = layout != null && c < layout.CellCount ? layout.LineOf(c, offset) : 0;
+                    var (ls, le) = LineRange(layout, c, k, s, e);
+                    var line = GetCellLine(vli, cellLines, blockText, parsed, map, c, k, colWidths, ls, le,
+                        _rendering.Measure.GetBlockFontSize(parsed.Kind), TextMeasurer.GetBlockBaseTypeface(parsed.Kind));
 
-                    double fullTextW;
-                    if (map != null)
+                    double textW = 0;
+                    if (line.Ft != null)
                     {
-                        fullTextW = 0;
-                        int ri = 0;
-                        for (int rawI = trimStart; rawI < trimEnd; rawI++)
-                        {
-                            if (map.IsHidden(rawI)) continue;
-                            var style = TextMeasurer.GetStyleAtOffset(parsed.Runs, rawI, ref ri);
-                            fullTextW += _rendering.Measure.MeasureCharWidth(blockText[rawI], parsed.Kind, style);
-                        }
+                        int raw = Math.Clamp(offset, ls, le);
+                        int j = map != null ? map.RawToVisual(raw) - map.RawToVisual(ls) : raw - ls;
+                        var stops = StopsFor(line);
+                        textW = stops[Math.Clamp(j, 0, stops.Length - 1)];
                     }
-                    else
-                    {
-                        string cellContent = blockText.Substring(trimStart, trimEnd - trimStart);
-                        fullTextW = _rendering.Measure.MeasureStringWidth(cellContent, parsed.Kind, parsed.Runs, trimStart);
-                    }
+                    return new TableCaretPos(x + DocsCanvas._tableCellPadding + line.AlignX + textW, c, k);
+                }
+                x += colWidths[c];
+            }
+            return new TableCaretPos(x, Math.Max(0, drawn - 1), 0);
+        }
 
-                    var align = parsed.Table!.Alignments[c];
-                    double cellContentWidth = colWidths[c] - DocsCanvas._tableCellPadding * 2;
-                    double alignOffset = align switch
-                    {
-                        ColumnAlignment.Center => Math.Max(0, (cellContentWidth - fullTextW) / 2),
-                        ColumnAlignment.Right => Math.Max(0, cellContentWidth - fullTextW),
-                        _ => 0,
-                    };
-
-                    double localX = x - cx - DocsCanvas._tableCellPadding - alignOffset;
-                    double accum = 0;
-                    int runIdx = 0;
-
-                    if (map != null)
-                    {
-                        for (int rawI = trimStart; rawI < trimEnd; rawI++)
-                        {
-                            if (map.IsHidden(rawI)) continue;
-                            var style = TextMeasurer.GetStyleAtOffset(parsed.Runs, rawI, ref runIdx);
-                            double charW = _rendering.Measure.MeasureCharWidth(blockText[rawI], parsed.Kind, style);
-                            if (localX < accum + charW / 2)
-                                return rawI;
-                            accum += charW;
-                        }
-                        return trimEnd;
-                    }
-                    else
-                    {
-                        string cellContent = blockText.Substring(trimStart, trimEnd - trimStart);
-                        for (int i = 0; i < cellContent.Length; i++)
-                        {
-                            var style = TextMeasurer.GetStyleAtOffset(parsed.Runs, trimStart + i, ref runIdx);
-                            double charW = _rendering.Measure.MeasureCharWidth(cellContent[i], parsed.Kind, style);
-                            if (localX < accum + charW / 2)
-                                return trimStart + i;
-                            accum += charW;
-                        }
-                        return trimEnd;
-                    }
+        /// <summary>
+        /// The offset under a point in a table row: the column by <paramref name="x"/>, relative to
+        /// the left padding, and the line of that cell by <paramref name="localY"/>, measured from
+        /// the row's top.
+        /// </summary>
+        internal int HitTestInTableRow(int vli, VisualLine vl, ParsedBlock parsed, double[] colWidths, double x, double localY)
+        {
+            var cells = parsed.TableRow!.Cells;
+            int drawn = Math.Min(cells.Count, colWidths.Length);
+            double cx = 0;
+            for (int c = 0; c < drawn; c++)
+            {
+                if (x < cx + colWidths[c] || c == drawn - 1)
+                {
+                    // Clamped as a double: callers pass double.MaxValue for "the bottom line", which
+                    // converted to int first is int.MinValue and would clamp to the top one.
+                    double baseH = _rendering.Measure.GetLineHeight(vl.BlockKind);
+                    int rowLines = vl.TableLayout?.LineCount ?? 1;
+                    int k = (int)Math.Clamp(Math.Floor(localY / baseH), 0, rowLines - 1);
+                    return HitTestTableCellLine(vli, vl, parsed, colWidths, c, k, x);
                 }
                 cx += colWidths[c];
             }
             return vl.StartOffset + vl.Length;
+        }
+
+        /// <summary>
+        /// The offset nearest <paramref name="x"/> on line <paramref name="subLine"/> of one cell -
+        /// the question a click asks once it knows the cell, and the one Up and Down ask when they
+        /// move within a cell and must stay in it whatever column the goal X is over.
+        /// </summary>
+        /// <remarks>
+        /// The line is clamped to this cell's own count, not the row's, so a point below a short
+        /// cell's text lands on its last line.
+        ///
+        /// On any line but a cell's last, the result stops at that line's last visible character.
+        /// The offset after it is where the next line starts, and the caret shows it there: a click
+        /// past the end of a line, or Up arriving from the line below, would otherwise land on the
+        /// line it came from and look stuck. After a mid-word break that leaves the position after
+        /// a line's last letter reachable only by Left and Right, which shows it at the start of the
+        /// next line - accepted in the design, as Home and End stay row-wide in a table.
+        /// </remarks>
+        internal int HitTestTableCellLine(int vli, VisualLine vl, ParsedBlock parsed, double[] colWidths,
+            int column, int subLine, double x)
+        {
+            var cells = parsed.TableRow!.Cells;
+            if (column < 0 || column >= Math.Min(cells.Count, colWidths.Length)) return vl.StartOffset + vl.Length;
+
+            string blockText = _doc.GetBlockText(vl.BlockIndex);
+            var map = MapFor(vl.BlockIndex);
+            var layout = vl.TableLayout;
+
+            double colLeft = 0;
+            for (int c = 0; c < column; c++) colLeft += colWidths[c];
+
+            var (s, e) = cells[column].TrimContent(blockText);
+            int cellLines = CellLineCount(layout, column);
+            int k = Math.Clamp(subLine, 0, cellLines - 1);
+            var (ls, le) = LineRange(layout, column, k, s, e);
+            var line = GetCellLine(vli, cellLines, blockText, parsed, map, column, k, colWidths, ls, le,
+                _rendering.Measure.GetBlockFontSize(parsed.Kind), TextMeasurer.GetBlockBaseTypeface(parsed.Kind));
+            if (line.Ft == null) return ls;
+
+            var stops = StopsFor(line);
+            double localX = x - colLeft - DocsCanvas._tableCellPadding - line.AlignX;
+            int visBase = map?.RawToVisual(ls) ?? ls;
+            int lastVisible = -1;
+            for (int i = ls; i < le; i++)
+            {
+                if (map != null && map.IsHidden(i)) continue;
+                int d = (map?.RawToVisual(i) ?? i) - visBase;
+                if (d < 0 || d + 1 >= stops.Length) continue;
+                if (localX < (stops[d] + stops[d + 1]) / 2) return i;
+                lastVisible = i;
+            }
+
+            bool lastLine = k == cellLines - 1;
+            return lastLine ? le : (lastVisible >= 0 ? lastVisible : ls);
         }
 
         /// <summary>

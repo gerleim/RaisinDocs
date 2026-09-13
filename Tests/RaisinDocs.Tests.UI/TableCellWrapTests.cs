@@ -193,6 +193,145 @@ public class TableCellWrapTests
         }
     }
 
+    // --- 7. The caret sits on its own line of the cell ---
+
+    private const int WrapWidth = 400;
+
+    private static string WrappedRowTable() =>
+        $"| Element | Contents |\n|---|---|\n| RootPanel | {LongProse(10)} **{LongProse(6)}** {LongProse(30)} |\n| Last | short |";
+
+    [StaFact]
+    public void Caret_MovesDownALine_ExactlyWhereTheCellsNextLineStarts_AndIsOneLineTall()
+    {
+        var canvas = MakeCanvasAt(WrappedRowTable(), WrapWidth);
+        int vi = TableRows(canvas)[1];
+        var vl = canvas.TestVisualLines[vi];
+        var layout = vl.TableLayout!;
+        layout.CellLineCount(1).Should().BeGreaterThan(2);
+
+        double rowY = canvas.TestGetLineYPosition(vi);
+        double lineH = LineHeight(canvas, vi);
+
+        for (int k = 1; k < layout.CellLineCount(1); k++)
+        {
+            int start = layout.LineStarts[1][k];
+
+            canvas.TestSetCursor(vl.BlockIndex, start - 1);
+            (canvas.TestCursorY - rowY).Should().BeApproximately((k - 1) * lineH, Eps, $"the offset before line {k} starts is still on line {k - 1}");
+
+            canvas.TestSetCursor(vl.BlockIndex, start);
+            (canvas.TestCursorY - rowY).Should().BeApproximately(k * lineH, Eps, $"line {k} starts at raw offset {start}");
+            canvas.TestCaretHeight.Should().BeApproximately(lineH, Eps, "the caret spans one line of the cell, not the row");
+        }
+    }
+
+    // --- 8. A click lands on the offset the caret draws at ---
+
+    [StaFact]
+    public void Click_AtTheCaret_ReturnsItsOffset_OnEveryLineOfAWrappedCell()
+    {
+        var canvas = MakeCanvasAt(WrappedRowTable(), WrapWidth);
+        int vi = TableRows(canvas)[1];
+        var vl = canvas.TestVisualLines[vi];
+        var layout = vl.TableLayout!;
+        double lineH = LineHeight(canvas, vi);
+
+        int checkedOffsets = 0;
+        for (int o = layout.LineStarts[1][0]; o <= layout.CellEnds[1]; o++)
+        {
+            if (o < layout.CellEnds[1] && canvas.TestIsHiddenInVisual(vl.BlockIndex, o)) continue;
+
+            canvas.TestSetCursor(vl.BlockIndex, o);
+            var point = new Point(canvas.TestCursorX, canvas.TestCursorY + lineH / 2);
+            canvas.HitTestToPosition(point, out int block, out int offset);
+
+            block.Should().Be(vl.BlockIndex);
+            offset.Should().Be(o, $"the caret for offset {o} is drawn at ({point.X:F1}, {point.Y:F1})");
+            checkedOffsets++;
+        }
+        checkedOffsets.Should().BeGreaterThan(100);
+    }
+
+    [StaFact]
+    public void Click_PastTheEndOfALineThatIsNotTheCellsLast_StaysOnThatLine()
+    {
+        var canvas = MakeCanvasAt(WrappedRowTable(), WrapWidth);
+        int vi = TableRows(canvas)[1];
+        var vl = canvas.TestVisualLines[vi];
+        var layout = vl.TableLayout!;
+        var edges = ColumnEdges(canvas.TestTableColumnWidths(vl.BlockIndex)!);
+        double rowY = canvas.TestGetLineYPosition(vi);
+        double lineH = LineHeight(canvas, vi);
+
+        for (int k = 0; k + 1 < layout.CellLineCount(1); k++)
+        {
+            canvas.HitTestToPosition(new Point(edges[2] - 1, rowY + k * lineH + lineH / 2), out _, out int offset);
+            offset.Should().BeInRange(layout.LineStarts[1][k], layout.LineStarts[1][k + 1] - 1,
+                $"past the end of line {k} is still line {k}, not the start of the next");
+
+            canvas.TestSetCursor(vl.BlockIndex, offset);
+            (canvas.TestCursorY - rowY).Should().BeApproximately(k * lineH, Eps);
+        }
+    }
+
+    // --- 17. Printing cannot leave page-width cell lines in the screen's cache ---
+
+    [StaFact]
+    public void CaretX_AfterAPrintLayout_IsTheScreensAgain()
+    {
+        // Right-aligned, so a cell line's alignment depends on what that line holds: the page's
+        // first line of the cell is aligned differently from the screen's whole-cell line.
+        string md = $"| Key | Value |\n|---|---:|\n| k | {LongProse(12)} |";
+        var canvas = MakeCanvasAt(md, 800);
+        int vi = TableRows(canvas)[1];
+        var vl = canvas.TestVisualLines[vi];
+        vl.TableLayout.Should().BeNull("the table fits the screen");
+
+        string text = canvas.TestGetBlockText(vl.BlockIndex);
+        canvas.TestSetCursor(vl.BlockIndex, text.IndexOf('|', 1) + 3); // inside the first word
+        double screen = canvas.TestCursorX;
+
+        // Empties the cache, so the next read is a miss built against whatever lines are current.
+        canvas.InvalidateRenderCache();
+        canvas.TestComputeLayoutAtWidth(250);
+        canvas.TestVisualLines[vi].TableLayout.Should().NotBeNull("the table has to wrap at the page width");
+        canvas.TestCursorXNoLayout.Should().NotBeApproximately(screen, 0.5,
+            "read against the page's lines, the caret is somewhere else - so a cache entry was built from them");
+
+        canvas.TestCursorX.Should().BeApproximately(screen, Eps,
+            "laying the screen out again moves LayoutVersion, and the page's cell lines must not be reused");
+    }
+
+    // --- 18. An empty cell in a wrapped row ---
+
+    [StaFact]
+    public void EmptyCell_InAWrappedRow_HasACaretOnTheRowsFirstLine_AndTakesClicks()
+    {
+        string md = $"| Key | Note | Contents |\n|---|---|---|\n| k |  | {LongProse(60)} |";
+        var canvas = MakeCanvasAt(md, WrapWidth);
+        int vi = TableRows(canvas)[1];
+        var vl = canvas.TestVisualLines[vi];
+        vl.TableLayout!.LineCount.Should().BeGreaterThan(1);
+
+        int emptyStart = vl.TableLayout.LineStarts[1][0];
+        vl.TableLayout.CellEnds[1].Should().Be(emptyStart, "the cell holds nothing");
+
+        canvas.TestSetCursor(vl.BlockIndex, emptyStart);
+        double rowY = canvas.TestGetLineYPosition(vi);
+        double lineH = LineHeight(canvas, vi);
+        (canvas.TestCursorY - rowY).Should().BeApproximately(0, Eps);
+        canvas.TestCaretHeight.Should().BeApproximately(lineH, Eps);
+
+        var edges = ColumnEdges(canvas.TestTableColumnWidths(vl.BlockIndex)!);
+        double caretX = canvas.TestCursorX;
+        caretX.Should().BeInRange(edges[1], edges[2]);
+
+        // Below the empty cell's only line, in a row two or more lines tall.
+        canvas.HitTestToPosition(new Point((edges[1] + edges[2]) / 2, rowY + lineH * 1.5), out int block, out int offset);
+        block.Should().Be(vl.BlockIndex);
+        offset.Should().Be(emptyStart, "a click anywhere in an empty cell puts the caret in it");
+    }
+
     // --- 6. Alignment applies to each line of a cell ---
 
     [StaTheory]

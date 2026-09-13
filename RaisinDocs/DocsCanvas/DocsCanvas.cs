@@ -664,6 +664,34 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider, IDocsC
             return _padding + CursorXInVisualLine(vli);
         }
     }
+
+    /// <summary>The top of the caret, in content coordinates.</summary>
+    internal double TestCursorY
+    {
+        get
+        {
+            ComputeLayout();
+            int vli = CursorToVisualLineIndex();
+            return _lineYPositions[vli] + CaretBox(vli).Top;
+        }
+    }
+
+    internal double TestCaretHeight
+    {
+        get
+        {
+            ComputeLayout();
+            return CaretBox(CursorToVisualLineIndex()).Height;
+        }
+    }
+
+    /// <summary>
+    /// <see cref="TestCursorX"/> without its ComputeLayout, so it answers against whatever lines
+    /// are laid out now - the print layout, if that is what was last computed.
+    /// </summary>
+    internal double TestCursorXNoLayout => _padding + CursorXInVisualLine(CursorToVisualLineIndex());
+
+    internal int TestTableCellLineBuilds => _tableRenderer.CellLineBuilds;
     internal record struct VisualBlockInfo(string RawText, string VisualText, BlockKind Kind, bool CreateVisualSeparation = false);
 
     internal string TestGetBlockText(int block) => _doc.GetBlockText(block);
@@ -1327,6 +1355,8 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider, IDocsC
 
     internal double CursorXInVisualLine(int vlIndex) => _navigationEngine.CursorXInVisualLine(vlIndex);
 
+    internal (double X, double Top, double Height) CaretBox(int vlIndex) => _navigationEngine.CaretBox(vlIndex);
+
     internal double MeasureJoinedRange(ParagraphGroup group, int start, int length)
         => _navigationEngine.MeasureJoinedRange(group, start, length);
 
@@ -1357,9 +1387,11 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider, IDocsC
         ComputeLayout();
         if (_visualLines.Count == 0) return;
         int vli = CursorToVisualLineIndex();
-        double cursorY = _lineYPositions[vli];
-        double lineH = GetEffectiveLineHeight(_visualLines[vli]);
-        double cursorBottom = cursorY + lineH;
+        // The caret's own line of text, not the whole visual line: a wrapped table row can be
+        // taller than the viewport, and scrolling to its top would leave a caret below it unseen.
+        var (_, caretTop, caretHeight) = CaretBox(vli);
+        double cursorY = _lineYPositions[vli] + caretTop;
+        double cursorBottom = cursorY + caretHeight;
         if (cursorY < _scroll.Offset + _padding)
             _scroll.Offset = Math.Max(0, cursorY - _padding);
         else if (cursorBottom > _scroll.Offset + ActualHeight - _padding)

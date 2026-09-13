@@ -72,6 +72,10 @@ partial class DocsCanvas
     internal List<(Point Origin, string Text, double[] Edges)> TestLineGlyphRuns(int vi)
         => _renderingContext.TestLineGlyphRuns(vi);
 
+    /// <summary>Whether a raw offset is hidden markup in visual mode.</summary>
+    internal bool TestIsHiddenInVisual(int block, int offset)
+        => _visualMaps != null && block < _visualMaps.Count && _visualMaps[block].IsHidden(offset);
+
     /// <summary>The column widths a table block's table was given, cell padding included.</summary>
     internal double[]? TestTableColumnWidths(int block)
         => _parsedBlocks?[block].Table is { } table && _tableColumnWidths.TryGetValue(table, out var w) ? w : null;

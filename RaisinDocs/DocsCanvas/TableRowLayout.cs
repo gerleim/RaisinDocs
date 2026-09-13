@@ -3,6 +3,12 @@ namespace RaisinDocs;
 public partial class DocsCanvas
 {
     /// <summary>
+    /// Where an offset sits in a table row: its X relative to the left padding, the cell, and the
+    /// line of that cell.
+    /// </summary>
+    internal readonly record struct TableCaretPos(double X, int Column, int SubLine);
+
+    /// <summary>
     /// Where each cell of one table row wraps, as raw offsets into the row's block text.
     /// </summary>
     /// <remarks>

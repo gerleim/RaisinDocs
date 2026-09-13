@@ -106,12 +106,6 @@ public partial class DocsCanvas
         TryGetTableRectSelection()
         => _tableSelection.TryGetTableRectSelection();
 
-    internal double CursorXInTableRow(int blockIndex, ParsedBlock parsed, double[] colWidths, int cursorOffset)
-        => _tableRenderer.CursorXInTableRow(blockIndex, parsed, colWidths, cursorOffset);
-
-    private int HitTestInTableRow(VisualLine vl, ParsedBlock parsed, double[] colWidths, double x)
-        => _tableRenderer.HitTestInTableRow(vl, parsed, colWidths, x);
-
     private void ComputeAllTableColumnWidths(double maxWidth)
         => _tableRenderer.ComputeAllTableColumnWidths(maxWidth);
 
