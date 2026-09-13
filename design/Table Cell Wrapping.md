@@ -99,7 +99,7 @@ In CursorNavigationEngine and `INavigationServices`:
   - `MinimapTableCell` (Integrations.cs:13) gets `LineIndex`.
   - `GetMinimapTableRowInfo` emits one entry per sub-line, plus `out int lineCount`.
   - MinimapScrollbar.cs:333-361 uses `subH = lineH/lineCount` for glyph scale and each entry's Y.
-  - `GetMinimapLineImage` (:281) returns null when `vl.TableLayout != null`. Defensive: a tall row already gets null unless a cell holds an image.
+  - `GetMinimapLineImage` (:281) returns null when `vl.TableLayout != null`. This is required, not defensive. When a cell holds an image, the method returns that image with YOffset 0 (Integrations.cs:289-298), and MinimapScrollbar.cs:323-324 then `continue`s, which skips the row's text.
 - **Print, minimal only** (print rework is deferred): the header tint at Print.cs:384 uses the paginator's `GetLineHeight(i)`. Nothing else in print changes, including the VisualMode.cs drawing copies. Print reaches `DrawTableRow` through the same forwarder (Print.cs:443) and so prints wrapped rows, but must not touch the cell-line cache (step 10.2). A row taller than a page is clipped at the page edge.
 
 ### 10. Scrolling performance must not regress
@@ -116,7 +116,9 @@ Where cost could creep in:
 2. **No FormattedText per frame for the caret.** Today `CursorXInTableRow` builds a FormattedText and highlight geometry every render while the caret is in a table; `BuildCaretStops` would add a DrawingGroup and glyph walk on top. So:
    - **Owner:** TableRenderer holds the cache next to `BuildCellLine`. RenderingContext drives its lifetime from `EnsureLineFtCache` (reset on `RenderVersion`) and `TrimLineFtCache` (same window, RenderingContext.cs:589).
    - **Per visual line:** for each cell and sub-line, the FormattedText, `AlignX`, and `Stops`.
+   - **Keyed on `RenderVersion` and `LayoutVersion`.** The print paginator runs `canvas.ComputeLayoutCore(_contentWidth)` over the canvas's own `_visualLines` and column widths, then only sets `_layoutDirty` (Print.cs:183-189); `RenderVersion` does not move. Without `LayoutVersion` in the key, a query before the next arrange would store print-width entries under the screen's `RenderVersion`, and they would outlive the restore. `ComputeLayoutCore` bumps `LayoutVersion` (LayoutEngine.cs:528), so the cost is one rebuild after printing.
    - **Filled by the screen path only.** `DrawTableRow` gets an optional cache-slot argument that RenderingContext.cs:942 passes for line i. Print.cs:443 passes none, so its print widths and its own line indexes never reach the cache, and Print.cs itself is unchanged.
+   - **A query miss builds and stores the entry.** Some queries ask about rows that have not been drawn: `EnsureCursorVisible` after a jump, a PageDown landing beyond the pre-render margin, Up/Down into a row not built yet. Queries only come from the screen, so filling on miss is safe given the key above.
    - **Stops are lazy.** Building a row stores the FormattedText and `AlignX`; `BuildCaretStops` runs on the first caret, squiggle or span query for that sub-line, as `_lineStops` does. Row builds stay no dearer than today.
    - **Rebuilds reuse it.** A row redrawn after a selection change takes its FormattedTexts from the cache.
    - Net: the caret in a table gets cheaper than today.
@@ -154,9 +156,9 @@ Cases:
 12. **Minimap:** row info carries sub-lines and a line count.
 13. **Resize:** reflowing from 400 to 800 restores `LineCount == 1`.
 14. **Print path:** `TestComputeLayoutAtWidth(narrow)` gives wrapped rows.
-15. **Regression:** TableCursorTests, TableEditingTests, SelectionHighlightAlignmentTests and VerticalGoalColumnTests pass. No test calls `CursorXInTableRow`, but the comment at TableCursorTests.cs:95 describes it (char-by-char advances, no kerning) and is updated.
+15. **Regression:** TableCursorTests, TableEditingTests, SelectionHighlightAlignmentTests and VerticalGoalColumnTests pass. No test calls `CursorXInTableRow`, but the comments at TableCursorTests.cs:95 (char-by-char advances, no kerning) and :105 name it and are updated. That file has uncommitted changes from the other session, so the line numbers may move.
 16. **Sub-line clamps:** Up from the row below into a row whose cell under X is shorter than the row lands on that cell's last line; a click below a short cell's text does the same.
-17. **Print leaves the cache alone:** print at a narrow width, then check the screen caret X in a table row still matches its pre-print value.
+17. **Print leaves the cache alone:** build the print layout at a narrow width, query the caret X in a table row *before* the next arrange (so the miss path runs against print lines), then arrange and check the screen caret X still matches its pre-print value.
 18. **Empty cell** in a wrapped row: caret, click and Up/Down work on it.
 
 ## Verification
@@ -173,8 +175,8 @@ Cases:
 - Mark multi-line table cells done in `design/RaisinDocs design v01.md:269`.
 
 ## Implementation order
-1. Steps 1–3 and 5 (layout, widths, drawing) → tests 1–6.
-2. Steps 4, 6 and 7, caret/popups only → tests 7–8, 17–18.
+1. Steps 1–3, the text-and-alignment part of step 4 (`BuildCellLine` without stops), and step 5 (layout, widths, drawing) → tests 1–6. Drawing depends on `BuildCellLine`, so it can't wait for stage 2.
+2. The rest of step 4 (caret stops), steps 6 and 7, caret/popups only → tests 7–8, 17–18.
 3. Step 8 → tests 9, 11 and 16.
 4. Step 7 spans (selection, search, squiggles) → test 10.
 5. Step 9 → tests 12 and 14.
