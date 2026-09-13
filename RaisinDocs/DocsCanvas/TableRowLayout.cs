@@ -1,0 +1,54 @@
+namespace RaisinDocs;
+
+public partial class DocsCanvas
+{
+    /// <summary>
+    /// Where each cell of one table row wraps, as raw offsets into the row's block text.
+    /// </summary>
+    /// <remarks>
+    /// A row stays one VisualLine however many lines its cells wrap to, because cells wrap
+    /// independently: a VisualLine is one offset range, and "cell 0's second line plus cell 2's
+    /// second line" is not one. The line is made taller through OverrideHeight instead, and this
+    /// says which part of each cell sits on which of its lines. See design/Table Cell Wrapping.md.
+    ///
+    /// A plain class rather than a record, so VisualLine's generated equality compares it by
+    /// reference - the same reason ParagraphGroup is one.
+    /// </remarks>
+    internal sealed class TableRowLayout
+    {
+        /// <summary>
+        /// Per drawn cell, the raw offset each of its lines starts at. The first is the cell's
+        /// trimmed start, so an empty cell still has one line.
+        /// </summary>
+        public required int[][] LineStarts { get; init; }
+
+        /// <summary>Per drawn cell, its trimmed end - where its last line stops.</summary>
+        public required int[] CellEnds { get; init; }
+
+        /// <summary>The most lines any cell wraps to: the row's height in lines, at least one.</summary>
+        public required int LineCount { get; init; }
+
+        public int CellCount => LineStarts.Length;
+
+        public int CellLineCount(int cell) => LineStarts[cell].Length;
+
+        /// <summary>The raw range of line <paramref name="k"/> of a cell, its trailing space included.</summary>
+        public (int Start, int End) GetLine(int cell, int k)
+        {
+            var starts = LineStarts[cell];
+            return (starts[k], k + 1 < starts.Length ? starts[k + 1] : CellEnds[cell]);
+        }
+
+        /// <summary>
+        /// The line of a cell a raw offset is on: the last one starting at or before it, and the
+        /// first for an offset in the padding before the cell's text.
+        /// </summary>
+        public int LineOf(int cell, int raw)
+        {
+            var starts = LineStarts[cell];
+            int k = 0;
+            while (k + 1 < starts.Length && starts[k + 1] <= raw) k++;
+            return k;
+        }
+    }
+}

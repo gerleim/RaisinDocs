@@ -27,12 +27,38 @@ public partial class DocsCanvas
             _layout = layout ?? throw new ArgumentNullException(nameof(layout));
         }
 
+        /// <summary>Tables whose columns had to shrink below their natural width to fit.</summary>
+        /// <remarks>
+        /// Only their rows get a <see cref="TableRowLayout"/>. A table that fits is laid out exactly
+        /// as it was before cells could wrap - no wrap pass, no extra height - which keeps the
+        /// common case off the new path's cost. Rebuilt on every width pass, print's included.
+        /// </remarks>
+        private readonly HashSet<TableInfo> _shrunkTables = new();
+
+        public bool IsShrunk(TableInfo table) => _shrunkTables.Contains(table);
+
         /// <summary>
-        /// Computes and caches the column widths for all tables in the document.
-        /// Column widths are computed based on the widest cell content in each column.
+        /// Computes and caches the column widths for all tables in the document, shrinking the
+        /// columns of any table wider than <paramref name="maxWidth"/> so it fits.
         /// </summary>
+        /// <remarks>
+        /// The browser's rule, in three tiers. A column's natural width is its widest cell and its
+        /// minimum its longest word, both with the cell padding included.
+        /// <list type="number">
+        /// <item>Natural widths fit: use them.</item>
+        /// <item>Minimums fit: every column keeps its longest word, and the shortfall comes out of
+        /// each in proportion to how far it is above its minimum.</item>
+        /// <item>Not even the minimums fit: the same blend between a floor of about three
+        /// characters and the minimum, so long words break mid-word. At the floor the table still
+        /// overflows and is clipped, as every wide table used to be.</item>
+        /// </list>
+        /// Widths are measured as advance sums over the visible characters - the same sums, in the
+        /// same order, that FitLine wraps by - so a cell at its natural width is never wrapped by
+        /// the pass that follows. Header rows measure bold through their block kind.
+        /// </remarks>
         public void ComputeAllTableColumnWidths(double maxWidth)
         {
+            _shrunkTables.Clear();
             var seen = new HashSet<TableInfo>();
             for (int bi = 0; bi < _doc.BlockCount; bi++)
             {
@@ -41,7 +67,8 @@ public partial class DocsCanvas
                 if (!seen.Add(parsed.Table)) continue;
 
                 int colCount = parsed.Table.ColumnCount;
-                var widths = new double[colCount];
+                var natural = new double[colCount];
+                var minimum = new double[colCount];
 
                 for (int bj = bi; bj < _doc.BlockCount; bj++)
                 {
@@ -53,24 +80,83 @@ public partial class DocsCanvas
                     BlockVisualMap? map = (_content.VisualMaps != null && bj < _content.VisualMaps.Count) ? _content.VisualMaps[bj] : null;
                     for (int c = 0; c < Math.Min(p.TableRow.Cells.Count, colCount); c++)
                     {
-                        var cell = p.TableRow.Cells[c];
-                        int s = cell.Start;
-                        int e = s + cell.Length;
-                        while (s < e && text[s] == ' ') s++;
-                        while (e > s && text[e - 1] == ' ') e--;
-                        string cellText = map != null
-                            ? map.BuildDisplayString(text, s, e - s)
-                            : text.Substring(s, e - s);
-                        double w = _rendering.Measure.MeasureStringWidth(cellText, p.Kind, p.Runs, s);
-                        if (w > widths[c]) widths[c] = w;
+                        var (s, e) = p.TableRow.Cells[c].TrimContent(text);
+                        var (nat, longestWord) = MeasureCell(text, s, e, p, map);
+                        if (nat > natural[c]) natural[c] = nat;
+                        if (longestWord > minimum[c]) minimum[c] = longestWord;
                     }
                 }
 
+                double pad = DocsCanvas._tableCellPadding * 2;
                 for (int c = 0; c < colCount; c++)
-                    widths[c] += DocsCanvas._tableCellPadding * 2;
+                {
+                    natural[c] += pad;
+                    minimum[c] += pad;
+                }
+
+                var widths = FitColumns(natural, minimum, maxWidth,
+                    3 * _rendering.Measure.MeasureCharWidth('0', BlockKind.TableHeaderRow, InlineStyle.Normal) + pad);
+                if (!ReferenceEquals(widths, natural))
+                    _shrunkTables.Add(parsed.Table);
 
                 _table.TableColumnWidths[parsed.Table] = widths;
             }
+        }
+
+        /// <summary>
+        /// A cell's width and its longest word's, over the visible characters of [s, e). Words end
+        /// at a visible space, the only place FitLine breaks a line.
+        /// </summary>
+        private (double Width, double LongestWord) MeasureCell(string text, int s, int e,
+            ParsedBlock parsed, BlockVisualMap? map)
+        {
+            double width = _rendering.MeasureRangeWidth(text, s, e - s, parsed.Runs, parsed.Kind, map);
+
+            double longest = 0;
+            int wordStart = s;
+            for (int i = s; i <= e; i++)
+            {
+                bool boundary = i == e || (text[i] == ' ' && (map == null || !map.IsHidden(i)));
+                if (!boundary) continue;
+                if (i > wordStart)
+                {
+                    double w = _rendering.MeasureRangeWidth(text, wordStart, i - wordStart, parsed.Runs, parsed.Kind, map);
+                    if (w > longest) longest = w;
+                }
+                wordStart = i + 1;
+            }
+            return (width, longest);
+        }
+
+        /// <summary>
+        /// The three tiers of <see cref="ComputeAllTableColumnWidths"/>. Returns
+        /// <paramref name="natural"/> itself when the table fits, so the caller can tell.
+        /// </summary>
+        internal static double[] FitColumns(double[] natural, double[] minimum, double available, double floorWidth)
+        {
+            double sumNat = natural.Sum();
+            if (available <= 0 || sumNat <= available) return natural;
+
+            int n = natural.Length;
+            var widths = new double[n];
+            double sumMin = minimum.Sum();
+            if (sumMin <= available)
+            {
+                double share = sumNat > sumMin ? (available - sumMin) / (sumNat - sumMin) : 0;
+                for (int c = 0; c < n; c++)
+                    widths[c] = minimum[c] + (natural[c] - minimum[c]) * share;
+                return widths;
+            }
+
+            var floor = new double[n];
+            for (int c = 0; c < n; c++) floor[c] = Math.Min(minimum[c], floorWidth);
+            double sumFloor = floor.Sum();
+            if (sumFloor >= available) return floor;
+
+            double blend = (available - sumFloor) / (sumMin - sumFloor);
+            for (int c = 0; c < n; c++)
+                widths[c] = floor[c] + (minimum[c] - floor[c]) * blend;
+            return widths;
         }
 
         /// <summary>
@@ -190,6 +276,11 @@ public partial class DocsCanvas
         /// <summary>
         /// Draws the content of a table row, including cell text with proper alignment and styling.
         /// </summary>
+        /// <remarks>
+        /// Each cell's lines are drawn one under the next, top-aligned, inside one clip the height
+        /// of the whole row. A row of a table that fits has no layout and draws each cell as its
+        /// single line, through the same <see cref="BuildCellLine"/>.
+        /// </remarks>
         public void DrawTableRow(DrawingContext dc, VisualLine vl, string blockText,
             ParsedBlock parsed, double y,
             double fontSize, Typeface baseTypeface)
@@ -201,68 +292,103 @@ public partial class DocsCanvas
             if (_content.VisualMaps != null && vl.BlockIndex < _content.VisualMaps.Count)
                 map = _content.VisualMaps[vl.BlockIndex];
 
+            var layout = vl.TableLayout;
             double x = DocsCanvas._padding;
             double lineH = _rendering.Measure.GetLineHeight(vl.BlockKind);
-            bool isHeader = parsed.Kind == BlockKind.TableHeaderRow;
+            int rowLines = layout?.LineCount ?? 1;
 
             for (int c = 0; c < Math.Min(parsed.TableRow.Cells.Count, colWidths.Length); c++)
             {
-                var cell = parsed.TableRow.Cells[c];
-                var (s, e) = cell.TrimContent(blockText);
+                var (s, e) = parsed.TableRow.Cells[c].TrimContent(blockText);
+                int cellLines = layout != null && c < layout.CellCount ? layout.CellLineCount(c) : 1;
 
-                string cellText = map != null
-                    ? map.BuildDisplayString(blockText, s, e - s)
-                    : blockText.Substring(s, e - s);
-                if (cellText.Length == 0) { x += colWidths[c]; continue; }
+                dc.PushClip(new RectangleGeometry(new Rect(x, y, colWidths[c], rowLines * lineH)));
 
-                var cellTypeface = isHeader ? TextMeasurer.BoldTypeface : baseTypeface;
-                var ft = new FormattedText(cellText, CultureInfo.InvariantCulture,
-                    FlowDirection.LeftToRight, cellTypeface, fontSize,
-                    _rendering.Palette.Foreground, _rendering.Measure.DpiScale);
-
-                if (map != null)
-                    ApplyInlineStylesForCell(ft, parsed, map, s, e);
-                else
-                    ApplyInlineStylesForCellRaw(ft, cellText, parsed, s, e);
-
-                var align = parsed.Table.Alignments[c];
-                double cellContentWidth = colWidths[c] - DocsCanvas._tableCellPadding * 2;
-                double textX;
-                if (align == ColumnAlignment.Center)
-                    textX = x + DocsCanvas._tableCellPadding + Math.Max(0, (cellContentWidth - ft.Width) / 2);
-                else if (align == ColumnAlignment.Right)
-                    textX = x + DocsCanvas._tableCellPadding + Math.Max(0, cellContentWidth - ft.Width);
-                else
-                    textX = x + DocsCanvas._tableCellPadding;
-
-                var clipRect = new Rect(x, y, colWidths[c], lineH);
-                dc.PushClip(new RectangleGeometry(clipRect));
-
-                if (map?.ColorSpans != null)
+                for (int k = 0; k < cellLines; k++)
                 {
-                    foreach (var cs in map.ColorSpans)
-                    {
-                        if (cs.Background == null) continue;
-                        int csEnd = cs.Start + cs.Length;
-                        if (csEnd <= s || cs.Start >= e) continue;
+                    var (ls, le) = layout != null && c < layout.CellCount ? layout.GetLine(c, k) : (s, e);
+                    if (BuildCellLine(blockText, parsed, map, c, colWidths, ls, le, fontSize, baseTypeface)
+                        is not { } line)
+                        continue;
 
-                        int rawStart = Math.Max(cs.Start, s);
-                        int rawEnd = Math.Min(csEnd, e);
-                        double bgX1 = _rendering.MeasureRangeWidth(blockText, s, rawStart - s, parsed.Runs, parsed.Kind, map);
-                        double bgX2 = _rendering.MeasureRangeWidth(blockText, s, rawEnd - s, parsed.Runs, parsed.Kind, map);
-                        if (bgX2 <= bgX1) continue;
-
-                        var bg = cs.Background.Value;
-                        var brush = new SolidColorBrush(Color.FromArgb(40, bg.R, bg.G, bg.B));
-                        brush.Freeze();
-                        dc.DrawRectangle(brush, null, new Rect(textX + bgX1, y, bgX2 - bgX1, lineH));
-                    }
+                    double textX = x + DocsCanvas._tableCellPadding + line.AlignX;
+                    double lineY = y + k * lineH;
+                    DrawCellColorBackgrounds(dc, line.Ft, map, ls, le, textX, lineY, lineH);
+                    dc.DrawText(line.Ft, new Point(textX, lineY));
                 }
 
-                dc.DrawText(ft, new Point(textX, y));
                 dc.Pop();
-
                 x += colWidths[c];
+            }
+        }
+
+        /// <summary>
+        /// One line of one cell, ready to draw: its text styled as the cell styles it, and how far
+        /// its column's alignment moves it right of the cell's padded left edge. Null when nothing
+        /// on the line is visible.
+        /// </summary>
+        /// <remarks>
+        /// Drawing and every position question about a cell are to come through here, so the caret,
+        /// a click and the glyphs cannot disagree about where a character is. Alignment is taken
+        /// from this line's own width, which excludes the trailing space a wrapped line keeps, so a
+        /// centred or right-aligned column aligns each of a cell's lines.
+        /// </remarks>
+        private (FormattedText Ft, double AlignX)? BuildCellLine(string blockText, ParsedBlock parsed,
+            BlockVisualMap? map, int column, double[] colWidths, int ls, int le,
+            double fontSize, Typeface baseTypeface)
+        {
+            string lineText = map != null
+                ? map.BuildDisplayString(blockText, ls, le - ls)
+                : blockText.Substring(ls, le - ls);
+            if (lineText.Length == 0) return null;
+
+            var typeface = parsed.Kind == BlockKind.TableHeaderRow ? TextMeasurer.BoldTypeface : baseTypeface;
+            var ft = new FormattedText(lineText, CultureInfo.InvariantCulture,
+                FlowDirection.LeftToRight, typeface, fontSize,
+                _rendering.Palette.Foreground, _rendering.Measure.DpiScale);
+
+            if (map != null)
+                ApplyInlineStylesForCell(ft, parsed, map, ls, le);
+            else
+                ApplyInlineStylesForCellRaw(ft, lineText, parsed, ls, le);
+
+            double contentWidth = colWidths[column] - DocsCanvas._tableCellPadding * 2;
+            double alignX = parsed.Table!.Alignments[column] switch
+            {
+                ColumnAlignment.Center => Math.Max(0, (contentWidth - ft.Width) / 2),
+                ColumnAlignment.Right => Math.Max(0, contentWidth - ft.Width),
+                _ => 0,
+            };
+            return (ft, alignX);
+        }
+
+        /// <summary>
+        /// Tints the parts of one cell line that a colour span with a background covers, measured
+        /// off the line's own text so the tint sits under the glyphs it belongs to.
+        /// </summary>
+        private void DrawCellColorBackgrounds(DrawingContext dc, FormattedText ft, BlockVisualMap? map,
+            int ls, int le, double textX, double lineY, double lineH)
+        {
+            if (map?.ColorSpans == null) return;
+
+            int visBase = map.RawToVisual(ls);
+            foreach (var cs in map.ColorSpans)
+            {
+                if (cs.Background == null) continue;
+                int csEnd = cs.Start + cs.Length;
+                if (csEnd <= ls || cs.Start >= le) continue;
+
+                int visStart = map.RawToVisual(Math.Max(cs.Start, ls)) - visBase;
+                int visEnd = Math.Min(map.RawToVisual(Math.Min(csEnd, le)) - visBase, ft.Text.Length);
+                if (visStart < 0 || visEnd <= visStart) continue;
+
+                var bounds = ft.BuildHighlightGeometry(new Point(textX, lineY), visStart, visEnd - visStart)?.Bounds;
+                if (bounds is not { } b || b.Width <= 0) continue;
+
+                var bg = cs.Background.Value;
+                var brush = new SolidColorBrush(Color.FromArgb(40, bg.R, bg.G, bg.B));
+                brush.Freeze();
+                dc.DrawRectangle(brush, null, new Rect(b.X, lineY, b.Width, lineH));
             }
         }
 

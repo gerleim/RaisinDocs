@@ -245,6 +245,12 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider, IDocsC
         public ParagraphGroup? Group { get; init; }
         public int NestingDepth { get; init; }
         public int ParentContentColumn { get; init; }
+
+        /// <summary>
+        /// Where the cells of a table row wrap; null when every cell is one line, which is every
+        /// row of a table that fits.
+        /// </summary>
+        public TableRowLayout? TableLayout { get; init; }
     }
     internal readonly List<VisualLine> _visualLines = [];
     internal readonly List<double> _lineYPositions = [];

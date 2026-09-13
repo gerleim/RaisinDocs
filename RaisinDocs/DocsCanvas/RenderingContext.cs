@@ -541,6 +541,47 @@ public partial class DocsCanvas
             return right;
         }
 
+        /// <summary>
+        /// Test hook: every run of glyphs on a visual line, with its baseline origin, its text, and
+        /// the left edge of each character followed by the run's right edge. For a wrapped table
+        /// row the baseline says which of a cell's lines a run is on.
+        /// </summary>
+        internal List<(Point Origin, string Text, double[] Edges)> TestLineGlyphRuns(int i)
+        {
+            var runs = new List<(Point, string, double[])>();
+            if (i < 0 || i >= _layout.VisualLines.Count) return runs;
+
+            _rendering.Measure.EnsureMeasured(_docsCanvas);
+            EnsureLineFtCache(_layout.VisualLines.Count, _docsCanvas.RenderVersion);
+
+            var dv = new DrawingVisual();
+            using (var dc = dv.RenderOpen())
+                DrawLineContent(dc, i, _layout.VisualLines[i], 0);
+
+            CollectGlyphRuns(dv.Drawing, runs);
+            return runs;
+        }
+
+        private static void CollectGlyphRuns(Drawing? drawing, List<(Point, string, double[])> into)
+        {
+            switch (drawing)
+            {
+                case GlyphRunDrawing { GlyphRun: { } run }:
+                {
+                    var edges = new List<double>();
+                    double right = CollectGlyphLeftEdges(drawing, edges);
+                    edges.Add(right);
+                    string text = run.Characters != null ? new string(run.Characters.ToArray()) : string.Empty;
+                    into.Add((run.BaselineOrigin, text, edges.ToArray()));
+                    break;
+                }
+                case DrawingGroup group:
+                    foreach (var child in group.Children)
+                        CollectGlyphRuns(child, into);
+                    break;
+            }
+        }
+
         private static void CollectGlyphOriginXs(Drawing? drawing, List<double> into)
         {
             switch (drawing)

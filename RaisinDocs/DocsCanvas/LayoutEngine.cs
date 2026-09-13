@@ -579,11 +579,28 @@ public partial class DocsCanvas
 
             if (_visual.IsVisual && parsed.Table != null && parsed.Kind is BlockKind.TableHeaderRow or BlockKind.TableDataRow)
             {
-                _layout.VisualLines.Add(new DocsCanvas.VisualLine(blockIndex, 0, text.Length, parsed.Kind)
+                var rowLine = new DocsCanvas.VisualLine(blockIndex, 0, text.Length, parsed.Kind)
                 {
                     NestingDepth = nestingDepth,
                     ParentContentColumn = parentContentCol
-                });
+                };
+
+                // Only a table that had to shrink wraps. One that fits keeps a null layout and the
+                // plain line height, and is laid out exactly as before.
+                if (parsed.TableRow != null && _table.TableRenderer.IsShrunk(parsed.Table)
+                    && _table.TableColumnWidths.TryGetValue(parsed.Table, out var colWidths))
+                {
+                    var rowLayout = BuildTableRowLayout(text, parsed, map, colWidths);
+                    rowLine = rowLine with
+                    {
+                        TableLayout = rowLayout,
+                        OverrideHeight = rowLayout.LineCount > 1
+                            ? rowLayout.LineCount * _rendering.Measure.GetLineHeight(parsed.Kind)
+                            : 0,
+                    };
+                }
+
+                _layout.VisualLines.Add(rowLine);
                 return;
             }
 
@@ -700,14 +717,66 @@ public partial class DocsCanvas
             }
         }
 
-        private int FitLine(string text, int start, double maxWidth, ParsedBlock parsed,
-            BlockVisualMap? map = null, int blockOffset = 0, HashSet<int>? softBreaks = null)
+        /// <summary>
+        /// Wraps one table row's cells into the widths their columns were given.
+        /// </summary>
+        /// <remarks>
+        /// Each cell goes through FitLine bounded to its own trimmed range, so it breaks exactly as
+        /// a paragraph does: after the last visible space, with that space hanging past the edge,
+        /// or mid-word when a word is wider than the column. The hundredth of a pixel stops a cell
+        /// whose column is exactly its natural width from wrapping on floating point: the width is
+        /// its advance sum plus the padding, less the padding again.
+        /// </remarks>
+        private DocsCanvas.TableRowLayout BuildTableRowLayout(string text, ParsedBlock parsed,
+            BlockVisualMap? map, double[] colWidths)
         {
+            var cells = parsed.TableRow!.Cells;
+            int drawn = Math.Min(cells.Count, colWidths.Length);
+            var lineStarts = new int[drawn][];
+            var cellEnds = new int[drawn];
+            int lineCount = 1;
+
+            var starts = new List<int>();
+            for (int c = 0; c < drawn; c++)
+            {
+                var (s, e) = cells[c].TrimContent(text);
+                double contentWidth = colWidths[c] - DocsCanvas._tableCellPadding * 2 + 0.01;
+
+                starts.Clear();
+                starts.Add(s);
+                int pos = s;
+                while (pos < e)
+                {
+                    pos += FitLine(text, pos, contentWidth, parsed, map, end: e);
+                    if (pos < e) starts.Add(pos);
+                }
+
+                lineStarts[c] = starts.ToArray();
+                cellEnds[c] = e;
+                lineCount = Math.Max(lineCount, starts.Count);
+            }
+
+            return new DocsCanvas.TableRowLayout
+            {
+                LineStarts = lineStarts,
+                CellEnds = cellEnds,
+                LineCount = lineCount,
+            };
+        }
+
+        /// <param name="end">
+        /// Where the text to fit stops, when that is short of the end of <paramref name="text"/>:
+        /// a table cell is fitted inside its row's block.
+        /// </param>
+        private int FitLine(string text, int start, double maxWidth, ParsedBlock parsed,
+            BlockVisualMap? map = null, int blockOffset = 0, HashSet<int>? softBreaks = null, int end = -1)
+        {
+            int limit = end < 0 ? text.Length : end;
             int lastSpace = -1;
             double width = 0;
             int runIdx = 0;
             bool anyVisible = false;
-            for (int i = start; i < text.Length; i++)
+            for (int i = start; i < limit; i++)
             {
                 int rawOffset = blockOffset + i;
                 if (map != null && map.IsHidden(rawOffset))
@@ -757,7 +826,7 @@ public partial class DocsCanvas
                     return i - start;
                 }
             }
-            return text.Length - start;
+            return limit - start;
         }
 
         internal BlockVisualSpacing ComputeVisualLineSpacing(DocsCanvas.VisualLine vl)
