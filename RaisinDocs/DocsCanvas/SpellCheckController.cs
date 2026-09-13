@@ -237,18 +237,21 @@ internal sealed class SpellCheckController
                 int hlStart = Math.Max(err.StartOffset, vl.StartOffset);
                 int hlEnd = Math.Min(errEnd, vlEnd);
 
-                double x1 = _nav.XInVisualLine(i, hlStart);
-                double x2 = _nav.XInVisualLine(i, hlEnd);
-
-                double w = x2 - x1;
-                if (w > 0)
+                // Under the line of text each piece is on: the bottom of a wrapped cell's own line,
+                // not the bottom of the whole row.
+                _spans.Clear();
+                _nav.GetRangeSpans(i, hlStart, hlEnd, _spans);
+                foreach (var span in _spans)
                 {
-                    double baselineY = lineY - effectiveScroll + lineH - 2;
-                    DrawSquigglyLine(dc, DocsCanvas._padding + x1, DocsCanvas._padding + x2, baselineY);
+                    if (span.X2 - span.X1 <= 0) continue;
+                    double baselineY = lineY - effectiveScroll + span.Bottom - 2;
+                    DrawSquigglyLine(dc, DocsCanvas._padding + span.X1, DocsCanvas._padding + span.X2, baselineY);
                 }
             }
         }
     }
+
+    private readonly List<DocsCanvas.LineSpan> _spans = new();
 
     private void DrawSpellingErrorsOnJoinedLine(DrawingContext dc, int vlIndex, DocsCanvas.VisualLine vl,
         double lineY, double lineH, double effectiveScroll)

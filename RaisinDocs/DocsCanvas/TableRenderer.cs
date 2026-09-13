@@ -564,6 +564,58 @@ public partial class DocsCanvas
         }
 
         /// <summary>
+        /// The pieces of the raw range [<paramref name="start"/>, <paramref name="end"/>) that a
+        /// highlight paints on a table row: one per line of each cell it crosses, measured off the
+        /// glyphs of that line.
+        /// </summary>
+        /// <remarks>
+        /// Each piece is cut at its line's own ends and measured on that line, not through
+        /// <see cref="PositionInTableRow"/>, which would put a range ending exactly where a line
+        /// ends at the start of the next line instead. The padding and pipes between cells are not
+        /// text, so a range across several cells paints each cell's part and not the gaps.
+        /// </remarks>
+        internal void RangeSpansInTableRow(int vli, VisualLine vl, ParsedBlock parsed, double[] colWidths,
+            int start, int end, List<LineSpan> into)
+        {
+            var cells = parsed.TableRow!.Cells;
+            string blockText = _doc.GetBlockText(vl.BlockIndex);
+            var map = MapFor(vl.BlockIndex);
+            var layout = vl.TableLayout;
+            int rowLines = layout?.LineCount ?? 1;
+            double lineH = _rendering.Measure.GetLineHeight(vl.BlockKind);
+            double fontSize = _rendering.Measure.GetBlockFontSize(parsed.Kind);
+            var baseTypeface = TextMeasurer.GetBlockBaseTypeface(parsed.Kind);
+            int drawn = Math.Min(cells.Count, colWidths.Length);
+
+            double colLeft = 0;
+            for (int c = 0; c < drawn; c++)
+            {
+                var (s, e) = cells[c].TrimContent(blockText);
+                int cellLines = CellLineCount(layout, c);
+                for (int k = 0; k < cellLines && start < e && end > s; k++)
+                {
+                    var (ls, le) = LineRange(layout, c, k, s, e);
+                    int a = Math.Max(start, ls);
+                    int b = Math.Min(end, le);
+                    if (a >= b) continue;
+
+                    var line = GetCellLine(vli, cellLines, blockText, parsed, map, c, k, colWidths, ls, le, fontSize, baseTypeface);
+                    if (line.Ft == null) continue;
+
+                    var stops = StopsFor(line);
+                    int visBase = map?.RawToVisual(ls) ?? ls;
+                    int ja = Math.Clamp((map?.RawToVisual(a) ?? a) - visBase, 0, stops.Length - 1);
+                    int jb = Math.Clamp((map?.RawToVisual(b) ?? b) - visBase, 0, stops.Length - 1);
+                    if (jb <= ja) continue;
+
+                    double textLeft = colLeft + DocsCanvas._tableCellPadding + line.AlignX;
+                    into.Add(new LineSpan(textLeft + stops[ja], textLeft + stops[jb], k, rowLines, lineH, b < end));
+                }
+                colLeft += colWidths[c];
+            }
+        }
+
+        /// <summary>
         /// The offset under a point in a table row: the column by <paramref name="x"/>, relative to
         /// the left padding, and the line of that cell by <paramref name="localY"/>, measured from
         /// the row's top.

@@ -487,6 +487,74 @@ public class TableCellWrapTests
         canvas.TestCursorBlock.Should().Be(below.BlockIndex, "an empty cell has one line, so Down leaves the row");
     }
 
+    // --- 10. Highlights are drawn per line of the cell ---
+
+    [StaFact]
+    public void ShiftDown_InsideAWrappedCell_PaintsOneSelectionBandPerLine()
+    {
+        var canvas = MakeCanvasAt(WrappedRowTable(), WrapWidth);
+        int vi = TableRows(canvas)[1];
+        var vl = canvas.TestVisualLines[vi];
+        double lineH = LineHeight(canvas, vi);
+
+        canvas.TestSetCursor(vl.BlockIndex, vl.TableLayout!.LineStarts[1][0] + 8);
+        canvas.TestNavigate(System.Windows.Input.Key.Down, shift: true);
+
+        var rects = canvas.TestSelectionRects(vi).OrderBy(r => r.Top).ToList();
+        rects.Should().HaveCount(2, "the selection covers the end of line 0 and the start of line 1");
+        rects[0].Top.Should().BeApproximately(0, Eps);
+        rects[1].Top.Should().BeApproximately(Math.Round(lineH), Eps);
+        rects.Should().OnlyContain(r => r.Height <= Math.Round(lineH) + 1, "no band covers more than its own line");
+    }
+
+    [StaFact]
+    public void SearchMatch_CrossingAWrap_PaintsTwoPieces_OnConsecutiveLines()
+    {
+        string words = string.Join(" ", Enumerable.Range(0, 60).Select(i => $"word{i:00}"));
+        var canvas = MakeCanvasAt($"| Key | Contents |\n|---|---|\n| k | {words} |", WrapWidth);
+        int vi = TableRows(canvas)[1];
+        var vl = canvas.TestVisualLines[vi];
+        var layout = vl.TableLayout!;
+        layout.CellLineCount(1).Should().BeGreaterThan(1);
+        double lineH = LineHeight(canvas, vi);
+        string text = canvas.TestGetBlockText(vl.BlockIndex);
+
+        // The last word of line 0 and the first of line 1, which are only ever next to each other here.
+        int wrapAt = layout.LineStarts[1][1];
+        int from = text.LastIndexOf(' ', wrapAt - 2) + 1;
+        int to = text.IndexOf(' ', wrapAt);
+        string query = text.Substring(from, to - from);
+
+        canvas.TestExecuteSearch(query, caseSensitive: false);
+
+        var rects = canvas.TestSearchMatchRects(vi).OrderBy(r => r.Top).ToList();
+        rects.Should().HaveCount(2, $"'{query}' crosses where the cell wraps");
+        rects[0].Top.Should().BeApproximately(0, Eps);
+        rects[1].Top.Should().BeApproximately(Math.Round(lineH), Eps);
+        rects[1].Left.Should().BeLessThan(rects[0].Left, "the second piece starts the next line, left of where the first began");
+    }
+
+    [StaTheory]
+    [InlineData(800)]
+    [InlineData(WrapWidth)]
+    public void FullySelectedRow_PaintsItsSelectionInEveryCell(int width)
+    {
+        string md = $"Before\n\n| Key | Contents |\n|---|---|\n| one | {LongProse(width == 800 ? 3 : 40)} |\n\nAfter";
+        var canvas = MakeCanvasAt(md, width);
+        int vi = TableRows(canvas)[1];
+        var vl = canvas.TestVisualLines[vi];
+        (vl.TableLayout != null).Should().Be(width == WrapWidth, "one table fits, the other wraps");
+
+        int last = canvas.TestVisualLines[^1].BlockIndex;
+        canvas.TestSetSelection(0, 0, last, canvas.TestGetBlockText(last).Length);
+
+        var edges = ColumnEdges(canvas.TestTableColumnWidths(vl.BlockIndex)!);
+        var rects = canvas.TestSelectionRects(vi);
+        for (int c = 0; c + 1 < edges.Length; c++)
+            rects.Should().Contain(r => r.Left >= edges[c] - Eps && r.Right <= edges[c + 1] + 4 + Eps && r.Width > 8,
+                $"column {c}'s text is selected, not a sliver past the last pipe");
+    }
+
     // --- 6. Alignment applies to each line of a cell ---
 
     [StaTheory]

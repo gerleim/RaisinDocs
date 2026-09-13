@@ -596,6 +596,41 @@ public partial class DocsCanvas
             }
         }
 
+        /// <summary>
+        /// Test hook: every rectangle one visual line paints in <paramref name="brush"/>, in its own
+        /// coordinates - a highlight in a wrapped table row is several.
+        /// </summary>
+        internal List<Rect> TestLineRectsPaintedWith(int i, Brush brush)
+        {
+            var rects = new List<Rect>();
+            if (i < 0 || i >= _layout.VisualLines.Count) return rects;
+
+            _rendering.Measure.EnsureMeasured(_docsCanvas);
+            EnsureLineFtCache(_layout.VisualLines.Count, _docsCanvas.RenderVersion);
+
+            var dv = new DrawingVisual();
+            using (var dc = dv.RenderOpen())
+                DrawLineContent(dc, i, _layout.VisualLines[i], 0);
+
+            CollectRectsPaintedWith(dv.Drawing, brush, rects);
+            return rects;
+        }
+
+        private static void CollectRectsPaintedWith(Drawing? drawing, Brush brush, List<Rect> into)
+        {
+            switch (drawing)
+            {
+                case GeometryDrawing gd
+                    when ReferenceEquals(gd.Brush, brush) && gd.Geometry is RectangleGeometry rg:
+                    into.Add(rg.Rect);
+                    break;
+                case DrawingGroup group:
+                    foreach (var child in group.Children)
+                        CollectRectsPaintedWith(child, brush, into);
+                    break;
+            }
+        }
+
         private static Rect? FindRectPaintedWith(Drawing? drawing, Brush brush)
         {
             switch (drawing)
@@ -1942,20 +1977,28 @@ public partial class DocsCanvas
             int hlEnd = Document.ComparePositions(vl.BlockIndex, vlEnd, eb, eo) <= 0
                 ? vlEnd : eo;
 
-            double x1 = _navigation.XInVisualLine(vlIndex, hlStart);
-            double x2 = _navigation.XInVisualLine(vlIndex, hlEnd);
-
             bool selectionContinues = Document.ComparePositions(vl.BlockIndex, vlEnd, eb, eo) < 0;
-            if (selectionContinues && x2 - x1 < 4)
-                x2 = x1 + 4;
-            else if (selectionContinues)
-                x2 += 4;
 
-            double selW = Math.Max(0, x2 - x1);
-            if (selW > 0)
+            _spans.Clear();
+            _navigation.GetRangeSpans(vlIndex, hlStart, hlEnd, _spans);
+            foreach (var span in _spans)
+            {
+                double x1 = span.X1, x2 = span.X2;
+                // The sliver that shows the selection carries on past a line's last character. In
+                // a wrapped cell a span carries on into the next line of the cell as well.
+                if (selectionContinues || span.Continues)
+                    x2 = x2 - x1 < 4 ? x1 + 4 : x2 + 4;
+
+                double selW = Math.Max(0, x2 - x1);
+                if (selW <= 0) continue;
+                var (top, height) = span.Band(y, bgH);
                 dc.DrawRectangle(_rendering.Palette.Selection, null,
-                    new Rect(DocsCanvas._padding + x1, y, selW, bgH));
+                    new Rect(DocsCanvas._padding + x1, top, selW, height));
+            }
         }
+
+        /// <summary>Reused for every highlight a line draws, so a frame allocates no lists.</summary>
+        private readonly List<LineSpan> _spans = new();
 
         /// <summary>One line's slice of a rectangular table selection.</summary>
         private void DrawTableRectSelectionForLine(DrawingContext dc, VisualLine vl,

@@ -322,13 +322,20 @@ internal class FindAndReplaceController
         int hlStart = Math.Max(match.Offset, vl.StartOffset);
         int hlEnd = Math.Min(matchEnd, vlEnd);
 
-        double x1 = _navigation.XInVisualLine(vlIndex, hlStart);
-        double x2 = _navigation.XInVisualLine(vlIndex, hlEnd);
-
-        double w = Math.Max(0, x2 - x1);
-        if (w > 0)
-            dc.DrawRectangle(brush, null, new Rect(DocsCanvas._padding + x1, y, w, bgH));
+        // Per line of text: a match that crosses where a table cell wraps is two pieces, on two
+        // lines, like the selection.
+        _spans.Clear();
+        _navigation.GetRangeSpans(vlIndex, hlStart, hlEnd, _spans);
+        foreach (var span in _spans)
+        {
+            double w = Math.Max(0, span.X2 - span.X1);
+            if (w <= 0) continue;
+            var (top, height) = span.Band(y, bgH);
+            dc.DrawRectangle(brush, null, new Rect(DocsCanvas._padding + span.X1, top, w, height));
+        }
     }
+
+    private readonly List<DocsCanvas.LineSpan> _spans = new();
 
     // --- Private helpers ---
 

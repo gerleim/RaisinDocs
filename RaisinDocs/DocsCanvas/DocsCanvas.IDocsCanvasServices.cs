@@ -112,6 +112,8 @@ public partial class DocsCanvas
         => _tableRenderer.HitTestInTableRow(vlIndex, vl, parsed, colWidths, x, localY);
     int ITableServices.HitTestTableCellLine(int vlIndex, VisualLine vl, ParsedBlock parsed, double[] colWidths, int column, int subLine, double x)
         => _tableRenderer.HitTestTableCellLine(vlIndex, vl, parsed, colWidths, column, subLine, x);
+    void ITableServices.RangeSpansInTableRow(int vlIndex, VisualLine vl, ParsedBlock parsed, double[] colWidths, int start, int end, List<LineSpan> into)
+        => _tableRenderer.RangeSpansInTableRow(vlIndex, vl, parsed, colWidths, start, end, into);
 
     // ====== INavigationServices ======
     List<VisualLine> INavigationServices.VisualLines => _visualLines;
@@ -121,6 +123,8 @@ public partial class DocsCanvas
     int INavigationServices.HitTestVisualLine(double y) => HitTestVisualLine(y);
     double INavigationServices.XInVisualLine(int vlIndex, int offset)
         => _navigationEngine.XInVisualLine(vlIndex, offset);
+    void INavigationServices.GetRangeSpans(int vlIndex, int start, int end, List<LineSpan> into)
+        => _navigationEngine.GetRangeSpans(vlIndex, start, end, into);
     void INavigationServices.ApplyInlineStyles(FormattedText ft, VisualLine vl, ParsedBlock parsed, string blockText)
         => ApplyInlineStyles(ft, vl, parsed, blockText);
 

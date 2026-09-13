@@ -154,6 +154,31 @@ public partial class DocsCanvas
     }
 
     /// <summary>
+    /// The pieces a highlight of [<paramref name="start"/>, <paramref name="end"/>) on visual line
+    /// <paramref name="vlIndex"/> is drawn as: the selection, a search match, a spelling squiggle.
+    /// </summary>
+    /// <remarks>
+    /// A table row in visual mode is cut per line of each cell, however many lines it has - even a
+    /// row of a table that fits, whose full-row highlight used to measure from the pipe before the
+    /// first cell to the pipe after the last and paint a sliver. Every other line is one span
+    /// between the two ends' X, exactly as every highlight was measured before.
+    /// </remarks>
+    internal void GetRangeSpans(int vlIndex, int start, int end, List<LineSpan> into)
+    {
+        var vl = _layout.VisualLines[vlIndex];
+        if (_visual.IsVisual && vl.Group == null
+            && _content.ParsedBlocks![vl.BlockIndex] is { TableRow: not null, Table: { } table } parsed
+            && _table.TableColumnWidths.TryGetValue(table, out var colWidths))
+        {
+            _table.RangeSpansInTableRow(vlIndex, vl, parsed, colWidths, start, end, into);
+            return;
+        }
+
+        into.Add(new LineSpan(XInVisualLine(vlIndex, start), XInVisualLine(vlIndex, end), 0, 1,
+            _layout.GetEffectiveLineHeight(vl), false));
+    }
+
+    /// <summary>
     /// The X of <paramref name="offset"/> on visual line <paramref name="vlIndex"/>, relative to
     /// the left padding - so the thing drawn there goes at <c>_padding + x</c>. For a line in a
     /// joined paragraph group the offset is in the group's joined text; otherwise it is an offset

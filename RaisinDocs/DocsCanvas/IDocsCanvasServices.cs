@@ -129,6 +129,7 @@ internal interface ITableServices
     DocsCanvas.TableCaretPos PositionInTableRow(int vlIndex, DocsCanvas.VisualLine vl, ParsedBlock parsed, double[] colWidths, int offset);
     int HitTestInTableRow(int vlIndex, DocsCanvas.VisualLine vl, ParsedBlock parsed, double[] colWidths, double x, double localY);
     int HitTestTableCellLine(int vlIndex, DocsCanvas.VisualLine vl, ParsedBlock parsed, double[] colWidths, int column, int subLine, double x);
+    void RangeSpansInTableRow(int vlIndex, DocsCanvas.VisualLine vl, ParsedBlock parsed, double[] colWidths, int start, int end, List<DocsCanvas.LineSpan> into);
 }
 
 /// <summary>
@@ -147,6 +148,13 @@ internal interface INavigationServices
     /// selection edge and a highlight edge all draw at <c>_padding + this</c>.
     /// </summary>
     double XInVisualLine(int vlIndex, int offset);
+
+    /// <summary>
+    /// The pieces a highlight of [start, end) on one visual line is drawn as - one for a plain
+    /// line, one per line of each cell for a table row. Appended to <paramref name="into"/>, which
+    /// the caller clears.
+    /// </summary>
+    void GetRangeSpans(int vlIndex, int start, int end, List<DocsCanvas.LineSpan> into);
     void ApplyInlineStyles(System.Windows.Media.FormattedText ft, DocsCanvas.VisualLine vl, ParsedBlock parsed, string blockText);
 }
 

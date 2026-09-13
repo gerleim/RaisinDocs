@@ -9,6 +9,37 @@ public partial class DocsCanvas
     internal readonly record struct TableCaretPos(double X, int Column, int SubLine);
 
     /// <summary>
+    /// One horizontal piece of a highlighted range on a visual line: its X extent relative to the
+    /// left padding, which of the line's lines of text it is on, and how tall one such line is.
+    /// </summary>
+    /// <remarks>
+    /// A plain line gives a range one span covering the whole line's height. A table row gives one
+    /// per line of each cell the range crosses, because its cells wrap independently and a single
+    /// rectangle from the range's first X to its last would paint across the other cells.
+    /// </remarks>
+    /// <param name="Continues">The range goes on past this span, into a later line or cell.</param>
+    internal readonly record struct LineSpan(double X1, double X2, int SubLine, int RowLineCount,
+        double LineHeight, bool Continues)
+    {
+        /// <summary>
+        /// The top and height of this span's band inside a line visual whose snapped height is
+        /// <paramref name="bgH"/>. A one-line row fills it, as every highlight did; a wrapped
+        /// row's bands snap to whole pixels and the last one runs to the bottom, so a range
+        /// that crosses lines tiles without gaps or overlaps.
+        /// </summary>
+        public (double Top, double Height) Band(double y, double bgH)
+        {
+            if (RowLineCount <= 1) return (y, bgH);
+            double top = Math.Round(SubLine * LineHeight);
+            double bottom = SubLine == RowLineCount - 1 ? bgH : Math.Round((SubLine + 1) * LineHeight);
+            return (y + top, bottom - top);
+        }
+
+        /// <summary>The bottom of this span's line of text, from the top of its visual line.</summary>
+        public double Bottom => RowLineCount <= 1 ? LineHeight : (SubLine + 1) * LineHeight;
+    }
+
+    /// <summary>
     /// Where each cell of one table row wraps, as raw offsets into the row's block text.
     /// </summary>
     /// <remarks>

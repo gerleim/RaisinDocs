@@ -39,6 +39,15 @@ partial class DocsCanvas
     internal Rect? TestSelectionRect(int vi) => _renderingContext.TestLineRectPaintedWith(vi, _palette.Selection);
 
     /// <summary>The search-match rectangle a visual line paints, current match or not.</summary>
+    internal List<Rect> TestSelectionRects(int vi) => _renderingContext.TestLineRectsPaintedWith(vi, _palette.Selection);
+
+    internal List<Rect> TestSearchMatchRects(int vi)
+    {
+        var rects = _renderingContext.TestLineRectsPaintedWith(vi, _palette.SearchMatch);
+        rects.AddRange(_renderingContext.TestLineRectsPaintedWith(vi, _palette.CurrentSearchMatch));
+        return rects;
+    }
+
     internal Rect? TestSearchMatchRect(int vi)
         => _renderingContext.TestLineRectPaintedWith(vi, _palette.CurrentSearchMatch)
            ?? _renderingContext.TestLineRectPaintedWith(vi, _palette.SearchMatch);
