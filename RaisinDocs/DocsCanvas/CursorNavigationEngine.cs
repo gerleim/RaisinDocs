@@ -485,7 +485,7 @@ public partial class DocsCanvas
                 _doc.Document.CursorOffset = so;
                 _doc.Document.CollapseSelection();
             }
-            else
+            else if (!(_visual.IsVisual && VisualModeManager?.TryMoveToAdjacentTableCell(forward: false) == true))
             {
                 _doc.Document.MoveWordLeft();
             }
@@ -518,7 +518,7 @@ public partial class DocsCanvas
                 _doc.Document.CursorOffset = eo;
                 _doc.Document.CollapseSelection();
             }
-            else
+            else if (!(_visual.IsVisual && VisualModeManager?.TryMoveToAdjacentTableCell(forward: true) == true))
             {
                 _doc.Document.MoveWordRight();
             }

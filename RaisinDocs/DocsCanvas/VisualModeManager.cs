@@ -376,6 +376,13 @@ internal class VisualModeManager
 
         int offset = _doc.Document.CursorOffset;
 
+        // Cell content can hold hidden syntax (color tags, emphasis markers), so one press must
+        // step over one visible character, not one raw one — otherwise the caret and the
+        // selection creep through the invisible tag characters.
+        BlockVisualMap? map = (_visual.VisualMaps != null && _doc.Document.CursorBlock < _visual.VisualMaps.Count)
+            ? _visual.VisualMaps[_doc.Document.CursorBlock] : null;
+        bool IsHiddenAt(int i) => map != null && map.IsHidden(i);
+
         if (forward)
         {
             // find which cell the cursor is in or between
@@ -384,9 +391,18 @@ internal class VisualModeManager
                 var (cs, ce) = cellRanges[c];
                 if (offset < ce)
                 {
-                    // cursor is within this cell's content — move right by 1
-                    _doc.Document.CursorOffset = offset + 1;
-                    return true;
+                    int v = System.Math.Max(offset, cs);
+                    while (v < ce && IsHiddenAt(v)) v++;
+                    if (v < ce)
+                    {
+                        // step over the visible char, then past any hidden run after it
+                        int o = v + 1;
+                        while (o < ce && IsHiddenAt(o)) o++;
+                        _doc.Document.CursorOffset = o;
+                        return true;
+                    }
+                    // only hidden chars left in this cell — treat as its end
+                    offset = ce;
                 }
                 if (offset == ce)
                 {
@@ -414,9 +430,16 @@ internal class VisualModeManager
                 var (cs, ce) = cellRanges[c];
                 if (offset > cs)
                 {
-                    // cursor is within this cell's content — move left by 1
-                    _doc.Document.CursorOffset = offset - 1;
-                    return true;
+                    int v = System.Math.Min(offset, ce) - 1;
+                    while (v >= cs && IsHiddenAt(v)) v--;
+                    if (v >= cs)
+                    {
+                        // land before the previous visible char
+                        _doc.Document.CursorOffset = v;
+                        return true;
+                    }
+                    // only hidden chars before the cursor in this cell — treat as its start
+                    offset = cs;
                 }
                 if (offset == cs)
                 {
@@ -437,6 +460,38 @@ internal class VisualModeManager
                 _doc.Document.CursorOffset = cellRanges[0].Start;
             return true;
         }
+    }
+
+    /// <summary>
+    /// Ctrl+Left/Right in a table cell: when the caret is already at the edge of its cell's text
+    /// (only hidden syntax between it and the edge), move to the adjacent cell the way a plain
+    /// arrow does. Word movement alone cannot get there — it lands in the gap between cells and
+    /// the clamp puts it back where it started.
+    /// </summary>
+    internal bool TryMoveToAdjacentTableCell(bool forward)
+    {
+        if (_content.ParsedBlocks == null || _doc.Document.CursorBlock >= _content.ParsedBlocks.Count) return false;
+        var parsed = _content.ParsedBlocks[_doc.Document.CursorBlock];
+        if (parsed.TableRow == null) return false;
+
+        string blockText = _doc.Document.GetBlockText(_doc.Document.CursorBlock);
+        BlockVisualMap? map = (_visual.VisualMaps != null && _doc.Document.CursorBlock < _visual.VisualMaps.Count)
+            ? _visual.VisualMaps[_doc.Document.CursorBlock] : null;
+        int offset = _doc.Document.CursorOffset;
+
+        foreach (var cell in parsed.TableRow.Cells)
+        {
+            var (cs, ce) = cell.TrimContent(blockText);
+            if (offset < cs || offset > ce) continue;
+
+            int from = forward ? offset : cs;
+            int to = forward ? ce : offset;
+            for (int i = from; i < to; i++)
+                if (map == null || !map.IsHidden(i)) return false;
+
+            return HandleTableArrow(parsed, forward);
+        }
+        return false;
     }
 
     private bool MoveToAdjacentTableRow(ParsedBlock parsed, bool forward)

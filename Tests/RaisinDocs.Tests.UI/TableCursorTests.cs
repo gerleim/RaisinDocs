@@ -322,6 +322,119 @@ public class TableCursorTests
             $"cursor at offset {offset} should be within a cell's content range");
     }
 
+    // --- Left/Right must step over hidden color tags inside a cell ---
+
+    // Row 2: "| <!--@fg:red-->ab<!--/@fg--> | cd |"
+    // Opening tag 2..15, 'a'=16, 'b'=17, closing tag 18..28, cell end 29; 'c'=32, 'd'=33
+    private const string ColoredCellTable =
+        "| H1 | H2 |\n|---|---|\n| <!--@fg:red-->ab<!--/@fg--> | cd |";
+
+    [StaFact]
+    public void ShiftRight_AtStartOfColoredCell_SelectsFirstVisibleCharImmediately()
+    {
+        var canvas = CreateCanvas(ColoredCellTable);
+        canvas.TestSetCursor(2, 2); // cell start, on the opening tag
+
+        canvas.TestNavigate(Key.Right, shift: true);
+
+        canvas.TestAnchorOffset.Should().Be(2);
+        canvas.TestCursorOffset.Should().Be(17, "one press selects 'a', not one tag character");
+    }
+
+    [StaFact]
+    public void Right_InColoredCell_StepsOverClosingTagAndIntoNextCell()
+    {
+        var canvas = CreateCanvas(ColoredCellTable);
+        canvas.TestSetCursor(2, 17); // after 'a'
+
+        canvas.TestNavigate(Key.Right);
+        canvas.TestCursorOffset.Should().Be(29, "after 'b' the closing tag is skipped");
+
+        canvas.TestNavigate(Key.Right);
+        canvas.TestCursorBlock.Should().Be(2);
+        canvas.TestCursorOffset.Should().Be(32, "the next press enters the next cell");
+    }
+
+    [StaFact]
+    public void ShiftLeft_AtEndOfColoredCell_SelectsLastVisibleCharImmediately()
+    {
+        var canvas = CreateCanvas(ColoredCellTable);
+        canvas.TestSetCursor(2, 29); // cell end, after the closing tag
+
+        canvas.TestNavigate(Key.Left, shift: true);
+
+        canvas.TestAnchorOffset.Should().Be(29);
+        canvas.TestCursorOffset.Should().Be(17, "one press selects 'b', not one tag character");
+
+        canvas.TestNavigate(Key.Left, shift: true);
+        canvas.TestCursorOffset.Should().Be(16);
+    }
+
+    // --- Ctrl+Left/Right at a cell's edge moves to the adjacent cell ---
+
+    [StaFact]
+    public void CtrlRight_AtEndOfCell_MovesToStartOfNextCell()
+    {
+        // "| ab | cd |" — end of "ab" is 4, start of "cd" is 7.
+        var canvas = CreateCanvas("| H1 | H2 |\n|---|---|\n| ab | cd |");
+        canvas.TestSetCursor(2, 2); // 'a'
+
+        canvas.TestNavigate(Key.Right, ctrl: true);
+        canvas.TestCursorOffset.Should().Be(4, "the first press stops at the end of the cell's text");
+
+        canvas.TestNavigate(Key.Right, ctrl: true);
+        canvas.TestCursorBlock.Should().Be(2);
+        canvas.TestCursorOffset.Should().Be(7, "from the end of the cell the next press enters the next cell");
+    }
+
+    [StaFact]
+    public void CtrlLeft_AtStartOfCell_MovesToEndOfPreviousCell()
+    {
+        var canvas = CreateCanvas("| H1 | H2 |\n|---|---|\n| ab | cd |");
+        canvas.TestSetCursor(2, 7); // start of "cd"
+
+        canvas.TestNavigate(Key.Left, ctrl: true);
+
+        canvas.TestCursorBlock.Should().Be(2);
+        canvas.TestCursorOffset.Should().Be(4);
+    }
+
+    [StaFact]
+    public void CtrlLeft_AtStartOfFirstCell_MovesToEndOfPreviousRow()
+    {
+        var canvas = CreateCanvas("| H1 | H2 |\n|---|---|\n| ab | cd |");
+        canvas.TestSetCursor(2, 2); // start of "ab"
+
+        canvas.TestNavigate(Key.Left, ctrl: true);
+
+        canvas.TestCursorBlock.Should().Be(0);
+        canvas.TestCursorOffset.Should().Be(9, "end of \"H2\" in the header row");
+    }
+
+    [StaFact]
+    public void CtrlShiftRight_AtEndOfCell_ExtendsSelectionIntoNextCell()
+    {
+        var canvas = CreateCanvas("| H1 | H2 |\n|---|---|\n| ab | cd |");
+        canvas.TestSetCursor(2, 4);
+
+        canvas.TestNavigate(Key.Right, shift: true, ctrl: true);
+
+        canvas.TestAnchorOffset.Should().Be(4);
+        canvas.TestCursorOffset.Should().Be(7);
+    }
+
+    [StaFact]
+    public void CtrlRight_BeforeClosingColorTag_MovesToNextCell()
+    {
+        var canvas = CreateCanvas(ColoredCellTable);
+        canvas.TestSetCursor(2, 18); // after 'b', before the hidden closing tag
+
+        canvas.TestNavigate(Key.Right, ctrl: true);
+
+        canvas.TestCursorBlock.Should().Be(2);
+        canvas.TestCursorOffset.Should().Be(32, "only hidden syntax is left in the cell, so it counts as its end");
+    }
+
     private static int FindVisualLineForBlock(DocsCanvas canvas, int blockIndex)
     {
         for (int vi = 0; vi < canvas.TestVisualLineCount; vi++)
