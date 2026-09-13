@@ -28,6 +28,16 @@ public partial class MainWindow : Window
     private readonly List<DocumentTab> _tabs = [];
     private readonly List<string> _recentFiles = [];
 
+    /// <summary>
+    /// Started with a file to open, so the saved tab list is not this window's to overwrite.
+    /// </summary>
+    /// <remarks>
+    /// Without it a launch with a path skipped the session entirely, then saved on close: the
+    /// settings went back to defaults, and the tab list and recent files were replaced by the
+    /// one file that had been opened.
+    /// </remarks>
+    private bool _openedFromPath;
+
     private DocsEditorState _editorState = new()
     {
         Theme = DocsCanvas.EditorTheme.DarkBlue,
@@ -46,13 +56,19 @@ public partial class MainWindow : Window
                 .Skip(1)
                 .FirstOrDefault(a => !a.StartsWith('-'));
 
+            // Settings and recent files are preferences and come back however the editor is
+            // started. The open tabs are a session: a file on the command line opens that file
+            // instead of resuming it, and leaves the saved tab list for the next plain start.
+            RestoreSettings();
+
             if (path is not null)
             {
+                _openedFromPath = true;
                 TryOpenFileFromPath(path);
                 return;
             }
 
-            RestoreSession();
+            RestoreOpenFiles();
         };
     }
 
@@ -492,13 +508,18 @@ public partial class MainWindow : Window
 
     private void SaveSession()
     {
+        var saved = _sessionStore.State;
         var state = new SessionState
         {
-            OpenFiles = _tabs
-                .Where(t => t.FilePath != null)
-                .Select(t => t.FilePath!)
-                .ToList(),
-            ActiveTabIndex = ActiveTab != null ? _tabs.IndexOf(ActiveTab) : 0,
+            OpenFiles = _openedFromPath
+                ? new List<string>(saved.OpenFiles)
+                : _tabs
+                    .Where(t => t.FilePath != null)
+                    .Select(t => t.FilePath!)
+                    .ToList(),
+            ActiveTabIndex = _openedFromPath
+                ? saved.ActiveTabIndex
+                : ActiveTab != null ? _tabs.IndexOf(ActiveTab) : 0,
             RecentFiles = new List<string>(_recentFiles),
         };
 
@@ -508,7 +529,7 @@ public partial class MainWindow : Window
         _sessionStore.Save(state);
     }
 
-    private void RestoreSession()
+    private void RestoreSettings()
     {
         var session = _sessionStore.State;
 
@@ -516,6 +537,11 @@ public partial class MainWindow : Window
             _editorState = session.EditorState;
 
         _recentFiles.AddRange(session.RecentFiles);
+    }
+
+    private void RestoreOpenFiles()
+    {
+        var session = _sessionStore.State;
 
         foreach (var path in session.OpenFiles)
         {
