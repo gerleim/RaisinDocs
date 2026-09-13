@@ -28,6 +28,32 @@ public partial class App : Application
 
     internal static DocsCanvas.EditMode? EditModeOverride { get; private set; }
 
+    /// <summary>
+    /// The other settings a scroll capture has to pin, for the same reason as the edit mode.
+    /// </summary>
+    /// <remarks>
+    /// Zoom decides how large the text is and so how many lines a wrapped table row takes; the
+    /// table of contents and the minimap sit beside the canvas and take width from it. Restored
+    /// from the saved settings, any of them makes a capture measure a different document from the
+    /// last one - which is how a zoom level left over from testing got into a before-and-after
+    /// comparison. Written <c>--zoom=1.0</c>, <c>--toc=off</c>, <c>--minimap=on</c>.
+    /// </remarks>
+    internal const string ZoomSwitch = "--zoom=";
+    internal const string TocSwitch = "--toc=";
+    internal const string MinimapSwitch = "--minimap=";
+
+    internal static double? ZoomOverride { get; private set; }
+    internal static bool? TocOverride { get; private set; }
+    internal static bool? MinimapOverride { get; private set; }
+
+    private static bool? OnOff(string arg, string prefix) =>
+        arg.Substring(prefix.Length).ToLowerInvariant() switch
+        {
+            "on" => true,
+            "off" => false,
+            _ => null,
+        };
+
     protected override void OnStartup(StartupEventArgs e)
     {
         // Here rather than in a window's Loaded: the canvas wires its scroll counters up in
@@ -42,6 +68,14 @@ public partial class App : Application
                 EditModeOverride = DocsCanvas.EditMode.Visual;
             else if (string.Equals(arg, SourceSwitch, StringComparison.OrdinalIgnoreCase))
                 EditModeOverride = DocsCanvas.EditMode.Source;
+            else if (arg.StartsWith(ZoomSwitch, StringComparison.OrdinalIgnoreCase)
+                     && double.TryParse(arg.AsSpan(ZoomSwitch.Length), System.Globalization.NumberStyles.Float,
+                         System.Globalization.CultureInfo.InvariantCulture, out double zoom))
+                ZoomOverride = zoom;
+            else if (arg.StartsWith(TocSwitch, StringComparison.OrdinalIgnoreCase))
+                TocOverride = OnOff(arg, TocSwitch);
+            else if (arg.StartsWith(MinimapSwitch, StringComparison.OrdinalIgnoreCase))
+                MinimapOverride = OnOff(arg, MinimapSwitch);
         }
 
         base.OnStartup(e);

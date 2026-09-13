@@ -875,7 +875,11 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider, IDocsC
 
         _scroll = new ScrollController(InvalidateVisual, () => Math.Max(0, _totalContentHeight - ActualHeight))
         {
-            DiagContext = () => _editMode == EditMode.Visual ? "visual" : "source",
+            // Everything restored settings can change about what a gesture draws: the renderer,
+            // the size of the text, and the space left to the canvas by the side panels and the
+            // toolbar.
+            DiagContext = () => (_editMode == EditMode.Visual ? "visual" : "source")
+                + FormattableString.Invariant($"  zoom {_measure.ZoomFactor:F2}  canvas {ActualWidth:F0}x{ActualHeight:F0}"),
         };
         _linkHandler = new LinkHandler((INavigationServices)this, (IDocumentServices)this, (IParsedContentServices)this, (ILayoutDataServices)this, (IVisualModeServices)this, (IScrollServices)this);
         _linkPopup = new LinkPopupController(_doc, this);

@@ -41,6 +41,10 @@ public partial class MainWindow : Window
     /// <summary>The edit mode the settings held before a --visual or --source override.</summary>
     private DocsCanvas.EditMode _savedEditMode;
 
+    /// <summary>What the settings held before a --zoom, --toc or --minimap override.</summary>
+    private double _savedZoom;
+    private bool _savedToc, _savedMinimap;
+
     private DocsEditorState _editorState = new()
     {
         Theme = DocsCanvas.EditorTheme.DarkBlue,
@@ -67,6 +71,13 @@ public partial class MainWindow : Window
             _savedEditMode = _editorState.EditMode;
             if (App.EditModeOverride is { } mode)
                 _editorState.EditMode = mode;
+
+            _savedZoom = _editorState.ZoomLevel;
+            _savedToc = _editorState.ShowToc;
+            _savedMinimap = _editorState.ShowMinimap;
+            if (App.ZoomOverride is { } zoom) _editorState.ZoomLevel = zoom;
+            if (App.TocOverride is { } toc) _editorState.ShowToc = toc;
+            if (App.MinimapOverride is { } minimap) _editorState.ShowMinimap = minimap;
 
             if (path is not null)
             {
@@ -537,6 +548,12 @@ public partial class MainWindow : Window
         // since that change is the user's own choice.
         if (App.EditModeOverride is { } mode && state.EditorState is { } es && es.EditMode == mode)
             es.EditMode = _savedEditMode;
+        if (state.EditorState is { } editor)
+        {
+            if (App.ZoomOverride is { } zoom && Math.Abs(editor.ZoomLevel - zoom) < 0.001) editor.ZoomLevel = _savedZoom;
+            if (App.TocOverride is { } toc && editor.ShowToc == toc) editor.ShowToc = _savedToc;
+            if (App.MinimapOverride is { } minimap && editor.ShowMinimap == minimap) editor.ShowMinimap = _savedMinimap;
+        }
 
         _sessionStore.Save(state);
     }

@@ -64,6 +64,22 @@
     hidden markup has to be measured with -Mode Visual. The mode the editor actually ran in is
     read back from its gesture log into the .meta file.
 
+.PARAMETER Zoom
+    The zoom level, passed to the editor on every run. 1.0 unless a capture is about zoom. The
+    editor restores its saved settings when it opens a file, and a zoom left over from reading
+    changes how many lines every wrapped table row takes - a different document to measure.
+
+.PARAMETER Toc
+    Whether the table of contents panel is shown: On or Off, Off by default. It takes width from
+    the canvas, which changes where tables wrap.
+
+.PARAMETER Minimap
+    Whether the minimap is shown: On or Off, On by default, since the sweep drags it. It also takes
+    width from the canvas.
+
+    The zoom and canvas size every gesture actually ran at are read back from the gesture log
+    into the .meta file, beside the mode.
+
 .PARAMETER Size
     An explicit window size as WxH, for example 1920x1032, placed at the top-left of the chosen
     display's working area. Window height multiplies the per-frame work, because it sets how many
@@ -101,6 +117,9 @@ param(
     [int]    $Repeats = 3,
     [string] $Monitor,
     [ValidateSet('Source', 'Visual')] [string] $Mode = 'Source',
+    [double] $Zoom = 1.0,
+    [ValidateSet('On', 'Off')] [string] $Toc = 'Off',
+    [ValidateSet('On', 'Off')] [string] $Minimap = 'On',
     [switch] $Maximise,
     [string] $Size
 )
@@ -382,7 +401,9 @@ Write-Host ""
 # --scroll-diag so the gesture log and the capture describe the same run.
 # Quoted: Start-Process joins an ArgumentList with spaces and quotes nothing, so a path with
 # a space in it arrives as several arguments and the editor opens the first word.
-$editorArgs = @('--scroll-diag', "--$($Mode.ToLowerInvariant())")
+$editorArgs = @('--scroll-diag', "--$($Mode.ToLowerInvariant())",
+    ('--zoom={0}' -f $Zoom.ToString([System.Globalization.CultureInfo]::InvariantCulture)),
+    "--toc=$($Toc.ToLowerInvariant())", "--minimap=$($Minimap.ToLowerInvariant())")
 # Where this run's gesture lines start, so the mode check below reads only them.
 $scrollLog = "$env:LOCALAPPDATA\RaisinDocs\scroll.log"
 $logStart = if (Test-Path $scrollLog) { @(Get-Content $scrollLog).Count } else { 0 }
@@ -527,6 +548,21 @@ if ((Test-Path $csv) -and (Get-Item $csv).Length -gt 0) {
         Write-Warning "asked for $Mode mode but the gestures ran in: $ranText"
     }
     $meta += "mode      : $($Mode.ToLowerInvariant()) requested, ran in $ranText"
+    # Zoom and canvas size as the gestures report them - the canvas size is what the side panels
+    # and the toolbar left, which is what decides where lines wrap.
+    $ranAt = @()
+    if (Test-Path $scrollLog) {
+        $ranAt = @(Get-Content $scrollLog | Select-Object -Skip $logStart |
+            Select-String -Pattern 'gesture .* zoom ([\d.]+)\s+canvas (\d+x\d+)' |
+            ForEach-Object { "zoom $($_.Matches[0].Groups[1].Value), canvas $($_.Matches[0].Groups[2].Value)" } |
+            Sort-Object -Unique)
+    }
+    $zoomText = $Zoom.ToString('0.00', [System.Globalization.CultureInfo]::InvariantCulture)
+    $ranAtText = if ($ranAt.Count -eq 0) { 'unknown - no gesture reported them' } else { $ranAt -join '; ' }
+    if ($ranAt.Count -gt 0 -and ($ranAt.Count -ne 1 -or $ranAt[0] -notlike "zoom $zoomText,*")) {
+        Write-Warning "asked for zoom $zoomText but the gestures ran at: $ranAtText"
+    }
+    $meta += "settings  : zoom $zoomText, toc $($Toc.ToLowerInvariant()), minimap $($Minimap.ToLowerInvariant()) requested; ran at $ranAtText"
     $meta += "document  : $(if ($File) { "$(Split-Path $File -Leaf), $(@(Get-Content $File).Count) lines" } else { '(none)' })"
     $meta += "window    : $(if ($windowRect) { "$($windowRect.Width)x$($windowRect.Height) at $($windowRect.X),$($windowRect.Y)" } else { 'unknown' })"
     $meta += "display   : $(if ($panel) { $panel.DeviceName } else { 'unknown' })"
