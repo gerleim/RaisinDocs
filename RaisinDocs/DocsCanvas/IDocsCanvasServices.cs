@@ -128,6 +128,7 @@ internal interface ITableServices
     DocsCanvas.TableRenderer TableRenderer { get; }
     DocsCanvas.TableCaretPos PositionInTableRow(int vlIndex, DocsCanvas.VisualLine vl, ParsedBlock parsed, double[] colWidths, int offset);
     int HitTestInTableRow(int vlIndex, DocsCanvas.VisualLine vl, ParsedBlock parsed, double[] colWidths, double x, double localY);
+    int HitTestTableCellLine(int vlIndex, DocsCanvas.VisualLine vl, ParsedBlock parsed, double[] colWidths, int column, int subLine, double x);
 }
 
 /// <summary>

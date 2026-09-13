@@ -332,6 +332,161 @@ public class TableCellWrapTests
         offset.Should().Be(emptyStart, "a click anywhere in an empty cell puts the caret in it");
     }
 
+    // --- 9. Up and Down move one line of a wrapped cell at a time ---
+
+    [StaFact]
+    public void Down_MovesALineWithinTheCell_KeepingX_ThenLeavesForTheNextRow()
+    {
+        var canvas = MakeCanvasAt(WrappedRowTable(), WrapWidth);
+        var rows = TableRows(canvas);
+        var vl = canvas.TestVisualLines[rows[1]];
+        var layout = vl.TableLayout!;
+        int lines = layout.CellLineCount(1);
+        double rowY = canvas.TestGetLineYPosition(rows[1]);
+        double lineH = LineHeight(canvas, rows[1]);
+
+        canvas.TestSetCursor(vl.BlockIndex, layout.LineStarts[1][0] + 8);
+        double x = canvas.TestCursorX;
+
+        for (int k = 1; k < lines; k++)
+        {
+            canvas.TestNavigate(System.Windows.Input.Key.Down);
+            canvas.TestCursorBlock.Should().Be(vl.BlockIndex, $"line {k} is still in the same cell");
+            (canvas.TestCursorY - rowY).Should().BeApproximately(k * lineH, Eps);
+            if (k < lines - 1)
+                canvas.TestCursorX.Should().BeApproximately(x, 12, "the caret keeps its X from line to line");
+        }
+
+        canvas.TestNavigate(System.Windows.Input.Key.Down);
+        canvas.TestCursorBlock.Should().Be(canvas.TestVisualLines[rows[2]].BlockIndex, "from the cell's last line Down goes to the next row");
+        canvas.TestCursorY.Should().BeApproximately(canvas.TestGetLineYPosition(rows[2]), Eps);
+    }
+
+    [StaFact]
+    public void Up_FromTheRowBelow_LandsOnTheCellsBottomLine_AndUpFromItsTopLeavesTheRow()
+    {
+        var canvas = MakeCanvasAt(WrappedRowTable(), WrapWidth);
+        var rows = TableRows(canvas);
+        var vl = canvas.TestVisualLines[rows[1]];
+        var layout = vl.TableLayout!;
+        int lines = layout.CellLineCount(1);
+        double rowY = canvas.TestGetLineYPosition(rows[1]);
+        double lineH = LineHeight(canvas, rows[1]);
+
+        var below = canvas.TestVisualLines[rows[2]];
+        string belowText = canvas.TestGetBlockText(below.BlockIndex);
+        canvas.TestSetCursor(below.BlockIndex, belowText.LastIndexOf("short", StringComparison.Ordinal) + 2);
+
+        canvas.TestNavigate(System.Windows.Input.Key.Up);
+        canvas.TestCursorBlock.Should().Be(vl.BlockIndex);
+        (canvas.TestCursorY - rowY).Should().BeApproximately((lines - 1) * lineH, Eps, "arriving from below lands on the bottom line");
+
+        for (int k = lines - 2; k >= 0; k--)
+        {
+            canvas.TestNavigate(System.Windows.Input.Key.Up);
+            canvas.TestCursorBlock.Should().Be(vl.BlockIndex);
+            (canvas.TestCursorY - rowY).Should().BeApproximately(k * lineH, Eps);
+        }
+
+        canvas.TestNavigate(System.Windows.Input.Key.Up);
+        canvas.TestCursorBlock.Should().Be(canvas.TestVisualLines[rows[0]].BlockIndex, "from the top line Up goes to the header");
+    }
+
+    [StaFact]
+    public void DownThenUp_ThroughAShortRow_ReturnsToTheGoalX()
+    {
+        var canvas = MakeCanvasAt(WrappedRowTable(), WrapWidth);
+        var rows = TableRows(canvas);
+        var vl = canvas.TestVisualLines[rows[1]];
+        var layout = vl.TableLayout!;
+        int last = layout.CellLineCount(1) - 1;
+        double rowY = canvas.TestGetLineYPosition(rows[1]);
+        double lineH = LineHeight(canvas, rows[1]);
+
+        // Far along the cell's bottom line, well past where "short" in the row below ends.
+        var (ls, le) = layout.GetLine(1, last);
+        canvas.TestSetCursor(vl.BlockIndex, ls + Math.Max(0, (le - ls) - 2));
+        double x = canvas.TestCursorX;
+
+        canvas.TestNavigate(System.Windows.Input.Key.Down);
+        canvas.TestCursorBlock.Should().Be(canvas.TestVisualLines[rows[2]].BlockIndex);
+        canvas.TestNavigate(System.Windows.Input.Key.Up);
+
+        canvas.TestCursorBlock.Should().Be(vl.BlockIndex);
+        (canvas.TestCursorY - rowY).Should().BeApproximately(last * lineH, Eps);
+        canvas.TestCursorX.Should().BeApproximately(x, 12, "the goal X survives the short row in between");
+    }
+
+    // --- 11. A page is a page, however tall the rows ---
+
+    [StaFact]
+    public void PageDown_PastTallRows_MovesAWholePage()
+    {
+        var sb = new System.Text.StringBuilder("| Element | Contents |\n|---|---|\n");
+        for (int r = 0; r < 30; r++) sb.Append($"| Row{r} | {LongProse(50)} |\n");
+        var canvas = MakeCanvasAt(sb.ToString(), WrapWidth);
+        var rows = TableRows(canvas);
+        var first = canvas.TestVisualLines[rows[1]];
+        first.TableLayout!.LineCount.Should().BeGreaterThan(3, "rows several lines tall are the case that shrank the page");
+        double lineH = LineHeight(canvas, rows[1]);
+
+        canvas.TestSetCursor(first.BlockIndex, first.TableLayout.LineStarts[1][0] + 4);
+        double before = canvas.TestCursorY;
+
+        canvas.TestNavigate(System.Windows.Input.Key.PageDown);
+
+        (canvas.TestCursorY - before).Should().BeGreaterThanOrEqualTo(CanvasHeight - 3 * lineH - lineH,
+            "a page is the viewport less three lines of text, not less three rows");
+    }
+
+    // --- 16. Moving into a row, the cell under X decides the line ---
+
+    [StaFact]
+    public void Up_IntoARowWhoseCellIsShorterThanTheRow_LandsOnThatCellsLastLine()
+    {
+        string md = $"| Key | Short | Long |\n|---|---|---|\n| k | tiny | {LongProse(60)} |\n| m | below | x |";
+        var canvas = MakeCanvasAt(md, WrapWidth);
+        var rows = TableRows(canvas);
+        var tall = canvas.TestVisualLines[rows[1]];
+        tall.TableLayout!.LineCount.Should().BeGreaterThan(2);
+        tall.TableLayout.CellLineCount(1).Should().Be(1);
+        double rowY = canvas.TestGetLineYPosition(rows[1]);
+
+        var below = canvas.TestVisualLines[rows[2]];
+        string belowText = canvas.TestGetBlockText(below.BlockIndex);
+        canvas.TestSetCursor(below.BlockIndex, belowText.IndexOf("below", StringComparison.Ordinal) + 2);
+
+        canvas.TestNavigate(System.Windows.Input.Key.Up);
+
+        canvas.TestCursorBlock.Should().Be(tall.BlockIndex);
+        canvas.TestCursorOffset.Should().BeInRange(tall.TableLayout.LineStarts[1][0], tall.TableLayout.CellEnds[1],
+            "the caret stays in the column it came from");
+        (canvas.TestCursorY - rowY).Should().BeApproximately(0, Eps, "the short cell's last line is its first");
+    }
+
+    // --- 18, continued. Up and Down reach an empty cell ---
+
+    [StaFact]
+    public void EmptyCell_InAWrappedRow_IsReachedByUpAndLeftByDown()
+    {
+        string md = $"| Key | Note | Contents |\n|---|---|---|\n| k |  | {LongProse(60)} |\n| m | here | x |";
+        var canvas = MakeCanvasAt(md, WrapWidth);
+        var rows = TableRows(canvas);
+        var wrapped = canvas.TestVisualLines[rows[1]];
+        int emptyStart = wrapped.TableLayout!.LineStarts[1][0];
+
+        var below = canvas.TestVisualLines[rows[2]];
+        string belowText = canvas.TestGetBlockText(below.BlockIndex);
+        canvas.TestSetCursor(below.BlockIndex, belowText.IndexOf("here", StringComparison.Ordinal));
+
+        canvas.TestNavigate(System.Windows.Input.Key.Up);
+        canvas.TestCursorBlock.Should().Be(wrapped.BlockIndex);
+        canvas.TestCursorOffset.Should().Be(emptyStart, "Up from below lands in the empty cell above");
+
+        canvas.TestNavigate(System.Windows.Input.Key.Down);
+        canvas.TestCursorBlock.Should().Be(below.BlockIndex, "an empty cell has one line, so Down leaves the row");
+    }
+
     // --- 6. Alignment applies to each line of a cell ---
 
     [StaTheory]

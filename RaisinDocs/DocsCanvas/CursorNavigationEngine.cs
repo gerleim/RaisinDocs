@@ -722,10 +722,11 @@ public partial class DocsCanvas
         SealAndEnsureLayout();
         int vli = CursorToVisualLineIndex();
         double x = VerticalGoalX(vli);
-        if (vli > 0)
+        if (!TryMoveWithinTableCell(vli, x, -1) && vli > 0)
         {
             vli--;
-            SetCursorFromVisualLine(vli, x);
+            // Arriving from below, so the bottom line of a wrapped cell, not its top.
+            SetCursorFromVisualLine(vli, x, double.MaxValue);
         }
         if (_visual.IsVisual) VisualModeManager?.HandleUpVisual();
         if (!shift) _doc.Document.CollapseSelection();
@@ -737,7 +738,7 @@ public partial class DocsCanvas
         SealAndEnsureLayout();
         int vli = CursorToVisualLineIndex();
         double x = VerticalGoalX(vli);
-        if (vli < _layout.VisualLines.Count - 1)
+        if (!TryMoveWithinTableCell(vli, x, +1) && vli < _layout.VisualLines.Count - 1)
         {
             vli++;
             SetCursorFromVisualLine(vli, x);
@@ -747,21 +748,48 @@ public partial class DocsCanvas
         RememberVerticalGoal(x);
     }
 
+    /// <summary>
+    /// Up or Down inside a table cell that wraps: one line of the cell, keeping the goal X.
+    /// False when the caret is on the cell's first line going up or its last going down, and the
+    /// move belongs to the row above or below.
+    /// </summary>
+    /// <remarks>
+    /// The column is the caret's own, not the one under the goal X, so the caret stays in its
+    /// cell even when the goal was set further right in another column.
+    /// </remarks>
+    private bool TryMoveWithinTableCell(int vli, double goalX, int direction)
+    {
+        if (!_visual.IsVisual) return false;
+        var vl = _layout.VisualLines[vli];
+        if (vl.Group != null || vl.TableLayout is not { LineCount: > 1 } layout) return false;
+        if (_content.ParsedBlocks![vl.BlockIndex] is not { TableRow: not null, Table: { } table } parsed) return false;
+        if (!_table.TableColumnWidths.TryGetValue(table, out var colWidths)) return false;
+
+        var pos = _table.PositionInTableRow(vli, vl, parsed, colWidths, _doc.Document.CursorOffset);
+        if (pos.Column >= layout.CellCount) return false;
+
+        int target = pos.SubLine + direction;
+        if (target < 0 || target >= layout.CellLineCount(pos.Column)) return false;
+
+        _doc.Document.CursorOffset = _table.HitTestTableCellLine(vli, vl, parsed, colWidths, pos.Column, target, goalX);
+        return true;
+    }
+
     internal void HandlePageUp(bool shift)
     {
         SealAndEnsureLayout();
         int vli = CursorToVisualLineIndex();
         double x = VerticalGoalX(vli);
-        double cursorY = _layout.LineYPositions[vli];
+        var (cursorY, lineH) = CaretLine(vli);
         double relativeY = cursorY - _scroll.Scroll.Offset;
-        double lineH = _layout.GetEffectiveLineHeight(_layout.VisualLines[vli]);
         double pageAmount = Math.Max(lineH, _rendering.ActualHeight - 3 * lineH);
 
         _scroll.Scroll.Offset -= pageAmount;
         _scroll.Scroll.Clamp();
 
-        int targetVli = HitTestVisualLine(_scroll.Scroll.Offset + relativeY);
-        SetCursorFromVisualLine(targetVli, x);
+        double targetY = _scroll.Scroll.Offset + relativeY;
+        int targetVli = HitTestVisualLine(targetY);
+        SetCursorFromVisualLine(targetVli, x, targetY - _layout.LineYPositions[targetVli] + lineH / 2);
         if (_visual.IsVisual) VisualModeManager?.HandleUpVisual();
         if (!shift) _doc.Document.CollapseSelection();
         RememberVerticalGoal(x);
@@ -772,22 +800,37 @@ public partial class DocsCanvas
         SealAndEnsureLayout();
         int vli = CursorToVisualLineIndex();
         double x = VerticalGoalX(vli);
-        double cursorY = _layout.LineYPositions[vli];
+        var (cursorY, lineH) = CaretLine(vli);
         double relativeY = cursorY - _scroll.Scroll.Offset;
-        double lineH = _layout.GetEffectiveLineHeight(_layout.VisualLines[vli]);
         double pageAmount = Math.Max(lineH, _rendering.ActualHeight - 3 * lineH);
 
         _scroll.Scroll.Offset += pageAmount;
         _scroll.Scroll.Clamp();
 
-        int targetVli = HitTestVisualLine(_scroll.Scroll.Offset + relativeY);
-        SetCursorFromVisualLine(targetVli, x);
+        double targetY = _scroll.Scroll.Offset + relativeY;
+        int targetVli = HitTestVisualLine(targetY);
+        SetCursorFromVisualLine(targetVli, x, targetY - _layout.LineYPositions[targetVli] + lineH / 2);
         if (_visual.IsVisual) VisualModeManager?.HandleDownVisual();
         if (!shift) _doc.Document.CollapseSelection();
         RememberVerticalGoal(x);
     }
 
-    private void SetCursorFromVisualLine(int vli, double x)
+    /// <summary>
+    /// The top and height of the line of text the caret is on, in content coordinates. A page is
+    /// measured in these, so a wrapped table row many lines tall does not shrink it to almost
+    /// nothing, and the caret keeps its place on screen from its own line rather than the row's top.
+    /// </summary>
+    private (double Top, double Height) CaretLine(int vli)
+    {
+        var (_, top, height) = CaretBox(vli);
+        return (_layout.LineYPositions[vli] + top, height);
+    }
+
+    /// <param name="localY">
+    /// How far below the line's top to aim - only a table row with wrapped cells reads it, to pick
+    /// the line of the cell. double.MaxValue means its bottom line.
+    /// </param>
+    private void SetCursorFromVisualLine(int vli, double x, double localY = 0)
     {
         var vl = _layout.VisualLines[vli];
         // x came from CursorXInVisualLine, which measures from the line's text column. Only the
@@ -795,8 +838,8 @@ public partial class DocsCanvas
         // prefix's width instead, and the two disagree by however far the marker column sits
         // from the prefix - enough to drop the cursor a character or two off the goal.
         int rawOffset = _visual.IsVisual
-            ? HitTestInVisualLineProper(vli, x)
-            : HitTestInVisualLine(vli, x);
+            ? HitTestInVisualLineProper(vli, x, localY)
+            : HitTestInVisualLine(vli, x, localY);
         if (vl.Group != null)
         {
             var (bi, bo) = vl.Group.JoinedToSource(rawOffset);

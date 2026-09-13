@@ -110,6 +110,8 @@ public partial class DocsCanvas
         => _tableRenderer.PositionInTableRow(vlIndex, vl, parsed, colWidths, offset);
     int ITableServices.HitTestInTableRow(int vlIndex, VisualLine vl, ParsedBlock parsed, double[] colWidths, double x, double localY)
         => _tableRenderer.HitTestInTableRow(vlIndex, vl, parsed, colWidths, x, localY);
+    int ITableServices.HitTestTableCellLine(int vlIndex, VisualLine vl, ParsedBlock parsed, double[] colWidths, int column, int subLine, double x)
+        => _tableRenderer.HitTestTableCellLine(vlIndex, vl, parsed, colWidths, column, subLine, x);
 
     // ====== INavigationServices ======
     List<VisualLine> INavigationServices.VisualLines => _visualLines;
