@@ -631,12 +631,46 @@ public partial class MainWindow : Window
         AddTab(path, File.ReadAllText(path));
     }
 
+    /// <remarks>
+    /// <para>
+    /// <b>A save that fails must not take the document with it.</b> The write used to throw straight
+    /// out of <c>Save_Click</c>, and this app has no unhandled-exception handler, so a file another
+    /// program had locked, a full disk or a read-only folder terminated the editor — and the unsaved
+    /// buffer, which is the one thing the save was trying to protect, went with it.
+    /// </para>
+    /// <para>
+    /// Now nothing about the tab changes unless the write lands: it keeps the path and base it had,
+    /// stays dirty, and watches its file again. That is also what makes closing safe, because
+    /// <c>ConfirmDiscard</c> saves and then asks whether the tab is still dirty — so a failed save now
+    /// cancels the close instead of crashing through it. The path and base are still set before the
+    /// write, as they were, since a Save As may need the new base to resolve the document's images.
+    /// </para>
+    /// </remarks>
     private void SaveToFile(DocumentTab tab, string path)
     {
+        var previousPath = tab.FilePath;
+        var previousBasePath = tab.Editor.DocumentBasePath;
+
         tab.SuppressFileWatcher();
         tab.FilePath = path;
         tab.Editor.DocumentBasePath = Path.GetDirectoryName(path)!;
-        File.WriteAllText(path, tab.Editor.GetText());
+
+        try
+        {
+            File.WriteAllText(path, tab.Editor.GetText());
+        }
+        catch (Exception ex)
+        {
+            tab.FilePath = previousPath;
+            tab.Editor.DocumentBasePath = previousBasePath;
+            tab.SetupFileWatcher(this);
+
+            MessageBox.Show(this,
+                $"'{Path.GetFileName(path)}' could not be saved. The document is still open, with your changes.\n\n{ex.Message}",
+                "RaisinDocs Editor", MessageBoxButton.OK, MessageBoxImage.Error);
+            return;
+        }
+
         tab.Editor.MarkClean();
         AddRecentFile(path);
         UpdateTabHeader(tab);
