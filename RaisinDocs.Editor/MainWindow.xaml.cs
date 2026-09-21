@@ -105,6 +105,21 @@ public partial class MainWindow : Window
         var ctrl = (modifiers & ModifierKeys.Control) == ModifierKeys.Control && (modifiers & ModifierKeys.Alt) == ModifierKeys.None;
         var ctrlShift = (modifiers & (ModifierKeys.Control | ModifierKeys.Shift)) == (ModifierKeys.Control | ModifierKeys.Shift) && (modifiers & ModifierKeys.Alt) == ModifierKeys.None;
 
+        // See App.CrashTestSwitch.
+        if (App.CrashTestKeys && modifiers == (ModifierKeys.Control | ModifierKeys.Alt | ModifierKeys.Shift))
+        {
+            var key = e.Key == Key.System ? e.SystemKey : e.Key;
+            if (key == Key.F12)
+                throw new InvalidOperationException("Crash test: an exception on the UI thread (--crash-test, Ctrl+Alt+Shift+F12).");
+            if (key == Key.F11)
+            {
+                new Thread(() => throw new InvalidOperationException(
+                    "Crash test: an exception on a background thread (--crash-test, Ctrl+Alt+Shift+F11).")).Start();
+                e.Handled = true;
+                return;
+            }
+        }
+
         switch (e.Key)
         {
             case Key.N when ctrl:

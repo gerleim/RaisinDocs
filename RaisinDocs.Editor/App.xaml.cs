@@ -35,6 +35,16 @@ public partial class App : Application
 
     internal static DocsCanvas.EditMode? EditModeOverride { get; private set; }
 
+    /// <summary>Arms the keys that crash the editor on purpose, to try the rescue of unsaved documents.</summary>
+    /// <remarks>
+    /// Ctrl+Alt+Shift+F12 throws on the UI thread, Ctrl+Alt+Shift+F11 on a thread of its own — the two
+    /// ways a crash reaches <see cref="Crash"/>. Off unless started with the switch, so no stray chord
+    /// can end a real session.
+    /// </remarks>
+    internal const string CrashTestSwitch = "--crash-test";
+
+    internal static bool CrashTestKeys { get; private set; }
+
     /// <summary>
     /// The other settings a scroll capture has to pin, for the same reason as the edit mode.
     /// </summary>
@@ -71,6 +81,8 @@ public partial class App : Application
                 DocsCanvas.ScrollDiagnostics = true;
             else if (string.Equals(arg, LayoutDiagSwitch, StringComparison.OrdinalIgnoreCase))
                 DocsCanvas.LayoutDiagnostics = true;
+            else if (string.Equals(arg, CrashTestSwitch, StringComparison.OrdinalIgnoreCase))
+                CrashTestKeys = true;
             else if (string.Equals(arg, VisualSwitch, StringComparison.OrdinalIgnoreCase))
                 EditModeOverride = DocsCanvas.EditMode.Visual;
             else if (string.Equals(arg, SourceSwitch, StringComparison.OrdinalIgnoreCase))
