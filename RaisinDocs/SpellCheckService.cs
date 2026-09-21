@@ -76,12 +76,7 @@ internal sealed class SpellCheckService : IDisposable
 
         if (dictionaryPath is null || !File.Exists(dictionaryPath)) return;
 
-        foreach (var line in File.ReadLines(dictionaryPath))
-        {
-            var trimmed = line.Trim();
-            if (trimmed.Length > 0 && !trimmed.StartsWith('#'))
-                _projectDictionary.Add(trimmed);
-        }
+        _projectDictionary.UnionWith(ReadWords(dictionaryPath, skipComments: true));
     }
 
     public void AddToProjectDictionary(string word)
@@ -117,25 +112,23 @@ internal sealed class SpellCheckService : IDisposable
     /// byte-for-byte what <c>File.WriteAllLines</c> wrote, so no dictionary under version control
     /// changes by being saved this way.
     /// </para>
+    /// <para>
+    /// <b>A save merges with the file rather than overwriting it.</b> Every editor builds its own
+    /// service and read the dictionaries once, so each saved its own copy over the file: two tabs, or
+    /// RaisinDocs and RaisinTerminal2 sharing the user dictionary, dropped each other's words with
+    /// nothing said. The file is now read again just before each save and the words on disk joined to
+    /// the ones in memory, so a save only ever adds. If that read fails the save is skipped and
+    /// reported — writing without it is the very overwrite this prevents — and the word is carried by
+    /// the next save as above. Two saves in the same instant can still race between read and write;
+    /// adding words is a hand action, and that window is a few milliseconds wide.
+    /// </para>
     /// </remarks>
     internal Action<string>? SaveFailed { get; set; }
 
     private void SaveProjectDictionary()
     {
         if (_projectDictionaryPath is null) return;
-        try
-        {
-            Directory.CreateDirectory(Path.GetDirectoryName(_projectDictionaryPath)!);
-            Raisin.Core.SafeFile.WriteWithStream(_projectDictionaryPath, writer =>
-            {
-                foreach (var word in _projectDictionary.OrderBy(w => w, StringComparer.OrdinalIgnoreCase))
-                    writer.WriteLine(word);
-            });
-        }
-        catch (Exception ex)
-        {
-            SaveFailed?.Invoke($"Could not save the project dictionary {_projectDictionaryPath}: {ex.Message}");
-        }
+        SaveMerged(_projectDictionaryPath, _projectDictionary, skipComments: true, "project dictionary");
     }
 
     private void LoadUserDictionary()
@@ -143,32 +136,47 @@ internal sealed class SpellCheckService : IDisposable
         _userDictionaryPath = RaisinDocsPaths.GetUserDictionaryPath();
         if (_userDictionaryPath is null || !File.Exists(_userDictionaryPath)) return;
 
-        foreach (var line in File.ReadLines(_userDictionaryPath))
-        {
-            var trimmed = line.Trim();
-            if (trimmed.Length > 0)
-                _userDictionary.Add(trimmed);
-        }
+        _userDictionary.UnionWith(ReadWords(_userDictionaryPath, skipComments: false));
     }
 
     /// <inheritdoc cref="SaveFailed"/>
     private void SaveUserDictionary()
     {
         if (_userDictionaryPath is null) return;
+        SaveMerged(_userDictionaryPath, _userDictionary, skipComments: false, "user dictionary");
+    }
+
+    /// <inheritdoc cref="SaveFailed"/>
+    private void SaveMerged(string path, HashSet<string> words, bool skipComments, string name)
+    {
         try
         {
-            var dir = Path.GetDirectoryName(_userDictionaryPath)!;
-            Directory.CreateDirectory(dir);
-            Raisin.Core.SafeFile.WriteWithStream(_userDictionaryPath, writer =>
+            if (File.Exists(path))
+                words.UnionWith(ReadWords(path, skipComments));
+
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            Raisin.Core.SafeFile.WriteWithStream(path, writer =>
             {
-                foreach (var word in _userDictionary.OrderBy(w => w, StringComparer.OrdinalIgnoreCase))
+                foreach (var word in words.OrderBy(w => w, StringComparer.OrdinalIgnoreCase))
                     writer.WriteLine(word);
             });
         }
         catch (Exception ex)
         {
-            SaveFailed?.Invoke($"Could not save the user dictionary {_userDictionaryPath}: {ex.Message}");
+            SaveFailed?.Invoke($"Could not save the {name} {path}: {ex.Message}");
         }
+    }
+
+    private static List<string> ReadWords(string path, bool skipComments)
+    {
+        var words = new List<string>();
+        foreach (var line in File.ReadLines(path))
+        {
+            var trimmed = line.Trim();
+            if (trimmed.Length > 0 && !(skipComments && trimmed.StartsWith('#')))
+                words.Add(trimmed);
+        }
+        return words;
     }
 
     public void Dispose()

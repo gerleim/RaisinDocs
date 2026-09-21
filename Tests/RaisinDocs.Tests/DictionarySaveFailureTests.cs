@@ -108,4 +108,53 @@ public class DictionarySaveFailureTests : IDisposable
         File.ReadAllBytes(_path).Should().Equal(System.Text.Encoding.UTF8.GetBytes("Existing\r\nnaïve\r\n"),
             "UTF-8 without a byte-order mark, CRLF after every line, as File.WriteAllLines wrote it");
     }
+
+    // ---- two editors on one dictionary ----
+    //
+    // Every editor builds its own service, and each read the dictionary once and saved its own copy
+    // over the file — so the second of two tabs to add a word erased the first one's. The user
+    // dictionary is shared the same way between RaisinDocs and RaisinTerminal2.
+
+    [Fact]
+    public void Two_editors_keep_each_others_words()
+    {
+        using var first = ServiceOver([]);
+        using var second = ServiceOver([]);
+
+        first.AddToProjectDictionary("Alphaword");
+        second.AddToProjectDictionary("Betaword");
+
+        File.ReadAllLines(_path).Should().Equal("Alphaword", "Betaword", "Existing");
+    }
+
+    [Fact]
+    public void An_editor_learns_the_words_it_merged()
+    {
+        using var first = ServiceOver([]);
+        using var second = ServiceOver([]);
+
+        first.AddToProjectDictionary("Alphaword");
+        second.AddToProjectDictionary("Betaword");
+
+        second.Check("Alphaword").Should().BeTrue("the second editor read it from disk when it saved");
+    }
+
+    [Fact]
+    public void A_dictionary_that_cannot_be_read_back_is_not_saved_over()
+    {
+        // Writing without the merge is the overwrite the merge exists to prevent. The holder lets the
+        // file be replaced but not read, so only the refusal to save keeps its words.
+        var failures = new List<string>();
+        using var svc = ServiceOver(failures);
+        File.WriteAllText(_path, "Existing\nAddedElsewhere\n");
+
+        using (new FileStream(_path, FileMode.Open, FileAccess.Read, FileShare.Write | FileShare.Delete))
+            svc.AddToProjectDictionary("Zyxwvq");
+
+        failures.Should().ContainSingle();
+        File.ReadAllLines(_path).Should().Contain("AddedElsewhere");
+
+        svc.AddToProjectDictionary("Qwvxyz");
+        File.ReadAllLines(_path).Should().Equal("AddedElsewhere", "Existing", "Qwvxyz", "Zyxwvq");
+    }
 }

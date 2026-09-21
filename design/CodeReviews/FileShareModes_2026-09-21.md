@@ -1,6 +1,6 @@
 # File reads and writes in RaisinDocs
 
-*Date: 2026-09-21. Scope: every production file read and write in RaisinDocs, RaisinDocs.Editor and RaisinDocs.Viewer, looked at for share modes, atomicity, failure handling and what a failure costs. Follows the same review of StockRaisin2 the day before, and one of RaisinTerminal alongside this. **Findings 1 to 3 are fixed; 4 and 5 are open.** A defect found in the shared library is written up and fixed separately, in RaisinLibraries' `design/Durable Stores and Unreadable Files.md` — it covered RaisinDocs' `SessionStore`.*
+*Date: 2026-09-21. Scope: every production file read and write in RaisinDocs, RaisinDocs.Editor and RaisinDocs.Viewer, looked at for share modes, atomicity, failure handling and what a failure costs. Follows the same review of StockRaisin2 the day before, and one of RaisinTerminal alongside this. **Findings 1, 2, 3 and 5 are fixed; 4 is open.** A defect found in the shared library is written up and fixed separately, in RaisinLibraries' `design/Durable Stores and Unreadable Files.md` — it covered RaisinDocs' `SessionStore`.*
 
 ## What RaisinDocs already gets right
 
@@ -17,7 +17,7 @@
 | 2 | Documents are saved in place | Medium–High | fixed |
 | 3 | The spell-check dictionaries are saved in place and unguarded | Medium | fixed |
 | 4 | The external-change reload depends on a second event arriving | Low–Medium | open |
-| 5 | Two editors drop each other's dictionary words | Medium | open |
+| 5 | Two editors drop each other's dictionary words | Medium | fixed |
 
 ### 1. A failed save terminates the editor and takes the document with it — High, fixed
 
@@ -74,7 +74,7 @@ So it recovers — but only because a second event arrived after the writer clos
 
 **Widening the read would make this worse, not better.** On that first event a shared read succeeds — and loads the half-written file into the editor as though it were the document. The restrictive read is what keeps partial content out. The fix is to wait for the file to settle and retry, which is what RaisinTerminal's automation channel does by polling instead of watching. It is the reverse of the StockRaisin2 review, where shared reads were the answer.
 
-### 5. Two editors drop each other's dictionary words — Medium, open
+### 5. Two editors drop each other's dictionary words — Medium, fixed
 
 Found while fixing finding 3, and not about how the file is written — making the write atomic does nothing for it. The spell checker is not one per process but one per editor: each `DocsCanvas` builds its own `SpellCheckController`, which builds its own `SpellCheckService`, which reads the dictionaries once when it starts and never again. Every add then rewrites the whole file from that editor's private copy. Proven with two services over one dictionary, the way two tabs hold it:
 
@@ -86,8 +86,14 @@ Found while fixing finding 3, and not about how the file is written — making t
 
 `Alphaword` is gone from disk with nothing said, though the first editor goes on treating it as spelled correctly until it is closed. Two tabs in one RaisinDocs window are enough. The user dictionary is one file for everything, so RaisinDocs and RaisinTerminal2 — which embeds this editor in several places — do it to each other as well, wherever spell-check is on in both.
 
-The fix is to merge rather than overwrite: read the file again just before each save and write the union with the words in memory, so a save can only ever add. Sharing one service per dictionary would also work, but reaches into how the canvas is built and still leaves two processes racing. Neither is done here.
+**What was done:** a save merges rather than overwrites. Just before writing, it reads the file again and joins the words on disk to the ones in memory, so a save only ever adds — and the editor saving learns the other's words as it does, rather than flagging them until it is reopened. Sharing one service per dictionary was the other way, and was not taken: it reaches into how the canvas is built, and would still leave RaisinDocs and RaisinTerminal2 as two processes each with its own.
+
+If that read fails, the save is skipped and reported through `SaveFailed`, the same Warning as finding 3. Saving without it would be the very overwrite this fixes; the word stays in memory and the next save that can read the file carries it.
+
+Two things it does not do. Two saves in the same few milliseconds, from two editors, can still race between one's read and the other's write — adding a word is a hand action, so that is left. And a word removed from the file by hand while an editor is open comes back at its next save, as it always did, since the editor still holds it; merging only adds.
+
+Three tests, each failing when the merge is taken out: two editors keep each other's words, the editor that saves learns the words it merged, and a dictionary that can be replaced but not read back is left alone, its words still there once a later save can read them.
 
 ## Tests
 
-RaisinDocs passes all three test projects, with its two long-standing skips unchanged; the four dictionary tests above are this review's. The fix for finding 1 lives in `MainWindow`'s code-behind and is not unit-tested: exercising it means standing up a WPF window and a locked file, and a test of that weight to pin a `catch` would cost more than it protects.
+RaisinDocs passes all three test projects, with its two long-standing skips unchanged; the seven dictionary tests above are this review's. The fix for finding 1 lives in `MainWindow`'s code-behind and is not unit-tested: exercising it means standing up a WPF window and a locked file, and a test of that weight to pin a `catch` would cost more than it protects.
