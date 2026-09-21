@@ -275,7 +275,7 @@ public partial class MainWindow : Window
             Title = "RaisinDocs Editor";
             return;
         }
-        var name = tab.FilePath != null ? Path.GetFileName(tab.FilePath) : "Untitled";
+        var name = tab.DisplayName;
         var dirty = tab.Editor.IsDirty ? " *" : "";
         var blockCount = tab.Editor.Canvas.BlockCount;
         Title = $"{name}{dirty} — RaisinDocs Editor [Blocks: {blockCount}]";
@@ -283,7 +283,7 @@ public partial class MainWindow : Window
 
     private static void UpdateTabHeader(DocumentTab tab)
     {
-        var name = tab.FilePath != null ? Path.GetFileName(tab.FilePath) : "Untitled";
+        var name = tab.DisplayName;
         var dirty = tab.Editor.IsDirty ? " *" : "";
         tab.HeaderText.Text = $"{name}{dirty}";
     }
@@ -323,10 +323,10 @@ public partial class MainWindow : Window
         if (tab == null) return;
 
         var dlg = new SaveFileDialog { Filter = FileFilter };
-        if (tab.FilePath != null)
+        if ((tab.FilePath ?? tab.RecoveredFrom) is { } suggested)
         {
-            dlg.InitialDirectory = Path.GetDirectoryName(tab.FilePath)!;
-            dlg.FileName = Path.GetFileName(tab.FilePath);
+            dlg.InitialDirectory = Path.GetDirectoryName(suggested)!;
+            dlg.FileName = Path.GetFileName(suggested);
         }
         if (dlg.ShowDialog(this) != true) return;
         SaveToFile(tab, dlg.FileName);
@@ -776,10 +776,17 @@ public partial class MainWindow : Window
     /// offered at the next start.
     /// </para>
     /// <para>
-    /// A document goes back to its file when that file is still there: into the tab the session
-    /// already opened for it if there is one, or a new one. It keeps the version on disk it was based
-    /// on, so if another program changed the file since the crash, saving asks first. A document
-    /// whose file is gone, or that never had one, comes back untitled.
+    /// A document goes back to its file when that file is still there and unchanged since the crash:
+    /// into the tab the session already opened for it if there is one, or a new one. If the file has
+    /// changed since — a Cancel here, then work saved to it, and a Yes at a later start — the rescued
+    /// text would have replaced the newer version in the tab, hidden it, and left one Yes at the save
+    /// question between the user and losing it. So it opens beside the file instead, as an untitled
+    /// copy named for it, and the file's tab is left as it is. A document whose file is gone, or that
+    /// never had one, comes back untitled.
+    /// </para>
+    /// <para>
+    /// The list is one bullet per line: the message box drops leading spaces from its text, so an
+    /// indent left the first line out of step with the rest.
     /// </para>
     /// </remarks>
     private void OfferRecoveredDocuments()
@@ -798,7 +805,7 @@ public partial class MainWindow : Window
         if (found.Count == 0)
             return;
 
-        var names = string.Join("\n", found.Select(d => "  " + (d.OriginalPath ?? "Untitled")));
+        var names = string.Join("\n", found.Select(d => "• " + DescribeRecovered(d)));
         var answer = MessageBox.Show(this,
             $"RaisinDocs closed unexpectedly, and {found.Count} unsaved document{(found.Count == 1 ? " was" : "s were")} kept:\n\n{names}\n\n"
           + "Yes: open them now, with their unsaved changes.\n"
@@ -830,24 +837,46 @@ public partial class MainWindow : Window
             CloseTab(placeholder);
     }
 
+    /// <summary>Whether the rescued document's file has been written since the crash.</summary>
+    /// <remarks>A file with no recorded version counts as changed: nothing says it is safe to put the copy back.</remarks>
+    private static bool ChangedSinceCrash(RecoveredDocument document) =>
+        document.OriginalPath is { } path && File.Exists(path) && DiskStamp.Of(path) != document.Baseline;
+
+    private static string DescribeRecovered(RecoveredDocument document) => document.OriginalPath switch
+    {
+        null => "Untitled",
+        { } path when !File.Exists(path) => $"{path} (the file is gone; opens untitled)",
+        { } path when ChangedSinceCrash(document) => $"{path} (the file has changed since; opens as a separate copy)",
+        { } path => path,
+    };
+
     private void Reopen(RecoveredDocument document)
     {
-        var path = document.OriginalPath is { } original && File.Exists(original) ? original : null;
+        var original = document.OriginalPath is { } p && File.Exists(p) ? p : null;
+        var intoFile = original is not null && !ChangedSinceCrash(document);
 
-        var tab = path is null
-            ? null
-            : _tabs.Find(t => string.Equals(t.FilePath, path, StringComparison.OrdinalIgnoreCase) && !t.Editor.IsDirty);
-        tab ??= AddTab(path, path is null ? "" : File.ReadAllText(path));
+        DocumentTab tab;
+        if (intoFile)
+        {
+            tab = _tabs.Find(t => string.Equals(t.FilePath, original, StringComparison.OrdinalIgnoreCase) && !t.Editor.IsDirty)
+                ?? AddTab(original, File.ReadAllText(original!));
+        }
+        else
+        {
+            tab = AddTab();
+            tab.RecoveredFrom = original;
+        }
 
         tab.Editor.RestoreUnsavedText(document.Text);
-        if (path is not null && document.Baseline is { } baseline)
+        if (intoFile && document.Baseline is { } baseline)
             tab.RestoreDiskBaseline(baseline);
+        UpdateTabHeader(tab);
         TabControl.SelectedItem = tab.TabItem;
     }
 
     private bool ConfirmDiscard(DocumentTab tab)
     {
-        var name = tab.FilePath != null ? Path.GetFileName(tab.FilePath) : "Untitled";
+        var name = tab.DisplayName;
         var result = MessageBox.Show(this,
             $"'{name}' has unsaved changes. Save before closing?",
             "RaisinDocs Editor",
@@ -871,6 +900,17 @@ public partial class MainWindow : Window
         public DocsEditor Editor { get; } = editor;
         public TextBlock HeaderText { get; } = headerText;
         public string? FilePath { get; set; }
+
+        /// <summary>
+        /// For an untitled tab holding a recovered copy, the file it was rescued from — which has moved
+        /// on since, so the copy is not put back into it.
+        /// </summary>
+        public string? RecoveredFrom { get; set; }
+
+        public string DisplayName =>
+            FilePath is not null ? Path.GetFileName(FilePath)
+            : RecoveredFrom is not null ? $"{Path.GetFileName(RecoveredFrom)} (recovered)"
+            : "Untitled";
 
         /// <summary>The version on disk this tab's text was loaded from or last saved to.</summary>
         public DiskStamp? DiskBaseline { get; private set; }
