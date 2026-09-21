@@ -712,6 +712,11 @@ public partial class MainWindow : Window
     /// overwrite question. No here cancels the save and keeps the tab dirty, so closing is cancelled
     /// too, through <see cref="ConfirmDiscard"/>.
     /// </para>
+    /// <para>
+    /// A change the user already answered is not asked about again: keeping their version then
+    /// records that one as seen, as Notepad++ does, so this asks only about a change nobody was asked
+    /// about — one the watcher missed, a reload that never settled, or one that landed after the answer.
+    /// </para>
     /// </remarks>
     private bool ConfirmOverwriteExternalChange(DocumentTab tab, string path)
     {
@@ -800,8 +805,13 @@ public partial class MainWindow : Window
         /// </para>
         /// <para>
         /// One question per burst: a change that arrives while the question is open is not asked about
-        /// again, and a Yes loads whatever is on disk by then. A No keeps the edits and leaves the
-        /// baseline where it was, so the next save asks before replacing the other program's version.
+        /// again, and a Yes loads whatever is on disk by then.
+        /// </para>
+        /// <para>
+        /// A No is the decision, and is not asked again at save: it records the version it was about
+        /// as seen, so saving replaces that version without a second question. It first moved nothing,
+        /// and the save asked the same thing twice. Only the version asked about is recorded — a change
+        /// that lands while the question is open still differs from it, and the save asks about that one.
         /// </para>
         /// </remarks>
         private void OnExternalChange(MainWindow owner, SettledText? settled)
@@ -825,7 +835,7 @@ public partial class MainWindow : Window
                 result = MessageBox.Show(owner,
                     $"'{Path.GetFileName(FilePath)}' was changed by another program, and you have unsaved changes here.\n\n"
                   + "Yes: load their version. Your unsaved changes are lost.\n"
-                  + "No: keep your version. Saving it will replace theirs, and you will be asked first.",
+                  + "No: keep your version. Saving it will replace theirs.",
                     "File Changed", MessageBoxButton.YesNo, MessageBoxImage.Question);
             }
             finally
@@ -834,7 +844,10 @@ public partial class MainWindow : Window
             }
 
             if (result != MessageBoxResult.Yes)
+            {
+                DiskBaseline = settled.Stamp;
                 return;
+            }
 
             // The file may have moved on while the question was open.
             var latest = DiskStamp.Of(FilePath) == settled.Stamp ? settled : SettledFile.Read(FilePath);
