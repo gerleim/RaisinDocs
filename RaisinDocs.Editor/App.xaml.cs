@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Windows;
+using System.Windows.Threading;
 using RaisinDocs;
 using System.IO;
 
@@ -8,6 +9,12 @@ namespace RaisinDocs.Editor;
 public partial class App : Application
 {
     public static readonly IDocsLogger Logger = new FileLogger();
+
+    /// <summary>Where unsaved documents go when the editor crashes, until the next start offers them back.</summary>
+    internal static readonly string RecoveryDirectory = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "RaisinDocs", "recovery");
+
+    private static int _crashing;
 
     /// <summary>Switches the editor accepts ahead of the file to open.</summary>
     internal const string ScrollDiagSwitch = "--scroll-diag";
@@ -78,7 +85,86 @@ public partial class App : Application
                 MinimapOverride = OnOff(arg, MinimapSwitch);
         }
 
+        DispatcherUnhandledException += (_, args) =>
+        {
+            args.Handled = true;
+            Crash(args.Exception);
+        };
+        AppDomain.CurrentDomain.UnhandledException += (_, args) => Crash(args.ExceptionObject as Exception);
+        TaskScheduler.UnobservedTaskException += (_, args) =>
+        {
+            Logger.Log(DocsLogLevel.Error, $"Unobserved task exception: {args.Exception}");
+            args.SetObserved();
+        };
+
         base.OnStartup(e);
+    }
+
+    /// <summary>
+    /// An unexpected exception: log it, keep what is unsaved, say so, and exit.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>There was no handler, so WPF ended the editor and every unsaved document went with it.</b>
+    /// Continuing is ruled out on purpose: after an exception no one planned for, the editor may hold
+    /// a damaged document, and a save from there would write it over a good file. So it does not try.
+    /// </para>
+    /// <para>
+    /// The rescue runs on the UI thread, which owns the editors. From the dispatcher it is already
+    /// there; from another thread it is asked over with a time limit, since that thread may be the one
+    /// in trouble — and the process ends when this returns whatever happens, so the rescue is the whole
+    /// of what can be done. Everything here is guarded: a handler that throws saves nothing. A second
+    /// exception during the first is ignored.
+    /// </para>
+    /// </remarks>
+    private static void Crash(Exception? exception)
+    {
+        if (Interlocked.Exchange(ref _crashing, 1) == 1)
+            return;
+
+        Logger.Log(DocsLogLevel.Error, $"Unexpected error, closing: {exception}");
+
+        int unsaved = 0, kept = 0;
+        try
+        {
+            var dispatcher = Current?.Dispatcher;
+            if (dispatcher is not null)
+            {
+                (int Unsaved, int Kept) Rescue()
+                {
+                    if (Current.MainWindow is not MainWindow window)
+                        return (0, 0);
+                    var documents = window.UnsavedDocuments();
+                    return (documents.Count, new DocumentRecovery(RecoveryDirectory).Rescue(documents));
+                }
+
+                (unsaved, kept) = dispatcher.CheckAccess()
+                    ? Rescue()
+                    : dispatcher.Invoke(Rescue, DispatcherPriority.Send, CancellationToken.None, TimeSpan.FromSeconds(5));
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.Log(DocsLogLevel.Error, $"Could not rescue unsaved documents: {ex.Message}");
+        }
+
+        Logger.Log(DocsLogLevel.Error, $"Rescued {kept} of {unsaved} unsaved documents to {RecoveryDirectory}.");
+
+        var outcome = unsaved == 0
+            ? "No document had unsaved changes."
+            : kept == unsaved
+                ? $"Your {unsaved} unsaved document{(unsaved == 1 ? " was" : "s were")} kept, and will be offered back when RaisinDocs next starts."
+                : $"{kept} of {unsaved} unsaved documents were kept, and will be offered back when RaisinDocs next starts.";
+        try
+        {
+            MessageBox.Show($"RaisinDocs hit an unexpected error and has to close.\n\n{outcome}\n\n{exception?.Message}",
+                "RaisinDocs Editor", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+        catch
+        {
+        }
+
+        Environment.Exit(1);
     }
 }
 

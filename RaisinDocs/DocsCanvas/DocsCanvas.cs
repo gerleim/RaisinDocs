@@ -365,6 +365,22 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider, IDocsC
         OnContentChangedForSpellCheck();
     }
 
+    /// <summary>
+    /// Replaces the text as an unsaved change: the document stays compared against what it held
+    /// before, so it is dirty unless the two are the same.
+    /// </summary>
+    /// <remarks>
+    /// For a document rescued from a crash: set to the file's text first, then restored with this,
+    /// it comes back unsaved — and closing it asks, as it would have before the crash.
+    /// </remarks>
+    public void RestoreUnsavedText(string text)
+    {
+        _doc.SetText(text);
+        IsDirty = !_doc.IsClean;
+        InvalidateLayout();
+        OnContentChangedForSpellCheck();
+    }
+
     public void ToggleTheme() => SetCurrentValue(ThemeProperty, Theme switch
     {
         EditorTheme.Light => EditorTheme.Dark,

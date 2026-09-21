@@ -214,6 +214,9 @@ public partial class DocsEditor : UserControl
 
     public void SetText(string text) => PART_Canvas.SetText(text);
 
+    /// <inheritdoc cref="DocsCanvas.RestoreUnsavedText"/>
+    public void RestoreUnsavedText(string text) => PART_Canvas.RestoreUnsavedText(text);
+
     public void MarkClean() => PART_Canvas.MarkClean();
 
     public DocsEditorState GetState() => new()

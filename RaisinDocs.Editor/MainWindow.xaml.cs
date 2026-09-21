@@ -57,6 +57,9 @@ public partial class MainWindow : Window
 
         Loaded += (_, _) =>
         {
+            // Once the window is up, whatever the tabs below turn out to be.
+            Dispatcher.BeginInvoke(OfferRecoveredDocuments, System.Windows.Threading.DispatcherPriority.ApplicationIdle);
+
             // Skip switches, so a file path can be given alongside one - App has already
             // read them.
             string? path = Environment.GetCommandLineArgs()
@@ -734,6 +737,99 @@ public partial class MainWindow : Window
         return result == MessageBoxResult.Yes;
     }
 
+    /// <summary>The tabs with unsaved changes, for rescue as the editor goes down.</summary>
+    /// <remarks>
+    /// Nothing is read here: the text is read inside the rescue, one tab at a time, so a tab whose
+    /// state the crash damaged costs only itself.
+    /// </remarks>
+    internal List<RescuedDocument> UnsavedDocuments() =>
+        _tabs.Where(tab =>
+            {
+                try { return tab.Editor.IsDirty; }
+                catch { return true; }
+            })
+            .Select(tab => new RescuedDocument(tab.FilePath, () => tab.Editor.GetText(), tab.DiskBaseline))
+            .ToList();
+
+    /// <summary>
+    /// Offers back the documents an earlier session rescued when it crashed.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Yes opens each with its unsaved changes — dirty, so closing it asks, as it would have before
+    /// the crash — and removes it from the recovery folder. No removes them. Cancel leaves them to be
+    /// offered at the next start.
+    /// </para>
+    /// <para>
+    /// A document goes back to its file when that file is still there: into the tab the session
+    /// already opened for it if there is one, or a new one. It keeps the version on disk it was based
+    /// on, so if another program changed the file since the crash, saving asks first. A document
+    /// whose file is gone, or that never had one, comes back untitled.
+    /// </para>
+    /// </remarks>
+    private void OfferRecoveredDocuments()
+    {
+        var recovery = new DocumentRecovery(App.RecoveryDirectory);
+        IReadOnlyList<RecoveredDocument> found;
+        try
+        {
+            found = recovery.Find();
+        }
+        catch (Exception ex)
+        {
+            App.Logger.Log(DocsLogLevel.Error, $"Could not look for rescued documents in {App.RecoveryDirectory}: {ex.Message}");
+            return;
+        }
+        if (found.Count == 0)
+            return;
+
+        var names = string.Join("\n", found.Select(d => "  " + (d.OriginalPath ?? "Untitled")));
+        var answer = MessageBox.Show(this,
+            $"RaisinDocs closed unexpectedly, and {found.Count} unsaved document{(found.Count == 1 ? " was" : "s were")} kept:\n\n{names}\n\n"
+          + "Yes: open them now, with their unsaved changes.\n"
+          + "No: discard them.\n"
+          + "Cancel: decide the next time RaisinDocs starts.",
+            "Recover Documents", MessageBoxButton.YesNoCancel, MessageBoxImage.Warning);
+
+        if (answer == MessageBoxResult.Cancel)
+            return;
+
+        var placeholder = _tabs.Count == 1 && _tabs[0].FilePath is null && !_tabs[0].Editor.IsDirty
+            && _tabs[0].Editor.GetText().Length == 0 ? _tabs[0] : null;
+
+        foreach (var document in found)
+        {
+            try
+            {
+                if (answer == MessageBoxResult.Yes)
+                    Reopen(document);
+                recovery.Discard(document);
+            }
+            catch (Exception ex)
+            {
+                App.Logger.Log(DocsLogLevel.Error, $"Could not recover {document.RecoveryFile}: {ex.Message}. It is left in the recovery folder.");
+            }
+        }
+
+        if (placeholder is not null && _tabs.Count > 1)
+            CloseTab(placeholder);
+    }
+
+    private void Reopen(RecoveredDocument document)
+    {
+        var path = document.OriginalPath is { } original && File.Exists(original) ? original : null;
+
+        var tab = path is null
+            ? null
+            : _tabs.Find(t => string.Equals(t.FilePath, path, StringComparison.OrdinalIgnoreCase) && !t.Editor.IsDirty);
+        tab ??= AddTab(path, path is null ? "" : File.ReadAllText(path));
+
+        tab.Editor.RestoreUnsavedText(document.Text);
+        if (path is not null && document.Baseline is { } baseline)
+            tab.RestoreDiskBaseline(baseline);
+        TabControl.SelectedItem = tab.TabItem;
+    }
+
     private bool ConfirmDiscard(DocumentTab tab)
     {
         var name = tab.FilePath != null ? Path.GetFileName(tab.FilePath) : "Untitled";
@@ -765,6 +861,9 @@ public partial class MainWindow : Window
         public DiskStamp? DiskBaseline { get; private set; }
 
         public void RecordDiskBaseline() => DiskBaseline = FilePath is null ? null : DiskStamp.Of(FilePath);
+
+        /// <summary>Takes the baseline a rescued document had, so a save still asks if the file moved on since.</summary>
+        public void RestoreDiskBaseline(DiskStamp baseline) => DiskBaseline = baseline;
 
         public void SuppressFileWatcher() => _fileWatcher?.Suppress();
 
