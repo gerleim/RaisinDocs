@@ -16,6 +16,7 @@ internal sealed class SpellCheckController
     private readonly INavigationServices _nav;
     private readonly IVisualModeServices _visualMode;
     private readonly IScrollServices _scroll;
+    private readonly ILoggingServices _logging;
 
     private bool _spellCheckEnabled;
     private SpellCheckService? _spellCheckService;
@@ -30,7 +31,8 @@ internal sealed class SpellCheckController
 
     public SpellCheckController(ICanvasOperations canvas, IImageServices images, IDocumentServices doc,
         IRenderingServices rendering, ILayoutDataServices layout, IParsedContentServices content,
-        INavigationServices nav, IVisualModeServices visualMode, IScrollServices scroll)
+        INavigationServices nav, IVisualModeServices visualMode, IScrollServices scroll,
+        ILoggingServices logging)
     {
         _canvas = canvas ?? throw new ArgumentNullException(nameof(canvas));
         _images = images ?? throw new ArgumentNullException(nameof(images));
@@ -41,6 +43,7 @@ internal sealed class SpellCheckController
         _nav = nav ?? throw new ArgumentNullException(nameof(nav));
         _visualMode = visualMode ?? throw new ArgumentNullException(nameof(visualMode));
         _scroll = scroll ?? throw new ArgumentNullException(nameof(scroll));
+        _logging = logging ?? throw new ArgumentNullException(nameof(logging));
     }
 
     public void SetSpellCheckEnabled(bool enabled)
@@ -117,7 +120,13 @@ internal sealed class SpellCheckController
     {
         if (_spellCheckService is not null) return;
 
-        _spellCheckService = new SpellCheckService();
+        // Read at the moment of failure rather than captured now, since a host sets the canvas's
+        // logger after constructing it. Warning, because nothing is lost: the word is already in
+        // memory and the next successful save writes it.
+        _spellCheckService = new SpellCheckService
+        {
+            SaveFailed = message => _logging.Logger?.Log(DocsLogLevel.Warning, message),
+        };
         _spellCheckService.LoadEmbeddedDictionary();
         ResolveAndLoadProjectDictionary();
 

@@ -96,12 +96,36 @@ internal sealed class SpellCheckService : IDisposable
 
     public void ClearCache() => _cache.Clear();
 
+    /// <summary>Told when a dictionary could not be written, so a host can log it.</summary>
+    /// <remarks>
+    /// <para>
+    /// <b>These saves used to throw, and the throw ended the application.</b> They run from the
+    /// add-word action, RaisinDocs.Editor has no unhandled-exception handler, and RaisinTerminal2 —
+    /// which embeds this editor for task documents and attachments — leaves unexpected exceptions
+    /// unhandled on purpose. So adding a word while a dictionary was held by another program took down
+    /// the editor, or the terminal with every session in it, along with whatever was unsaved.
+    /// </para>
+    /// <para>
+    /// A failure is reported instead, and nothing is lost by it: the word joins the in-memory set
+    /// before the save, so it stops being flagged at once, and every later save writes the whole set —
+    /// so it reaches disk at the next successful one. It is only lost if the application closes first.
+    /// </para>
+    /// </remarks>
+    internal Action<string>? SaveFailed { get; set; }
+
     private void SaveProjectDictionary()
     {
         if (_projectDictionaryPath is null) return;
-        Directory.CreateDirectory(Path.GetDirectoryName(_projectDictionaryPath)!);
-        File.WriteAllLines(_projectDictionaryPath,
-            _projectDictionary.OrderBy(w => w, StringComparer.OrdinalIgnoreCase));
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(_projectDictionaryPath)!);
+            File.WriteAllLines(_projectDictionaryPath,
+                _projectDictionary.OrderBy(w => w, StringComparer.OrdinalIgnoreCase));
+        }
+        catch (Exception ex)
+        {
+            SaveFailed?.Invoke($"Could not save the project dictionary {_projectDictionaryPath}: {ex.Message}");
+        }
     }
 
     private void LoadUserDictionary()
@@ -117,12 +141,20 @@ internal sealed class SpellCheckService : IDisposable
         }
     }
 
+    /// <inheritdoc cref="SaveFailed"/>
     private void SaveUserDictionary()
     {
         if (_userDictionaryPath is null) return;
-        var dir = Path.GetDirectoryName(_userDictionaryPath)!;
-        Directory.CreateDirectory(dir);
-        File.WriteAllLines(_userDictionaryPath, _userDictionary.OrderBy(w => w, StringComparer.OrdinalIgnoreCase));
+        try
+        {
+            var dir = Path.GetDirectoryName(_userDictionaryPath)!;
+            Directory.CreateDirectory(dir);
+            File.WriteAllLines(_userDictionaryPath, _userDictionary.OrderBy(w => w, StringComparer.OrdinalIgnoreCase));
+        }
+        catch (Exception ex)
+        {
+            SaveFailed?.Invoke($"Could not save the user dictionary {_userDictionaryPath}: {ex.Message}");
+        }
     }
 
     public void Dispose()

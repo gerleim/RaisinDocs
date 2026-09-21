@@ -172,7 +172,8 @@ public partial class DocsCanvas
             (IParsedContentServices)this,
             (INavigationServices)this,
             (IVisualModeServices)this,
-            (IScrollServices)this);
+            (IScrollServices)this,
+            (ILoggingServices)this);
 
     public bool SpellCheckEnabled => SpellCheck.SpellCheckEnabled;
     public string? ProjectFolder => SpellCheck.ProjectFolder;
