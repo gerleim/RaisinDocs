@@ -110,6 +110,13 @@ internal sealed class SpellCheckService : IDisposable
     /// before the save, so it stops being flagged at once, and every later save writes the whole set —
     /// so it reaches disk at the next successful one. It is only lost if the application closes first.
     /// </para>
+    /// <para>
+    /// Both are written through <c>SafeFile.WriteWithStream</c>, so a dictionary is replaced whole or
+    /// not at all rather than truncated at the start of every save — the user dictionary is words
+    /// gathered over months, and a kill inside an in-place rewrite could empty it. The output is
+    /// byte-for-byte what <c>File.WriteAllLines</c> wrote, so no dictionary under version control
+    /// changes by being saved this way.
+    /// </para>
     /// </remarks>
     internal Action<string>? SaveFailed { get; set; }
 
@@ -119,8 +126,11 @@ internal sealed class SpellCheckService : IDisposable
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(_projectDictionaryPath)!);
-            File.WriteAllLines(_projectDictionaryPath,
-                _projectDictionary.OrderBy(w => w, StringComparer.OrdinalIgnoreCase));
+            Raisin.Core.SafeFile.WriteWithStream(_projectDictionaryPath, writer =>
+            {
+                foreach (var word in _projectDictionary.OrderBy(w => w, StringComparer.OrdinalIgnoreCase))
+                    writer.WriteLine(word);
+            });
         }
         catch (Exception ex)
         {
@@ -149,7 +159,11 @@ internal sealed class SpellCheckService : IDisposable
         {
             var dir = Path.GetDirectoryName(_userDictionaryPath)!;
             Directory.CreateDirectory(dir);
-            File.WriteAllLines(_userDictionaryPath, _userDictionary.OrderBy(w => w, StringComparer.OrdinalIgnoreCase));
+            Raisin.Core.SafeFile.WriteWithStream(_userDictionaryPath, writer =>
+            {
+                foreach (var word in _userDictionary.OrderBy(w => w, StringComparer.OrdinalIgnoreCase))
+                    writer.WriteLine(word);
+            });
         }
         catch (Exception ex)
         {

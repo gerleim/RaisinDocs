@@ -73,4 +73,39 @@ public class DictionarySaveFailureTests : IDisposable
 
         File.ReadAllLines(_path).Should().Contain(["Existing", "Zyxwvq", "Qwvxyz"]);
     }
+
+    [Fact]
+    public void A_dictionary_is_swapped_in_whole()
+    {
+        // What tells an atomic save from an in-place one: a reader holding the file across it. An
+        // in-place rewrite empties the very file that reader has open; a swap leaves its handle on the
+        // old version, complete — and a kill inside the save leaves that same old version on disk.
+        using var svc = ServiceOver([]);
+        var before = File.ReadAllText(_path);
+
+        string seenByReader;
+        using (var held = new FileStream(_path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
+        {
+            svc.AddToProjectDictionary("Zyxwvq");
+            using var reader = new StreamReader(held);
+            seenByReader = reader.ReadToEnd();
+        }
+
+        seenByReader.Should().Be(before);
+        File.ReadAllLines(_path).Should().Contain("Zyxwvq");
+        Directory.GetFiles(_dir, "*.tmp").Should().BeEmpty();
+    }
+
+    [Fact]
+    public void A_dictionary_is_written_exactly_as_before()
+    {
+        // Project dictionaries live in project folders, often under version control. Saving must not
+        // change a byte of their format, or every one of them shows as modified.
+        using var svc = ServiceOver([]);
+
+        svc.AddToProjectDictionary("naïve");
+
+        File.ReadAllBytes(_path).Should().Equal(System.Text.Encoding.UTF8.GetBytes("Existing\r\nnaïve\r\n"),
+            "UTF-8 without a byte-order mark, CRLF after every line, as File.WriteAllLines wrote it");
+    }
 }

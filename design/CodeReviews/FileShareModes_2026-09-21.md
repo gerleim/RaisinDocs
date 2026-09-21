@@ -1,6 +1,6 @@
 # File reads and writes in RaisinDocs
 
-*Date: 2026-09-21. Scope: every production file read and write in RaisinDocs, RaisinDocs.Editor and RaisinDocs.Viewer, looked at for share modes, atomicity, failure handling and what a failure costs. Follows the same review of StockRaisin2 the day before, and one of RaisinTerminal alongside this. **Findings 1 and 2 are fixed; 3 is half fixed — its crash, not its in-place write; 4 is open.** A defect found in the shared library is written up and fixed separately, in RaisinLibraries' `design/Durable Stores and Unreadable Files.md` — it covered RaisinDocs' `SessionStore`.*
+*Date: 2026-09-21. Scope: every production file read and write in RaisinDocs, RaisinDocs.Editor and RaisinDocs.Viewer, looked at for share modes, atomicity, failure handling and what a failure costs. Follows the same review of StockRaisin2 the day before, and one of RaisinTerminal alongside this. **Findings 1 to 3 are fixed; 4 and 5 are open.** A defect found in the shared library is written up and fixed separately, in RaisinLibraries' `design/Durable Stores and Unreadable Files.md` — it covered RaisinDocs' `SessionStore`.*
 
 ## What RaisinDocs already gets right
 
@@ -15,8 +15,9 @@
 |---|---|---|---|
 | 1 | A failed save terminates the editor and takes the unsaved document with it | High | fixed |
 | 2 | Documents are saved in place | Medium–High | fixed |
-| 3 | The spell-check dictionaries are saved in place and unguarded | Medium | crash fixed; in place open |
+| 3 | The spell-check dictionaries are saved in place and unguarded | Medium | fixed |
 | 4 | The external-change reload depends on a second event arriving | Low–Medium | open |
+| 5 | Two editors drop each other's dictionary words | Medium | open |
 
 ### 1. A failed save terminates the editor and takes the document with it — High, fixed
 
@@ -44,7 +45,7 @@ The swap has one cost worth knowing, and it was measured rather than assumed. `F
 
 Such holders are rare for a document, and the failure is now the one finding 1 made safe: the document stays open and dirty and you are told. The fix is not unit-tested, living in the window's code-behind; the same swap is pinned by tests in RaisinTerminal, where both fail against an in-place write.
 
-### 3. The spell-check dictionaries are saved in place and unguarded — Medium, crash fixed
+### 3. The spell-check dictionaries are saved in place and unguarded — Medium, fixed
 
 `SaveProjectDictionary` and `SaveUserDictionary` rewrite their files with `File.WriteAllLines`, and neither catches. The user dictionary is words collected over time; the project dictionary lives inside the project folder. Beyond the truncation window, a locked dictionary throws out of the add-word action — and with no handler, that is the same termination as finding 1, taking any unsaved documents with it.
 
@@ -54,7 +55,11 @@ It reaches further than RaisinDocs. RaisinTerminal2 embeds this editor for task 
 
 Two tests, both run against the old throwing save and failing on it: adding a word to a held dictionary reports rather than throws, and a word that missed its save reaches disk at the next. The user dictionary's path is global and cannot be pointed at a test folder, but it shares the project dictionary's code exactly.
 
-The dictionaries are still written in place with `File.WriteAllLines`, so a kill inside a save can still truncate one. That half was not asked for in this change and waits; `SafeFile.WriteWithStream` would make it atomic in a line.
+**The in-place write, fixed afterwards.** Both dictionaries are written through `SafeFile.WriteWithStream`, so one is replaced whole or not at all rather than truncated at the start of every save — the user dictionary being words gathered over months, and a kill inside an in-place rewrite able to empty it. Before switching, the new write was checked against the old for the exact bytes it produces, because project dictionaries sit in project folders under version control and a changed line ending or a byte-order mark would show every one of them as modified: they are identical, UTF-8 without a mark and CRLF after every line.
+
+Two more tests. A reader holding the dictionary across a save still reads the version it opened, whole, with no scratch file left — which fails against the in-place write. And the file is written exactly as before, byte for byte — which passes against both writes, and is meant to: it is the guard that the switch changed nothing it should not have.
+
+The swap carries the cost measured for finding 2: `File.Replace` needs delete access, so a program holding a dictionary open without sharing delete now blocks its save. Here that is the mildest failure in this document — reported as a Warning, the word already in memory, written at the next save that lands.
 
 ### 4. The external-change reload depends on a second event arriving — Low–Medium, open
 
@@ -69,6 +74,20 @@ So it recovers — but only because a second event arrived after the writer clos
 
 **Widening the read would make this worse, not better.** On that first event a shared read succeeds — and loads the half-written file into the editor as though it were the document. The restrictive read is what keeps partial content out. The fix is to wait for the file to settle and retry, which is what RaisinTerminal's automation channel does by polling instead of watching. It is the reverse of the StockRaisin2 review, where shared reads were the answer.
 
+### 5. Two editors drop each other's dictionary words — Medium, open
+
+Found while fixing finding 3, and not about how the file is written — making the write atomic does nothing for it. The spell checker is not one per process but one per editor: each `DocsCanvas` builds its own `SpellCheckController`, which builds its own `SpellCheckService`, which reads the dictionaries once when it starts and never again. Every add then rewrites the whole file from that editor's private copy. Proven with two services over one dictionary, the way two tabs hold it:
+
+| step | file afterwards |
+|---|---|
+| both editors load `Existing` | `Existing` |
+| the first adds `Alphaword` | `Alphaword`, `Existing` |
+| the second adds `Betaword` | `Betaword`, `Existing` |
+
+`Alphaword` is gone from disk with nothing said, though the first editor goes on treating it as spelled correctly until it is closed. Two tabs in one RaisinDocs window are enough. The user dictionary is one file for everything, so RaisinDocs and RaisinTerminal2 — which embeds this editor in several places — do it to each other as well, wherever spell-check is on in both.
+
+The fix is to merge rather than overwrite: read the file again just before each save and write the union with the words in memory, so a save can only ever add. Sharing one service per dictionary would also work, but reaches into how the canvas is built and still leaves two processes racing. Neither is done here.
+
 ## Tests
 
-RaisinDocs passes all three test projects, with its two long-standing skips unchanged; the two dictionary tests above are this review's. The fix for finding 1 lives in `MainWindow`'s code-behind and is not unit-tested: exercising it means standing up a WPF window and a locked file, and a test of that weight to pin a `catch` would cost more than it protects.
+RaisinDocs passes all three test projects, with its two long-standing skips unchanged; the four dictionary tests above are this review's. The fix for finding 1 lives in `MainWindow`'s code-behind and is not unit-tested: exercising it means standing up a WPF window and a locked file, and a test of that weight to pin a `catch` would cost more than it protects.
