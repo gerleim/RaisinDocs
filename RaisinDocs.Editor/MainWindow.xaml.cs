@@ -243,6 +243,7 @@ public partial class MainWindow : Window
         TabControl.Items.Add(tabItem);
         TabControl.SelectedItem = tabItem;
 
+        tab.RecordDiskBaseline();
         tab.SetupFileWatcher(this);
 
         return tab;
@@ -623,6 +624,9 @@ public partial class MainWindow : Window
             tab.Editor.DocumentBasePath = Path.GetDirectoryName(path)!;
             tab.Editor.SetText(File.ReadAllText(path));
             tab.Editor.MarkClean();
+            tab.RecordDiskBaseline();
+            // The reused tab never watched its file, so another program's changes went unseen here.
+            tab.SetupFileWatcher(this);
             UpdateTabHeader(tab);
             UpdateTitle();
             return;
@@ -657,6 +661,9 @@ public partial class MainWindow : Window
     /// </remarks>
     private void SaveToFile(DocumentTab tab, string path)
     {
+        if (!ConfirmOverwriteExternalChange(tab, path))
+            return;
+
         var previousPath = tab.FilePath;
         var previousBasePath = tab.Editor.DocumentBasePath;
 
@@ -681,10 +688,45 @@ public partial class MainWindow : Window
         }
 
         tab.Editor.MarkClean();
+        tab.RecordDiskBaseline();
         AddRecentFile(path);
         UpdateTabHeader(tab);
         UpdateTitle();
         tab.SetupFileWatcher(this);
+    }
+
+    /// <summary>
+    /// Asks before a save replaces a version of the file this tab's text was not based on.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Keeping your edits used to mean overwriting theirs, unasked.</b> When another program
+    /// changed the file while the tab had unsaved edits, answering No to the reload kept the edits —
+    /// and nothing remembered that the file had moved on, so the next Ctrl+S replaced the other
+    /// program's work without a word. The same happened when a reload failed, or when a change went
+    /// unseen.
+    /// </para>
+    /// <para>
+    /// The tab now keeps the stamp of the version it was loaded from or last saved, and a save to that
+    /// same file checks it first. Saving to a different file is left to the Save As dialog's own
+    /// overwrite question. No here cancels the save and keeps the tab dirty, so closing is cancelled
+    /// too, through <see cref="ConfirmDiscard"/>.
+    /// </para>
+    /// </remarks>
+    private bool ConfirmOverwriteExternalChange(DocumentTab tab, string path)
+    {
+        if (tab.FilePath is null || tab.DiskBaseline is not { } baseline
+            || !string.Equals(Path.GetFullPath(path), Path.GetFullPath(tab.FilePath), StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        if (DiskStamp.Of(path) is not { } onDisk || onDisk == baseline)
+            return true;
+
+        var result = MessageBox.Show(this,
+            $"'{Path.GetFileName(path)}' was changed by another program after it was opened or last saved here.\n\n"
+          + "Save anyway? Their version will be replaced by yours.",
+            "File Changed", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+        return result == MessageBoxResult.Yes;
     }
 
     private bool ConfirmDiscard(DocumentTab tab)
@@ -707,11 +749,17 @@ public partial class MainWindow : Window
     {
         private FileChangeWatcher? _fileWatcher;
         private bool _isReloadingFromDisk;
+        private bool _isAsking;
 
         public TabItem TabItem { get; } = tabItem;
         public DocsEditor Editor { get; } = editor;
         public TextBlock HeaderText { get; } = headerText;
         public string? FilePath { get; set; }
+
+        /// <summary>The version on disk this tab's text was loaded from or last saved to.</summary>
+        public DiskStamp? DiskBaseline { get; private set; }
+
+        public void RecordDiskBaseline() => DiskBaseline = FilePath is null ? null : DiskStamp.Of(FilePath);
 
         public void SuppressFileWatcher() => _fileWatcher?.Suppress();
 
@@ -734,51 +782,81 @@ public partial class MainWindow : Window
                     return;
                 }
 
-                owner.Dispatcher.Invoke(() =>
-                {
-                    if (_isReloadingFromDisk)
-                        return;
-
-                    if (!Editor.IsDirty)
-                    {
-                        ReloadFromDisk(owner);
-                        return;
-                    }
-
-                    var editorState = Editor.GetState();
-                    if (!editorState.PromptOnExternalChanges)
-                    {
-                        ReloadFromDisk(owner);
-                        return;
-                    }
-
-                    var name = Path.GetFileName(FilePath);
-                    var result = MessageBox.Show(owner,
-                        $"'{name}' has been modified by another application.\n\nReload from disk and discard your unsaved changes?",
-                        "File Changed", MessageBoxButton.YesNo, MessageBoxImage.Question);
-                    if (result == MessageBoxResult.Yes)
-                        ReloadFromDisk(owner);
-                });
+                // Off the UI thread: wait for the other program to finish before anything is loaded
+                // or asked. A tab left stale when this fails is still safe — its baseline is unchanged,
+                // so a save asks before replacing the file.
+                var settled = SettledFile.Read(change.FilePath);
+                owner.Dispatcher.Invoke(() => OnExternalChange(owner, settled));
             });
 
             _fileWatcher.WatchFile(FilePath);
         }
 
-        private void ReloadFromDisk(MainWindow? owner = null)
+        /// <remarks>
+        /// <para>
+        /// A clean tab takes the new version silently. A tab with unsaved edits always asks — including
+        /// when <c>PromptOnExternalChanges</c> is off, which used to reload over the edits and discard
+        /// them without a word. Unsaved typing is never thrown away unasked.
+        /// </para>
+        /// <para>
+        /// One question per burst: a change that arrives while the question is open is not asked about
+        /// again, and a Yes loads whatever is on disk by then. A No keeps the edits and leaves the
+        /// baseline where it was, so the next save asks before replacing the other program's version.
+        /// </para>
+        /// </remarks>
+        private void OnExternalChange(MainWindow owner, SettledText? settled)
         {
-            if (FilePath == null || !File.Exists(FilePath))
+            if (_isReloadingFromDisk || _isAsking || FilePath is null || settled is null)
                 return;
 
+            if (settled.Stamp == DiskBaseline)
+                return;
+
+            if (!Editor.IsDirty)
+            {
+                Apply(settled);
+                return;
+            }
+
+            MessageBoxResult result;
+            _isAsking = true;
+            try
+            {
+                result = MessageBox.Show(owner,
+                    $"'{Path.GetFileName(FilePath)}' was changed by another program, and you have unsaved changes here.\n\n"
+                  + "Yes: load their version. Your unsaved changes are lost.\n"
+                  + "No: keep your version. Saving it will replace theirs, and you will be asked first.",
+                    "File Changed", MessageBoxButton.YesNo, MessageBoxImage.Question);
+            }
+            finally
+            {
+                _isAsking = false;
+            }
+
+            if (result != MessageBoxResult.Yes)
+                return;
+
+            // The file may have moved on while the question was open.
+            var latest = DiskStamp.Of(FilePath) == settled.Stamp ? settled : SettledFile.Read(FilePath);
+            if (latest is null)
+            {
+                MessageBox.Show(owner,
+                    $"'{Path.GetFileName(FilePath)}' could not be read, so your version is still open.",
+                    "File Changed", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            Apply(latest);
+        }
+
+        private void Apply(SettledText settled)
+        {
             try
             {
                 _isReloadingFromDisk = true;
-                var content = File.ReadAllText(FilePath);
-                Editor.SetText(content);
+                Editor.SetText(settled.Content);
                 Editor.MarkClean();
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Trace.TraceError($"Could not reload file: {ex.Message}");
+                DiskBaseline = settled.Stamp;
             }
             finally
             {

@@ -1,6 +1,6 @@
 # File reads and writes in RaisinDocs
 
-*Date: 2026-09-21. Scope: every production file read and write in RaisinDocs, RaisinDocs.Editor and RaisinDocs.Viewer, looked at for share modes, atomicity, failure handling and what a failure costs. Follows the same review of StockRaisin2 the day before, and one of RaisinTerminal alongside this. **Findings 1, 2, 3 and 5 are fixed; 4 is open.** A defect found in the shared library is written up and fixed separately, in RaisinLibraries' `design/Durable Stores and Unreadable Files.md` — it covered RaisinDocs' `SessionStore`.*
+*Date: 2026-09-21. Scope: every production file read and write in RaisinDocs, RaisinDocs.Editor and RaisinDocs.Viewer, looked at for share modes, atomicity, failure handling and what a failure costs. Follows the same review of StockRaisin2 the day before, and one of RaisinTerminal alongside this. **All five findings are fixed.** A defect found in the shared library is written up and fixed separately, in RaisinLibraries' `design/Durable Stores and Unreadable Files.md` — it covered RaisinDocs' `SessionStore`.*
 
 ## What RaisinDocs already gets right
 
@@ -16,7 +16,7 @@
 | 1 | A failed save terminates the editor and takes the unsaved document with it | High | fixed |
 | 2 | Documents are saved in place | Medium–High | fixed |
 | 3 | The spell-check dictionaries are saved in place and unguarded | Medium | fixed |
-| 4 | The external-change reload depends on a second event arriving | Low–Medium | open |
+| 4 | The external-change reload depends on a second event arriving | Low–Medium | fixed |
 | 5 | Two editors drop each other's dictionary words | Medium | fixed |
 
 ### 1. A failed save terminates the editor and takes the document with it — High, fixed
@@ -61,7 +61,7 @@ Two more tests. A reader holding the dictionary across a save still reads the ve
 
 The swap carries the cost measured for finding 2: `File.Replace` needs delete access, so a program holding a dictionary open without sharing delete now blocks its save. Here that is the mildest failure in this document — reported as a Warning, the word already in memory, written at the next save that lands.
 
-### 4. The external-change reload depends on a second event arriving — Low–Medium, open
+### 4. The external-change reload depends on a second event arriving — Low–Medium, fixed
 
 `ReloadFromDisk` reads with `File.ReadAllText` when the file watcher reports a change, and on failure writes to `Trace`, which nothing is listening to. Probed rather than assumed, with a writer that holds the file across two chunks:
 
@@ -73,6 +73,19 @@ The swap carries the cost measured for finding 2: `File.Replace` needs delete ac
 So it recovers — but only because a second event arrived after the writer closed. A writer that finishes inside the first event, or a burst of events the watcher coalesces, leaves nothing to recover with, and the tab keeps stale text that a later save would write over the external change. The first failure is invisible either way.
 
 **Widening the read would make this worse, not better.** On that first event a shared read succeeds — and loads the half-written file into the editor as though it were the document. The restrictive read is what keeps partial content out. The fix is to wait for the file to settle and retry, which is what RaisinTerminal's automation channel does by polling instead of watching. It is the reverse of the StockRaisin2 review, where shared reads were the answer.
+
+**Looking closer, the tab with unsaved edits was worse off than the reload.** With `PromptOnExternalChanges` off, an external change reloaded over the edits and discarded them without a word. With it on, the one question offered losing your edits or keeping them — and keeping them was remembered nowhere, so the next Ctrl+S replaced the other program's work unasked. The question came on the first event, often mid-write, and could come again for each event of the same burst. And a tab reused from an empty Untitled one on open never watched its file at all.
+
+**What was done**, as four agreed points:
+
+1. **Unsaved edits are never discarded unasked.** A clean tab takes the new version silently, as before; a tab with unsaved edits always asks, whatever `PromptOnExternalChanges` says. That leaves the setting with nothing to decide in RaisinDocs.Editor — clean tabs always reloaded — so it now does nothing here; it is left in the editor state, not removed.
+2. **One question, once the file has settled.** The watcher's callback reads through `SettledFile.Read` off the UI thread before anything is shown: the default share mode is refused while a writer holds the file, so it retries, and a read that succeeds is kept only if the file is unchanged a moment later, which catches a writer that opens it more than once. Up to fifteen tries of 200 ms. A change arriving while the question is open is not asked about again, and a Yes loads whatever is on disk by then.
+3. **Keeping yours is remembered.** Each tab keeps a `DiskStamp` — last write time and length — of the version it was loaded from, last saved or last reloaded. A save to that same file checks it first and, if another program has written since, asks before replacing it; No cancels the save and keeps the tab dirty, so a close is cancelled too. This also covers what the watcher misses: a reload that never settled, or a change that went unseen, leaves the stamp behind, and the save asks. Save As to another file is left to its dialog's own overwrite question.
+4. **The questions say what each answer costs.** The reload question now reads: Yes, load their version and your unsaved changes are lost; No, keep yours and saving it will replace theirs, and you will be asked first. A Yes whose file cannot be read by then says so and leaves your version open.
+
+The reused Untitled tab now records its stamp and watches its file like any other. The previous `Trace` on a failed reload is gone: a failure leaves the stamp unchanged, which the save then asks about.
+
+Two gaps stay open. A file deleted by another program still says nothing, and the tab keeps it open as it was. And there is no way to keep both versions at once — saving yours beside the file before loading theirs would be the shape of it, if it is ever wanted.
 
 ### 5. Two editors drop each other's dictionary words — Medium, fixed
 
@@ -96,4 +109,4 @@ Three tests, each failing when the merge is taken out: two editors keep each oth
 
 ## Tests
 
-RaisinDocs passes all three test projects, with its two long-standing skips unchanged; the seven dictionary tests above are this review's. The fix for finding 1 lives in `MainWindow`'s code-behind and is not unit-tested: exercising it means standing up a WPF window and a locked file, and a test of that weight to pin a `catch` would cost more than it protects.
+RaisinDocs passes all three test projects, with its two long-standing skips unchanged; the seven dictionary tests above are this review's, and `SettledFileTests` adds six for finding 4: a file still being written is read once the writer finishes, a file that changes just after a read is read again — both fail against a single read — one that never settles gives nothing rather than part of it, one that is gone gives nothing, and the stamp both names the version read and changes with another program's write. The fixes for findings 1 and 4 that live in `MainWindow`'s code-behind — the save guard, the stamp check before a save, and the questions — are not unit-tested: exercising them means standing up a WPF window and answering its message boxes, a test of more weight than it would protect. What can be tested without a window — the settled read and the stamp — is.
