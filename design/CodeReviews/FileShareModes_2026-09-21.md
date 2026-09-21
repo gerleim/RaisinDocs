@@ -1,6 +1,6 @@
 # File reads and writes in RaisinDocs
 
-*Date: 2026-09-21. Scope: every production file read and write in RaisinDocs, RaisinDocs.Editor and RaisinDocs.Viewer, looked at for share modes, atomicity, failure handling and what a failure costs. Follows the same review of StockRaisin2 the day before, and one of RaisinTerminal alongside this. **Findings 1 and 2 are fixed; 3 and 4 are open.** A defect found in the shared library is written up and fixed separately, in RaisinLibraries' `design/Durable Stores and Unreadable Files.md` — it covered RaisinDocs' `SessionStore`.*
+*Date: 2026-09-21. Scope: every production file read and write in RaisinDocs, RaisinDocs.Editor and RaisinDocs.Viewer, looked at for share modes, atomicity, failure handling and what a failure costs. Follows the same review of StockRaisin2 the day before, and one of RaisinTerminal alongside this. **Findings 1 and 2 are fixed; 3 is half fixed — its crash, not its in-place write; 4 is open.** A defect found in the shared library is written up and fixed separately, in RaisinLibraries' `design/Durable Stores and Unreadable Files.md` — it covered RaisinDocs' `SessionStore`.*
 
 ## What RaisinDocs already gets right
 
@@ -15,7 +15,7 @@
 |---|---|---|---|
 | 1 | A failed save terminates the editor and takes the unsaved document with it | High | fixed |
 | 2 | Documents are saved in place | Medium–High | fixed |
-| 3 | The spell-check dictionaries are saved in place and unguarded | Medium | open |
+| 3 | The spell-check dictionaries are saved in place and unguarded | Medium | crash fixed; in place open |
 | 4 | The external-change reload depends on a second event arriving | Low–Medium | open |
 
 ### 1. A failed save terminates the editor and takes the document with it — High, fixed
@@ -44,9 +44,17 @@ The swap has one cost worth knowing, and it was measured rather than assumed. `F
 
 Such holders are rare for a document, and the failure is now the one finding 1 made safe: the document stays open and dirty and you are told. The fix is not unit-tested, living in the window's code-behind; the same swap is pinned by tests in RaisinTerminal, where both fail against an in-place write.
 
-### 3. The spell-check dictionaries are saved in place and unguarded — Medium, open
+### 3. The spell-check dictionaries are saved in place and unguarded — Medium, crash fixed
 
 `SaveProjectDictionary` and `SaveUserDictionary` rewrite their files with `File.WriteAllLines`, and neither catches. The user dictionary is words collected over time; the project dictionary lives inside the project folder. Beyond the truncation window, a locked dictionary throws out of the add-word action — and with no handler, that is the same termination as finding 1, taking any unsaved documents with it.
+
+It reaches further than RaisinDocs. RaisinTerminal2 embeds this editor for task documents and attachments and leaves unexpected exceptions unhandled on purpose, so wherever spell-check is switched on in its editors — `SpellCheckEnabled` travels in the editor state it applies — a held dictionary ended the terminal and every session in it.
+
+**What was done — the crash, not the in-place write.** Both saves now catch and report through a new `SaveFailed` hook, which `SpellCheckController` wires to the canvas's logger. That meant giving the controller `ILoggingServices`, passed the way `DocsCanvas` already passes it to its other controllers; the logger is read at the moment of failure, since a host sets it after constructing the canvas. Logged as a Warning, because nothing is lost: the word joins the in-memory set before the save, so it stops being flagged at once, and every save writes the whole set, so it reaches disk at the next successful one.
+
+Two tests, both run against the old throwing save and failing on it: adding a word to a held dictionary reports rather than throws, and a word that missed its save reaches disk at the next. The user dictionary's path is global and cannot be pointed at a test folder, but it shares the project dictionary's code exactly.
+
+The dictionaries are still written in place with `File.WriteAllLines`, so a kill inside a save can still truncate one. That half was not asked for in this change and waits; `SafeFile.WriteWithStream` would make it atomic in a line.
 
 ### 4. The external-change reload depends on a second event arriving — Low–Medium, open
 
@@ -63,4 +71,4 @@ So it recovers — but only because a second event arrived after the writer clos
 
 ## Tests
 
-RaisinDocs passes 2,666 across its three test projects, with its two long-standing skips unchanged. The fix for finding 1 lives in `MainWindow`'s code-behind and is not unit-tested: exercising it means standing up a WPF window and a locked file, and a test of that weight to pin a `catch` would cost more than it protects.
+RaisinDocs passes all three test projects, with its two long-standing skips unchanged; the two dictionary tests above are this review's. The fix for finding 1 lives in `MainWindow`'s code-behind and is not unit-tested: exercising it means standing up a WPF window and a locked file, and a test of that weight to pin a `catch` would cost more than it protects.
