@@ -645,6 +645,15 @@ public partial class MainWindow : Window
     /// cancels the close instead of crashing through it. The path and base are still set before the
     /// write, as they were, since a Save As may need the new base to resolve the document's images.
     /// </para>
+    /// <para>
+    /// The write goes through <c>SafeFile.WriteAllText</c>, so the document is replaced whole or not
+    /// at all: an in-place write truncated it first, and a kill or power loss in that window left it
+    /// empty. The swap needs delete access, so a program holding the document open without sharing
+    /// delete now blocks the save where it did not before — which fails here loudly, with the document
+    /// still open and dirty, where truncation failed silently and for good. The file watcher already
+    /// treats a replace onto its file as a modification, not a rename, and is suppressed across the
+    /// save besides.
+    /// </para>
     /// </remarks>
     private void SaveToFile(DocumentTab tab, string path)
     {
@@ -657,7 +666,7 @@ public partial class MainWindow : Window
 
         try
         {
-            File.WriteAllText(path, tab.Editor.GetText());
+            Raisin.Core.SafeFile.WriteAllText(path, tab.Editor.GetText());
         }
         catch (Exception ex)
         {

@@ -1,10 +1,10 @@
 # File reads and writes in RaisinDocs
 
-*Date: 2026-09-21. Scope: every production file read and write in RaisinDocs, RaisinDocs.Editor and RaisinDocs.Viewer, looked at for share modes, atomicity, failure handling and what a failure costs. Follows the same review of StockRaisin2 the day before, and one of RaisinTerminal alongside this. **Finding 1 is fixed; 2 to 4 are open.** A defect found in the shared library is written up and fixed separately, in RaisinLibraries' `design/Durable Stores and Unreadable Files.md` — it covered RaisinDocs' `SessionStore`.*
+*Date: 2026-09-21. Scope: every production file read and write in RaisinDocs, RaisinDocs.Editor and RaisinDocs.Viewer, looked at for share modes, atomicity, failure handling and what a failure costs. Follows the same review of StockRaisin2 the day before, and one of RaisinTerminal alongside this. **Findings 1 and 2 are fixed; 3 and 4 are open.** A defect found in the shared library is written up and fixed separately, in RaisinLibraries' `design/Durable Stores and Unreadable Files.md` — it covered RaisinDocs' `SessionStore`.*
 
 ## What RaisinDocs already gets right
 
-- **The save marks the document clean only after the write.** `SaveToFile` calls `MarkClean()` after `File.WriteAllText`, which is the order RaisinTerminal had backwards in three places. So a failed save here never left a document believing it was saved.
+- **The save marks the document clean only after the write.** `SaveToFile` calls `MarkClean()` after the write succeeds, which is the order RaisinTerminal had backwards in three places. So a failed save here never left a document believing it was saved.
 - **Closing is guarded by the dirty flag.** `ConfirmDiscard` saves and then returns `!IsDirty`, so once a failed save leaves the document dirty, the close is cancelled rather than proceeding. That is what made finding 1 a one-place fix.
 - **The external-change reload refuses partial content**, and that is correct rather than an accident — see finding 4, where widening it would be the wrong fix.
 - **The app log is guarded**, and the dictionary files are only created when absent.
@@ -14,7 +14,7 @@
 | # | finding | severity | state |
 |---|---|---|---|
 | 1 | A failed save terminates the editor and takes the unsaved document with it | High | fixed |
-| 2 | Documents are saved in place | Medium–High | open |
+| 2 | Documents are saved in place | Medium–High | fixed |
 | 3 | The spell-check dictionaries are saved in place and unguarded | Medium | open |
 | 4 | The external-change reload depends on a second event arriving | Low–Medium | open |
 
@@ -28,9 +28,21 @@ The path and base are still assigned before the write, as they were, because a S
 
 **The missing global handler is left as it was.** Any other unexpected exception still terminates the editor. What a handler ought to do — log and continue, or log and exit — is a decision about the whole application rather than about saving, so it is recorded here and not made.
 
-### 2. Documents are saved in place — Medium–High, open
+### 2. Documents are saved in place — Medium–High, fixed
 
 `SaveToFile` writes with `File.WriteAllText`, which truncates and then refills. A kill, crash or power loss inside that window leaves the document truncated or empty — and for a document editor that is the core job, and often a file inside a repository, where git or another editor may also be reading it. `SafeFile.WriteAllText` would make the swap atomic and is the natural fix; RaisinDocs already references Raisin.Core.
+
+**What was done:** `SaveToFile` writes through `SafeFile.WriteAllText`, fully qualified rather than importing `Raisin.Core` into the window. The file watcher needed nothing: `FileChangeWatcher` already reports a rename onto its file as a modification — its own comment calls that shape an atomic save — and the watcher is suppressed across our own save and re-armed afterwards in any case.
+
+The swap has one cost worth knowing, and it was measured rather than assumed. `File.Replace` needs delete access to the file it replaces, so a program holding the document open while sharing read and write but *not* delete now blocks the save, where the in-place write would have gone through underneath it:
+
+| a reader holds the file, sharing | in-place | atomic |
+|---|---|---|
+| `Read` | blocked | blocked |
+| `ReadWrite` | saved | **blocked** |
+| `ReadWrite \| Delete` | saved | saved |
+
+Such holders are rare for a document, and the failure is now the one finding 1 made safe: the document stays open and dirty and you are told. The fix is not unit-tested, living in the window's code-behind; the same swap is pinned by tests in RaisinTerminal, where both fail against an in-place write.
 
 ### 3. The spell-check dictionaries are saved in place and unguarded — Medium, open
 
