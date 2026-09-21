@@ -1,0 +1,54 @@
+# File reads and writes in RaisinDocs
+
+*Date: 2026-09-21. Scope: every production file read and write in RaisinDocs, RaisinDocs.Editor and RaisinDocs.Viewer, looked at for share modes, atomicity, failure handling and what a failure costs. Follows the same review of StockRaisin2 the day before, and one of RaisinTerminal alongside this. **Finding 1 is fixed; 2 to 4 are open.** A defect found in the shared library is written up and fixed separately, in RaisinLibraries' `design/Durable Stores and Unreadable Files.md` — it covered RaisinDocs' `SessionStore`.*
+
+## What RaisinDocs already gets right
+
+- **The save marks the document clean only after the write.** `SaveToFile` calls `MarkClean()` after `File.WriteAllText`, which is the order RaisinTerminal had backwards in three places. So a failed save here never left a document believing it was saved.
+- **Closing is guarded by the dirty flag.** `ConfirmDiscard` saves and then returns `!IsDirty`, so once a failed save leaves the document dirty, the close is cancelled rather than proceeding. That is what made finding 1 a one-place fix.
+- **The external-change reload refuses partial content**, and that is correct rather than an accident — see finding 4, where widening it would be the wrong fix.
+- **The app log is guarded**, and the dictionary files are only created when absent.
+
+## Findings
+
+| # | finding | severity | state |
+|---|---|---|---|
+| 1 | A failed save terminates the editor and takes the unsaved document with it | High | fixed |
+| 2 | Documents are saved in place | Medium–High | open |
+| 3 | The spell-check dictionaries are saved in place and unguarded | Medium | open |
+| 4 | The external-change reload depends on a second event arriving | Low–Medium | open |
+
+### 1. A failed save terminates the editor and takes the document with it — High, fixed
+
+RaisinDocs.Editor has **no unhandled-exception handler at all**, and `SaveToFile` wrote with nothing around it. So Ctrl+S on a document another program had locked, a full disk or a read-only folder threw out of `Save_Click`, WPF terminated the process — and the unsaved buffer, the one thing the save existed to protect, went with it. The same held when closing: `ConfirmDiscard` calls the save, so answering Yes to "save before closing?" could crash through the close instead.
+
+`SaveToFile` now catches the failure and changes nothing about the tab unless the write landed: it restores the path and document base it had, stays dirty, starts watching its file again, and tells you the document is still open with your changes. Because the tab stays dirty, `ConfirmDiscard` now cancels a close whose save failed.
+
+The path and base are still assigned before the write, as they were, because a Save As may need the new base for `GetText()` to resolve the document's images — so they are put back on failure rather than set after success.
+
+**The missing global handler is left as it was.** Any other unexpected exception still terminates the editor. What a handler ought to do — log and continue, or log and exit — is a decision about the whole application rather than about saving, so it is recorded here and not made.
+
+### 2. Documents are saved in place — Medium–High, open
+
+`SaveToFile` writes with `File.WriteAllText`, which truncates and then refills. A kill, crash or power loss inside that window leaves the document truncated or empty — and for a document editor that is the core job, and often a file inside a repository, where git or another editor may also be reading it. `SafeFile.WriteAllText` would make the swap atomic and is the natural fix; RaisinDocs already references Raisin.Core.
+
+### 3. The spell-check dictionaries are saved in place and unguarded — Medium, open
+
+`SaveProjectDictionary` and `SaveUserDictionary` rewrite their files with `File.WriteAllLines`, and neither catches. The user dictionary is words collected over time; the project dictionary lives inside the project folder. Beyond the truncation window, a locked dictionary throws out of the add-word action — and with no handler, that is the same termination as finding 1, taking any unsaved documents with it.
+
+### 4. The external-change reload depends on a second event arriving — Low–Medium, open
+
+`ReloadFromDisk` reads with `File.ReadAllText` when the file watcher reports a change, and on failure writes to `Trace`, which nothing is listening to. Probed rather than assumed, with a writer that holds the file across two chunks:
+
+| watcher event | what the reload saw |
+|---|---|
+| first, while the writer still held the file | **denied** |
+| second, after the writer closed | the complete new content |
+
+So it recovers — but only because a second event arrived after the writer closed. A writer that finishes inside the first event, or a burst of events the watcher coalesces, leaves nothing to recover with, and the tab keeps stale text that a later save would write over the external change. The first failure is invisible either way.
+
+**Widening the read would make this worse, not better.** On that first event a shared read succeeds — and loads the half-written file into the editor as though it were the document. The restrictive read is what keeps partial content out. The fix is to wait for the file to settle and retry, which is what RaisinTerminal's automation channel does by polling instead of watching. It is the reverse of the StockRaisin2 review, where shared reads were the answer.
+
+## Tests
+
+RaisinDocs passes 2,666 across its three test projects, with its two long-standing skips unchanged. The fix for finding 1 lives in `MainWindow`'s code-behind and is not unit-tested: exercising it means standing up a WPF window and a locked file, and a test of that weight to pin a `catch` would cost more than it protects.
