@@ -127,8 +127,8 @@ Each extracted class depends on specific interfaces, not on DocsCanvas directly:
 
 **See Also:**
 - Full architecture documentation: `design/DocsCanvas_Refactoring/Architecture_Overview.md`
-- Refactoring plan: `design/DocsCanvas_Refactoring/_done/DocsCanvas_Interface_Refactoring_Plan.md`
-- Completion summary: `design/DocsCanvas_Refactoring/_done/Phase2_Refactoring_Summary.md`
+- Refactoring plan: `design/_done/DocsCanvas_Refactoring/DocsCanvas_Interface_Refactoring_Plan.md`
+- Completion summary: `design/_done/DocsCanvas_Refactoring/Phase2_Refactoring_Summary.md`
 - Future opportunities: `design/DocsCanvas_Refactoring/Remaining_Architectural_Opportunities.md`
 
 ### Input decomposition (Phase 3 — 2026-09)
