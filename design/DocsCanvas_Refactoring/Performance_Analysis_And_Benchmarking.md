@@ -1164,7 +1164,7 @@ The refactored architecture also provides a solid foundation for future performa
 
 **Related Documentation:**
 - `design/DocsCanvas_Refactoring/Architecture_Overview.md` - Complete architecture
-- `design/DocsCanvas_Refactoring/Phase2_Refactoring_Summary.md` - Refactoring details
+- `design/DocsCanvas_Refactoring/_done/Phase2_Refactoring_Summary.md` - Refactoring details
 - `design/DocsCanvas_Refactoring/Remaining_Architectural_Opportunities.md` - Future work
 
 **Code Files:**

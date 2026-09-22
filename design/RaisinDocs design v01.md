@@ -140,7 +140,7 @@ A trailing `\` is a hard break only when:
 - Rectangular cell selection with copy and clear operations
 
 ### 8 — Task list items ✅
-- See `design/GFM Task Lists - Iteration 8.md` for detailed plan
+- See `design/_done/GFM Task Lists - Iteration 8.md` for detailed plan
 - GFM task list syntax: `- [ ] unchecked`, `- [x] checked`
 - Parser detects checkbox prefix, assigns TaskListItemUnchecked / TaskListItemChecked BlockKind
 - Source mode: dimmed checkbox prefix
@@ -149,7 +149,7 @@ A trailing `\` is a hard break only when:
 - Toolbar button to insert/toggle task list item
 
 ### 9 — Inline links ✅
-- See `design/Inline Links - Iteration 9.md` for detailed plan
+- See `design/_done/Inline Links - Iteration 9.md` for detailed plan
 - CommonMark inline link syntax: `[text](url)` with optional title
 - Parser detects bracket/paren structure (reuses image parsing helpers), assigns InlineStyle.Link
 - Source mode: dimmed `[` and `](url)` markers, link text in blue with underline
@@ -166,7 +166,7 @@ A trailing `\` is a hard break only when:
 - 18 tests (15 parser + 3 visual map)
 
 ### 13 — Ordered list items ✅
-- See `design/Ordered Lists - Iteration 13.md` for detailed plan
+- See `design/_done/Ordered Lists - Iteration 13.md` for detailed plan
 - CommonMark ordered list syntax: `1. item` or `1) item` (1–9 digits + `.` or `)` + space)
 - Parser detects numbered prefix, assigns `OrderedListItem` BlockKind
 - Source mode: dimmed number prefix
@@ -219,7 +219,7 @@ A trailing `\` is a hard break only when:
 - **GetContentColumn fix**: rewrote `GetContentColumn` to scan actual text per CommonMark §5.3 — handles 1–4 spaces after marker (content starts where it starts) and 5+ spaces (collapses to marker + 1). Fixed `DetectIndentedCode` to preserve code blocks within list items when relative indent ≥ 4.
 
 ### 19 — Indentation awareness ✅
-- See `design/Indentation Awareness - Iteration 19.md` for detailed plan
+- See `design/_done/Indentation Awareness - Iteration 19.md` for detailed plan
 - CommonMark indentation is load-bearing: it determines list continuation, code blocks, nesting, and block recognition
 - **Content column**: each list item / blockquote has a content column (marker width + spaces). Continuation lines indented to this column remain part of the same item.
 - **Lazy continuation**: paragraph text immediately following a list item (no blank line) continues the item without indentation

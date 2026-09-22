@@ -294,9 +294,9 @@ public class MyController
 
 ## Related Documents
 
-- **Phase 1 Implementation Guide:** `design/Analysis/DocsCanvas/Phase1_Implementation_Guide.md`
-- **Interface Design Plan:** `design/ArchitectureReviews/DocsCanvas_Interface_Refactoring_Plan.md`
-- **DocsCanvas Analysis:** `design/Analysis/DocsCanvas/DocsCanvas_Analysis.md`
+- **Phase 1 Implementation Guide:** `design/Analysis/_done/DocsCanvas/Phase1_Implementation_Guide.md`
+- **Interface Design Plan:** `design/DocsCanvas_Refactoring/_done/DocsCanvas_Interface_Refactoring_Plan.md`
+- **DocsCanvas Analysis:** `design/Analysis/_done/DocsCanvas/DocsCanvas_Analysis.md`
 
 ---
 
