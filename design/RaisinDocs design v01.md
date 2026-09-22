@@ -129,7 +129,7 @@ A trailing `\` is a hard break only when:
 - No existing markdown editors (Typora, Obsidian, VS Code, Mark Text) offer an embeddable native control — RaisinDocs is unique as a reusable WPF markdown editor component
 
 ### 7 — Tables ✅
-- See `design/GFM Table Support - Iteration 7.md` for detailed plan
+- See `design/_done/GFM Table Support - Iteration 7.md` for detailed plan
 - GFM table syntax: header row, separator row (with column alignment), data rows
 - Parser detects table context across consecutive blocks (two-pass, like fenced code)
 - New BlockKind values: TableHeaderRow, TableSeparatorRow, TableDataRow
