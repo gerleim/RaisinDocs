@@ -169,6 +169,37 @@ public class FileChangeWatcherTests : IDisposable
     }
 
     [Fact]
+    public void Delete_ReportsDeleted_Once()
+    {
+        // Reported by the watcher's own event and again by the poll; the host must hear it once, or
+        // it asks the same question every poll.
+        var path = NewFile();
+        var events = new ConcurrentQueue<FileChangeEvent>();
+        using var watcher = Watch(path, events);
+
+        File.Delete(path);
+        Thread.Sleep(SettleMs + 1500);
+
+        events.Should().ContainSingle()
+            .Which.ChangeType.Should().Be(FileChangeType.Deleted);
+    }
+
+    [Fact]
+    public void DeleteThenRecreateLater_ReportsDeletedThenModified()
+    {
+        var path = NewFile();
+        var events = new ConcurrentQueue<FileChangeEvent>();
+        using var watcher = Watch(path, events);
+
+        File.Delete(path);
+        Thread.Sleep(SettleMs);
+        File.WriteAllText(path, "back again\n");
+        Thread.Sleep(SettleMs);
+
+        events.Select(e => e.ChangeType).Should().Equal(FileChangeType.Deleted, FileChangeType.Modified);
+    }
+
+    [Fact]
     public void CallbackThatThrows_DoesNotLoseTheChange()
     {
         // A host whose reload fails (the file was still locked, say) must be offered the

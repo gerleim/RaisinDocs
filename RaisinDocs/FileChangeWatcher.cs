@@ -21,6 +21,7 @@ public class FileChangeWatcher : IDisposable
     private FileChangeEvent? _pendingEvent;
     private bool _disposed;
     private bool _suppressed;
+    private bool _missing;
     private DateTime _lastKnownWriteTime;
     private const int DebounceMs = 500;
     private const int PollMs = 1500;
@@ -38,6 +39,7 @@ public class FileChangeWatcher : IDisposable
         };
         _watcher.Changed += OnFileSystemChanged;
         _watcher.Created += OnFileSystemChanged;
+        _watcher.Deleted += OnFileDeleted;
         _watcher.Renamed += OnFileRenamed;
         _watcher.Error += OnWatcherError;
     }
@@ -52,6 +54,7 @@ public class FileChangeWatcher : IDisposable
         var fileName = Path.GetFileName(CurrentFilePath);
 
         _lastKnownWriteTime = File.GetLastWriteTimeUtc(CurrentFilePath);
+        _missing = !File.Exists(CurrentFilePath);
 
         _watcher.Path = directory;
         _watcher.Filter = fileName;
@@ -85,6 +88,7 @@ public class FileChangeWatcher : IDisposable
         {
             _suppressed = false;
             _pendingEvent = null;
+            _missing = CurrentFilePath != null && !File.Exists(CurrentFilePath);
             if (CurrentFilePath != null && File.Exists(CurrentFilePath))
                 _lastKnownWriteTime = File.GetLastWriteTimeUtc(CurrentFilePath);
         }
@@ -97,6 +101,7 @@ public class FileChangeWatcher : IDisposable
         {
             if (File.Exists(e.FullPath))
             {
+                lock (_lock) _missing = false;
                 ScheduleCallback(new FileChangeEvent
                 {
                     FilePath = e.FullPath,
@@ -154,6 +159,39 @@ public class FileChangeWatcher : IDisposable
         }
     }
 
+    /// <remarks>
+    /// Reported once, when the file goes missing; the poll reports it too, in case the watcher's own
+    /// event was lost. A save that deletes the file and then puts the new one in its place — a
+    /// common way to write atomically — sends its modification inside the debounce, which replaces
+    /// the deletion, so the host sees only the change.
+    /// </remarks>
+    private void OnFileDeleted(object sender, FileSystemEventArgs e)
+    {
+        try
+        {
+            if (SamePath(e.FullPath, CurrentFilePath))
+                ReportMissing(e.FullPath);
+        }
+        catch
+        {
+        }
+    }
+
+    private void ReportMissing(string path)
+    {
+        lock (_lock)
+        {
+            if (_missing) return;
+            _missing = true;
+        }
+
+        ScheduleCallback(new FileChangeEvent
+        {
+            FilePath = path,
+            ChangeType = FileChangeType.Deleted,
+        });
+    }
+
     private void OnWatcherError(object sender, ErrorEventArgs e)
     {
         // The OS dropped the subscription (buffer overflow, directory went away).
@@ -190,10 +228,22 @@ public class FileChangeWatcher : IDisposable
             }
 
             var path = CurrentFilePath;
-            if (path == null || !File.Exists(path)) return;
+            if (path == null) return;
+            if (!File.Exists(path))
+            {
+                ReportMissing(path);
+                return;
+            }
+
+            bool reappeared;
+            lock (_lock)
+            {
+                reappeared = _missing;
+                _missing = false;
+            }
 
             var writeTime = File.GetLastWriteTimeUtc(path);
-            if (writeTime != _lastKnownWriteTime)
+            if (reappeared || writeTime != _lastKnownWriteTime)
             {
                 ScheduleCallback(new FileChangeEvent
                 {
@@ -212,6 +262,12 @@ public class FileChangeWatcher : IDisposable
         lock (_lock)
         {
             if (_disposed || _suppressed) return;
+
+            // Any report but a deletion means the file is there. An atomic replace sends a deletion
+            // and then the rename onto the file; left missing, the next poll would report the file
+            // coming back as a second change.
+            if (changeEvent.ChangeType != FileChangeType.Deleted)
+                _missing = false;
 
             _pendingEvent = changeEvent;
 
@@ -293,4 +349,7 @@ public enum FileChangeType
 {
     Modified,
     Renamed,
+
+    /// <summary>The file is gone. Reported once; it is reported as modified if it comes back.</summary>
+    Deleted,
 }

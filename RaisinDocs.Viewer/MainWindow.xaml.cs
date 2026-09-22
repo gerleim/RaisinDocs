@@ -164,6 +164,10 @@ public partial class MainWindow : Window
 
         _fileWatcher = new FileChangeWatcher(change =>
         {
+            // A viewer keeps showing the last text it had; there is nothing to reload.
+            if (change.ChangeType == FileChangeType.Deleted)
+                return;
+
             if (change.ChangeType == FileChangeType.Renamed)
             {
                 Dispatcher.Invoke(() =>

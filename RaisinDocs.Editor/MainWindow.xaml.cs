@@ -276,7 +276,7 @@ public partial class MainWindow : Window
             return;
         }
         var name = tab.DisplayName;
-        var dirty = tab.Editor.IsDirty ? " *" : "";
+        var dirty = tab.HasUnsavedWork ? " *" : "";
         var blockCount = tab.Editor.Canvas.BlockCount;
         Title = $"{name}{dirty} — RaisinDocs Editor [Blocks: {blockCount}]";
     }
@@ -284,7 +284,7 @@ public partial class MainWindow : Window
     private static void UpdateTabHeader(DocumentTab tab)
     {
         var name = tab.DisplayName;
-        var dirty = tab.Editor.IsDirty ? " *" : "";
+        var dirty = tab.HasUnsavedWork ? " *" : "";
         tab.HeaderText.Text = $"{name}{dirty}";
     }
 
@@ -447,13 +447,19 @@ public partial class MainWindow : Window
 
     private void CloseTab(DocumentTab tab)
     {
-        if (tab.Editor.IsDirty)
+        if (tab.HasUnsavedWork)
         {
             TabControl.SelectedItem = tab.TabItem;
             if (!ConfirmDiscard(tab)) return;
         }
 
-        if (tab.FilePath != null)
+        RemoveTab(tab);
+    }
+
+    /// <summary>Closes a tab without asking — for when the user has already answered.</summary>
+    private void RemoveTab(DocumentTab tab)
+    {
+        if (tab.FilePath != null && File.Exists(tab.FilePath))
             AddRecentFile(tab.FilePath);
 
         _tabs.Remove(tab);
@@ -471,7 +477,7 @@ public partial class MainWindow : Window
     {
         foreach (var tab in _tabs)
         {
-            if (!tab.Editor.IsDirty) continue;
+            if (!tab.HasUnsavedWork) continue;
             TabControl.SelectedItem = tab.TabItem;
             if (!ConfirmDiscard(tab))
             {
@@ -707,6 +713,7 @@ public partial class MainWindow : Window
 
         tab.Editor.MarkClean();
         tab.RecordDiskBaseline();
+        tab.DeletedOnDisk = false;
         AddRecentFile(path);
         UpdateTabHeader(tab);
         UpdateTitle();
@@ -760,7 +767,7 @@ public partial class MainWindow : Window
     internal List<RescuedDocument> UnsavedDocuments() =>
         _tabs.Where(tab =>
             {
-                try { return tab.Editor.IsDirty; }
+                try { return tab.HasUnsavedWork; }
                 catch { return true; }
             })
             .Select(tab => new RescuedDocument(tab.FilePath, () => tab.Editor.GetText(), tab.DiskBaseline))
@@ -885,7 +892,7 @@ public partial class MainWindow : Window
         if (result == MessageBoxResult.Yes)
         {
             Save_Click(this, new RoutedEventArgs());
-            return !tab.Editor.IsDirty;
+            return !tab.HasUnsavedWork;
         }
         return true;
     }
@@ -907,8 +914,18 @@ public partial class MainWindow : Window
         /// </summary>
         public string? RecoveredFrom { get; set; }
 
+        /// <summary>
+        /// The file was deleted by another program and the user kept the tab: its text now exists
+        /// nowhere else, so it counts as unsaved until it is saved or reloaded.
+        /// </summary>
+        public bool DeletedOnDisk { get; set; }
+
+        /// <summary>Whether closing would lose anything: unsaved edits, or a file that is gone.</summary>
+        public bool HasUnsavedWork => Editor.IsDirty || DeletedOnDisk;
+
         public string DisplayName =>
-            FilePath is not null ? Path.GetFileName(FilePath)
+            DeletedOnDisk && FilePath is not null ? $"{Path.GetFileName(FilePath)} (deleted)"
+            : FilePath is not null ? Path.GetFileName(FilePath)
             : RecoveredFrom is not null ? $"{Path.GetFileName(RecoveredFrom)} (recovered)"
             : "Untitled";
 
@@ -941,6 +958,21 @@ public partial class MainWindow : Window
                     return;
                 }
 
+                if (change.ChangeType == FileChangeType.Deleted)
+                {
+                    // Off the UI thread: a program that saves by deleting the file and writing a new one
+                    // leaves it missing for a moment, and a question then would be about nothing. If it
+                    // comes back, the watcher reports that as a change.
+                    for (var i = 0; i < 5; i++)
+                    {
+                        Thread.Sleep(200);
+                        if (File.Exists(change.FilePath))
+                            return;
+                    }
+                    owner.Dispatcher.Invoke(() => OnDeleted(owner));
+                    return;
+                }
+
                 // Off the UI thread: wait for the other program to finish before anything is loaded
                 // or asked. A tab left stale when this fails is still safe — its baseline is unchanged,
                 // so a save asks before replacing the file.
@@ -954,8 +986,9 @@ public partial class MainWindow : Window
         /// <remarks>
         /// <para>
         /// A clean tab takes the new version silently. A tab with unsaved edits always asks — including
-        /// when <c>PromptOnExternalChanges</c> is off, which used to reload over the edits and discard
-        /// them without a word. Unsaved typing is never thrown away unasked.
+        /// when the old <c>PromptOnExternalChanges</c> setting was off, which reloaded over the edits and
+        /// discarded them without a word; the setting is gone. Unsaved typing is never thrown away
+        /// unasked. A tab whose file was deleted and kept counts as unsaved: its text exists nowhere else.
         /// </para>
         /// <para>
         /// One question per burst: a change that arrives while the question is open is not asked about
@@ -976,7 +1009,7 @@ public partial class MainWindow : Window
             if (settled.Stamp == DiskBaseline)
                 return;
 
-            if (!Editor.IsDirty)
+            if (!HasUnsavedWork)
             {
                 Apply(settled);
                 return;
@@ -1024,10 +1057,58 @@ public partial class MainWindow : Window
                 Editor.SetText(settled.Content);
                 Editor.MarkClean();
                 DiskBaseline = settled.Stamp;
+                DeletedOnDisk = false;
+                UpdateTabHeader(this);
             }
             finally
             {
                 _isReloadingFromDisk = false;
+            }
+        }
+
+        /// <summary>
+        /// The file was deleted by another program: ask whether to keep the tab, as Notepad++ does.
+        /// </summary>
+        /// <remarks>
+        /// Keeping it marks it <see cref="DeletedOnDisk"/> — unsaved, titled "(deleted)" — so closing
+        /// asks and a save writes the file back. Closing it is said to lose the unsaved changes when
+        /// there are any, since nothing else holds them. Asked once: the watcher reports a deletion
+        /// once, and a tab already kept is not asked again.
+        /// </remarks>
+        private void OnDeleted(MainWindow owner)
+        {
+            if (_isAsking || DeletedOnDisk || FilePath is null || File.Exists(FilePath))
+                return;
+
+            var name = Path.GetFileName(FilePath);
+            var closing = Editor.IsDirty
+                ? "No: close it. Your unsaved changes are lost."
+                : "No: close it.";
+
+            MessageBoxResult result;
+            _isAsking = true;
+            try
+            {
+                result = MessageBox.Show(owner,
+                    $"'{name}' was deleted by another program.\n\n"
+                  + "Yes: keep it open. It is marked unsaved, and saving writes the file back.\n"
+                  + closing,
+                    "File Deleted", MessageBoxButton.YesNo, MessageBoxImage.Question);
+            }
+            finally
+            {
+                _isAsking = false;
+            }
+
+            if (result == MessageBoxResult.Yes)
+            {
+                DeletedOnDisk = true;
+                UpdateTabHeader(this);
+                owner.UpdateTitle();
+            }
+            else
+            {
+                owner.RemoveTab(this);
             }
         }
 
