@@ -25,14 +25,14 @@ public class VisualModeTypingTests
     [StaFact]
     public void Type_AtEndOfIndentedContinuation_DoesNotThrow()
     {
-        // Layout merges "  f" into the paragraph above it and trims the indent, so the cursor
-        // has to be trimmed along with the text - otherwise the next keystroke inserts past
-        // the end of the merged block.
+        // Layout merges "  f" into the paragraph above it, so the cursor has to move with the
+        // text - otherwise the next keystroke inserts past the end of the merged block. The
+        // indent stays in the text; only the display hides it.
         var canvas = CreateCanvas("\n-\n  ");
         canvas.TestSetCursor(2, 2);
         canvas.TestTypeText("fx");
 
-        canvas.TestGetBlockText(1).Should().Be("-\nfx");
+        canvas.TestGetBlockText(1).Should().Be("-\n  fx");
     }
 
     [StaFact]

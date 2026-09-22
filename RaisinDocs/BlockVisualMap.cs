@@ -402,6 +402,11 @@ public class BlockVisualMap
             }
         }
 
+        // Only a merge puts a newline in a block, but not only paragraphs come out of one: the
+        // joined text is re-parsed, and "[Foo\n  bar]: /url" merges as a paragraph and comes
+        // back a link reference definition.
+        HideSoftBreakWhitespace(blockText, ranges);
+
         ranges.Sort((a, b) => a.Start.CompareTo(b.Start));
 
         // Merge overlapping ranges (e.g., color tags found by both color tag and HTML comment finders)
@@ -433,6 +438,26 @@ public class BlockVisualMap
 
         return new BlockVisualMap(deduped, replacementPrefix, isContinuation, prefixMeasureKind,
             parsed.Images, parsed.Links, parsed.ColorSpans);
+    }
+
+    /// <summary>
+    /// Hides the whitespace either side of each line break inside a merged block. The
+    /// merge keeps every line exactly as written, indent included, so the file saves as it was
+    /// loaded; the soft break already draws as a space, and the source whitespace next to it
+    /// would widen the gap or indent the line under it.
+    /// </summary>
+    private static void HideSoftBreakWhitespace(string text, List<HiddenRange> ranges)
+    {
+        for (int nl = text.IndexOf('\n'); nl >= 0; nl = text.IndexOf('\n', nl + 1))
+        {
+            int before = nl;
+            while (before > 0 && text[before - 1] is ' ' or '\t') before--;
+            if (before < nl) ranges.Add(new HiddenRange(before, nl - before));
+
+            int after = nl + 1;
+            while (after < text.Length && text[after] is ' ' or '\t') after++;
+            if (after > nl + 1) ranges.Add(new HiddenRange(nl + 1, after - nl - 1));
+        }
     }
 
     private static int CountBackticks(string text, int start)

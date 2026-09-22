@@ -228,6 +228,16 @@ public class BlockVisualMapTests
     }
 
     [Fact]
+    public void BuildDisplayString_MergedParagraph_HidesWhitespaceAroundLineBreaks()
+    {
+        // A merged paragraph keeps its lines' indents and trailing spaces in the text; the
+        // display hides them, so the soft break is the only gap between the lines.
+        const string text = "first \n   second\n\tthird";
+        var map = ComputeMap(text, BlockKind.Paragraph);
+        map.BuildDisplayString(text, 0, text.Length).Should().Be("first\nsecond\nthird");
+    }
+
+    [Fact]
     public void BuildDisplayString_HeadingHidesPrefix()
     {
         var map = ComputeMap("# Hello");

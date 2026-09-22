@@ -118,7 +118,12 @@ public class Document
         for (int i = 0; i < _blocks.Count; i++)
         {
             if (i > 0) sb.Append("\r\n");
-            sb.Append(_blocks[i]);
+            // A merged paragraph holds its lines joined by a bare '\n'. Written out as is, every
+            // wrapped paragraph would save with LF inside it and CRLF around it.
+            if (ContainsNewline(_blocks[i]))
+                sb.Append(_blocks[i].ToString().Replace("\n", "\r\n"));
+            else
+                sb.Append(_blocks[i]);
         }
         return sb.ToString();
     }
@@ -778,24 +783,23 @@ public class Document
                 continue;
             string text = _blocks[i].ToString();
 
-            int leadingRemoved = 0;
-            string result;
-            if (hasSignificantLeading != null && hasSignificantLeading(text))
+            // Line by line, because a merged paragraph is one block holding several lines.
+            // Trimmed as a whole, only its first line lost its indent and only its last its
+            // trailing space. Each line also records where it landed, to carry the cursor.
+            var lines = text.Split('\n');
+            var origStarts = new int[lines.Length];
+            var newStarts = new int[lines.Length];
+            var leadingRemoved = new int[lines.Length];
+            var sb = new StringBuilder(text.Length);
+            for (int j = 0, origStart = 0; j < lines.Length; origStart += lines[j].Length + 1, j++)
             {
-                result = text;
+                if (j > 0) sb.Append('\n');
+                origStarts[j] = origStart;
+                newStarts[j] = sb.Length;
+                lines[j] = TrimLine(lines[j], hasSignificantLeading, out leadingRemoved[j]);
+                sb.Append(lines[j]);
             }
-            else
-            {
-                result = text.TrimStart();
-                leadingRemoved = text.Length - result.Length;
-            }
-
-            string trimmedEnd = result.TrimEnd();
-            int trailingCount = result.Length - trimmedEnd.Length;
-            if (trailingCount >= 2)
-                result = trimmedEnd + "  ";
-            else
-                result = trimmedEnd;
+            string result = sb.ToString();
 
             if (result == text) continue;
 
@@ -803,11 +807,37 @@ public class Document
             changed = true;
 
             if (CursorBlock == i)
-                CursorOffset = Math.Max(0, Math.Min(CursorOffset - leadingRemoved, result.Length));
+                CursorOffset = MapThroughTrim(CursorOffset);
             if (AnchorBlock == i)
-                AnchorOffset = Math.Max(0, Math.Min(AnchorOffset - leadingRemoved, result.Length));
+                AnchorOffset = MapThroughTrim(AnchorOffset);
+
+            int MapThroughTrim(int offset)
+            {
+                int j = lines.Length - 1;
+                while (j > 0 && offset < origStarts[j]) j--;
+                return newStarts[j]
+                    + Math.Clamp(offset - origStarts[j] - leadingRemoved[j], 0, lines[j].Length);
+            }
         }
         return changed;
+    }
+
+    /// <summary>
+    /// Trims one line: its indent unless the indent means something, and its trailing
+    /// whitespace down to nothing, or to the two spaces of a hard break.
+    /// </summary>
+    private static string TrimLine(string line, Func<string, bool>? hasSignificantLeading, out int leadingRemoved)
+    {
+        leadingRemoved = 0;
+        string result = line;
+        if (hasSignificantLeading == null || !hasSignificantLeading(line))
+        {
+            result = line.TrimStart();
+            leadingRemoved = line.Length - result.Length;
+        }
+
+        string trimmedEnd = result.TrimEnd();
+        return result.Length - trimmedEnd.Length >= 2 ? trimmedEnd + "  " : trimmedEnd;
     }
 
     public bool NormalizeAdjacentMarkers(int startBlock, int endBlock, Func<string, string> normalize, Func<string, int>? isFenceLine = null)
@@ -894,16 +924,19 @@ public class Document
         {
             if (insideFence != null && insideFence.Contains(i))
                 continue;
-            string text = _blocks[i].ToString();
-            if (text.Length > 0 && (text[0] == ' ' || text[0] == '\t')
-                && (hasSignificantLeading == null || !hasSignificantLeading(text)))
-                return true;
-            if (text.Length > 0 && text[^1] == ' ')
+            // Per line, matching TrimWhitespace: a merged paragraph is several lines in one block.
+            foreach (var text in _blocks[i].ToString().Split('\n'))
             {
-                string trimmedEnd = text.TrimEnd();
-                int trailing = text.Length - trimmedEnd.Length;
-                if (trailing != 2)
+                if (text.Length > 0 && (text[0] == ' ' || text[0] == '\t')
+                    && (hasSignificantLeading == null || !hasSignificantLeading(text)))
                     return true;
+                if (text.Length > 0 && text[^1] == ' ')
+                {
+                    string trimmedEnd = text.TrimEnd();
+                    int trailing = text.Length - trimmedEnd.Length;
+                    if (trailing != 2)
+                        return true;
+                }
             }
         }
         return false;
@@ -1188,27 +1221,21 @@ public class Document
             if (continuationIndices.Count > 0)
             {
                 // Merge block text: combine i with all continuations after it, recording where
-                // each continuation lands. The merge trims, so those positions have to come out
-                // of the trimmed text - derived from the raw block lengths they put the cursor
-                // past the end of the merged block.
+                // each continuation lands. The lines are joined exactly as written - this is the
+                // document's text, not its display, so an indent or a trailing space trimmed here
+                // is gone from the file on the next save. Visual mode hides that whitespace
+                // instead (BlockVisualMap.HideSoftBreakWhitespace).
                 var offsetAdjustments = new Dictionary<int, int>();  // start of the continuation in the merged text
-                var trimmedLeading = new Dictionary<int, int>();     // leading chars the trim dropped
-                var trimmedLengths = new Dictionary<int, int>();     // continuation length after trimming
 
-                var parentText = _blocks[i].ToString();
+                var joined = new StringBuilder(_blocks[i].ToString());
                 for (int j = 0; j < continuationIndices.Count; j++)
                 {
                     int contIdx = continuationIndices[j];
-                    string contText = _blocks[contIdx].ToString();
-                    // Trim trailing spaces from parent and leading spaces from continuation to avoid duplication
-                    parentText = parentText.TrimEnd();
-                    string trimmedCont = contText.TrimStart();
-                    trimmedLeading[contIdx] = contText.Length - trimmedCont.Length;
-                    trimmedLengths[contIdx] = trimmedCont.Length;
-                    offsetAdjustments[contIdx] = parentText.Length + 1; // +1 for the newline
-                    parentText += "\n" + trimmedCont;
+                    joined.Append('\n');
+                    offsetAdjustments[contIdx] = joined.Length;
+                    joined.Append(_blocks[contIdx]);
                 }
-                _blocks[i] = new StringBuilder(parentText);
+                _blocks[i] = joined;
 
                 // Remove continuation blocks from _blocks and parsedBlocks (in reverse order to preserve indices)
                 for (int j = continuationIndices.Count - 1; j >= 0; j--)
@@ -1220,8 +1247,7 @@ public class Document
                     {
                         // Cursor is in a continuation block - move it to the parent block
                         CursorBlock = i;
-                        CursorOffset = offsetAdjustments[idxToRemove]
-                            + MapIntoTrimmedContinuation(CursorOffset, idxToRemove);
+                        CursorOffset += offsetAdjustments[idxToRemove];
                     }
                     else if (CursorBlock > idxToRemove)
                     {
@@ -1233,8 +1259,7 @@ public class Document
                     if (AnchorBlock == idxToRemove)
                     {
                         AnchorBlock = i;
-                        AnchorOffset = offsetAdjustments[idxToRemove]
-                            + MapIntoTrimmedContinuation(AnchorOffset, idxToRemove);
+                        AnchorOffset += offsetAdjustments[idxToRemove];
                     }
                     else if (AnchorBlock > idxToRemove)
                     {
@@ -1245,18 +1270,9 @@ public class Document
                     parsedBlocks.RemoveAt(idxToRemove);
                 }
 
-                // The parent's own trailing spaces were trimmed as well, so a cursor sitting
-                // on them has nowhere left to be.
-                int mergedLen = _blocks[i].Length;
-                if (CursorBlock == i) CursorOffset = Math.Min(CursorOffset, mergedLen);
-                if (AnchorBlock == i) AnchorOffset = Math.Min(AnchorOffset, mergedLen);
-
                 // Update the parent block to clear Children since they're merged
                 parsedBlocks[i] = parsed with { Children = null };
                 merged = true;
-
-                int MapIntoTrimmedContinuation(int offset, int contIdx)
-                    => Math.Clamp(offset - trimmedLeading[contIdx], 0, trimmedLengths[contIdx]);
             }
 
             i--;

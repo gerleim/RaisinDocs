@@ -830,6 +830,52 @@ public class DocumentTests
         doc.GetBlockText(1).Should().Be("world");
     }
 
+    /// <summary>A document whose lines layout has merged into one paragraph block.</summary>
+    private static Document MergedParagraph(string text)
+    {
+        var doc = new Document();
+        doc.SetText(text);
+        doc.MergeParagraphContinuations(MarkdownParser.Parse(i => doc.GetBlockText(i), doc.BlockCount))
+            .Should().BeTrue("the case has to merge to test it");
+        return doc;
+    }
+
+    [Fact]
+    public void TrimWhitespace_MergedParagraph_TrimsEveryLine()
+    {
+        // A merged paragraph is one block; trimmed as a whole, only its first line lost its
+        // indent and only its last line its trailing space.
+        var doc = MergedParagraph("  first \n   second \n third ");
+        doc.HasTrimmableWhitespace(0, 0).Should().BeTrue();
+
+        doc.TrimWhitespace(0, 0).Should().BeTrue();
+
+        doc.GetBlockText(0).Should().Be("first\nsecond\nthird");
+        doc.HasTrimmableWhitespace(0, 0).Should().BeFalse();
+    }
+
+    [Fact]
+    public void HasTrimmableWhitespace_MergedParagraph_SeesAnIndentOnALaterLine()
+    {
+        var doc = MergedParagraph("first\n  second");
+        doc.HasTrimmableWhitespace(0, 0).Should().BeTrue();
+    }
+
+    [Fact]
+    public void TrimWhitespace_MergedParagraph_CursorStaysOnItsLine()
+    {
+        var doc = MergedParagraph("first\n   second");
+        doc.CursorBlock = 0;
+        doc.CursorOffset = 11;   // "first\n   se|cond"
+        doc.CollapseSelection();
+
+        doc.TrimWhitespace(0, 0);
+
+        doc.GetBlockText(0).Should().Be("first\nsecond");
+        doc.CursorOffset.Should().Be(8, "the cursor stays between 'se' and 'cond'");
+        doc.AnchorOffset.Should().Be(doc.CursorOffset);
+    }
+
     [Fact]
     public void TrimWhitespace_AdjustsCursorForLeadingTrim()
     {
@@ -2140,8 +2186,8 @@ public class DocumentTests
     [Fact]
     public void ParagraphContinuation_IndentedContinuation_KeepsCursorInsideMergedBlock()
     {
-        // The merge trims the continuation's leading spaces, so the cursor offset has to be
-        // trimmed with it - otherwise it lands past the end of the merged block.
+        // The cursor has to follow the continuation into the merged block, landing where the
+        // continuation's text now starts - otherwise it is past the end of the merged block.
         var doc = new Document();
         doc.SetText("\n-\n  f");   // blank line, then "-", then an indented continuation
         doc.CursorBlock = 2;
@@ -2151,10 +2197,42 @@ public class DocumentTests
         var parsedBlocks = MarkdownParser.Parse(i => doc.GetBlockText(i), doc.BlockCount);
         doc.MergeParagraphContinuations(parsedBlocks);
 
-        doc.GetBlockText(1).Should().Be("-\nf");
+        doc.GetBlockText(1).Should().Be("-\n  f");
         doc.CursorBlock.Should().Be(1);
-        doc.CursorOffset.Should().Be(3, "the cursor was at the end of the continuation text");
+        doc.CursorOffset.Should().Be(5, "the cursor was at the end of the continuation text");
         doc.AnchorOffset.Should().Be(doc.CursorOffset);
+    }
+
+    [Theory]
+    [InlineData("- item one\r\n  two\r\n  three\r\n  four")]   // indented lines of a list item
+    [InlineData("first\r\n   second\r\n third")]                 // indented lazy lines
+    [InlineData("first \r\nsecond")]                              // a trailing space
+    public void ParagraphContinuation_MergeKeepsTheTextAsWritten(string text)
+    {
+        // The merge rewrites the document, not just its display, so whatever it trims is gone
+        // from the file on the next save. It used to strip the indent from every line after the
+        // first of a paragraph, which opening and saving a file was enough to trigger.
+        var doc = new Document();
+        doc.SetText(text);
+
+        var parsedBlocks = MarkdownParser.Parse(i => doc.GetBlockText(i), doc.BlockCount);
+        doc.MergeParagraphContinuations(parsedBlocks).Should().BeTrue("the case has to merge to test it");
+
+        doc.GetText().Should().Be(text);
+    }
+
+    [Fact]
+    public void GetText_MergedParagraph_UsesCrLfInsideIt()
+    {
+        // A merged paragraph joins its lines with a bare '\n', while GetText separates blocks
+        // with CRLF - written out unchanged, every wrapped paragraph saved with mixed endings.
+        var doc = new Document();
+        doc.SetText("para one\nstill one\n\npara two\nstill two");
+
+        var parsedBlocks = MarkdownParser.Parse(i => doc.GetBlockText(i), doc.BlockCount);
+        doc.MergeParagraphContinuations(parsedBlocks).Should().BeTrue();
+
+        doc.GetText().Should().Be("para one\r\nstill one\r\n\r\npara two\r\nstill two");
     }
 
     /// <summary>
