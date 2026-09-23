@@ -161,6 +161,7 @@ public partial class DocsCanvas
     }
     (int StartCol, int EndCol, int StartBlock, int EndBlock, TableInfo Table)? IEditingServices.TryGetTableRectSelection() => TryGetTableRectSelection();
     void IEditingServices.ClearTableRectCells((int StartCol, int EndCol, int StartBlock, int EndBlock, TableInfo Table) rect) => ClearTableRectCells(rect);
+    void IEditingServices.DeleteSelectedContent() => DeleteSelectedContent();
     bool IEditingServices.HandleBackVisual() => HandleBackVisual();
     bool IEditingServices.HandleBackSource() => HandleBackSource();
     bool IEditingServices.HandleDeleteVisual() => HandleDeleteVisual();

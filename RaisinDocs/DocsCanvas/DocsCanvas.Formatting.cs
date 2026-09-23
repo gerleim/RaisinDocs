@@ -382,7 +382,7 @@ public partial class DocsCanvas
     {
         SealAndStopTimer();
         _doc.BeginUndoGroup();
-        if (_doc.HasSelection) _doc.DeleteSelection();
+        if (_doc.HasSelection) DeleteSelectedContent();
 
         string header = "| " + string.Join(" | ", Enumerable.Range(1, columns).Select(c => $"Header {c}")) + " |";
         string separator = "| " + string.Join(" | ", Enumerable.Repeat("---", columns)) + " |";

@@ -844,6 +844,11 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider, IDocsC
         if (r == null) return null;
         return GetTableRectSelectedText(r.Value);
     }
+    internal void TestPaste(string text)
+    {
+        InsertPastedText(text);
+        InvalidateLayout();
+    }
     internal (string Text, string? Html) TestBuildClipboardPayload()
     {
         ComputeLayout();
@@ -944,7 +949,8 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider, IDocsC
         _navigationEngine.VisualModeManager = _visualModeManager;
         _navigationKeysHandler = new NavigationKeysHandler(_navigationEngine, (IDocumentServices)this);
         _editingKeysHandler = new EditingKeysHandler((IDocumentServices)this, (IEditingServices)this);
-        _listFormattingHandler = new ListFormattingHandler((IDocumentServices)this, (IParsedContentServices)this, new HardBreakStyleProvider(this));
+        _listFormattingHandler = new ListFormattingHandler((IDocumentServices)this, (IParsedContentServices)this, (IEditingServices)this,
+            new HardBreakStyleProvider(this));
         _contextMenuHandler = new ContextMenuHandler(this, (IDocumentServices)this, (ISpellCheckAccess)this);
         _indentationHandler = new IndentationHandler((IDocumentServices)this, (IParsedContentServices)this);
         _hoverImageHandler = new HoverImageHandler((IParsedContentServices)this, (IImageServices)this, (INavigationServices)this, (ILayoutDataServices)this, (IScrollServices)this, (IRenderingServices)this, (IDocumentServices)this, this);
@@ -1077,10 +1083,71 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider, IDocsC
     internal (string Text, string? Html) BuildClipboardPayload()
     {
         var rect = TryGetTableRectSelection();
-        string text = rect != null ? GetTableRectSelectedText(rect.Value) : _doc.GetSelectedText();
+        string text = rect != null ? GetTableRectSelectedText(rect.Value) : GetSelectionMarkdown();
         string? html = BuildTableClipboardHtml(rect)
                        ?? ClipboardHtmlWriter.ConvertToHtmlClipboard(text);
         return (text, html);
+    }
+
+    /// <summary>
+    /// The selection as markdown. Visual mode hides the markers around the selected text, so the
+    /// raw range between the selection ends can hold half a pair; <see cref="VisualSelection"/>
+    /// gives it the markers of whatever formatting was selected.
+    /// </summary>
+    private string GetSelectionMarkdown()
+    {
+        if (!IsVisual) return _doc.GetSelectedText();
+
+        ComputeLayout();
+        if (_parsedBlocks == null || _visualMaps == null) return _doc.GetSelectedText();
+
+        var (sb, so, eb, eo) = _doc.GetOrderedSelection();
+        return VisualSelection.BuildCopyText(_doc.GetBlockText, _parsedBlocks, _visualMaps, sb, so, eb, eo);
+    }
+
+    /// <summary>
+    /// Deletes the selection. In visual mode the raw range between the selection ends can hold
+    /// half a pair of hidden markers, so <see cref="VisualSelection.PlanDeletion"/> decides which
+    /// markers go with it: a construct whose text is all deleted loses its markers, any other
+    /// keeps them. With <paramref name="keepFormattingAtStart"/> - typing over the selection -
+    /// the text typed next takes the formatting of the first selected character.
+    /// </summary>
+    private void DeleteSelectedContent(bool keepFormattingAtStart = false)
+    {
+        if (!_doc.HasSelection) return;
+        if (IsVisual) ComputeLayout();
+        if (!IsVisual || _parsedBlocks == null || _visualMaps == null)
+        {
+            _doc.DeleteSelection();
+            return;
+        }
+
+        var (sb, so, eb, eo) = _doc.GetOrderedSelection();
+        so = Math.Min(so, _doc.GetBlockLength(sb));
+        eo = Math.Min(eo, _doc.GetBlockLength(eb));
+        var plan = VisualSelection.PlanDeletion(_doc.GetBlockText, _parsedBlocks, _visualMaps,
+            sb, so, eb, eo, keepFormattingAtStart);
+
+        // The raw deletion leaves head (start block before so) + tail (end block from eo) in block sb.
+        _doc.DeleteSelection();
+        _doc.InsertTextAt(sb, so, plan.KeptMarkers);
+
+        int tailStart = so + plan.KeptMarkers.Length;
+        foreach (var r in plan.RemoveFromTail.OrderByDescending(r => r.Start))
+            _doc.RemoveTextAt(sb, tailStart + (r.Start - eo), r.Length);
+
+        int removedFromHead = 0;
+        foreach (var r in plan.RemoveFromHead.OrderByDescending(r => r.Start))
+        {
+            _doc.RemoveTextAt(sb, r.Start, r.Length);
+            removedFromHead += r.Length;
+        }
+
+        _doc.CursorBlock = sb;
+        _doc.CursorOffset = so - removedFromHead + plan.CaretInKept;
+        _doc.CollapseSelection();
+        // The maps were read above; anything that lays out next must see the new text.
+        InvalidateLayout();
     }
 
     private string? BuildTableClipboardHtml(
@@ -1127,7 +1194,7 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider, IDocsC
         if (rect != null)
             ClearTableRectCells(rect.Value);
         else
-            _doc.DeleteSelection();
+            DeleteSelectedContent();
         _doc.SealUndoGroup();
         InvalidateLayout();
         EnsureCursorVisible();
@@ -1154,23 +1221,48 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider, IDocsC
         pasteText ??= ClipboardHelper.GetText(Logger);
         if (!string.IsNullOrEmpty(pasteText))
         {
-            _doc.BeginUndoGroup();
-            var rect = TryGetTableRectSelection();
-            if (rect != null)
-            {
-                ClearTableRectCells(rect.Value);
-                MoveCursorToRectStart(rect.Value);
-            }
-            else if (_doc.HasSelection)
-            {
-                _doc.DeleteSelection();
-            }
-            if (!TryPasteIntoTableCells(pasteText))
-                _doc.Paste(pasteText);
-            _doc.SealUndoGroup();
+            InsertPastedText(pasteText);
             InvalidateLayout();
             EnsureCursorVisible();
         }
+    }
+
+    /// <summary>
+    /// Inserts pasted text at the caret, replacing any selection, as one undo step. In visual
+    /// mode the text first sheds the markers of formatting already in force where it lands.
+    /// </summary>
+    private void InsertPastedText(string pasteText)
+    {
+        _doc.BeginUndoGroup();
+        var rect = TryGetTableRectSelection();
+        if (rect != null)
+        {
+            ClearTableRectCells(rect.Value);
+            MoveCursorToRectStart(rect.Value);
+        }
+        else if (_doc.HasSelection)
+        {
+            DeleteSelectedContent();
+        }
+
+        pasteText = AdaptPasteToCaret(pasteText);
+        if (!TryPasteIntoTableCells(pasteText))
+            _doc.Paste(pasteText);
+        _doc.SealUndoGroup();
+    }
+
+    /// <summary>
+    /// In visual mode, drops the markers in <paramref name="pasteText"/> for formatting already
+    /// in force at the caret; see <see cref="VisualSelection.AdaptPasteToCaret"/>.
+    /// </summary>
+    private string AdaptPasteToCaret(string pasteText)
+    {
+        if (!IsVisual) return pasteText;
+        ComputeLayout();
+        if (_parsedBlocks == null || _doc.CursorBlock >= _parsedBlocks.Count) return pasteText;
+
+        return VisualSelection.AdaptPasteToCaret(pasteText, _parsedBlocks[_doc.CursorBlock],
+            _doc.GetBlockText(_doc.CursorBlock), _doc.CursorOffset);
     }
 
     public void PerformSelectAll()

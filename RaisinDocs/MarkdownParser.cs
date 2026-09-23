@@ -95,6 +95,10 @@ public record class ParsedBlock
         || Kind == BlockKind.SetextUnderline || Kind == BlockKind.PageBreak;
     public IReadOnlyList<InlineImage>? Images { get; init; }
     public IReadOnlyList<InlineLink>? Links { get; init; }
+    /// <summary>
+    /// Emphasis and strikethrough delimiters, in pairs: each opener is immediately followed by
+    /// the closer it matched. <see cref="VisualSelection"/> relies on that order.
+    /// </summary>
     public IReadOnlyList<EmphasisMarker>? EmphasisMarkers { get; init; }
     public IReadOnlyList<ColorSpan>? ColorSpans { get; init; }
     public BlockColor? BlockColor { get; init; }

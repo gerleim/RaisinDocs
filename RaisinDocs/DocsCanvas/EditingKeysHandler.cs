@@ -71,7 +71,7 @@ internal class EditingKeysHandler
             if (rect.HasValue)
                 _editing.ClearTableRectCells(rect.Value);
             else
-                _doc.Document.DeleteSelection();
+                _editing.DeleteSelectedContent();
             textChanged = true;
         }
         else if (_editing.IsVisual)
@@ -111,7 +111,7 @@ internal class EditingKeysHandler
             if (rect.HasValue)
                 _editing.ClearTableRectCells(rect.Value);
             else
-                _doc.Document.DeleteSelection();
+                _editing.DeleteSelectedContent();
             textChanged = true;
         }
         else if (_editing.IsVisual)

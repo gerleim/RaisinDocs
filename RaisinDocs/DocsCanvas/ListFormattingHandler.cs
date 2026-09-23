@@ -19,12 +19,15 @@ internal class ListFormattingHandler
 {
     private readonly IDocumentServices _doc;
     private readonly IParsedContentServices _parsed;
+    private readonly IEditingServices _editing;
     private readonly HardBreakStyleProvider _hardBreakProvider;
 
-    public ListFormattingHandler(IDocumentServices doc, IParsedContentServices parsed, HardBreakStyleProvider hardBreakProvider)
+    public ListFormattingHandler(IDocumentServices doc, IParsedContentServices parsed, IEditingServices editing,
+        HardBreakStyleProvider hardBreakProvider)
     {
         _doc = doc ?? throw new ArgumentNullException(nameof(doc));
         _parsed = parsed ?? throw new ArgumentNullException(nameof(parsed));
+        _editing = editing ?? throw new ArgumentNullException(nameof(editing));
         _hardBreakProvider = hardBreakProvider ?? throw new ArgumentNullException(nameof(hardBreakProvider));
     }
 
@@ -36,7 +39,7 @@ internal class ListFormattingHandler
     public void HandleEnter(bool shift, bool ctrl)
     {
         _doc.BeginUndoGroup();
-        if (_doc.Document.HasSelection) _doc.Document.DeleteSelection();
+        if (_doc.Document.HasSelection) _editing.DeleteSelectedContent();
         if (shift)
         {
             var blockKind = MarkdownParser.ClassifyBlock(_doc.GetBlockText(_doc.Document.CursorBlock));

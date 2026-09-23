@@ -233,7 +233,7 @@ public partial class DocsCanvas
                 MoveCursorToRectStart(rect.Value);
             }
             else
-                _doc.DeleteSelection();
+                DeleteSelectedContent(keepFormattingAtStart: true);
         }
 
         if (pendingOff is { } p)
@@ -288,7 +288,7 @@ public partial class DocsCanvas
             if (rect != null)
                 ClearTableRectCells(rect.Value);
             else
-                _doc.DeleteSelection();
+                DeleteSelectedContent();
             textChanged = true;
         }
         else if (IsVisual) textChanged = HandleBackVisual();
@@ -311,7 +311,7 @@ public partial class DocsCanvas
             if (rect != null)
                 ClearTableRectCells(rect.Value);
             else
-                _doc.DeleteSelection();
+                DeleteSelectedContent();
             textChanged = true;
         }
         else if (IsVisual) textChanged = HandleDeleteVisual();
@@ -453,7 +453,7 @@ public partial class DocsCanvas
                     if (rectX != null)
                         ClearTableRectCells(rectX.Value);
                     else
-                        _doc.DeleteSelection();
+                        DeleteSelectedContent();
                     _doc.SealUndoGroup();
                     textChanged = true;
                 }
@@ -481,20 +481,7 @@ public partial class DocsCanvas
                     pasteText ??= ClipboardHelper.GetText(Logger);
                     if (!string.IsNullOrEmpty(pasteText))
                     {
-                        _doc.BeginUndoGroup();
-                        var rectPaste = TryGetTableRectSelection();
-                        if (rectPaste != null)
-                        {
-                            ClearTableRectCells(rectPaste.Value);
-                            MoveCursorToRectStart(rectPaste.Value);
-                        }
-                        else if (_doc.HasSelection)
-                        {
-                            _doc.DeleteSelection();
-                        }
-                        if (!TryPasteIntoTableCells(pasteText))
-                            _doc.Paste(pasteText);
-                        _doc.SealUndoGroup();
+                        InsertPastedText(pasteText);
                         textChanged = true;
                     }
                 }

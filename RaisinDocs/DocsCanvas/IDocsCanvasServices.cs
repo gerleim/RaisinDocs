@@ -236,6 +236,12 @@ internal interface IEditingServices
     /// <summary>Clears (deletes content of) table cells in a rectangular range.</summary>
     void ClearTableRectCells((int StartCol, int EndCol, int StartBlock, int EndBlock, TableInfo Table) rect);
 
+    /// <summary>
+    /// Deletes the selection. In visual mode it keeps hidden markup balanced: a construct whose
+    /// text is all deleted loses its markers, any other keeps them.
+    /// </summary>
+    void DeleteSelectedContent();
+
     /// <summary>Handles backspace in visual mode. Returns true if text was changed.</summary>
     bool HandleBackVisual();
 
