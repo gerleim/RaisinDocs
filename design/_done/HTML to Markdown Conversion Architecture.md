@@ -1,6 +1,7 @@
 # HTML to Markdown Conversion Architecture
 
-**Status**: Design Document  
+**Status**: Superseded. This describes `HtmlToMarkdownConverter`, removed 2026-09-23; paste goes
+through `HtmlBlockModelParser` (see `HTML to Markdown Semantic Block Model.md`).  
 **Last Updated**: 2026-08-06  
 **Relates to**: HtmlToMarkdownConverter, PreprocessBlockElements, ParseHtmlFragment
 

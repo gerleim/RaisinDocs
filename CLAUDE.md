@@ -231,7 +231,7 @@ The editor supports custom color tags embedded as HTML comments (invisible in st
 - **Inline**: `<!--@fg:red-->text<!--/@fg-->` — colors a span of text
 - **Block div**: `<!--@div fg:red-->` / `<!--/@div-->` — colors all blocks between the tags
 
-`MarkdownParser.ParseInlineColorTags` produces `ColorSpan` lists (stored on `ParsedBlock`). `BlockVisualMap` hides the tag syntax in visual mode. `ApplyColorSpans`/`ApplyColorSpansVisual` apply `SolidColorBrush` to `FormattedText` ranges. `HtmlColorParser` handles the HTML comment parsing and color name resolution.
+`MarkdownParser.ParseInlineColorTags` produces `ColorSpan` lists (stored on `ParsedBlock`). `BlockVisualMap` hides the tag syntax in visual mode. `ApplyColorSpans`/`ApplyColorSpansVisual` apply `SolidColorBrush` to `FormattedText` ranges. Color names resolve through `MarkdownParser.TryGetNamedColor`/`TryGetColorName`.
 
 ### Test architecture
 

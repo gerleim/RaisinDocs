@@ -1,6 +1,10 @@
 # Clipboard Paste Integration: New Parser Strategy
 
 **Date**: 2026-08-06  
+**Status**: Done 2026-09-23. Paste had already switched to `HtmlBlockModelParser`; the old
+`HtmlToMarkdownConverter` was removed once the new parser handled what the comparison had
+missed — coloured `<pre>` content (terminal output, RaisinDocs's own copy) and blockquotes of
+several paragraphs. Copy-out now lives in `ClipboardHtmlWriter`.  
 **Context**: Comparing old `HtmlToMarkdownConverter` with new `HtmlBlockModelParser` for Windows clipboard CF_HTML content
 
 ---
