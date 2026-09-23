@@ -677,6 +677,48 @@ public class HtmlBlockModelParserTests
     }
 
     [Fact]
+    public void FullPipeline_BlockquoteWithTwoParagraphs_KeepsThemApart()
+    {
+        // Parsed as one run of inline content, the two paragraphs came out as "> Line oneLine two".
+        var html = "<blockquote><p>Line one</p><p>Line two</p></blockquote>";
+        var markdown = HtmlBlockModelParser.ConvertToMarkdown(HtmlBlockModelParser.ParseBlockStructure(html));
+
+        markdown.Should().Be("> Line one\n>\n> Line two");
+    }
+
+    [Fact]
+    public void FullPipeline_BlockquoteWithOneParagraph_IsASingleLine()
+    {
+        var html = "<blockquote>\n<p>Only <strong>one</strong></p>\n</blockquote>";
+        var markdown = HtmlBlockModelParser.ConvertToMarkdown(HtmlBlockModelParser.ParseBlockStructure(html));
+
+        markdown.Should().Be("> Only **one**");
+    }
+
+    [Fact]
+    public void FullPipeline_BlockquoteLooseTextThenParagraph_BothKept()
+    {
+        var html = "<blockquote>Intro<p>Body</p></blockquote>";
+        var markdown = HtmlBlockModelParser.ConvertToMarkdown(HtmlBlockModelParser.ParseBlockStructure(html));
+
+        markdown.Should().Be("> Intro\n>\n> Body");
+    }
+
+    [Fact]
+    public void FullPipeline_BlockquoteParagraphs_ParseBackAsOneQuote()
+    {
+        var html = "<blockquote><p>Line one</p><p>Line two</p></blockquote>";
+        var markdown = HtmlBlockModelParser.ConvertToMarkdown(HtmlBlockModelParser.ParseBlockStructure(html));
+
+        var doc = new Document();
+        doc.Paste(markdown);
+        var kinds = MarkdownParser.Parse(doc.GetBlockText, doc.BlockCount).Select(b => b.Kind);
+
+        doc.BlockCount.Should().Be(3);
+        kinds.Should().AllBeEquivalentTo(BlockKind.Blockquote);
+    }
+
+    [Fact]
     public void FullPipeline_ListWithFormattedItems_PreservesFormatting()
     {
         var html = "<ul><li>Item with <strong>bold</strong> text</li></ul>";

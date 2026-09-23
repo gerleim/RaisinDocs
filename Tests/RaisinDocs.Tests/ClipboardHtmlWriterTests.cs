@@ -240,4 +240,21 @@ public class ClipboardHtmlWriterTests
 
         ClipboardHtmlWriter.IsMarkdownCopy(foreign).Should().BeFalse();
     }
+
+    // === Round-trip through the HTML alone (as any app other than RaisinDocs reads it) ===
+
+    [Theory]
+    [InlineData("<!--@fg:red-->error<!--/@fg-->: ok")]
+    [InlineData("<!--@fg:red-->**error**<!--/@fg-->")]
+    [InlineData("<!--@fg:red bg:blue-->alert<!--/@--> and *more*")]
+    [InlineData("<!--@div fg:lime-->\nline one\nline two\n<!--/@div-->")]
+    [InlineData("<!--@fg:red-->error<!--/@fg-->\nok")]
+    public void RoundTrip_MarkdownSurvivesUnchanged(string markdown)
+    {
+        var cfHtml = ClipboardHtmlWriter.ConvertToHtmlClipboard(markdown)!;
+
+        var pasted = HtmlBlockModelParser.ConvertHtmlToMarkdown(cfHtml, new MarkdownOutputSettings { PreserveColors = true });
+
+        pasted.Should().Be(markdown);
+    }
 }

@@ -106,6 +106,15 @@ internal static class HtmlBlockModelParser
                 continue;
             }
 
+            // Ahead of the paragraph check, which would otherwise take "<pre" for "<p".
+            if (TryParsePreformatted(html, pos, out var preBlock, out newPos))
+            {
+                if (preBlock.PreformattedLines!.Count > 0)
+                    blocks.Add(preBlock);
+                pos = newPos;
+                continue;
+            }
+
             if (TryParseParagraph(html, pos, out var paraBlock, out newPos, settings))
             {
                 blocks.Add(paraBlock);
@@ -242,6 +251,153 @@ internal static class HtmlBlockModelParser
 
         endPos = closeStart + 4; // "</p>" is 4 characters
         return true;
+    }
+
+    /// <summary>
+    /// Try to parse preformatted text: &lt;pre&gt;...&lt;/pre&gt;.
+    /// </summary>
+    /// <remarks>
+    /// Terminals and RaisinDocs's own copy-out put coloured text here, one source line per line,
+    /// so line breaks and whitespace are kept rather than collapsed. The block counts as a
+    /// paragraph for separation purposes: its lines are ordinary markdown text.
+    /// </remarks>
+    private static bool TryParsePreformatted(string html, int startPos, out BlockElement block, out int endPos)
+    {
+        block = null!;
+        endPos = startPos;
+
+        if (!HtmlTagScanner.IsOpenTag(html, startPos, "pre"))
+            return false;
+
+        int contentStart = HtmlTagScanner.EndOfTag(html, startPos);
+        int closeStart = HtmlTagScanner.FindMatchingClose(html, contentStart, "pre");
+        int contentEnd = closeStart < 0 ? html.Length : closeStart;
+
+        block = new BlockElement
+        {
+            Kind = BlockKind.Paragraph,
+            PreformattedLines = ParsePreformattedLines(html[contentStart..contentEnd]),
+        };
+
+        endPos = closeStart < 0 ? html.Length : HtmlTagScanner.EndOfTag(html, closeStart);
+        return true;
+    }
+
+    /// <summary>
+    /// Splits a &lt;pre&gt; block's inner HTML into lines of styled segments. Newlines and
+    /// &lt;br&gt; end a line; a style that spans a newline carries on into the next line.
+    /// </summary>
+    private static List<List<InlineContent>> ParsePreformattedLines(string html)
+    {
+        var lines = new List<List<InlineContent>> { new() };
+        var textBuf = new StringBuilder();
+        var styleStack = new Stack<InlineFormat>();
+
+        void Flush()
+        {
+            if (textBuf.Length == 0) return;
+            lines[^1].Add(new InlineContent
+            {
+                Text = textBuf.ToString(),
+                Format = styleStack.Count > 0 ? CloneFormat(styleStack.Peek()) : new(),
+            });
+            textBuf.Clear();
+        }
+
+        void Push(Action<InlineFormat> apply)
+        {
+            var fmt = styleStack.Count > 0 ? CloneFormat(styleStack.Peek()) : new();
+            apply(fmt);
+            styleStack.Push(fmt);
+        }
+
+        // HTML ignores a newline straight after the opening tag.
+        int pos = html.StartsWith("\r\n", StringComparison.Ordinal) ? 2
+            : html.StartsWith('\n') ? 1
+            : 0;
+
+        while (pos < html.Length)
+        {
+            char c = html[pos];
+
+            if (c == '<')
+            {
+                Flush();
+
+                if (html.AsSpan(pos).StartsWith("<!--"))
+                {
+                    int commentEnd = html.IndexOf("-->", pos + 4, StringComparison.Ordinal);
+                    pos = commentEnd < 0 ? html.Length : commentEnd + 3;
+                    continue;
+                }
+
+                int tagEnd = html.IndexOf('>', pos);
+                if (tagEnd < 0)
+                    break;
+
+                if (HtmlTagScanner.IsOpenTag(html, pos, "br"))
+                {
+                    lines.Add(new());
+                }
+                else if (HtmlTagScanner.IsOpenTag(html, pos, "span"))
+                {
+                    // Same rule as ParseInlineContent: a span only ever adds emphasis.
+                    var spanFormat = HtmlStyleSheet.Empty.ResolveFormat(html[pos..(tagEnd + 1)]);
+                    Push(fmt =>
+                    {
+                        fmt.ForegroundColor = spanFormat.ForegroundColor ?? fmt.ForegroundColor;
+                        fmt.BackgroundColor = spanFormat.BackgroundColor ?? fmt.BackgroundColor;
+                        fmt.Bold |= spanFormat.Bold;
+                        fmt.Italic |= spanFormat.Italic;
+                    });
+                }
+                else if (HtmlTagScanner.IsOpenTag(html, pos, "b") || HtmlTagScanner.IsOpenTag(html, pos, "strong"))
+                {
+                    Push(fmt => fmt.Bold = true);
+                }
+                else if (HtmlTagScanner.IsOpenTag(html, pos, "i") || HtmlTagScanner.IsOpenTag(html, pos, "em"))
+                {
+                    Push(fmt => fmt.Italic = true);
+                }
+                else if (HtmlTagScanner.IsCloseTag(html, pos, "span")
+                         || HtmlTagScanner.IsCloseTag(html, pos, "b") || HtmlTagScanner.IsCloseTag(html, pos, "strong")
+                         || HtmlTagScanner.IsCloseTag(html, pos, "i") || HtmlTagScanner.IsCloseTag(html, pos, "em"))
+                {
+                    if (styleStack.Count > 0)
+                        styleStack.Pop();
+                }
+                // Anything else, <code> included, carries no formatting worth keeping here.
+
+                pos = tagEnd + 1;
+            }
+            else if (c == '\n')
+            {
+                Flush();
+                lines.Add(new());
+                pos++;
+            }
+            else if (c == '\r')
+            {
+                pos++;
+            }
+            else if (c == '&')
+            {
+                pos += HtmlParsingContext.DecodeEntity(html, pos, textBuf);
+            }
+            else
+            {
+                textBuf.Append(c);
+                pos++;
+            }
+        }
+
+        Flush();
+
+        // A trailing newline before </pre> ends the last line; it does not start another.
+        while (lines.Count > 0 && lines[^1].Count == 0)
+            lines.RemoveAt(lines.Count - 1);
+
+        return lines;
     }
 
     /// <summary>
@@ -427,18 +583,53 @@ internal static class HtmlBlockModelParser
 
         string quoteContent = html[(tagEnd + 1)..closeStart];
 
-        // Parse blockquote as inline content
+        // Parsed as one run of inline content, the quote's <p> elements would run together
+        // ("Line oneLine two"). A quote of several paragraphs keeps them as nested blocks.
         settings ??= new();
-        var inline = ParseInlineContent(quoteContent, BlockKind.Blockquote, settings);
+        var paragraphs = ParseQuoteParagraphs(quoteContent, settings);
 
         block = new BlockElement
         {
             Kind = BlockKind.Blockquote,
-            Content = inline,
+            Content = paragraphs.Count == 1 ? paragraphs[0] : new(),
+            NestedBlocks = paragraphs.Count > 1
+                ? paragraphs.Select(p => new BlockElement { Kind = BlockKind.Paragraph, Content = p }).ToList()
+                : null,
         };
 
         endPos = closeStart + 13; // "</blockquote>" is 13 characters
         return true;
+    }
+
+    /// <summary>
+    /// Splits a blockquote's inner HTML into paragraphs: one per &lt;p&gt; element, and one per
+    /// stretch of loose text between them. Stretches with no text are dropped.
+    /// </summary>
+    private static List<List<InlineContent>> ParseQuoteParagraphs(string content, MarkdownOutputSettings settings)
+    {
+        var paragraphs = new List<List<InlineContent>>();
+
+        void Add(int start, int end)
+        {
+            var inline = ParseInlineContent(content[start..end], BlockKind.Blockquote, settings);
+            if (inline.Any(s => !string.IsNullOrWhiteSpace(s.Text)))
+                paragraphs.Add(inline);
+        }
+
+        int pos = 0;
+        while (pos < content.Length)
+        {
+            int pStart = HtmlTagScanner.IndexOfOpenTag(content, pos, "p");
+            Add(pos, pStart < 0 ? content.Length : pStart);
+            if (pStart < 0) break;
+
+            int inner = HtmlTagScanner.EndOfTag(content, pStart);
+            int pClose = HtmlTagScanner.FindMatchingClose(content, inner, "p");
+            Add(inner, pClose < 0 ? content.Length : pClose);
+            pos = pClose < 0 ? content.Length : HtmlTagScanner.EndOfTag(content, pClose);
+        }
+
+        return paragraphs;
     }
 
     /// <summary>
@@ -673,7 +864,9 @@ internal static class HtmlBlockModelParser
 
                 case BlockKind.Paragraph:
                     {
-                        var paraLines = FormatParagraph(block.Content, settings);
+                        var paraLines = block.PreformattedLines != null
+                            ? FormatPreformatted(block.PreformattedLines, settings)
+                            : FormatParagraph(block.Content, settings);
                         output.AddRange(paraLines);
                         break;
                     }
@@ -688,9 +881,19 @@ internal static class HtmlBlockModelParser
 
                 case BlockKind.Blockquote:
                     {
-                        var quoteLines = FormatParagraph(block.Content, settings);
-                        foreach (var line in quoteLines)
-                            output.Add($"> {line}");
+                        var paragraphs = block.NestedBlocks?.Select(p => p.Content) ?? [block.Content];
+                        bool first = true;
+                        foreach (var paragraph in paragraphs)
+                        {
+                            // A bare '>' separates paragraphs inside the quote, as a blank line
+                            // does outside it; without it they would merge into one.
+                            if (!first)
+                                output.Add(">");
+                            first = false;
+
+                            foreach (var line in FormatParagraph(paragraph, settings))
+                                output.Add($"> {line}");
+                        }
                         break;
                     }
 
@@ -845,6 +1048,133 @@ internal static class HtmlBlockModelParser
             lines.Add(currentLine.ToString().Trim());
 
         return lines;
+    }
+
+    /// <summary>
+    /// Formats a &lt;pre&gt; block one markdown line per line. Two or more consecutive lines in
+    /// one uniform colour become a colour div, so the colour is written once rather than on
+    /// every line.
+    /// </summary>
+    private static List<string> FormatPreformatted(List<List<InlineContent>> lines, MarkdownOutputSettings settings)
+    {
+        var uniform = lines.Select(line => UniformColors(line, settings)).ToList();
+        var output = new List<string>();
+        int i = 0;
+
+        while (i < lines.Count)
+        {
+            if (uniform[i] is { } colors)
+            {
+                int runEnd = i + 1;
+                while (runEnd < lines.Count && uniform[runEnd] == colors)
+                    runEnd++;
+
+                if (runEnd - i >= 2)
+                {
+                    output.Add($"<!--@div {ColorProps(colors.Fg, colors.Bg)}-->");
+                    for (int k = i; k < runEnd; k++)
+                        output.Add(FormatEmphasisRuns(lines[k], 0, lines[k].Count));
+                    output.Add("<!--/@div-->");
+                    i = runEnd;
+                    continue;
+                }
+            }
+
+            output.Add(FormatColorRuns(lines[i], settings));
+            i++;
+        }
+
+        return output;
+    }
+
+    /// <summary>
+    /// The colours a line is entirely written in, or null when it is uncoloured, empty, or mixes
+    /// colours.
+    /// </summary>
+    private static (RgbColor? Fg, RgbColor? Bg)? UniformColors(List<InlineContent> line, MarkdownOutputSettings settings)
+    {
+        if (line.Count == 0) return null;
+
+        var first = SegmentColors(line[0], settings);
+        if (first.Fg == null && first.Bg == null) return null;
+
+        for (int i = 1; i < line.Count; i++)
+        {
+            if (SegmentColors(line[i], settings) != first) return null;
+        }
+
+        return first;
+    }
+
+    private static (RgbColor? Fg, RgbColor? Bg) SegmentColors(InlineContent segment, MarkdownOutputSettings settings)
+        => settings.PreserveColors
+            ? (segment.Format.ForegroundColor, segment.Format.BackgroundColor)
+            : (null, null);
+
+    /// <summary>
+    /// Formats one line, wrapping each run of same-coloured segments in a single colour tag, so
+    /// emphasis changing inside a coloured run does not split the tag.
+    /// </summary>
+    private static string FormatColorRuns(List<InlineContent> line, MarkdownOutputSettings settings)
+    {
+        var sb = new StringBuilder();
+        int i = 0;
+
+        while (i < line.Count)
+        {
+            var colors = SegmentColors(line[i], settings);
+            int runEnd = i + 1;
+            while (runEnd < line.Count && SegmentColors(line[runEnd], settings) == colors)
+                runEnd++;
+
+            string text = FormatEmphasisRuns(line, i, runEnd);
+            if (colors.Fg != null && colors.Bg != null)
+                sb.Append($"<!--@{ColorProps(colors.Fg, colors.Bg)}-->{text}<!--/@-->");
+            else if (colors.Fg != null)
+                sb.Append($"<!--@fg:{FormatColor(colors.Fg.Value)}-->{text}<!--/@fg-->");
+            else if (colors.Bg != null)
+                sb.Append($"<!--@bg:{FormatColor(colors.Bg.Value)}-->{text}<!--/@bg-->");
+            else
+                sb.Append(text);
+
+            i = runEnd;
+        }
+
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// Formats segments [start, end), joining neighbours with the same emphasis so each run gets
+    /// one pair of markers.
+    /// </summary>
+    private static string FormatEmphasisRuns(List<InlineContent> segments, int start, int end)
+    {
+        var sb = new StringBuilder();
+        int i = start;
+
+        while (i < end)
+        {
+            bool bold = segments[i].Format.Bold, italic = segments[i].Format.Italic;
+            var text = new StringBuilder();
+            int runEnd = i;
+            while (runEnd < end && segments[runEnd].Format.Bold == bold && segments[runEnd].Format.Italic == italic)
+                text.Append(segments[runEnd++].Text);
+
+            string marker = bold && italic ? "***" : bold ? "**" : italic ? "*" : "";
+            sb.Append(marker).Append(text).Append(marker);
+            i = runEnd;
+        }
+
+        return sb.ToString();
+    }
+
+    /// <summary>"fg:X bg:Y", with either half left out when that colour is absent.</summary>
+    private static string ColorProps(RgbColor? fg, RgbColor? bg)
+    {
+        var parts = new List<string>(2);
+        if (fg != null) parts.Add($"fg:{FormatColor(fg.Value)}");
+        if (bg != null) parts.Add($"bg:{FormatColor(bg.Value)}");
+        return string.Join(" ", parts);
     }
 
     /// <summary>

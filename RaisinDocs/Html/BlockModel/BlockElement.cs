@@ -22,6 +22,12 @@ internal class BlockElement
     public TableBlockData? TableData { get; set; }
 
     /// <summary>
+    /// The lines of a &lt;pre&gt; block, each with its own segments. Set instead of
+    /// <see cref="Content"/>: preformatted text keeps its line breaks and whitespace.
+    /// </summary>
+    public List<List<InlineContent>>? PreformattedLines { get; set; }
+
+    /// <summary>
     /// Helper to extract heading level from BlockKind.
     /// Returns 1-6 for Heading1-Heading6, null for non-headings.
     /// </summary>
