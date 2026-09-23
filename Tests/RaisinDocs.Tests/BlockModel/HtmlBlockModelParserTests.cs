@@ -37,6 +37,7 @@ public class HtmlBlockModelParserTests
                 4 => BlockKind.Heading4,
                 5 => BlockKind.Heading5,
                 6 => BlockKind.Heading6,
+                _ => throw new ArgumentOutOfRangeException(nameof(level)),
             };
             blocks[0].Kind.Should().Be(expectedKind);
         }
@@ -445,7 +446,7 @@ public class HtmlBlockModelParserTests
         blocks[0].Kind.Should().Be(BlockKind.UnorderedListItem);
         blocks[0].NestedBlocks.Should().HaveCount(2);
         blocks[0].NestedBlocks![0].Content[0].Text.Should().Be("Item 1");
-        blocks[0].NestedBlocks[1].Content[0].Text.Should().Be("Item 2");
+        blocks[0].NestedBlocks![1].Content[0].Text.Should().Be("Item 2");
     }
 
     [Fact]
@@ -458,7 +459,7 @@ public class HtmlBlockModelParserTests
         blocks[0].Kind.Should().Be(BlockKind.OrderedListItem);
         blocks[0].NestedBlocks.Should().HaveCount(2);
         blocks[0].NestedBlocks![0].Content[0].Text.Should().Be("First");
-        blocks[0].NestedBlocks[1].Content[0].Text.Should().Be("Second");
+        blocks[0].NestedBlocks![1].Content[0].Text.Should().Be("Second");
     }
 
     [Fact]

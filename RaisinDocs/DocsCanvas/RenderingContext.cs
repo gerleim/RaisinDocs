@@ -1037,9 +1037,12 @@ public partial class DocsCanvas
                 {
                     DrawJoinedLine(dc, vl, y, i);
                 }
-                else
+                // The backgrounds above skip a line whose parse is gone, and so does this. The
+                // content layer never gets here without one - UpdateContentLayer returns first -
+                // but the Test* draw hooks can, after an edit they have not laid out.
+                else if (_content.ParsedBlocks is { } parsedBlocks && vl.BlockIndex < parsedBlocks.Count)
                 {
-                    var parsed = _content.ParsedBlocks[vl.BlockIndex];
+                    var parsed = parsedBlocks[vl.BlockIndex];
                     // Materialised lazily: GetBlockText is a StringBuilder.ToString(), and on
                     // a cache hit the line's text is never needed at all.
                     string? _blockTextLazy = null;

@@ -25,7 +25,7 @@ public partial class DocsCanvas
     List<double> ILayoutDataServices.LineYPositions => _lineYPositions;
     List<BlockVisualSpacing>? ILayoutDataServices.VisualLineSpacings
     {
-        get => _visualLineSpacings!;
+        get => _visualLineSpacings;
         set => _visualLineSpacings = value;
     }
     double ILayoutDataServices.LayoutMaxWidth

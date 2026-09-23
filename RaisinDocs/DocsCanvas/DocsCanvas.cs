@@ -263,7 +263,7 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider, IDocsC
     internal List<ParsedBlock>? _parsedBlocks;
     private VisualBlockStructure? _visualBlockStructure;
     internal List<BlockVisualMap>? _visualMaps;
-    private List<BlockVisualSpacing?>? _visualLineSpacings;
+    private List<BlockVisualSpacing>? _visualLineSpacings;
     private Dictionary<int, ParagraphGroup>? _blockToGroup;
     private readonly ImageCache _imageCache = new();
     private int _layoutVersion;
@@ -801,7 +801,7 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider, IDocsC
     internal double TestGetVisualLineContentStartX(int vi) =>
         _layoutEngine.GetTextStartXForVisualLine(_visualLines[vi], vi);
     internal double TestGetVisualLineMarkerRightX(int vi) =>
-        _visualLineSpacings![vi]!.MarkerRightX;
+        _visualLineSpacings![vi].MarkerRightX;
 
     /// <summary>
     /// Width of the visible ink on a line, trailing whitespace excluded - a trailing space is

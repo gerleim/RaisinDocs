@@ -968,9 +968,9 @@ public static class MarkdownParser
         var blockToParent = new Dictionary<int, int>();
         for (int i = 0; i < blocks.Count; i++)
         {
-            if (blocks[i].Children != null)
+            if (blocks[i].Children is { } children)
             {
-                foreach (var child in blocks[i].Children)
+                foreach (var child in children)
                 {
                     for (int ci = 0; ci < blocks.Count; ci++)
                     {
