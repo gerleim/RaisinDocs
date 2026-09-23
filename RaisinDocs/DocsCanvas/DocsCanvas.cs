@@ -1079,7 +1079,7 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider, IDocsC
         var rect = TryGetTableRectSelection();
         string text = rect != null ? GetTableRectSelectedText(rect.Value) : _doc.GetSelectedText();
         string? html = BuildTableClipboardHtml(rect)
-                       ?? HtmlToMarkdownConverter.ConvertToHtmlClipboard(text);
+                       ?? ClipboardHtmlWriter.ConvertToHtmlClipboard(text);
         return (text, html);
     }
 
@@ -1143,7 +1143,8 @@ public partial class DocsCanvas : FrameworkElement, IMinimapDataProvider, IDocsC
         if (!inCodeBlock)
         {
             string? html = ClipboardHelper.GetHtml(Logger);
-            if (html != null)
+            // Our own copy's text payload is the exact markdown; its HTML is not.
+            if (html != null && !ClipboardHtmlWriter.IsMarkdownCopy(html))
             {
                 // Use new semantic block model parser with color preservation
                 var settings = new MarkdownOutputSettings { PreserveColors = true };

@@ -3,14 +3,89 @@ using System.Text;
 namespace RaisinDocs;
 
 /// <summary>
-/// Shared building blocks for producing CF_HTML clipboard payloads:
-/// HTML escaping, inline markdown → HTML rendering, and the CF_HTML header.
+/// Produces CF_HTML clipboard payloads for copy-out: HTML escaping, inline markdown → HTML
+/// rendering, the CF_HTML header, and <see cref="ConvertToHtmlClipboard"/> for plain
+/// (non-table) selections.
 ///
-/// Used by <see cref="TableClipboardHtml"/> (table copy-out) and by the legacy
-/// HtmlToMarkdownConverter copy-out path.
+/// Also used by <see cref="TableClipboardHtml"/> (table copy-out).
 /// </summary>
 internal static class ClipboardHtmlWriter
 {
+    /// <summary>
+    /// Marks the HTML <see cref="ConvertToHtmlClipboard"/> writes. The HTML is lossy: it reads
+    /// every '*' as emphasis and flattens code spans, while the text copied alongside it is the
+    /// exact markdown. A paste back into RaisinDocs uses that text instead.
+    /// </summary>
+    private const string MarkdownCopyMarker = "data-raisindocs-markdown";
+
+    /// <summary>
+    /// Whether <paramref name="cfHtml"/> is RaisinDocs's own copy of a markdown selection, whose
+    /// plain-text clipboard payload should be pasted rather than the HTML.
+    /// </summary>
+    internal static bool IsMarkdownCopy(string cfHtml)
+        => cfHtml.Contains(MarkdownCopyMarker, StringComparison.Ordinal);
+
+    /// <summary>
+    /// Converts RaisinDocs markdown to HTML for clipboard (reverse direction).
+    /// Handles bold, italic, colors, and RaisinDocs color comment syntax.
+    /// </summary>
+    internal static string? ConvertToHtmlClipboard(string markdownText)
+    {
+        if (!markdownText.Contains("<!--@") && !markdownText.Contains('*'))
+            return null;
+
+        var lines = markdownText.Replace("\r\n", "\n").Split('\n');
+        var htmlLines = new List<string>();
+        RgbColor? divFg = null, divBg = null;
+        bool anyFormatting = false;
+
+        foreach (var line in lines)
+        {
+            bool hasDivOpen = MarkdownParser.TryExtractDivOpen(line, out int divOpenTagEnd);
+            bool hasDivClose = MarkdownParser.TryExtractDivClose(line, out int divCloseTagStart);
+
+            if (hasDivOpen)
+            {
+                var tagText = line[..divOpenTagEnd].TrimEnd();
+                var props = tagText.AsSpan().Trim();
+                props = props[9..^3]; // strip <!--@div  and -->
+                HtmlParsingContext.ParseColorProps(props, out divFg, out divBg);
+                anyFormatting = true;
+            }
+
+            bool hasContent;
+            if (hasDivOpen || hasDivClose)
+            {
+                int cs = hasDivOpen ? divOpenTagEnd : 0;
+                int ce = hasDivClose ? divCloseTagStart : line.Length;
+                hasContent = ce > cs && line.AsSpan()[cs..ce].Trim().Length > 0;
+            }
+            else
+            {
+                hasContent = true;
+            }
+
+            if (hasContent || (!hasDivOpen && !hasDivClose))
+            {
+                var (html, hadFormatting) = RenderInlineMarkdown(line, divFg, divBg);
+                if (hadFormatting) anyFormatting = true;
+                htmlLines.Add(html);
+            }
+
+            if (hasDivClose)
+            {
+                divFg = null;
+                divBg = null;
+            }
+        }
+
+        if (!anyFormatting) return null;
+
+        var fragment = $"<pre {MarkdownCopyMarker} style=\"font-family:Consolas,'Courier New',monospace;font-size:10pt;\">"
+                       + string.Join("\n", htmlLines) + "</pre>";
+        return WrapClipboardHeader(fragment);
+    }
+
     internal static string HtmlEncode(string text)
     {
         var sb = new StringBuilder(text.Length);

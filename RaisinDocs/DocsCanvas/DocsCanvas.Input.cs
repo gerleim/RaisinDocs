@@ -471,7 +471,8 @@ public partial class DocsCanvas
                     if (!shift && !inCodeBlock)
                     {
                         string? html = ClipboardHelper.GetHtml(Logger);
-                        if (html != null)
+                        // Our own copy's text payload is the exact markdown; its HTML is not.
+                        if (html != null && !ClipboardHtmlWriter.IsMarkdownCopy(html))
                         {
                             var settings = new MarkdownOutputSettings { PreserveColors = true };
                             pasteText = HtmlBlockModelParser.ConvertHtmlToMarkdown(html, settings);
