@@ -3,8 +3,8 @@ using System.Text;
 namespace RaisinDocs;
 
 /// <summary>
-/// Shared utilities during HTML to markdown conversion.
-/// Manages entity decoding, color parsing, and style stack operations.
+/// Shared helpers for clipboard HTML: entity decoding, CSS colour parsing, and the
+/// colour-props and segment helpers the copy-out uses.
 /// </summary>
 internal static class HtmlParsingContext
 {
@@ -104,63 +104,6 @@ internal static class HtmlParsingContext
     }
 
     /// <summary>
-    /// Gets the current style from the top of the style stack.
-    /// </summary>
-    internal static (RgbColor? fg, RgbColor? bg, bool bold, bool italic) CurrentStyle(
-        List<(RgbColor? fg, RgbColor? bg, bool bold, bool italic)> stack)
-    {
-        return stack.Count > 0 ? stack[^1] : default;
-    }
-
-    /// <summary>
-    /// Parses style attributes from an HTML tag (e.g., &lt;span style="color:red;font-weight:bold;"&gt;).
-    /// </summary>
-    internal static (RgbColor? fg, RgbColor? bg, bool bold, bool italic) ParseStyleFromTag(ReadOnlySpan<char> tag)
-    {
-        int styleIdx = tag.IndexOf("style=".AsSpan(), StringComparison.OrdinalIgnoreCase);
-        if (styleIdx < 0) return (null, null, false, false);
-        int quotePos = styleIdx + 6;
-        if (quotePos >= tag.Length) return (null, null, false, false);
-        char quote = tag[quotePos];
-        if (quote != '"' && quote != '\'') return (null, null, false, false);
-        int styleStart = quotePos + 1;
-
-        int styleEnd = tag[styleStart..].IndexOf(quote);
-        if (styleEnd < 0) return (null, null, false, false);
-
-        var style = tag[styleStart..(styleStart + styleEnd)];
-
-        RgbColor? fg = null;
-        RgbColor? bg = null;
-
-        int bgIdx = style.IndexOf("background-color:".AsSpan(), StringComparison.OrdinalIgnoreCase);
-        int fgIdx = style.IndexOf("color:".AsSpan(), StringComparison.OrdinalIgnoreCase);
-
-        if (bgIdx >= 0)
-            bg = ParseCssColor(style[(bgIdx + 17)..]);
-
-        if (fgIdx >= 0)
-        {
-            bool isBgPrefix = fgIdx > 0 && style[fgIdx - 1] == '-';
-            if (!isBgPrefix)
-                fg = ParseCssColor(style[(fgIdx + 6)..]);
-        }
-
-        bool bold = style.IndexOf("font-weight:bold".AsSpan(), StringComparison.OrdinalIgnoreCase) >= 0;
-        bool italic = style.IndexOf("font-style:italic".AsSpan(), StringComparison.OrdinalIgnoreCase) >= 0;
-
-        return (fg, bg, bold, italic);
-    }
-
-    internal static bool IsBoldTag(ReadOnlySpan<char> tagName) =>
-        tagName.Equals("b".AsSpan(), StringComparison.OrdinalIgnoreCase) ||
-        tagName.Equals("strong".AsSpan(), StringComparison.OrdinalIgnoreCase);
-
-    internal static bool IsItalicTag(ReadOnlySpan<char> tagName) =>
-        tagName.Equals("i".AsSpan(), StringComparison.OrdinalIgnoreCase) ||
-        tagName.Equals("em".AsSpan(), StringComparison.OrdinalIgnoreCase);
-
-    /// <summary>
     /// Parses color properties from a string like "fg:red bg:#FF0000".
     /// </summary>
     internal static void ParseColorProps(ReadOnlySpan<char> props, out RgbColor? fg, out RgbColor? bg)
@@ -182,35 +125,6 @@ internal static class HtmlParsingContext
             int end = val.IndexOf(' ');
             if (end >= 0) val = val[..end];
             bg = ParseCssColor(val);
-        }
-    }
-
-    /// <summary>
-    /// Merges adjacent segments with identical styling to reduce fragment count.
-    /// </summary>
-    internal static void MergeAdjacentSegments(List<List<ColoredSegment>> lines)
-    {
-        for (int i = 0; i < lines.Count; i++)
-        {
-            var line = lines[i];
-            if (line.Count <= 1) continue;
-
-            var merged = new List<ColoredSegment>(line.Count);
-            merged.Add(line[0]);
-
-            for (int j = 1; j < line.Count; j++)
-            {
-                var prev = merged[^1];
-                var cur = line[j];
-                if (prev.Foreground == cur.Foreground && prev.Background == cur.Background
-                    && prev.Bold == cur.Bold && prev.Italic == cur.Italic)
-                    merged[^1] = new ColoredSegment(
-                        prev.Text + cur.Text, prev.Foreground, prev.Background, prev.Bold, prev.Italic);
-                else
-                    merged.Add(cur);
-            }
-
-            lines[i] = merged;
         }
     }
 }
