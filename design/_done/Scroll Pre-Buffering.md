@@ -350,9 +350,13 @@ remains. Notch distance is unchanged, which is what the closed-form integral bei
 predicted - it was reasoned rather than measured, so it is worth having heard.
 
 **Then confirmed from outside the process**, with `capture-scroll.ps1` and PresentMon - 2982
-frames over ten scripted gestures. **Nothing is being dropped: 0 frames of 2982**, against the
-13% that `design/Scroll Frame Pacing.md` was built on. Presented and displayed are both 273/s
-into a 280 Hz panel.
+frames over ten scripted gestures, presented at 273/s into a 280 Hz panel. ~~Nothing is being
+dropped: 0 frames of 2982~~ - **that figure was fabricated by the analyser**, as was the
+"displayed 273/s" beside it: `analyse-scroll.ps1` looked for a column PresentMon 2.5.1 does not
+emit and, finding none, counted every present as shown. Recomputed from
+`MsBetweenDisplayChange` on a later full-screen capture of the same panel, **2.6% of presents are
+never shown** - still a large fall from the 13% `design/Scroll Frame Pacing.md` was built on, but
+not zero. See the correction of 2026-09-06 in that note.
 
 The jaggedness is frames held longer than one refresh: 92.9% land on exactly one, 4.1% on two,
 and a 0.3% tail at four or five. Animation error - the difference between a frame's CPU delta
@@ -386,15 +390,19 @@ machine, driven by a scripted sweep so the two are comparable:
 
 | | wheel (10 gestures) | minimap drag (3) |
 |---|---|---|
-| presented, and displayed | 256-279/s | **108-110/s** |
+| presented | 256-279/s | **108-110/s** |
 | display interval | **3.57 ms** - exactly 1/280, on every gesture | **7.15 ms** - two refreshes |
 | intervals over 1.5x median | 1.1-9.0%, and 1.1-2.5% on the long scrolls | 24-38% |
 | animation error, median | **0.22-0.33 ms** | **3.73-7.12 ms** |
-| dropped | 0.0% | 0.0% |
+| ~~dropped~~ | ~~0.0%~~ not measured | ~~0.0%~~ not measured |
+
+The "dropped" row, and "displayed" beside "presented", came from the analyser bug described above
+and are struck; the other rows were read from columns it handled correctly.
 
 The drag carries roughly **twenty times** the wheel's animation error and holds every frame for
-two refreshes. Nothing is dropped in either, so this is pacing rather than loss: the drag is
-bound by the rate mouse messages arrive, which is about 110/s and unrelated to the panel.
+two refreshes. That is pacing rather than loss - the display interval and animation error show it
+without needing a drop count: the drag is bound by the rate mouse messages arrive, which is about
+110/s and unrelated to the panel.
 
 So the observation this investigation started from - a drag is smooth at any speed and the wheel
 is not - is exactly inverted by measurement. The wheel is now the best-paced input in the editor

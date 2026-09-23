@@ -1,8 +1,23 @@
 # Rendering Direction
 
-Status: **research**. Written after the paced-presenter work in `Scroll Frame Pacing.md` was
-stopped. That work answered a narrower question than it set out to; this is about what to do
-next, and it covers two options: patch WPF, or leave it.
+Status: **superseded - neither option is needed.** Written after the paced-presenter work in
+`Scroll Frame Pacing.md` was stopped, to decide between patching WPF and leaving it. The diagnosis
+below it rests on was then overturned by measurement, so read this as a record of the reasoning,
+not as a live plan:
+
+- **The 228-into-140, 13%-dropped figure was our own bug**, not WPF's. The wheel coast timed itself
+  off a `Stopwatch` rather than the compositor's frame stamp; fixed in `cd7cf24`. On the primary,
+  2.6% of presents now go unshown and animation error is 0.78 ms at full screen.
+- **The non-primary panels' fault was our own throttle.** Repainting was capped at the panel's
+  refresh rate; removing the cap brought animation error to 0.4-1.3 ms on every panel. That closes
+  *Open: the window changing display* below.
+- **A presenter of our own does not beat WPF in a window.** On a secondary panel it hits the same
+  composition floor, because DWM composites it on the primary's clock. Only a fullscreen surface
+  granted independent flip escapes that, and a docked editor cannot qualify.
+
+See the end of `Scroll Frame Pacing.md` and `RaisinLibraries/design/WPF Presentation Timing.md`.
+The milcore findings - D3D9Ex, blt-model, pacing by `DispatcherTimer` estimate - still stand as
+facts about WPF; they are just no longer what limits this editor.
 
 ## What we actually know
 
@@ -188,7 +203,17 @@ FrameView counted 140 reaching the display out of 228 presented - so the loss th
 the animation tick, in the blt-model present path, and this test cannot see it. Closing that gap
 needs FrameView or PresentMon, not instrumentation inside the process.
 
-## Open: the window changing display
+## ~~Open~~: the window changing display
+
+**Closed 2026-09-06.** The cap discussed below was the fault: `ScrollController` throttled
+repaints to the panel's refresh rate, and removing it - there and in `SmoothScroller` - fixed
+every non-primary panel (animation error 0.4-1.3 ms). Repaints now happen on every composition
+tick, so no cap is reinstated. The window's display is still tracked: the canvas pushes it to
+`ScrollController.SetDisplay` from `WindowDisplayInfo` at startup and on every change, mid-gesture
+included, and the period is kept only as a fallback frame time. Measured in
+`Scroll Frame Pacing.md`, *The throttle was the fault, not WPF*.
+
+As first written:
 
 Not addressed, and it needs to be. Two separate faults, one WPF's and one ours.
 

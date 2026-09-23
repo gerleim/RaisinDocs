@@ -1,8 +1,21 @@
 # Sub-Pixel Scrolling
 
-Status: **planned, not started**. The third attempt. Two previous ones were reverted
-(`40db97a`, `b23a387`), and this records why, what has changed since, and what would have to be
-different for a third to be worth starting.
+Status: **done** 2026-09-05. The third attempt went in as `ef121cc` and `92816fb`, merged in
+`bc89bda`, and has held. Two previous ones were reverted (`40db97a`, `b23a387`); this records
+why, what changed, and the options considered before the third.
+
+**What the third attempt was.** None of A-C below. It is attempt 2's shape - cached line visuals
+under one fractional translate - made to work by the opaque-line work
+(`design/_done/Opaque Line Visuals.md`) that moved every background, tint, selection and
+highlight into the line. Each line visual sits at its own `Round(lineY)` and the layer
+translates by the unrounded offset, so every line moves by the identical fraction and spacing
+is exactly constant. `92816fb` then stopped the wheel coast from repainting only when the
+rounded offset changed, without which the first commit did nothing for the wheel. Confirmed by
+eye as showing no artifact. Built and measured as phase 3 of
+`design/_done/Scroll Pre-Buffering.md`; the jaggedness that remained afterwards was frame
+pacing, not sub-pixel, and is closed in `design/Scroll Frame Pacing.md`.
+
+Option D, the raised `SnapVelocity`, is still in place alongside it.
 
 ## What is left to fix
 
@@ -236,6 +249,9 @@ output.
   than measured.
 
 ## Where this stands
+
+**Superseded by the third attempt** - see the status at the top. What follows was written
+before it, when D was the only change made.
 
 **D is done and the complaint is closed for now.** The tail is acceptable, not perfect, and
 nothing further is planned unless it becomes irritating again.

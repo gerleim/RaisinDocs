@@ -1,14 +1,18 @@
 # Scroll Frame Pacing
 
-Status: **section C is not needed for wheel scrolling. Measured, not argued.** Follows on from `design/_done/Scroll Pre-Buffering.md`, which covers how lines came to be cached
-as visuals. This one is about the frames reaching the screen rather than the cost of drawing
-them.
+Status: **done** 2026-09-06. A and B are built; C is retired and the vblank-aligned throttle
+declined, both on measurement. Follows on from `design/_done/Scroll Pre-Buffering.md`, which
+covers how lines came to be cached as visuals. This one is about the frames reaching the screen
+rather than the cost of drawing them.
 
 > **Do not build the presenter in section C without re-reading the bottom of this note.** The
-> unpaced presentation it exists to fix was measured while the wheel coast paced itself off a
-> wall clock. With that fixed and re-captured with PresentMon: **0 dropped frames of 2982, and
-> 92.9% of frames displayed for exactly one refresh.** The 13% drop rate this note is built on
-> is gone.
+> 13% drop rate it was proposed to fix came from the wheel coast pacing itself off a wall clock
+> (`cd7cf24`); on the primary, 2.6% of presents now go unshown. The fault that later appeared on
+> secondary monitors was our own refresh-rate throttle, and removing it brought animation error
+> to 0.4-1.3 ms on every panel - the same floor the presenter prototype hit. Painting only on the
+> tick before each vblank would give identical output for about 3.5% less GPU, and was judged not
+> worth a per-display vblank thread. Read the correction of 2026-09-06 before quoting any
+> "dropped" figure: every "0.0% dropped" in this note came from a harness bug.
 
 ## Where things stand
 
@@ -1141,13 +1145,21 @@ It is worth doing for work and battery, on a laptop especially. It is not worth 
 smoothness, and an earlier passage in this note describing the brute-force version as "not the end
 of it" implied otherwise.
 
-**Below the floor is outside WPF, and the prototype did not demonstrate getting there.** Presenting
-through our own swapchain, timed to the target output's vblank, is the only way to place a frame
-closer to the refresh than one composition tick. The paced presenter is the candidate - but
-measured on the 60 Hz panel it presented at 280/s, the primary's rate rather than the panel's, and
-landed at 1.20 ms against our 1.27 ms. **It hit the same floor.** Whether a swapchain properly
-bound to that output would beat it is unknown; that capture carried the confound that the window
-was moved to the panel after the swapchain had been created on the primary.
+**Below the floor is outside DWM composition, and a window cannot get there.** The paced presenter
+measured on the 60 Hz panel presented at 280/s, the primary's rate rather than the panel's, and
+landed at 1.20 ms against our 1.27 ms. **It hit the same floor.** That first capture carried a
+confound - the window was moved to the panel after the swapchain had been created on the primary -
+so it was re-run with the window opened on the 60 Hz panel, and `GetContainingOutput` confirmed
+the swapchain bound to it. Same result: 280/s, 1.20 ms, 77.6% never shown. `PresentMode` is
+`Composed: Flip`; DWM composites the swapchain, and DWM composes on one clock. Owning the
+swapchain changes who draws the pixels, not when composition happens.
+
+The floor does not hold outside composition. A borderless `WS_POPUP` covering the whole 60 Hz
+output is promoted to `Hardware: Independent Flip` and presents on the panel's own vblank:
+16.666 ms, 0.019 ms animation error, nothing unshown. But independent flip needs the window to own
+the entire output with nothing composited above it - a tooltip or toast drops it back to composed -
+so a docked editor window cannot qualify. It would only matter to a fullscreen reading mode. Full
+write-up: `RaisinLibraries/design/WPF Presentation Timing.md`.
 
 **And the scale of what is left.** At 1000 px/s, 1.27 ms of animation error is about 1.3 pixels of
 positional wobble. The primary sits at 0.78 ms and always has. Closing the remaining gap means a
