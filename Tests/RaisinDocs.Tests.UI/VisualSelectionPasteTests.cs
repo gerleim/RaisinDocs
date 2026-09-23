@@ -121,6 +121,20 @@ public class VisualSelectionPasteTests
     }
 
     [StaFact]
+    public void CopyFromABoldWordInATableCell_PastedBackInsideIt_StaysOneBoldRun()
+    {
+        // "who" is raw [4, 7) of the data row "| **whole** | x |"; between "l" and "e" is 8.
+        var canvas = CreateCanvas("| h | i |\n|---|---|\n| **whole** | x |");
+        canvas.TestSetSelection(2, 4, 2, 7);
+        string copied = canvas.TestBuildClipboardPayload().Text;
+
+        canvas.TestSetCursor(2, 8);
+        canvas.TestPaste(copied);
+
+        canvas.TestGetBlockText(2).Should().Be("| **wholwhoe** | x |");
+    }
+
+    [StaFact]
     public void SourceMode_PastesExactlyTheText()
     {
         var canvas = CreateCanvas("**whole**", DocsCanvas.EditMode.Source);

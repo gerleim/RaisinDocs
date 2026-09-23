@@ -100,8 +100,8 @@ internal static class VisualSelection
 
     /// <summary>
     /// The markdown for a visual-mode selection, joined with CRLF as
-    /// <see cref="Document.GetSelectedText"/> joins it. Table rows are taken raw: their hidden
-    /// ranges are cell padding and pipes, not paired markup.
+    /// <see cref="Document.GetSelectedText"/> joins it. A selection spanning table cells never
+    /// gets here: it is a rectangle, copied as whole cells.
     /// </summary>
     internal static string BuildCopyText(Func<int, string> getBlockText, IReadOnlyList<ParsedBlock> parsed,
         IReadOnlyList<BlockVisualMap> maps, int startBlock, int startOffset, int endBlock, int endOffset)
@@ -115,7 +115,7 @@ internal static class VisualSelection
             int from = i == startBlock ? Math.Min(startOffset, text.Length) : 0;
             int to = i == endBlock ? Math.Min(endOffset, text.Length) : text.Length;
 
-            string part = i < parsed.Count && i < maps.Count && !IsTableRow(parsed[i])
+            string part = i < parsed.Count && i < maps.Count
                 ? BlockSelectionText(parsed[i], maps[i], text, from, to)
                 : text[from..to];
             result.Append(part.Replace("\n", "\r\n"));
@@ -139,9 +139,14 @@ internal static class VisualSelection
         }
 
         // A selection reaching the block's first or last visible character takes the hidden
-        // markup at that edge too: a heading's "# ", a list marker, a closing "**".
-        if (!AnyContent(0, from)) from = 0;
-        if (!AnyContent(to, text.Length)) to = text.Length;
+        // markup at that edge too: a heading's "# ", a list marker, a closing "**". Not in a
+        // table row, whose edges are pipes and padding; inside a cell, the construct rule below
+        // already brings the cell's own markers.
+        if (!IsTableRow(parsed))
+        {
+            if (!AnyContent(0, from)) from = 0;
+            if (!AnyContent(to, text.Length)) to = text.Length;
+        }
         if (from == 0 && to == text.Length) return text;
 
         var include = new bool[text.Length];
@@ -195,7 +200,7 @@ internal static class VisualSelection
 
         void Process(int block, int from, int to)
         {
-            if (block >= parsed.Count || block >= maps.Count || IsTableRow(parsed[block])) return;
+            if (block >= parsed.Count || block >= maps.Count) return;
             var p = parsed[block];
             var map = maps[block];
             string text = getBlockText(block);

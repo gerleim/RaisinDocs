@@ -131,6 +131,42 @@ public class VisualSelectionDeleteTests
         canvas.GetText().Should().Be("a ** c");
     }
 
+    // A data row after the header and separator; "who" is raw [4, 7) of "| **whole** | x |".
+    private const string Table = "| h | i |\n|---|---|\n| **whole** | x |";
+
+    [StaFact]
+    public void PartOfABoldWordInATableCell_LeavesTheRestBold()
+    {
+        var canvas = CreateCanvas(Table);
+        canvas.TestSetSelection(2, 4, 2, 7);
+
+        canvas.TestNavigate(Key.Back);
+
+        canvas.TestGetBlockText(2).Should().Be("| **le** | x |");
+    }
+
+    [StaFact]
+    public void AWholeBoldWordInATableCell_GoesWithItsMarkers()
+    {
+        var canvas = CreateCanvas(Table);
+        canvas.TestSetSelection(2, 4, 2, 9);
+
+        canvas.TestNavigate(Key.Back);
+
+        canvas.TestGetBlockText(2).Should().Be("|  | x |");
+    }
+
+    [StaFact]
+    public void TypingOverABoldWordInATableCell_IsBold()
+    {
+        var canvas = CreateCanvas(Table);
+        canvas.TestSetSelection(2, 4, 2, 9);
+
+        canvas.TestTypeText("X");
+
+        canvas.TestGetBlockText(2).Should().Be("| **X** | x |");
+    }
+
     // --- Typing over a selection ---
 
     [StaFact]

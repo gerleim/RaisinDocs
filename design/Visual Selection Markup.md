@@ -67,4 +67,10 @@ spans and links are left alone.
   so a pasted tag using one is kept even inside the same colour.
 - **Joined edges**: deleting across lines can butt a kept closer against a kept opener
   (`**a***d*`). CommonMark still reads it as bold then italic.
-- **Table rows** keep the raw range: their hidden ranges are cell padding and pipes.
+
+## Tables
+
+A selection spanning two cells or two rows of a table is a rectangle (`TryGetTableRectSelection`):
+copy writes whole cells as a markdown table plus an HTML `<table>`, and delete clears cells. A
+selection inside one cell is ordinary text and follows the rules above, except that the line-edge
+rule is skipped - a row's edges are pipes and padding, not the cell's markup.

@@ -141,6 +141,27 @@ public class VisualSelectionCopyTests
         canvas.TestBuildClipboardPayload().Text.Should().Be("**b**\r\n\r\n**mid** line\r\n\r\n*c*");
     }
 
+    // A data row after the header and separator; "who" is raw [4, 7) of "| **whole** | x |".
+    private const string Table = "| h | i |\n|---|---|\n| **whole** | x |";
+
+    [StaFact]
+    public void PartOfABoldWordInATableCell_CopiesAsBold()
+    {
+        var canvas = CreateCanvas(Table);
+        canvas.TestSetSelection(2, 4, 2, 7);
+
+        canvas.TestBuildClipboardPayload().Text.Should().Be("**who**");
+    }
+
+    [StaFact]
+    public void AWholeTableCell_TakesNoPipes()
+    {
+        var canvas = CreateCanvas(Table);
+        canvas.TestSetSelection(2, 4, 2, 9); // "whole", up to the hidden closing "**"
+
+        canvas.TestBuildClipboardPayload().Text.Should().Be("**whole**");
+    }
+
     [StaFact]
     public void SourceMode_CopiesExactlyTheSelectedCharacters()
     {
