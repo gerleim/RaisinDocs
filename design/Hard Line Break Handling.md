@@ -2,9 +2,7 @@
 
 ## Context
 
-A **hard line break** is a line that ends in `\` or in two or more spaces (CommonMark). The
-paragraph continues on the next line, and the break shows in the rendered output. Shift+Enter
-inserts one; `DocsCanvas.HardBreakStyle` picks `\` (default) or two spaces.
+A **hard line break** is a line that ends in `\` or in two or more spaces (CommonMark). The paragraph continues on the next line, and the break shows in the rendered output. Shift+Enter inserts one; `DocsCanvas.HardBreakStyle` picks `\` (default) or two spaces.
 
 The pieces that know about it:
 
@@ -16,10 +14,7 @@ The pieces that know about it:
 - `ListFormattingHandler` adds it (Shift+Enter) and removes it (`StripTrailingHardBreak`, plain Enter).
 - `Document.AddHardBreaks` / `DocsCanvas.ConvertToHardBreaks` add it to a range.
 
-The layout merges a paragraph's lines into **one block** joined by `\n`
-(`Document.MergeParagraphContinuations`, called from `LayoutEngine.cs:80`, in both modes). A line
-that ends in a hard break is supposed to stay its own block. Many items below come from this: a
-check that only looks at a block's end misses a break inside a merged block.
+The layout merges a paragraph's lines into **one block** joined by `\n` (`Document.MergeParagraphContinuations`, called from `LayoutEngine.cs:80`, in both modes). A line that ends in a hard break is supposed to stay its own block. Many items below come from this: a check that only looks at a block's end misses a break inside a merged block.
 
 An audit (2026-09-28) found the items below. Each is marked **verified** when the code path was
 re-read by hand, or **audit** when it comes from the audit alone.
@@ -248,3 +243,8 @@ behaviour there is intended, or at least defensible, and should not change witho
 6. **B1, B2, B3, B6** once the B2 decision is made.
 
 Out of scope: print (deferred wholesale rework).
+
+## Open questions
+
+1. **B2:** should visual mode show a <!--@fg:#B1B9F9-->\<!--/@fg--> that CommonMark doesn't treat as a line break?
+2. **Source** **mode:** should it also protect the line-break marker in the four items marked *by* *design* (A4, A7, A9, B5)?
