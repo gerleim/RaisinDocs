@@ -132,7 +132,7 @@ behaviour there is intended, or at least defensible, and should not change witho
 | Modes | **Visual only.** Source copy is raw text |
 | Now | A selection reaching the last visible character takes the hidden markup after it, which includes the marker. Copying `oo` from `foo\` gives `oo\`; pasting mid-line shows a `\`, pasting at a line end adds a break the user never saw |
 | Expected | Stop before the last selected block's marker. Markers between selected lines stay (they are real breaks inside the selection). Clamp only the break marker: other trailing markup still comes along (`ReachingTheLastVisibleCharacter_TakesTrailingMarkup` must keep passing, and `**x**\` copies as `**x**`). The whole-block early return (`from == 0 && to == text.Length`) returns `foo\` too, so the clamp goes before it |
-| Test | UI, visual: select `oo` in `foo\` / `bar`, assert the copy text is `oo`. Selecting all of `foo` gives `foo`. Two-line selection keeps the inner `\` |
+| Test | Model (`VisualSelectionTests` in `Tests/RaisinDocs.Tests`, next to the existing trailing-markup tests; `VisualSelection` is static and needs no canvas): select `oo` in `foo\` / `bar`, assert the copy text is `oo`. Selecting all of `foo` gives `foo`. Two-line selection keeps the inner `\` |
 
 ### A8. HTML to markdown puts breaks in the wrong places *(verified: a; audit: b)*
 
@@ -162,8 +162,8 @@ behaviour there is intended, or at least defensible, and should not change witho
 | Modes | **Both** |
 | Input | `asd` / `123`, which loads as one merged block `asd\n123`; caret after `asd`, Shift+Enter |
 | Now | Saves as `asd\` / *(blank)* / `123`. `InsertParagraphBreak` splits before the `\n`, so the second block starts with it and the old soft break becomes a blank line: a paragraph break, with a literal `\` at the end of the first paragraph. Any paragraph written over several source lines hits this |
-| Expected | `asd\` / `123`: the new block boundary replaces the soft break, so drop the leading `\n` of the second half. That is the block shape A1 produces |
-| Test | UI, both modes, both marker styles: the input above, assert `GetText()` and the caret at the start of `123` |
+| Expected | `asd\` / `123`: the new block boundary replaces the soft break, so drop the leading `\n` of the second half. That is the block shape A1 produces. Do it in the Shift+Enter branch of `HandleEnter`, not in `InsertParagraphBreak`: plain Enter at the same spot relies on the leading `\n` to save as `asd` / *(blank)* / `123`, the paragraph break it should make. Without it, plain Enter would only split the line, and the two lines would merge straight back into one paragraph |
+| Test | UI, both modes, both marker styles: the input above, assert `GetText()` and the caret at the start of `123`. Plain Enter at the same spot still gives `asd` / *(blank)* / `123` |
 
 ---
 
