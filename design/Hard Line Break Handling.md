@@ -14,10 +14,11 @@ The pieces that know about it:
 - `ListFormattingHandler` adds it (Shift+Enter) and removes it (`StripTrailingHardBreak`, plain Enter).
 - `Document.AddHardBreaks` / `DocsCanvas.ConvertToHardBreaks` add it to a range.
 
-The layout merges a paragraph's lines into **one block** joined by `\n` (`Document.MergeParagraphContinuations`, called from `LayoutEngine.cs:80`, in both modes). A line that ends in a hard break is supposed to stay its own block. Many items below come from this: a check that only looks at a block's end misses a break inside a merged block.
+The layout merges a paragraph's lines into **one block** joined by `\n`, in both modes. Two methods share the name: `MarkdownParser.MergeParagraphContinuations` decides what merges (it sets `Children` on the parsed block), and `Document.MergeParagraphContinuations`, called from `LayoutEngine.cs:80`, does the physical join. `Document.SplitStaleContinuations` (`LayoutEngine.cs:67`) undoes a merge that no longer holds. A line that ends in a hard break is supposed to stay its own block. Many items below come from this: a check that only looks at a block's end misses a break inside a merged block.
 
 An audit (2026-09-28) found the items below. Each is marked **verified** when the code path was
-re-read by hand, or **audit** when it comes from the audit alone.
+re-read by hand, or **audit** when it comes from the audit alone. A review the same day
+confirmed A1 and A10 with a throwaway UI test.
 
 ## Done
 
@@ -44,7 +45,11 @@ Most of these are one-line reproductions, so each gets a failing test first, the
   toggle, copy/paste round trip), assert that the number of `<br />` in the rendered HTML is the
   same before and after, or equals the expected count. This catches the "the `\` is still there
   but no longer a break" family without spelling out every string.
-- **Manual check in the Editor** for rendering-only items (#11, #15), after closing any running
+
+  The oracle is blind to the editor's own rule in C: it reads `foo\<!--/@fg-->` as an escaped
+  `<`, not a break, so it counts zero `<br />` there whatever the editor does. Inputs with a close
+  tag after the marker need a block-text assertion instead.
+- **Manual check in the Editor** for rendering-only items (B7, and B2/B6 if kept), after closing any running
   instance so it isn't using a stale `RaisinDocs.dll`.
 
 In the tables below, *Source* and *Visual* say where the bug shows. **By design** means the
@@ -63,8 +68,9 @@ behaviour there is intended, or at least defensible, and should not change witho
 | Input | `a` / `b\` / `c` |
 | Now | The hard-break check (`:1167`) only looks at the first line. `b\` and `c` both merge into `a`. Visual shows `a b\ c` on one line with a visible `\` |
 | Expected | Stop taking continuations after a line that ends in a hard break: `a b` merges, `c` starts a new block. CommonMark: one paragraph, `a b<br />c` |
-| Test | Model: parse + `Document.MergeParagraphContinuations` on `a\nb\\\nc`, expect blocks `a\nb\` and `c`. UI: visual line count is 2 |
-| Risk | Touches the merge that runs on every layout pass. Check `SplitStaleContinuations` and existing continuation tests |
+| Also | The parser fix only prevents new merges. A break typed onto a middle line of a paragraph that is *already* merged (`\` or two spaces at the end of `b` in `a\nb\nc`) is never split: `SplitStaleContinuations` pre-filters with `AnyLineIsBlockLevel` (`Document.cs:1152`), which only fires for lines that don't classify as a paragraph, and `b\` does. The pre-filter must also fire when any line but the last ends in a hard break; `MergeStillHolds` then returns false once the parser stops at the break |
+| Test | Model: parse + `Document.MergeParagraphContinuations` on the three blocks `a` / `b\` / `c`, expect blocks `a\nb\` and `c`. UI: load `a\nb\nc`, type `\` at the end of `b`, recompute layout, expect the same two blocks. UI: visual line count is 2 |
+| Risk | Touches the merge that runs on every layout pass. Check existing continuation tests |
 
 ### A2. "Convert to hard breaks" misfires *(verified)*
 
@@ -73,7 +79,7 @@ behaviour there is intended, or at least defensible, and should not change witho
 | Where | `Document.AddHardBreaks` / `HasSoftBreaks`, `Document.cs:1038-1076`; `DocsCanvas.ConvertToHardBreaks`, `Formatting.cs:211-253` |
 | Modes | **Both** (toolbar command) |
 | Now | (a) It only compares adjacent blocks and never looks inside a merged paragraph, so on ordinary paragraphs it does nothing and the button stays disabled. (b) With no selection it runs over the whole document without checking the kind of each line: it appends `\` to headings, setext underlines, table rows including the separator, list items and thematic breaks. (c) Raw `EndsWith('\\')`: `foo\\` is treated as already broken; `foo\<!--/@fg-->` gets a second marker |
-| Expected | Add a marker only at the `\n` joins inside paragraph (and list-item) blocks. Use `IsTrailingHardBreak` for "already broken" |
+| Expected | Paragraphs: add a marker before each `\n` join inside the block, adjusting cursor and anchor offsets after each insertion. List items are never merged physically (both merge loops check `Kind == Paragraph`), so their continuation lines stay separate blocks and keep the adjacent-block check, restricted to list items and their continuations. Use `IsTrailingHardBreak` for "already broken" |
 | Test | Model or UI: `# T` / `para` / `| a |` / `|---|` → only the paragraph lines change. `a` / `b` / `c` → `a\` / `b\` / `c`. `foo\\` / `bar` → gets a marker |
 
 ### A3. Reflow joins across a break before a colour close tag *(verified)*
@@ -85,7 +91,7 @@ behaviour there is intended, or at least defensible, and should not change witho
 | Input | `<!--@fg:red-->hello\<!--/@fg-->` / `bar` |
 | Now | The raw `EndsWith` checks miss the break, and `Document.Reflow` joins the lines |
 | Expected | Use `MarkdownParser.IsTrailingHardBreak`; the lines stay apart |
-| Test | UI (needs the parsed block): reflow, assert both blocks unchanged. Oracle: `<br />` count unchanged |
+| Test | UI (needs the parsed block): reflow, assert both blocks unchanged. Not the oracle: it counts zero breaks here before and after (see *How to test*) |
 
 ### A4. Joining two lines leaves the marker mid-line *(verified)*
 
@@ -125,8 +131,8 @@ behaviour there is intended, or at least defensible, and should not change witho
 | Where | `VisualSelection.BlockSelectionText`, `VisualSelection.cs:147-148` |
 | Modes | **Visual only.** Source copy is raw text |
 | Now | A selection reaching the last visible character takes the hidden markup after it, which includes the marker. Copying `oo` from `foo\` gives `oo\`; pasting mid-line shows a `\`, pasting at a line end adds a break the user never saw |
-| Expected | Stop before the last selected block's marker. Markers between selected lines stay (they are real breaks inside the selection) |
-| Test | UI, visual: select `oo` in `foo\` / `bar`, assert the copy text is `oo`. Two-line selection keeps the inner `\` |
+| Expected | Stop before the last selected block's marker. Markers between selected lines stay (they are real breaks inside the selection). Clamp only the break marker: other trailing markup still comes along (`ReachingTheLastVisibleCharacter_TakesTrailingMarkup` must keep passing, and `**x**\` copies as `**x**`). The whole-block early return (`from == 0 && to == text.Length`) returns `foo\` too, so the clamp goes before it |
+| Test | UI, visual: select `oo` in `foo\` / `bar`, assert the copy text is `oo`. Selecting all of `foo` gives `foo`. Two-line selection keeps the inner `\` |
 
 ### A8. HTML to markdown puts breaks in the wrong places *(verified: a; audit: b)*
 
@@ -147,6 +153,17 @@ behaviour there is intended, or at least defensible, and should not change witho
 | Now | Only click, drag, typing, End and mode switch call `ClampCursorBeforeTrailingHidden`. From a caret after the `\`: paste gives `foo\pasted`; Tab `foo\    `; link `foo\[t](u)`; colour `foo\<!--@fg:red--><!--/@fg-->` (no longer a break); Ctrl+B `foo\****` |
 | Expected | Fix the cause, not each insertion: every visual-mode caret move ends before the trailing hidden marker. A selection-based link must also clamp its end (`[foo\](url)` escapes the bracket) |
 | Test | UI, visual: for each navigation key, assert the caret offset is before the marker. One insertion test per operation to lock it in |
+
+### A10. Shift+Enter at a soft break makes a paragraph break *(verified by a probe test)*
+
+| | |
+|---|---|
+| Where | `ListFormattingHandler.HandleEnter`, `ListFormattingHandler.cs:43-54`; `Document.InsertParagraphBreak` |
+| Modes | **Both** |
+| Input | `asd` / `123`, which loads as one merged block `asd\n123`; caret after `asd`, Shift+Enter |
+| Now | Saves as `asd\` / *(blank)* / `123`. `InsertParagraphBreak` splits before the `\n`, so the second block starts with it and the old soft break becomes a blank line: a paragraph break, with a literal `\` at the end of the first paragraph. Any paragraph written over several source lines hits this |
+| Expected | `asd\` / `123`: the new block boundary replaces the soft break, so drop the leading `\n` of the second half. That is the block shape A1 produces |
+| Test | UI, both modes, both marker styles: the input above, assert `GetText()` and the caret at the start of `123` |
 
 ---
 
@@ -186,7 +203,7 @@ behaviour there is intended, or at least defensible, and should not change witho
 
 | | |
 |---|---|
-| Where | `DocsCanvas.cs:1217`, `DocsCanvas.Input.cs:477` |
+| Where | `DocsCanvas.cs:1217`, `DocsCanvas.Input.cs:480` |
 | Modes | **Both** |
 | Now | Both build `new MarkdownOutputSettings { PreserveColors = true }`, so HTML paste always writes `\`, even with `HardBreak = TrailingSpaces` |
 | Expected | Pass `HardBreak = _hardBreak` |
@@ -218,6 +235,7 @@ behaviour there is intended, or at least defensible, and should not change witho
 | Modes | **Source** (visual hides the spaces) |
 | Now | With a trailing-spaces break, the background covers all but one of the spaces |
 | Expected | Clip at `GetTrailingHardBreakStart` |
+| Also | The same `GetContentEnd - 1` clip is at `RenderingContext.cs:1333` (foreground, which does no harm on spaces) and `DocsCanvas.cs:1735` (print, deferred). Change `1333` with it so the two live sites agree; leave print |
 
 ---
 
@@ -235,16 +253,18 @@ behaviour there is intended, or at least defensible, and should not change witho
 ## Suggested order
 
 1. **A9 (caret clamp).** One navigation fix that removes most of the visual-mode insertion bugs.
-2. **A4, A5, A6, A7.** Everyday editing; small, local fixes.
-3. **A3, B4, B7.** One-liners.
-4. **A8.** HTML conversion, self-contained.
-5. **A1, then A2.** Paragraph merging touches layout and continuation handling; A2 depends on
-   how A1 lands.
-6. **B1, B2, B3, B6** once the B2 decision is made.
+2. **A1 with A10.** The merge is where many items start, and A10's correct result is the block
+   shape A1 produces. A5(a) and A2 behave differently depending on block shape, so their tests
+   should be written against the post-A1 structure.
+3. **A4, A5, A6, A7.** Everyday editing; small, local fixes.
+4. **A3, B4, B7.** One-liners.
+5. **A8.** HTML conversion, self-contained.
+6. **A2.** Depends on how A1 lands.
+7. **B1, B2, B3, B6** once the B2 decision is made.
 
 Out of scope: print (deferred wholesale rework).
 
 ## Open questions
 
-1. **B2:** should visual mode show a <!--@fg:#B1B9F9-->\<!--/@fg--> that CommonMark doesn't treat as a line break?
+1. **B2:** should visual mode show a `\` that CommonMark doesn't treat as a line break?
 2. **Source mode:** should it also protect the line-break marker in the four items marked *by design* (A4, A7, A9, B5)?
