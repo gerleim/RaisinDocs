@@ -247,4 +247,4 @@ Out of scope: print (deferred wholesale rework).
 ## Open questions
 
 1. **B2:** should visual mode show a <!--@fg:#B1B9F9-->\<!--/@fg--> that CommonMark doesn't treat as a line break?
-2. **Source** **mode:** should it also protect the line-break marker in the four items marked *by* *design* (A4, A7, A9, B5)?
+2. **Source mode:** should it also protect the line-break marker in the four items marked *by design* (A4, A7, A9, B5)?
