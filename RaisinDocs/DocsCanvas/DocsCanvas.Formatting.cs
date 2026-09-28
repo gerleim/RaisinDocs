@@ -490,7 +490,7 @@ public partial class DocsCanvas
         for (int b = sb; b <= eb; b++)
         {
             int blockSelStart = (b == sb) ? so : 0;
-            int blockSelEnd = (b == eb) ? eo : _doc.GetBlockLength(b);
+            int blockSelEnd = ClampBeforeHardBreak(b, (b == eb) ? eo : _doc.GetBlockLength(b));
             if (blockSelStart >= blockSelEnd) continue;
 
             var parsed = _parsedBlocks![b];
@@ -507,6 +507,16 @@ public partial class DocsCanvas
             }
         }
         return anyRunChecked;
+    }
+
+    /// <summary>
+    /// Pulls a selection end back to the start of the block's trailing hard-break marker, so
+    /// inline style toggles treat the marker as a line ending rather than as selected text.
+    /// </summary>
+    private int ClampBeforeHardBreak(int block, int offset)
+    {
+        int hardBreak = MarkdownParser.GetTrailingHardBreakStart(_parsedBlocks![block], _doc.GetBlockText(block));
+        return hardBreak >= 0 ? Math.Min(offset, hardBreak) : offset;
     }
 
     internal void RaiseFormattingChanged()
@@ -556,7 +566,7 @@ public partial class DocsCanvas
         for (int b = sb; b <= eb; b++)
         {
             int bStart = (b == sb) ? so : 0;
-            int bEnd = (b == eb) ? eo : _doc.GetBlockLength(b);
+            int bEnd = ClampBeforeHardBreak(b, (b == eb) ? eo : _doc.GetBlockLength(b));
             if (bStart >= bEnd) continue;
 
             var parsed = _parsedBlocks![b];
@@ -587,7 +597,7 @@ public partial class DocsCanvas
         for (int b = eb; b >= sb; b--)
         {
             int bStart = (b == sb) ? so : 0;
-            int bEnd = (b == eb) ? eo : _doc.GetBlockLength(b);
+            int bEnd = ClampBeforeHardBreak(b, (b == eb) ? eo : _doc.GetBlockLength(b));
             if (bStart >= bEnd) continue;
 
             if (allStyled)
@@ -622,7 +632,8 @@ public partial class DocsCanvas
                 _doc.InsertTextAt(b, bEnd, marker);
                 _doc.InsertTextAt(b, bStart, marker);
                 if (b == sb) newSo = so + markerLen;
-                if (b == eb) newEo = eo + markerLen;
+                // An end past bEnd sat on the hard-break marker, which the closing marker now precedes
+                if (b == eb) newEo = eo + (eo > bEnd ? 2 * markerLen : markerLen);
             }
         }
 

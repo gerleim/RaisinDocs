@@ -1566,6 +1566,22 @@ public static class MarkdownParser
         return true;
     }
 
+    /// <summary>
+    /// Offset where the block's trailing hard-break marker (<c>\</c> or the trailing spaces)
+    /// begins, or -1 when the block does not end in a hard break.
+    /// </summary>
+    public static int GetTrailingHardBreakStart(ParsedBlock parsed, string blockText)
+    {
+        if (!IsTrailingHardBreak(parsed, blockText)) return -1;
+
+        int end = GetContentEnd(blockText);
+        if (blockText[end - 1] == '\\') return end - 1;
+
+        int start = end;
+        while (start > 0 && blockText[start - 1] == ' ') start--;
+        return start;
+    }
+
     internal static List<StyledRun> ParseInlines(string text)
     {
         return ParseInlines(text, out _);

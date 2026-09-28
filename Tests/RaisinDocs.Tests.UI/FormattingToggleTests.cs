@@ -100,6 +100,61 @@ public class FormattingToggleTests
         canvas.TestGetBlockText(0).Should().Be("**text**");
     }
 
+    // --- Inline style toggles treat a trailing hard break as the line ending, not as text ---
+
+    private static void Toggle(DocsCanvas canvas, string marker)
+    {
+        switch (marker)
+        {
+            case "**": canvas.ToggleBold(); break;
+            case "*": canvas.ToggleItalic(); break;
+            case "~~": canvas.ToggleStrikethrough(); break;
+            case "`": canvas.ToggleCodeSpan(); break;
+        }
+    }
+
+    [StaTheory]
+    [InlineData("**", "\\")]
+    [InlineData("*", "\\")]
+    [InlineData("~~", "\\")]
+    [InlineData("`", "\\")]
+    [InlineData("**", "  ")]
+    public void ToggleStyle_OffWithTrailingHardBreakSelected_KeepsHardBreak(string marker, string hardBreak)
+    {
+        string text = marker + "boldtext" + marker + hardBreak;
+        var canvas = CreateCanvas(text + "\nnext");
+        canvas.TestSetEditMode(DocsCanvas.EditMode.Source);
+        canvas.TestComputeLayout();
+        canvas.TestSetSelection(0, 0, 0, text.Length);
+
+        Toggle(canvas, marker);
+
+        canvas.TestGetBlockText(0).Should().Be("boldtext" + hardBreak);
+        canvas.TestAnchorOffset.Should().Be(0);
+        canvas.TestCursorOffset.Should().Be(8 + hardBreak.Length);
+    }
+
+    [StaTheory]
+    [InlineData("**", "\\")]
+    [InlineData("*", "\\")]
+    [InlineData("~~", "\\")]
+    [InlineData("`", "\\")]
+    [InlineData("**", "  ")]
+    public void ToggleStyle_OnWithTrailingHardBreakSelected_WrapsBeforeHardBreak(string marker, string hardBreak)
+    {
+        string text = "boldtext" + hardBreak;
+        var canvas = CreateCanvas(text + "\nnext");
+        canvas.TestSetEditMode(DocsCanvas.EditMode.Source);
+        canvas.TestComputeLayout();
+        canvas.TestSetSelection(0, 0, 0, text.Length);
+
+        Toggle(canvas, marker);
+        canvas.TestGetBlockText(0).Should().Be(marker + "boldtext" + marker + hardBreak);
+
+        Toggle(canvas, marker);
+        canvas.TestGetBlockText(0).Should().Be(text);
+    }
+
     // --- Block prefix toggle: selection should include added prefixes ---
 
     // These verify that toggling a block prefix across a selection prefixes every block in it and
