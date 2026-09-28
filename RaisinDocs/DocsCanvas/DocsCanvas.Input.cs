@@ -204,6 +204,9 @@ public partial class DocsCanvas
         base.OnTextInput(e);
         if (string.IsNullOrEmpty(e.Text)) return;
         if (IsReadOnly) return;
+        // Keys OnKeyDown leaves unhandled still arrive here as control characters — Escape as
+        // "\x1b" — and inserting one would type over the selection.
+        if (e.Text.Any(char.IsControl)) return;
         _cursorAtLineEnd = false;
 
         if (_lastAction != LastActionKind.Typing)
