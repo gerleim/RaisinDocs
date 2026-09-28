@@ -78,6 +78,28 @@ public class FormattingToggleTests
         canvas.TestGetBlockText(0).Should().Be("text");
     }
 
+    [StaFact]
+    public void ToggleBold_OnPlainBold_SelectionIncludingMarkers_StaysInsideBlock()
+    {
+        // The selection starts on the opening marker, so removing it must not
+        // push the anchor before the start of the block.
+        var canvas = CreateCanvas("**text**\nnext");
+        canvas.TestSetSelection(0, 0, 0, 8);
+        canvas.ToggleBold();
+        canvas.TestAnchorOffset.Should().Be(0);
+        canvas.TestCursorOffset.Should().Be(4);
+    }
+
+    [StaFact]
+    public void ToggleBold_Twice_OnSelectionIncludingMarkers_RestoresBold()
+    {
+        var canvas = CreateCanvas("**text**");
+        canvas.TestSetSelection(0, 0, 0, 8);
+        canvas.ToggleBold();
+        canvas.ToggleBold();
+        canvas.TestGetBlockText(0).Should().Be("**text**");
+    }
+
     // --- Block prefix toggle: selection should include added prefixes ---
 
     // These verify that toggling a block prefix across a selection prefixes every block in it and

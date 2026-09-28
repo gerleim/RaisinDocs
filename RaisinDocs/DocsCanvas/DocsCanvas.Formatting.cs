@@ -605,13 +605,15 @@ public partial class DocsCanvas
                     _doc.RemoveTextAt(b, runEnd - markerLen, markerLen);
                     _doc.RemoveTextAt(b, run.Start, markerLen);
 
+                    // Shift each end by only the marker chars removed before it: a selection
+                    // that starts on the opening marker must not move before the run.
+                    int RemovedBefore(int p) =>
+                        Math.Clamp(p - run.Start, 0, markerLen)
+                        + Math.Clamp(p - (runEnd - markerLen), 0, markerLen);
                     if (b == eb)
-                    {
-                        newEo = eo - markerLen;
-                        if (eo > runEnd - markerLen) newEo -= markerLen;
-                    }
+                        newEo = eo - RemovedBefore(eo);
                     if (b == sb)
-                        newSo = so - markerLen;
+                        newSo = so - RemovedBefore(so);
                     break;
                 }
             }
